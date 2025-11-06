@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Issued Books History</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .container { max-width: 900px; margin: 40px auto; }
+        h1 { text-align: center; }
+        .details-header { margin-bottom: 20px; padding: 15px; background: #e9ecef; border-radius: 6px; }
+        .details-header p { margin: 5px 0; font-size: 1.1em; }
+        .details-header span { font-weight: bold; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f2f2f2; }
+        .status-issued { color: #007bff; font-weight: bold; }
+        .status-returned { color: #28a745; }
+        .status-overdue { color: #dc3545; font-weight: bold; }
+
+        #notification { position: fixed; top: 20px; right: 20px; padding: 15px; border-radius: 5px; color: white; z-index: 2000; display: none; }
+        .notification-error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        // Admin, Librarian, and Teacher can view user history
+        if (!token || !['Admin', 'Librarian', 'Teacher'].includes(userRole)) {
+            window.location.href = '/login';
+        }
+    </script>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/manage-books.html">← Back to Dashboard</a>
+        </div>
+        
+        <div class="details-header">
+            <h1>Issued Book History for User ID: <span id="user-id-display"></span></h1>
+            <p>Viewing history for: <span id="user-name-display">Loading...</span></p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Book Title</th>
+                    <th>Issue Date</th>
+                    <th>Due Date</th>
+                    <th>Return Date</th>
+                    <th>Status</th>
+                    <th>Fine Due</th>
+                    <th>Fine Paid</th>
+                </tr>
+            </thead>
+            <tbody id="history-list-body">
+                <tr><td colspan="7">Loading history...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="notification"></div>
+
+    <script>
+        const authHeaders = { 'Authorization': `Bearer ${token}` };
+        
+        function showNotification(message, type = 'error') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification-' + type;
+            notification.style.display = 'block';
+            setTimeout(() => { notification.style.display = 'none'; }, 4000);
+        }
+
+        function getUserIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            return params.get('id');
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+        }
+
+        function getStatusClass(status, dueDate, returnDate) {
+            if (status === 'Returned') return 'status-returned';
+            
+            const today = new Date();
+            const due = new Date(dueDate);
+
+            if (status === 'Issued' && due < today) return 'status-overdue';
+            if (status === 'Issued') return 'status-issued';
+            
+            return '';
+        }
+
+        async function fetchUserName(userId) {
+            // NOTE: This relies on a conceptual GET /users/:id endpoint which isn't defined,
+            // so we'll use the GET /users list endpoint as a workaround if the ID is known.
+            // For a robust system, a dedicated /users/:id route should be added.
+            try {
+                const response = await fetch('/api/library/users', { headers: authHeaders });
+                const users = await response.json();
+                const user = users.find(u => String(u.id) === String(userId));
+                return user ? `${user.username} (${user.role})` : `User not found (ID: ${userId})`;
+            } catch (error) {
+                console.error("Error fetching user name:", error);
+                return `Error loading name (ID: ${userId})`;
+            }
+        }
+        
+        async function loadUserHistory() {
+            const userId = getUserIdFromUrl();
+            const tableBody = document.getElementById('history-list-body');
+            
+            if (!userId) {
+                tableBody.innerHTML = '<tr><td colspan="7" style="color: red;">Error: User ID not provided in URL.</td></tr>';
+                return;
+            }
+
+            document.getElementById('user-id-display').textContent = userId;
+
+            // Fetch user name for display, but continue loading history even if this fails
+            const userNamePromise = fetchUserName(userId).then(name => {
+                document.getElementById('user-name-display').textContent = name;
+            });
+            
+            try {
+                const response = await fetch(`/api/library/users/${userId}/history`, { headers: authHeaders });
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    tableBody.innerHTML = `<tr><td colspan="7" style="color: red;">Failed to load history (Status: ${response.status}). ${text || 'Server error.'}</td></tr>`;
+                    showNotification('Failed to load history. See console for details.', 'error');
+                    return;
+                }
+
+                const history = await response.json();
+                tableBody.innerHTML = ''; 
+
+                if (history.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="7">No borrowing history found for this user.</td></tr>';
+                    return;
+                }
+
+                history.forEach(issue => {
+                    const tr = document.createElement('tr');
+                    const statusText = issue.status === 'Issued' && new Date(issue.due_date) < new Date() ? 'OVERDUE' : issue.status;
+                    const statusClass = getStatusClass(issue.status, issue.due_date, issue.return_date);
+
+                    tr.innerHTML = `
+                        <td>${issue.title}</td>
+                        <td>${formatDate(issue.issue_date)}</td>
+                        <td>${formatDate(issue.due_date)}</td>
+                        <td>${formatDate(issue.return_date)}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                        <td>$${(issue.fine_amount || 0).toFixed(2)}</td>
+                        <td>$${(issue.fine_paid || 0).toFixed(2)}</td>
+                    `;
+                    tableBody.appendChild(tr);
+                });
+
+            } catch (error) {
+                console.error("Critical error loading history:", error);
+                tableBody.innerHTML = '<tr><td colspan="7" style="color: red;">An unexpected error occurred while fetching data.</td></tr>';
+                showNotification('An unexpected error occurred.', 'error');
+            }
+        }
+
+        window.onload = loadUserHistory;
+    </script>
+</body>
+</html>

@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enrollment & Revenue Forecasting</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #797d7f;
+            --success-color: #27ae60;
+            --warning-color: #f39c12;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .forecast-controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+        .forecast-controls select, .forecast-controls input {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .submit-btn {
+            grid-column: 3;
+            padding: 10px;
+            background-color: var(--warning-color);
+            color: #333;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .forecast-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .forecast-table th, .forecast-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9em;
+        }
+        .forecast-table th {
+            background-color: var(--primary-color);
+            color: #fff;
+            font-weight: 600;
+        }
+        .placeholder-message {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--secondary-color);
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    /**
+     * Fetches and renders the Enrollment & Revenue Forecasting data.
+     */
+    async function fetchAndRenderForecast(filters) {
+        const tbody = document.getElementById('forecast-tbody');
+        tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">Calculating forecast...</td></tr>';
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return forecast data ❌
+            const queryString = new URLSearchParams(filters).toString();
+            const forecastData = await handleApi('/api/reports/revenue-forecast?' + queryString); 
+            
+            tbody.innerHTML = '';
+            if (forecastData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">No forecast data available for the selected parameters.</td></tr>';
+                return;
+            }
+
+            forecastData.forEach(f => {
+                const revenueColor = f.projected_revenue >= f.historical_revenue ? 'var(--success-color)' : 'var(--warning-color)';
+                const row = `<tr>
+                    <td>${f.year}</td>
+                    <td>${f.course_name || 'All'}</td>
+                    <td>${f.projected_enrollment}</td>
+                    <td>₹${(f.historical_revenue || 0).toFixed(2)}</td>
+                    <td style="color: ${revenueColor}; font-weight: 600;">₹${(f.projected_revenue || 0).toFixed(2)}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error('Error fetching revenue forecast:', error);
+            tbody.innerHTML = `<tr><td colspan="5" class="placeholder-message" style="color: var(--error-color);">Error loading forecast: ${error.message}</td></tr>`;
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initial load of the forecast
+        fetchAndRenderForecast({});
+
+        document.getElementById('forecast-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const filters = {
+                start_year: document.getElementById('start-year').value,
+                end_year: document.getElementById('end-year').value,
+                course_id: document.getElementById('course-filter').value,
+            };
+            fetchAndRenderForecast(filters);
+        });
+        
+        // FUTURE: Add logic to populate course-filter dropdown
+    });
+</script>
+
+<div class="container">
+    <h1>Enrollment & Revenue Forecasting</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Forecasting Parameters</h2>
+        <form id="forecast-form">
+            <div class="forecast-controls">
+                <div class="form-group">
+                    <label for="start-year">Forecast Start Year:</label>
+                    <input type="number" id="start-year" required value="2026">
+                </div>
+                <div class="form-group">
+                    <label for="end-year">Forecast End Year:</label>
+                    <input type="number" id="end-year" required value="2030">
+                </div>
+                <div class="form-group">
+                    <label for="course-filter">Focus Course (Optional):</label>
+                    <select id="course-filter">
+                        <option value="">All Courses</option>
+                        </select>
+                </div>
+                <div class="form-group" style="grid-column: 1 / 3;">
+                    <label for="growth-rate">Assumed Annual Enrollment Growth Rate (%):</label>
+                    <input type="number" step="0.1" id="growth-rate" value="5.0">
+                </div>
+                <button type="submit" class="submit-btn">Generate Forecast</button>
+            </div>
+        </form>
+
+        <h2>Forecast Results</h2>
+        <table class="forecast-table">
+            <thead>
+                <tr>
+                    <th>Year</th>
+                    <th>Course/Grouping</th>
+                    <th>Projected Enrollment</th>
+                    <th>Historical Revenue (Baseline)</th>
+                    <th>Projected Revenue</th>
+                </tr>
+            </thead>
+            <tbody id="forecast-tbody">
+                <tr><td colspan="5" class="placeholder-message">Set parameters and click 'Generate Forecast'.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

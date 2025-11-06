@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Apply for Gate Pass</title>
+    <style>
+        /* --- CLASSIC STYLES --- */
+        body { font-family: 'Times New Roman', serif; background-color: #f8f8f8; color: #333; padding: 2em; }
+        .container { max-width: 700px; margin: auto; padding: 30px; background-color: #ffffff; border: 2px solid #333; box-shadow: 2px 2px 0 #999; }
+        h1 { color: #C0392B; border-bottom: 2px solid #555; padding-bottom: 10px; margin-bottom: 20px; font-size: 1.8em; }
+        h2 { color: #005A9C; border-bottom: 1px dotted #999; padding-bottom: 5px; margin-top: 25px; font-size: 1.4em; }
+        label { font-weight: bold; color: #333; }
+        input[type="datetime-local"], textarea { border: 1px solid #555; border-radius: 0; }
+        button { background-color: #005A9C; color: white; border: 2px solid #000; border-radius: 0; box-shadow: 1px 1px 0 #000; }
+        table { margin-top: 15px; border: 1px solid #555; }
+        th { background-color: #333; color: white; }
+    </style>
+</head>
+<body>
+<script>
+    // Auth Check for Student
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Student') { window.location.href = '/login.html'; }
+</script>
+<div class="container">
+    <h1>Hostel Gate Pass</h1>
+    <div class="nav-links"><a href="/student-dashboard.html">← Back to Dashboard</a></div>
+
+    <h2>Apply for a New Gate Pass</h2>
+    <form id="gatepass-form">
+        <label for="reason">Reason for Leaving:</label>
+        <textarea name="reason" id="reason" rows="3" required></textarea>
+
+        <label for="expected_out_time">Expected Out-Time:</label>
+        <input type="datetime-local" name="expected_out_time" id="expected_out_time" required>
+
+        <label for="expected_in_time">Expected In-Time:</label>
+        <input type="datetime-local" name="expected_in_time" id="expected_in_time" required>
+        
+        <button type="submit">Submit Application</button>
+    </form>
+
+    <h2 style="margin-top: 40px;">My Gate Pass History</h2>
+    <table>
+        <thead><tr><th>Reason</th><th>Expected Out</th><th>Expected In</th><th>Status</th></tr></thead>
+        <tbody id="history-body"></tbody>
+    </table>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    function loadHistory() {
+        const tableBody = document.getElementById('history-body');
+        fetch('/api/hostel/me/gatepasses', { headers: authHeaders })
+            .then(res => res.json())
+            .then(passes => {
+                tableBody.innerHTML = '';
+                if (passes.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4">You have no gate pass history.</td></tr>';
+                    return;
+                }
+                passes.forEach(pass => {
+                    tableBody.innerHTML += `
+                        <tr>
+                            <td>${pass.reason}</td>
+                            <td>${new Date(pass.expected_out_time).toLocaleString()}</td>
+                            <td>${new Date(pass.expected_in_time).toLocaleString()}</td>
+                            <td><strong>${pass.status}</strong></td>
+                        </tr>`;
+                });
+            });
+    }
+
+    document.getElementById('gatepass-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(this).entries());
+        fetch('/api/hostel/gatepass', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(data)
+        }).then(res => {
+            if (res.ok) {
+                alert('Application submitted successfully!');
+                this.reset();
+                loadHistory();
+            } else { res.text().then(text => alert('Error: ' + text)); }
+        });
+    });
+
+    window.onload = loadHistory;
+</script>
+</body>
+</html>

@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Messaging & Collaboration</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; padding: 0; background-color: #f7f9fc; color: #333; }
+        .app-container { display: flex; height: 100vh; max-height: 100vh; overflow: hidden; }
+
+        /* --- Left Panel: Conversations List --- */
+        .sidebar { width: 300px; background-color: #ffffff; border-right: 1px solid #d4d8e1; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #eee; }
+        .sidebar-header h2 { margin: 0; color: #5c6bc0; }
+        .conversation-list { flex-grow: 1; overflow-y: auto; list-style: none; padding: 0; margin: 0; }
+        .conversation-item { padding: 15px 20px; border-bottom: 1px solid #f0f0f0; cursor: pointer; transition: background-color 0.2s; }
+        .conversation-item:hover, .conversation-item.active { 
+            background-color: #e8eaf6; 
+            border-left: 5px solid #6c5ce7; /* Highlight border */
+            padding-left: 15px;
+        }
+        .conversation-topic { font-weight: 600; font-size: 1.05em; }
+        .conversation-meta { font-size: 0.8em; color: #7f8c8d; margin-top: 3px; }
+        .new-chat-btn { 
+            width: calc(100% - 40px); 
+            margin: 10px 20px; 
+            background-color: #6c5ce7;
+            padding: 10px 20px;
+            border-radius: 8px; 
+            font-weight: bold;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        /* --- Right Panel: Chat Area --- */
+        .chat-area { flex-grow: 1; display: flex; flex-direction: column; background-color: #f7f7f7; }
+        .chat-header { padding: 15px 20px; background-color: #ffffff; border-bottom: 1px solid #d4d8e1; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .chat-header h3 { margin: 0; font-size: 1.4em; color: #34495e; }
+        
+        /* WhatsApp-style Feed */
+        .message-feed { 
+            flex-grow: 1; 
+            overflow-y: auto; 
+            padding: 20px; 
+            display: flex; 
+            flex-direction: column; 
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100%" height="100%" fill="%23f7f7f7"/><g fill="%23e8eaf6" opacity="0.3"><circle cx="20" cy="20" r="1" /><circle cx="70" cy="70" r="1" /><circle cx="50" cy="50" r="1" /><circle cx="90" cy="10" r="1" /></g></svg>');
+            background-repeat: repeat;
+        }
+        .message-bubble { 
+            max-width: 70%; 
+            padding: 10px 15px; 
+            border-radius: 8px; 
+            margin-bottom: 10px; 
+            line-height: 1.4; 
+            font-size: 0.95em; 
+            box-shadow: 0 1px 1px rgba(0,0,0,0.08);
+            position: relative;
+        }
+        
+        .incoming { 
+            background-color: #ffffff; 
+            border-top-left-radius: 0; 
+            align-self: flex-start; 
+        }
+        .outgoing { 
+            background-color: #6c5ce7; 
+            color: white; 
+            border-top-right-radius: 0; 
+            align-self: flex-end; 
+        }
+        .message-sender { 
+            font-size: 0.75em; 
+            margin-bottom: 2px; 
+            color: #2c3e50; 
+            font-weight: 600; 
+        }
+        .outgoing .message-sender { color: #f5f5f5; }
+
+        .chat-input-area { padding: 15px 20px; border-top: 1px solid #d4d8e1; background-color: #ffffff; display: flex; align-items: center; }
+        .chat-input-area input { flex-grow: 1; padding: 12px 20px; border: none; background-color: #f0f2f5; border-radius: 24px; margin-right: 10px; font-size: 1em; }
+        .chat-input-area button { padding: 12px 20px; border-radius: 24px; margin: 0; font-weight: bold; border: none; cursor: pointer;}
+        
+        .message-actions { 
+            position: absolute; 
+            top: -5px; 
+            right: 0; 
+            font-size: 0.7em;
+            opacity: 0;
+            transition: opacity 0.2s;
+            z-index: 50; 
+        }
+        /* Adjusted positioning for outgoing bubbles */
+        .outgoing .message-actions { 
+            right: auto;
+            left: 0;
+        }
+        .message-bubble:hover .message-actions {
+            opacity: 1;
+        }
+
+        /* Modal Styles */
+        .modal { 
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.4); 
+            padding-top: 60px;
+        }
+        .modal-content { 
+            background-color: #fefefe; 
+            margin: 5% auto; 
+            padding: 20px; 
+            border: 1px solid #888; 
+            width: 80%; 
+            max-width: 500px; 
+            border-radius: 10px;
+        }
+        .close-btn { 
+            color: #aaa; 
+            float: right; 
+            font-size: 28px; 
+            font-weight: bold; 
+            cursor: pointer;
+        }
+        /* New Participant List Style */
+        #new-chat-participants li {
+            padding: 5px 0;
+            border-bottom: 1px dotted #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    
+    <div id="auth-container" class="app-container">
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>Chats</h2>
+                <p style="font-size: 0.8em; margin: 5px 0 0 0;">User: <strong id="current-username-display">Loading...</strong></p>
+            </div>
+            <button class="new-chat-btn" onclick="openNewChatModal()">+ Start New Chat</button>
+            <ul id="conversation-list" class="conversation-list">
+                <li style="text-align: center; padding: 20px;">Loading conversations...</li>
+            </ul>
+        </div>
+
+        <div class="chat-area">
+            <div id="chat-header" class="chat-header" style="display:none;">
+                <h3 id="current-convo-topic"></h3>
+                <p id="current-convo-participants" style="font-size: 0.8em; color: #95a5a6; margin: 0;"></p>
+            </div>
+            
+            <div id="message-feed" class="message-feed">
+                <p id="chat-placeholder" style="text-align: center; color: #95a5a6; margin-top: 50px;">Select a conversation to begin chatting.</p>
+            </div>
+            
+            <form id="message-form" class="chat-input-area" style="display:none;">
+                <input type="text" id="message-input" placeholder="Type a message..." required>
+                <button type="submit" style="background-color: #6c5ce7; color: white;">Send</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="new-chat-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('new-chat-modal')">×</span>
+            <h3>Start New Conversation</h3>
+            <form id="new-chat-form">
+                <label for="new-chat-topic">Topic (Optional for groups):</label>
+                <input type="text" id="new-chat-topic" name="topic" placeholder="e.g., Science Project Team" style="width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box;">
+                
+                <label for="participant-search">Add Participants (Search by Name):</label>
+                <div style="display: flex;">
+                    <input type="text" id="participant-search" list="user-suggestions" placeholder="Enter name to search" style="flex-grow: 1; padding: 8px; margin-right: 5px;">
+                    <button type="button" onclick="addParticipant()" style="background-color: #5cb85c; color: white; border-radius: 4px;">Add</button>
+                </div>
+                <datalist id="user-suggestions"></datalist>
+
+                <div style="margin-top: 15px;">
+                    <p style="font-weight: bold;">Participants:</p>
+                    <ul id="new-chat-participants" style="list-style: none; padding: 0;">
+                        </ul>
+                </div>
+                <button type="submit" style="background-color: #6c5ce7; color: white; padding: 10px 20px; border-radius: 8px; width: 100%;">Create Chat</button>
+                <p id="new-chat-message" style="margin-top: 10px; color: red;"></p>
+            </form>
+        </div>
+    </div>
+
+    <div id="edit-message-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('edit-message-modal')">×</span>
+            <h3>Edit Message</h3>
+            <form id="edit-message-form">
+                <input type="hidden" id="edit-message-id">
+                <label for="edit-message-content">New Content:</label>
+                <input type="text" id="edit-message-content" name="content" required style="width: 100%; padding: 8px; margin: 5px 0 15px 0; box-sizing: border-box;">
+                <button type="submit" style="background-color: #6c5ce7; color: white; padding: 10px 20px; border-radius: 8px; width: 100%;">Save Changes</button>
+                <p id="edit-message-status" style="margin-top: 10px; color: red;"></p>
+            </form>
+        </div>
+    </div>
+
+
+    <script>
+        const API_BASE = '/api/messaging';
+        const TOKEN = localStorage.getItem('erp-token');
+        // Ensure USER_ID is always present and used consistently
+        const USER_ID = localStorage.getItem('user-id') || localStorage.getItem('profile-id'); 
+        const USER_NAME = localStorage.getItem('username') || 'You';
+        const USER_ROLE = localStorage.getItem('role'); 
+        
+        // --- Access Control Check ---
+        if (!TOKEN || !USER_ID) { 
+            console.error('Missing token or user ID. Redirecting to login.');
+            localStorage.clear(); 
+            window.location.href = '/login'; 
+        }
+
+        // DOM Elements
+        const currentUsernameDisplay = document.getElementById('current-username-display');
+        const conversationListEl = document.getElementById('conversation-list');
+        const chatHeaderEl = document.getElementById('chat-header');
+        const messageFeedEl = document.getElementById('message-feed');
+        const messageFormEl = document.getElementById('message-form');
+        const messageInputEl = document.getElementById('message-input');
+        const searchInputEl = document.getElementById('participant-search');
+        
+        // Chat State
+        let currentConversationId = null;
+        let activeParticipants = []; 
+        let chatPollingInterval = null;
+        let userSuggestionsData = []; 
+
+        // --- Utility Functions ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            // Handle Auth/Forbidden first
+            if (response.status === 401 || response.status === 403) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Authentication failed.' }));
+                console.error(`API Error ${response.status}: ${errorBody.message}`);
+                
+                if (response.status === 401) {
+                    alert('Session expired. Please log in again.');
+                    localStorage.clear();
+                    window.location.href = '/login';
+                }
+                throw new Error(errorBody.message || 'Access denied.');
+            }
+            
+            // Handle 400 Bad Request and other non-2xx errors
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                console.error(`API Error ${response.status}: ${errorBody.message}`);
+                throw new Error(errorBody.message || 'API call failed.');
+            }
+
+            if (response.status === 204) {
+                 return {};
+            }
+            return response.json();
+        }
+        
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // --- Conversation List Management ---
+
+        async function loadConversations() {
+            conversationListEl.innerHTML = '<li style="text-align: center; padding: 20px;">Refreshing...</li>';
+            try {
+                const conversations = await handleApi(`${API_BASE}/conversations`);
+                
+                if (conversations.length === 0) {
+                    conversationListEl.innerHTML = '<li style="text-align: center; padding: 20px; color: #95a5a6;">No conversations yet. Start a new one!</li>';
+                    return;
+                }
+
+                conversationListEl.innerHTML = conversations.map(c => {
+                    // Use participants_names if topic is null/empty for private/small group chats
+                    const displayTopic = c.topic || (c.participants_names ? c.participants_names.split(', ')[0] : 'Private Chat');
+                    
+                    return `
+                        <li class="conversation-item ${c.id === currentConversationId ? 'active' : ''}" 
+                            onclick="openConversation('${c.id}', \`${displayTopic.replace(/`/g, '\\`')}\`, ${c.is_group}, \`${c.participants_names.replace(/`/g, '\\`')}\`)">
+                            <div class="conversation-topic">${displayTopic}</div>
+                            <div class="conversation-meta">Last message: ${c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString() : 'No messages'}</div>
+                        </li>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error("Error loading conversations:", error);
+                conversationListEl.innerHTML = `<li style="color: red; padding: 20px;">Failed to load chats: ${error.message}</li>`;
+            }
+        }
+        
+        // --- Message Feed ---
+        
+        async function loadMessages(conversationId) {
+            const isInitialLoad = messageFeedEl.innerHTML.includes('Loading messages...');
+            
+            try {
+                const messages = await handleApi(`${API_BASE}/messages/${conversationId}`);
+                
+                const newContent = messages.map(m => {
+                    const isOutgoing = m.sender_id === USER_ID;
+                    const isDeleted = m.content === '[Message Deleted]';
+                    const bubbleClass = isOutgoing ? 'outgoing' : 'incoming';
+                    // Show sender name in the bubble for incoming messages in group chats
+                    const isGroupChat = document.getElementById('current-convo-participants').textContent.includes('Participants:');
+                    const showSender = !isOutgoing && isGroupChat;
+                    const senderName = isOutgoing ? USER_NAME : m.sender_name;
+                    
+                    // Read Status Indicator (for outgoing messages)
+                    const readStatus = m.read_count > 0 ? 
+                        `<span style="color: #8be0ff; margin-left: 5px;">✓✓ ${m.read_count}</span>` : 
+                        (isOutgoing ? `<span style="color: #ccc; margin-left: 5px;">✓</span>` : '');
+
+                    // Actions Menu (Only available for the sender)
+                    const actionsMenu = (isOutgoing && !isDeleted) ? `
+                        <div class="message-actions">
+                            <button onclick="editMessage('${m.id}', \`${m.content.replace(/`/g, '\\`')}\`)" style="background-color: #f39c12; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer;">Edit</button>
+                            <button onclick="deleteMessage('${m.id}')" style="background-color: #e74c3c; color: white; border: none; padding: 3px 6px; border-radius: 3px; cursor: pointer;">Delete</button>
+                        </div>
+                    ` : '';
+
+                    return `
+                        <div style="display: flex; justify-content: ${isOutgoing ? 'flex-end' : 'flex-start'};">
+                            <div class="message-bubble ${bubbleClass}" data-message-id="${m.id}">
+                                ${actionsMenu}
+                                <div class="message-sender" style="${showSender ? '' : 'display: none;'}">${senderName} (${new Date(m.created_at).toLocaleTimeString()}) ${m.is_edited ? ' (Edited)' : ''}</div>
+                                <div style="${isDeleted ? 'font-style: italic; color: #aaa;' : ''}">${m.content}</div>
+                                <div style="font-size: 0.7em; text-align: right;">${readStatus}</div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+                if (messageFeedEl.innerHTML !== newContent) {
+                    messageFeedEl.innerHTML = newContent;
+                    
+                    if (isInitialLoad || (messageFeedEl.scrollHeight - messageFeedEl.scrollTop < messageFeedEl.clientHeight + 100)) {
+                         messageFeedEl.scrollTop = messageFeedEl.scrollHeight;
+                    }
+                }
+                
+                // Mark messages as read (fire-and-forget)
+                handleApi(`${API_BASE}/conversations/${conversationId}/read`, { method: 'POST' }).catch(err => {
+                    console.warn("Failed to mark messages as read:", err.message);
+                });
+
+            } catch (error) {
+                 messageFeedEl.innerHTML = `<p style="text-align: center; color: red;">Failed to load messages: ${error.message}</p>`;
+            }
+        }
+
+        window.openConversation = function(convoId, topic, isGroup, participants) {
+            clearInterval(chatPollingInterval);
+            
+            currentConversationId = convoId;
+            
+            document.querySelectorAll('.conversation-item').forEach(el => el.classList.remove('active'));
+            const clickedElement = document.querySelector(`[onclick*="${convoId}"]`);
+            if (clickedElement) clickedElement.classList.add('active');
+            
+            document.getElementById('current-convo-topic').textContent = topic;
+            document.getElementById('current-convo-participants').textContent = isGroup ? `Participants: ${participants}` : '';
+            chatHeaderEl.style.display = 'block';
+            messageFormEl.style.display = 'flex';
+            document.getElementById('chat-placeholder').style.display = 'none';
+
+            messageFeedEl.innerHTML = '<p style="text-align: center; color: #95a5a6; margin-top: 50px;">Loading messages...</p>';
+
+            loadMessages(convoId);
+
+            chatPollingInterval = setInterval(() => loadMessages(convoId), 5000); 
+        }
+
+        messageFormEl.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const content = messageInputEl.value.trim();
+            if (!content || !currentConversationId) return;
+            
+            const submitButton = messageFormEl.querySelector('button');
+            const originalButtonText = submitButton.textContent;
+            submitButton.textContent = 'Sending...';
+            submitButton.disabled = true;
+
+            try {
+                await handleApi(`${API_BASE}/messages/${currentConversationId}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ content: content })
+                });
+                
+                messageInputEl.value = '';
+                
+                // Load messages/conversations after successful send
+                await loadMessages(currentConversationId); 
+                loadConversations(); 
+
+            } catch (error) {
+                alert('Failed to send message: ' + error.message);
+            } finally {
+                submitButton.textContent = originalButtonText;
+                submitButton.disabled = false;
+            }
+        });
+
+        // --- Message Edit/Delete Functions ---
+        
+        window.editMessage = function(messageId, currentContent) {
+            document.getElementById('edit-message-id').value = messageId;
+            document.getElementById('edit-message-content').value = currentContent;
+            document.getElementById('edit-message-status').textContent = '';
+            document.getElementById('edit-message-modal').style.display = 'block';
+        }
+
+        document.getElementById('edit-message-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const messageId = document.getElementById('edit-message-id').value;
+            const newContent = document.getElementById('edit-message-content').value;
+            const statusEl = document.getElementById('edit-message-status');
+
+            statusEl.textContent = 'Saving...';
+            statusEl.style.color = '#3498db';
+            
+            try {
+                await handleApi(`${API_BASE}/messages/${messageId}`, {
+                    method: 'PUT',
+                    body: JSON.stringify({ newContent: newContent })
+                });
+
+                closeModal('edit-message-modal');
+                loadMessages(currentConversationId); 
+
+            } catch (error) {
+                statusEl.textContent = 'Edit failed: ' + error.message;
+                statusEl.style.color = 'red';
+            }
+        });
+
+        window.deleteMessage = async function(messageId) {
+            if (!confirm('Are you sure you want to delete this message? It will be marked as deleted for all participants.')) return;
+
+            try {
+                await handleApi(`${API_BASE}/messages/${messageId}`, {
+                    method: 'DELETE'
+                });
+                
+                loadMessages(currentConversationId);
+
+            } catch (error) {
+                alert('Deletion failed: ' + error.message);
+            }
+        }
+        
+        // --- New Chat Modal Functions & Autosuggest ---
+
+        async function fetchUserSuggestions() {
+            const searchTerm = searchInputEl.value.trim();
+            const datalist = document.getElementById('user-suggestions');
+        
+            if (searchTerm.length < 2) { 
+                datalist.innerHTML = '';
+                userSuggestionsData = [];
+                return;
+            }
+        
+            try {
+                const users = await handleApi(`${API_BASE}/users/search?query=${encodeURIComponent(searchTerm)}`);
+                
+                userSuggestionsData = users; 
+                datalist.innerHTML = users.map(user => 
+                    // Use a distinct display format that includes the user's name and a truncated ID for clarity
+                    `<option value="${user.name} [ID: ${user.id.substring(0, 8)}...]"></option>` 
+                ).join('');
+                
+            } catch (error) {
+                console.error("Error fetching user suggestions:", error);
+            }
+        }
+        
+        window.openNewChatModal = function() {
+            // Initialize with the current user ID
+            activeParticipants = [USER_ID]; 
+            document.getElementById('new-chat-topic').value = '';
+            searchInputEl.value = '';
+            document.getElementById('new-chat-message').textContent = '';
+            document.getElementById('user-suggestions').innerHTML = ''; 
+            userSuggestionsData = []; 
+            
+            renderParticipantList();
+            
+            document.getElementById('new-chat-modal').style.display = 'block';
+        }
+        
+        window.addParticipant = function() {
+            const selectedValue = searchInputEl.value.trim();
+            document.getElementById('new-chat-message').textContent = '';
+            
+            // Find the user object by matching the selected display value
+            const selectedUser = userSuggestionsData.find(u => 
+                `${u.name} [ID: ${u.id.substring(0, 8)}...]` === selectedValue
+            );
+
+            if (!selectedUser) {
+                 document.getElementById('new-chat-message').textContent = 'Please select a valid user from the search results.';
+                 return;
+            }
+            
+            const uuid = selectedUser.id;
+            
+            if (activeParticipants.includes(uuid)) {
+                 document.getElementById('new-chat-message').textContent = `${selectedUser.name} is already added.`;
+                 return;
+            }
+            
+            if (uuid === USER_ID) {
+                document.getElementById('new-chat-message').textContent = `You are already the creator.`;
+                return;
+            }
+            
+            // Critical Safety Check: Ensures the selected user has valid data before proceeding.
+            if (!selectedUser.name || !uuid) {
+                 console.error("Incomplete user data selected:", selectedUser);
+                 document.getElementById('new-chat-message').textContent = 'Error processing user data. Please try searching again.';
+                 return;
+            }
+
+            activeParticipants.push(uuid);
+            
+            // Add the selected user to the local suggestion data if they aren't already there
+            if (!userSuggestionsData.some(u => u.id === uuid)) {
+                userSuggestionsData.push(selectedUser);
+            }
+            
+            renderParticipantList();
+            searchInputEl.value = ''; 
+            document.getElementById('new-chat-message').textContent = `Added ${selectedUser.name}.`;
+            document.getElementById('new-chat-message').style.color = '#27ae60'; // Success color
+        }
+        
+        window.removeParticipant = function(uuid) {
+            activeParticipants = activeParticipants.filter(id => id !== uuid);
+            renderParticipantList();
+        }
+
+        function renderParticipantList() {
+            const listEl = document.getElementById('new-chat-participants');
+            listEl.innerHTML = `<li><strong style="color: #6c5ce7;">${USER_NAME} (You)</strong> <span>- Creator/Admin</span></li>`;
+            
+            activeParticipants.filter(id => id !== USER_ID).forEach(id => {
+                const userDetail = userSuggestionsData.find(u => u.id === id);
+                const displayTag = userDetail ? userDetail.name : `${id.slice(0, 8)}... (Unknown User)`;
+
+                listEl.innerHTML += `<li>
+                    <span>${displayTag}</span>
+                    <button type="button" onclick="removeParticipant('${id}')" style="background-color: #e74c3c; color: white; padding: 3px 6px; margin-top: 0; border-radius: 3px; border: none; cursor: pointer;">x Remove</button>
+                </li>`;
+            });
+        }
+
+        document.getElementById('new-chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const form = e.target;
+            const messageEl = document.getElementById('new-chat-message');
+            
+            if (activeParticipants.length < 2) {
+                messageEl.textContent = 'Please add at least one other participant.';
+                messageEl.style.color = 'red';
+                return;
+            }
+            
+            messageEl.textContent = 'Creating conversation...';
+            messageEl.style.color = '#3498db';
+
+            const otherParticipants = activeParticipants.filter(id => id !== USER_ID);
+
+            const data = {
+                participant_ids: otherParticipants, 
+                topic: form.elements.topic.value
+            };
+
+            try {
+                const result = await handleApi(`${API_BASE}/conversations`, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                
+                closeModal('new-chat-modal');
+                
+                await loadConversations();
+
+                // Automatically open the new chat by finding and clicking its list element
+                if (result.conversation_id) {
+                    const newConvoElement = document.querySelector(`.conversation-item[onclick*="${result.conversation_id}"]`);
+                    if(newConvoElement) {
+                         newConvoElement.click();
+                    }
+                }
+                
+            } catch (error) {
+                messageEl.textContent = 'Creation failed: ' + error.message;
+                messageEl.style.color = 'red';
+            }
+        });
+
+
+        // --- Initialization ---
+
+        document.addEventListener('DOMContentLoaded', () => {
+            currentUsernameDisplay.textContent = `${USER_NAME} (${USER_ROLE || 'Guest'})`;
+            loadConversations();
+            searchInputEl.addEventListener('input', fetchUserSuggestions);
+        });
+    </script>
+</body>
+</html>

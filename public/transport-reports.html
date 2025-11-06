@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Transport Reports & Analytics</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* --- CLASSIC DESIGN STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 1200px; margin: auto; padding: 40px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #C0392B; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; border-bottom: 2px solid #999; 
+            padding-bottom: 5px; margin-top: 25px; margin-bottom: 20px; 
+        }
+
+        /* --- Navigation --- */
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+            border: 1px solid #E0E0E0;
+            padding: 10px;
+            background-color: #F0F0F0;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #005A9C; 
+            font-weight: bold;
+            margin: 0 10px;
+        }
+
+        /* --- Summary Cards --- */
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+        .card {
+            background-color: #FFFFE0; /* Yellowish background */
+            padding: 25px;
+            border: 1px solid #DDAA00;
+            box-shadow: 2px 2px 0 #DDAA00;
+            border-radius: 0;
+            text-align: center;
+        }
+        .card h3 {
+            margin-top: 0;
+            color: #333;
+            font-size: 0.9em;
+            text-transform: uppercase;
+        }
+        .card .value {
+            font-size: 2.8em;
+            font-weight: bold;
+            color: #000;
+        }
+        .details-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+        }
+        .chart-container {
+            background-color: #fff;
+            padding: 20px;
+            border: 1px solid #999;
+            box-shadow: 2px 2px 0 #CCC;
+            border-radius: 0;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const AUTHORIZED_ROLES = ['Admin', 'Super Admin'];
+
+    // Check for Admin or Super Admin role
+    if (!token || !AUTHORIZED_ROLES.includes(userRole)) {
+        console.error(`Access Denied. Role: ${userRole}`);
+        window.location.href = '/login';
+    }
+</script>
+
+<div class="container">
+    <h1>Transport Reports & Analytics</h1>
+    <div class="nav-links"><a href="/manage-transport.html">← Back to Transport Management</a></div>
+
+    <div class="summary-cards" style="margin-top: 30px;">
+        <div class="card">
+            <h3>Total Vehicles</h3>
+            <p id="total-vehicles" class="value">0</p>
+        </div>
+        <div class="card">
+            <h3>Total Drivers</h3>
+            <p id="total-drivers" class="value">0</p>
+        </div>
+        <div class="card">
+            <h3>Total Routes</h3>
+            <p id="total-routes" class="value">0</p>
+        </div>
+        <div class="card">
+            <h3>Students Assigned</h3>
+            <p id="students-assigned" class="value">0</p>
+        </div>
+    </div>
+
+    <div class="details-grid">
+        <div class="chart-container">
+            <h2>Students Per Route</h2>
+            <canvas id="studentsPerRouteChart"></canvas>
+        </div>
+        <div class="chart-container">
+            <h2>Transport Fee Summary ($)</h2>
+            <canvas id="feeSummaryChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    async function loadDashboardData() {
+        try {
+            // Fetch all report data in parallel
+            const [summaryRes, studentsPerRouteRes, feeSummaryRes] = await Promise.all([
+                fetch('/api/transport/reports/summary', { headers: authHeaders }),
+                fetch('/api/transport/reports/students-per-route', { headers: authHeaders }),
+                fetch('/api/transport/reports/fee-summary', { headers: authHeaders })
+            ]);
+
+            const summaryData = await summaryRes.json();
+            const studentsPerRouteData = await studentsPerRouteRes.json();
+            const feeSummaryData = await feeSummaryRes.json();
+
+            // Populate summary cards
+            document.getElementById('total-vehicles').textContent = summaryData.total_vehicles;
+            document.getElementById('total-drivers').textContent = summaryData.total_drivers;
+            document.getElementById('total-routes').textContent = summaryData.total_routes;
+            document.getElementById('students-assigned').textContent = summaryData.students_assigned;
+            
+            // Render charts
+            renderStudentsPerRouteChart(studentsPerRouteData);
+            renderFeeSummaryChart(feeSummaryData);
+
+        } catch (error) {
+            console.error('Failed to load dashboard data:', error);
+            // Alert user that data failed to load
+            document.querySelectorAll('.card .value').forEach(el => el.textContent = 'Error');
+            alert('Could not load report data. Check API endpoints and server logs.');
+        }
+    }
+
+    function renderStudentsPerRouteChart(data) {
+        const ctx = document.getElementById('studentsPerRouteChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: data.map(item => item.route_name),
+                datasets: [{
+                    label: 'Number of Students',
+                    data: data.map(item => item.student_count),
+                    backgroundColor: 'rgba(0, 90, 156, 0.7)', // Darker blue matching classic theme
+                    borderColor: 'rgba(0, 51, 102, 1)',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+    }
+
+    function renderFeeSummaryChart(data) {
+        const ctx = document.getElementById('feeSummaryChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Paid', 'Unpaid'],
+                datasets: [{
+                    label: 'Fee Status',
+                    data: [data.paid, data.unpaid],
+                    backgroundColor: [
+                        '#28a745', // Paid: Green
+                        '#C0392B' // Unpaid: Red/Maroon
+                    ],
+                    borderColor: [
+                        '#FFF',
+                        '#FFF'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+            }
+        });
+    }
+
+    window.onload = loadDashboardData;
+</script>
+
+</body>
+</html>

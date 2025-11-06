@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Exam & Quiz Management</title>
+    <style>
+        /* --- STYLES OMITTED FOR BREVITY --- */
+        body {
+            font-family: 'Times New Roman', serif;
+            margin: 0;
+            padding: 2em;
+            background-color: #EFEFEF; 
+            color: #111; 
+            line-height: 1.5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 40px;
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 {
+            color: #000;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-align: center;
+            border-bottom: 5px double #000; 
+            padding-bottom: 15px;
+            margin-top: 0;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+        h2 {
+            color: #005A9C; 
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 2px solid #555;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            font-size: 1.5em;
+        }
+        
+        /* --- LAYOUT & CARDS --- */
+        .content-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 30px;
+        }
+        .card {
+            background-color: #fff;
+            border: 1px solid #333;
+            padding: 20px;
+            border-radius: 0;
+            margin-bottom: 25px;
+        }
+        
+        /* --- FORMS & INPUTS --- */
+        label { display: block; margin-top: 10px; font-weight: bold; color: #333; font-size: 0.9em; }
+        input[type="text"], input[type="datetime-local"], input[type="number"], select, textarea, input[type="file"] { 
+            width: 100%; 
+            padding: 8px; 
+            margin-top: 5px; 
+            box-sizing: border-box; 
+            border: 1px solid #555;
+            border-radius: 0; 
+            background-color: #FFFFFF;
+        }
+        .submit-btn { 
+            background-color: #C0392B; 
+            color: #FFFFFF; 
+            font-weight: bold; 
+            padding: 8px 15px; 
+            border: 2px solid #000; 
+            border-radius: 0; 
+            cursor: pointer; 
+            margin-top: 15px;
+            box-shadow: 2px 2px 0 #000;
+        }
+        .btn-action, .btn-secondary {
+             font-size: 0.8em; padding: 5px 10px; margin: 2px;
+             color: white;
+             border: 1px solid #000;
+             box-shadow: 1px 1px 0 #000;
+             cursor: pointer;
+        }
+        .btn-action { background-color: #005A9C; }
+        .btn-secondary { background-color: #777; }
+        .btn-download { background-color: #28a745; margin-top: 10px; }
+        
+        /* --- TABLES --- */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #333; }
+        th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: #FFFFFF; font-weight: bold; text-transform: uppercase; border-color: #333; }
+        tr:nth-child(even) { background-color: #F8F8F8; }
+        .status-published { color: #28A745; font-weight: bold; }
+        .status-draft { color: orange; }
+        .status-archived { color: gray; }
+
+        /* --- MODAL STYLES --- */
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 2000;
+        }
+        .modal-content {
+            background-color: #FFFFFF; padding: 30px; border: 3px solid #005A9C; 
+            width: 90%; max-width: 800px; border-radius: 0; position: relative; box-shadow: 8px 8px 0 #000;
+        }
+        .close-btn { color: #000; position: absolute; top: 10px; right: 20px; font-size: 30px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+<script>
+    // --- Global Configuration ---
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    
+    // UPDATED: Check for both 'Admin' and 'Super Admin'
+    if (!token || (userRole !== 'Admin' && userRole !== 'Super Admin')) { 
+        window.location.href = '/login'; 
+    }
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    const QUESTION_HEADERS = ["Question_Text", "Subject_ID", "Option_A", "Option_B", "Option_C", "Option_D", "Correct_Option", "Marks", "Topic"];
+
+    // --- Helper Functions ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+
+    // --- Data Download Helpers ---
+
+    function generateSampleCSV() {
+        // NOTE: Subject_ID MUST be a UUID from the database!
+        const headerRow = QUESTION_HEADERS.join(',');
+        const sampleData = [
+            `What is the capital of France?,287b32bd-9919-499b-88ec-20574bbc91b1,Rome,Paris,Berlin,Madrid,B,1,Geography`,
+            `What is 2 + 2 * 2?,287b32bd-9919-499b-88ec-20574bbc91b1,6,8,4,2,A,2,Mathematics`
+        ].join('\n');
+        return headerRow + '\n' + sampleData;
+    }
+    
+    function generateSampleJSON() {
+        return JSON.stringify([
+            {
+                "Question_Text": "What is the capital of France?",
+                "Subject_ID": "287b32bd-9919-499b-88ec-20574bbc91b1", 
+                "Option_A": "Rome",
+                "Option_B": "Paris",
+                "Option_C": "Berlin",
+                "Option_D": "Madrid",
+                "Correct_Option": "B",
+                "Marks": 1,
+                "Topic": "Geography"
+            },
+            {
+                "Question_Text": "Which animal is the largest?",
+                "Subject_ID": "287b32bd-9919-499b-88ec-20574bbc91b1",
+                "Option_A": "Elephant",
+                "Option_B": "Blue Whale",
+                "Option_C": "Giraffe",
+                "Option_D": "Rhinoceros",
+                "Correct_Option": "B",
+                "Marks": 1,
+                "Topic": "Biology"
+            }
+        ], null, 2);
+    }
+
+    function downloadFile(filename, content, type) {
+        const blob = new Blob([content], { type: type });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    }
+    
+    function downloadCSVSample() {
+        downloadFile('mcq_sample.csv', generateSampleCSV(), 'text/csv;charset=utf-8;');
+    }
+    
+    function downloadJSONSample() {
+        downloadFile('mcq_sample.json', generateSampleJSON(), 'application/json');
+    }
+
+    // --- File Reading Helper ---
+
+    /**
+     * Reads the content of a local file using FileReader.
+     * @param {File} file - The file object from the input.
+     * @returns {Promise<string>} The file content as a string.
+     */
+    function readFileContent(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => resolve(event.target.result);
+            reader.onerror = (error) => reject(error);
+            reader.readAsText(file);
+        });
+    }
+
+    // --- Core Functions (Quiz CRUD/Fetch) ---
+
+    async function loadDependencies() { /* ... (Logic to load Courses/Subjects) ... */
+        const courseSelect = document.getElementById('quiz-course-select');
+        const subjectSelect = document.getElementById('quiz-subject-select');
+        
+        try {
+            const [courses, subjects] = await Promise.all([
+                handleApi('/api/academicswithfees/courses'),
+                handleApi('/api/academicswithfees/subjects')
+            ]);
+
+            const populate = (select, items, idKey, nameKey) => {
+                select.innerHTML = `<option value="">-- Select --</option>`;
+                items.forEach(item => {
+                    select.innerHTML += `<option value="${item[idKey]}">${item[nameKey]}</option>`;
+                });
+            };
+
+            populate(courseSelect, courses, 'course_id', 'course_name');
+            populate(subjectSelect, subjects, 'subject_id', 'subject_name');
+
+        } catch (error) {
+            console.error('Error loading dependencies:', error);
+            alert('Could not load course/subject lists.');
+        }
+    }
+    
+    async function fetchAndRenderQuizzes() {
+        // ... (Logic to fetch and render quizzes) ...
+        const tbody = document.getElementById('quiz-tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="placeholder-message">Loading quizzes...</td></tr>';
+
+        try {
+            const quizzes = await handleApi('/api/online-exam/quizzes'); 
+            
+            tbody.innerHTML = '';
+            if (quizzes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="placeholder-message">No assessments defined.</td></tr>';
+                return;
+            }
+
+            quizzes.forEach(q => {
+                const statusClass = q.status === 'Published' ? 'status-published' : q.status === 'Draft' ? 'status-draft' : 'status-archived';
+                const row = `<tr>
+                    <td>${q.title}</td>
+                    <td>${q.course_name || '-'} / ${q.subject_name || '-'}</td>
+                    <td>${q.total_questions || '-'}</td>
+                    <td>${q.time_limit || '-'} min</td>
+                    <td class="${statusClass}">${q.status}</td>
+                    <td>
+                        <button class="btn-action" onclick="editQuiz('${q.id}')">Edit</button>
+                        <button class="btn-secondary" onclick="manageQuestions('${q.id}')">Questions</button>
+                        <button class="btn-secondary" onclick="viewResults('${q.id}')">Results</button>
+                    </td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error('Error fetching quizzes:', error);
+            tbody.innerHTML = `<tr><td colspan="6" class="placeholder-message" style="color: #C0392B;">Error loading quizzes: ${error.message}</td></tr>`;
+        }
+    }
+
+    async function submitQuiz(e) {
+        e.preventDefault();
+        const form = e.target;
+        const submitBtn = document.getElementById('submit-quiz-btn');
+        submitBtn.disabled = true;
+
+        const formData = {
+            id: form.elements['quiz-id'].value || null,
+            title: form.elements['quiz-title'].value,
+            type: form.elements['quiz-type'].value,
+            course_id: form.elements['quiz-course-select'].value,
+            subject_id: form.elements['quiz-subject-select'].value,
+            time_limit: parseInt(form.elements['time-limit'].value),
+            start_time: form.elements['start-time'].value,
+            end_time: form.elements['end-time'].value,
+            status: form.elements['quiz-status'].value
+        };
+
+        // --- Client-Side Validation for Foreign Keys ---
+        if (!formData.course_id || !formData.subject_id) {
+            alert('Please select a Course and a Subject before saving the quiz.');
+            submitBtn.disabled = false;
+            return;
+        }
+
+        const isUpdate = !!formData.id;
+        const url = isUpdate ? `/api/online-exam/quizzes/${formData.id}` : '/api/online-exam/quizzes';
+        const method = isUpdate ? 'PUT' : 'POST';
+
+        try {
+            await handleApi(url, { method: method, body: JSON.stringify(formData) });
+            
+            alert(`✅ Quiz ${isUpdate ? 'updated' : 'created'} successfully!`);
+            form.reset();
+            form.elements['quiz-id'].value = '';
+            fetchAndRenderQuizzes();
+
+        } catch (error) {
+            alert(`❌ Error saving quiz: ${error.message}. Ensure Course/Subject IDs are valid integers.`);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+    
+    // --- Feature Functions (Now Correctly passing UUID strings) ---
+    function editQuiz(quizId) { 
+        if (!quizId) return; 
+        alert(`Action: Loading Quiz ID ${quizId} for editing.`); 
+        // Logic to fetch quiz details and populate form would go here
+    }
+    function manageQuestions(quizId) { 
+        if (!quizId) return; 
+        alert(`Action: Redirecting to Question Management interface for Quiz ID ${quizId}.`); 
+    }
+    function viewResults(quizId) { 
+        if (!quizId) return; 
+        alert(`Action: Showing student results and statistics for Quiz ID ${quizId}.`); 
+    }
+    function openQuestionBank() { alert('Action: Opening the main Question Bank interface for central management.'); }
+    
+    // F18: Bulk Import Questions (Open Modal)
+    function openBulkImport() {
+        document.getElementById('bulk-import-modal').style.display = 'flex';
+    }
+
+    async function submitBulkImport(e) {
+        e.preventDefault();
+        const form = e.target;
+        const submitBtn = document.getElementById('submit-import-btn');
+        submitBtn.disabled = true;
+
+        const fileInput = form.elements['import-file-input'];
+        const rawDataInput = form.elements['import-data-input'];
+        const format = form.elements['import-format-select'].value;
+        
+        let rawData = rawDataInput.value;
+        let questions = [];
+
+        try {
+            // 1. Read file content if a file is selected
+            if (fileInput.files.length > 0) {
+                rawData = await readFileContent(fileInput.files[0]);
+            } else if (!rawData) {
+                throw new Error('Please select a file or paste raw data.');
+            }
+
+            // 2. Parse data based on format
+            if (format === 'JSON') {
+                questions = JSON.parse(rawData);
+            } else if (format === 'CSV') {
+                const lines = rawData.trim().split('\n').filter(line => line.trim() !== '');
+                if (lines.length > 0) {
+                    const headers = QUESTION_HEADERS;
+                    // Assumes first line contains headers and skips it, otherwise uses all lines
+                    const dataLines = lines[0].includes('Question_Text') ? lines.slice(1) : lines; 
+                     
+                    questions = dataLines.map(line => {
+                        const values = line.split(',');
+                        return headers.reduce((obj, header, index) => {
+                            obj[header] = values[index] ? values[index].trim() : null;
+                            return obj;
+                        }, {});
+                    });
+                }
+            }
+
+            // 3. Final Validation
+            if (!Array.isArray(questions) || questions.length === 0 || questions.some(q => !q.Question_Text || !q.Subject_ID)) {
+                throw new Error('Parsed data is empty or missing required fields (Question_Text, Subject_ID).');
+            }
+            
+            // --- CRITICAL DATA VALIDATION FOR UUID TYPE ---
+            // Ensure Subject_ID is a valid UUID string (not an integer like "2")
+            const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+            const invalidSubject = questions.find(q => q.Subject_ID && !uuidRegex.test(q.Subject_ID));
+            if (invalidSubject) {
+                throw new Error(`Subject_ID "${invalidSubject.Subject_ID}" is not a valid UUID. Check your import data.`);
+            }
+            // ---------------------------------------------
+
+
+            // 4. API call for bulk import
+            const result = await handleApi('/api/online-exam/question-bank/import', { 
+                method: 'POST', 
+                body: JSON.stringify({ questions }) 
+            });
+
+            alert(`✅ Import successful: ${result.message}`);
+            document.getElementById('bulk-import-modal').style.display = 'none';
+            form.reset();
+        } catch (error) {
+            // Error is now either a UUID mismatch (client-side) or a foreign key violation (server-side)
+            alert(`❌ Import failed: ${error.message}. Check file format or console for details.`);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', async () => {
+        
+        await loadDependencies();
+        await fetchAndRenderQuizzes();
+        
+        // Attach form submission handlers
+        const quizForm = document.getElementById('quiz-form');
+        if (quizForm) {
+            quizForm.addEventListener('submit', submitQuiz);
+        }
+
+        const importForm = document.getElementById('bulk-import-form');
+        if (importForm) {
+            importForm.addEventListener('submit', submitBulkImport);
+        }
+        
+    });
+</script>
+
+<div class="container">
+    <h1>Online Exam & Assessment Manager</h1>
+
+    <div class="nav-links">
+        <a href="/admin-dashboard.html">← Back to Dashboard</a>
+        |
+        <a href="/online-learning.html">Online Module Manager</a>
+        |
+        <a href="/quiz.html">Online Quiz</a>
+    </div>
+
+    <div class="content-grid">
+        
+        <div class="card">
+            <h2>Create/Edit Quiz</h2>
+            <form id="quiz-form">
+                <input type="hidden" name="quiz-id" value="">
+
+                <label for="quiz-title">Quiz/Exam Title:</label>
+                <input type="text" id="quiz-title" name="quiz-title" required>
+
+                <label for="quiz-type">Assessment Type:</label>
+                <select id="quiz-type" name="quiz-type" required>
+                    <option value="Quiz">Quiz (Short)</option>
+                    <option value="Exam">Mid-term/Final Exam</option>
+                    <option value="Test">Unit Test</option>
+                </select>
+
+                <label for="quiz-course-select">Course:</label>
+                <select id="quiz-course-select" name="quiz-course-select" required>
+                    <option value="">Loading...</option>
+                </select>
+
+                <label for="quiz-subject-select">Subject:</label>
+                <select id="quiz-subject-select" name="quiz-subject-select" required>
+                    <option value="">Loading...</option>
+                </select>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label for="time-limit">Time Limit (Minutes):</label>
+                        <input type="number" id="time-limit" name="time-limit" min="5" value="60" required>
+                    </div>
+                    <div>
+                        <label for="quiz-status">Status:</label>
+                        <select id="quiz-status" name="quiz-status" required>
+                            <option value="Draft">Draft</option>
+                            <option value="Published">Published</option>
+                            <option value="Archived">Archived</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <label for="start-time">Availability Start Time:</label>
+                    <input type="datetime-local" id="start-time" name="start-time">
+                    
+                    <label for="end-time">Availability End Time:</label>
+                    <input type="datetime-local" id="end-time" name="end-time">
+                </div>
+                
+                <button type="submit" id="submit-quiz-btn" class="submit-btn" style="background-color: #005A9C;">Save Quiz/Assessment</button>
+            </form>
+            
+            <h3 style="margin-top: 25px;">Question Bank</h3>
+            <button class="btn-action" onclick="openQuestionBank()">Go to Central Question Bank</button>
+            <button class="btn-secondary" onclick="openBulkImport()">Import Questions</button>
+        </div>
+
+        <div class="card">
+            <h2>Active Assessments</h2>
+            
+            <div style="margin-bottom: 15px;">
+                <button class="btn-secondary" onclick="alert('Action: Open bulk assignment/scheduling modal.')">Bulk Schedule</button>
+                <button class="btn-secondary" onclick="alert('Action: Open performance reporting dashboard.')">Global Reports</button>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Course/Subject</th>
+                        <th>Q Count</th>
+                        <th>Time</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="quiz-tbody">
+                    <tr><td colspan="6" class="placeholder-message">Loading assessments...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+    </div>
+</div>
+
+<div id="bulk-import-modal" class="modal" style="justify-content: center; align-items: center;">
+    <div class="modal-content">
+        <span class="close-btn" onclick="document.getElementById('bulk-import-modal').style.display='none'">&times;</span>
+        <h3 style="color: #C0392B; border-bottom: 2px solid #C0392B; margin-top: 0;">Bulk Question Import (CSV/JSON)</h3>
+        
+        <p style="font-size: 0.9em;">Paste your question data below OR upload a file. Data must include <code>Question_Text</code> and <code>Subject_ID</code>.</p>
+        
+        <div style="margin-bottom: 15px;">
+            <strong>Sample Files:</strong>
+            <button class="btn-download" onclick="downloadCSVSample()">Download Sample CSV</button>
+            <button class="btn-download" onclick="downloadJSONSample()">Download Sample JSON</button>
+        </div>
+
+        <form id="bulk-import-form">
+            <label for="import-format-select">Data Format:</label>
+            <select id="import-format-select" name="import-format-select" required style="width: 100%; padding: 8px;">
+                <option value="JSON">JSON (Array of Objects)</option>
+                <option value="CSV">CSV (Comma Separated Values)</option>
+            </select>
+            
+            <label for="import-file-input">Upload File:</label>
+            <input type="file" id="import-file-input" name="import-file-input" accept=".csv, .json" />
+            
+            <label for="import-data-input" style="margin-top: 15px;">OR Paste Raw Data:</label>
+            <textarea id="import-data-input" name="import-data-input" rows="7" placeholder="Paste question data here..."></textarea>
+            
+            <button type="submit" id="submit-import-btn" class="submit-btn" style="width: 100%; background-color: #C0392B;">Upload and Import</button>
+        </form>
+    </div>
+</div>
+
+</body>
+</html>

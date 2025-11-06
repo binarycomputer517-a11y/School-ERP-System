@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hostel Gate Scanner</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        body { background-color: #333; color: white; }
+        .container { max-width: 600px; }
+        #qr-reader { border: 2px solid white; border-radius: 8px; overflow: hidden; }
+        #scan-result { margin-top: 20px; padding: 15px; border-radius: 5px; text-align: center; font-size: 1.2em; display: none; }
+        .result-success { background-color: #28a745; }
+        .result-error { background-color: #dc3545; }
+        button { width: 100%; padding: 15px; font-size: 1.2em; }
+    </style>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    // Assuming a 'Security' or 'Admin' role
+    if (!token || !['Admin', 'Security'].includes(localStorage.getItem('user-role'))) {
+        window.location.href = '/login';
+    }
+</script>
+<div class="container">
+    <h1>Hostel Security Scanner</h1>
+    <div id="qr-reader"></div>
+    <div id="scan-result"></div>
+</div>
+
+<script>
+    const authHeaders = { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
+    const resultDiv = document.getElementById('scan-result');
+    let lastScanTime = 0;
+    const scanCooldown = 3000; // 3 seconds cooldown to prevent double scans
+
+    function showResult(message, isSuccess) {
+        resultDiv.textContent = message;
+        resultDiv.className = isSuccess ? 'result-success' : 'result-error';
+        resultDiv.style.display = 'block';
+    }
+
+    // This function is called when a QR code is successfully scanned
+    async function onScanSuccess(decodedText, decodedResult) {
+        const now = Date.now();
+        if (now - lastScanTime < scanCooldown) {
+            // Ignore scan if it's within the cooldown period
+            return;
+        }
+        lastScanTime = now;
+        
+        console.log(`Scan result: ${decodedText}`);
+        
+        try {
+            const response = await fetch('/api/hostel/gatepass/scan', {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ qr_code_hash: decodedText })
+            });
+            
+            const result = await response.json();
+            showResult(result.message, result.success);
+
+        } catch (error) {
+            console.error("API call failed:", error);
+            showResult('Error communicating with the server.', false);
+        }
+    }
+
+    function onScanFailure(error) {
+        // This function is called when no QR code is found. We can ignore it for a cleaner UI.
+        // console.warn(`QR error: ${error}`);
+    }
+
+    // Initialize and start the scanner when the page loads
+    document.addEventListener('DOMContentLoaded', (event) => {
+        let html5QrcodeScanner = new Html5QrcodeScanner(
+            "qr-reader", 
+            { fps: 10, qrbox: { width: 250, height: 250 } },
+            /* verbose= */ false);
+        html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enroll New Student</title>
+    
+    <script src="add-student.js" defer></script> 
+    
+    <style>
+        /* BASE ERP STYLES */
+        :root {
+            --primary-color: #005A9C; 
+            --accent-color: #C0392B; 
+            --border-color: #333333; 
+            --font-serif: 'Times New Roman', serif;
+            --font-sans: Arial, sans-serif;
+            --tab-background: #f1f1f1;
+            --tab-active-color: #ffffff;
+            --progress-fill: #1ABC9C; /* Greenish-Teal for completion */
+        }
+        
+        body {
+            font-family: var(--font-serif);
+            background-color: #f8f8f8;
+            padding: 40px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 2px solid var(--border-color);
+            box-shadow: 6px 6px 0px #cccccc;
+            padding: 30px 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            border-bottom: 3px double var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-family: var(--font-sans);
+            font-weight: bold;
+        }
+        
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        /* Input & Button Styles (Grid-specific) */
+        label { display: block; margin-top: 10px; margin-bottom: 4px; font-weight: 600; }
+        input[type="text"], input[type="date"], input[type="email"], input[type="tel"], input[type="password"], input[type="number"], select, textarea {
+            width: 100%; padding: 8px; border: 1px solid #777; box-sizing: border-box; font-family: var(--font-serif);
+        }
+        button[type="submit"] { 
+            padding: 10px 18px; background-color: var(--accent-color); color: white; border: 2px solid var(--border-color); 
+            font-weight: bold; cursor: pointer; margin-top: 20px; width: 100%; 
+        }
+        .button {
+            display: inline-block; padding: 10px 18px; background-color: var(--accent-color); color: white; text-decoration: none; border: 2px solid var(--border-color); 
+            font-weight: bold; box-shadow: 2px 2px 0 var(--border-color); transition: all 0.1s; margin-right: 10px;
+        }
+
+        /* --- PROGRESS BAR STYLES --- */
+        #progressBarContainer {
+            width: 100%;
+            background-color: var(--tab-background);
+            border-radius: 5px;
+            margin-bottom: 25px;
+            border: 1px solid #ccc;
+        }
+
+        #progressBar {
+            height: 25px;
+            width: 25%; /* Start at 25% for the first step */
+            background-color: var(--progress-fill);
+            text-align: center;
+            line-height: 25px;
+            color: white;
+            border-radius: 5px;
+            transition: width 0.4s ease-in-out;
+            font-family: var(--font-sans);
+            font-size: 0.9em;
+        }
+
+        /* --- TAB SPECIFIC STYLES --- */
+        .tab-bar {
+            display: flex;
+            margin-bottom: 1px;
+            border-bottom: 2px solid var(--primary-color);
+            overflow-x: auto;
+        }
+        
+        .tab-button {
+            background-color: var(--tab-background);
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 1.0em;
+            border: 1px solid var(--primary-color);
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+            outline: none;
+            color: var(--primary-color);
+            font-family: var(--font-sans);
+            flex-shrink: 0;
+        }
+        
+        .tab-button.active {
+            background-color: var(--primary-color);
+            color: var(--tab-active-color);
+            border-color: var(--primary-color);
+        }
+
+        .tab-content {
+            border: 1px solid var(--primary-color);
+            padding: 20px;
+            min-height: 400px;
+        }
+
+        .tab-content fieldset {
+            display: none;
+            border: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .tab-content fieldset.active {
+            display: block;
+        }
+
+        /* --- GRID LAYOUT --- */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr); 
+            gap: 20px;
+        }
+        .full-width-section {
+            grid-column: 1 / -1; 
+        }
+        .form-grid .full-width-item {
+            grid-column: 1 / -1;
+        }
+
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Enroll New Student</h1>
+            <nav>
+                <a href="/students-list.html" class="button">View Students List</a>
+                <a href="/edit-student.html" class="button">Edit Existing Student</a> 
+            </nav>
+        </header>
+
+        <div id="progressBarContainer">
+            <div id="progressBar">Step 1 of 4</div>
+        </div>
+
+        <form id="addStudentForm" action="/api/students" method="POST"> 
+            
+            <fieldset style="display: none;">
+                <legend>System IDs</legend>
+                <input type="hidden" name="academic_session_id" value="22059457-4af5-416e-8714-5111c959a53b" required>
+                <input type="hidden" name="branch_id" value="a1b2c3d4-e5f6-7890-abcd-ef0123456789"> 
+                <input type="hidden" name="created_by" value="<ADMIN_USER_ID_UUID>">
+            </fieldset>
+
+            <div class="tab-bar" id="tabBar">
+                <button type="button" class="tab-button active" data-step="1" onclick="openTab(event, 'personal')">1. Personal & Address</button>
+                <button type="button" class="tab-button" data-step="2" onclick="openTab(event, 'academics')">2. Academics & Fees</button>
+                <button type="button" class="tab-button" data-step="3" onclick="openTab(event, 'parents')">3. Parent/Guardian</button>
+                <button type="button" class="tab-button" data-step="4" onclick="openTab(event, 'login')">4. Login/Security</button>
+            </div>
+
+            <div class="tab-content">
+                
+                <fieldset id="personal" class="active">
+                    <legend>👤 Student Personal Details (Required)</legend>
+                    <div class="form-grid">
+                        
+                        <div>
+                            <label for="admission_id">Admission ID: (Unique)</label>
+                            <input type="text" id="admission_id" name="admission_id" required>
+                        </div>
+                        <div>
+                            <label for="admission_date">Admission Date:</label>
+                            <input type="date" id="admission_date" name="admission_date" value="2025-11-02" required>
+                        </div>
+                        <div>
+                            <label for="roll_number">Roll Number (Optional):</label>
+                            <input type="text" id="roll_number" name="roll_number" placeholder="System generated, often">
+                        </div>
+                        
+                        <div>
+                            <label for="first_name">First Name:</label>
+                            <input type="text" id="first_name" name="first_name" required>
+                        </div>
+                        <div>
+                            <label for="middle_name">Middle Name:</label>
+                            <input type="text" id="middle_name" name="middle_name">
+                        </div>
+                        <div>
+                            <label for="last_name">Last Name:</label>
+                            <input type="text" id="last_name" name="last_name" required>
+                        </div>
+
+                        <div>
+                            <label for="dob">Date of Birth (DOB):</label>
+                            <input type="date" id="dob" name="dob" required>
+                        </div>
+                        <div>
+                            <label for="gender">Gender:</label>
+                            <select id="gender" name="gender">
+                                <option value="">Select Gender</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="blood_group">Blood Group:</label>
+                            <input type="text" id="blood_group" name="blood_group" maxlength="5" placeholder="e.g., A+, O-">
+                        </div>
+
+                        <div>
+                            <label for="nationality">Nationality:</label>
+                            <input type="text" id="nationality" name="nationality" value="Indian" required>
+                        </div>
+                        <div>
+                            <label for="religion">Religion:</label>
+                            <input type="text" id="religion" name="religion" placeholder="e.g., Hindu, Christian">
+                        </div>
+                        <div>
+                            <label for="mother_tongue">Mother Tongue:</label>
+                            <input type="text" id="mother_tongue" name="mother_tongue" placeholder="e.g., Hindi, English">
+                        </div>
+                        
+                        <div class="full-width-item">
+                            <label for="aadhaar_number">Aadhaar / National ID:</label>
+                            <input type="text" id="aadhaar_number" name="aadhaar_number" maxlength="12" placeholder="Mandatory official ID">
+                        </div>
+                        
+                        <div class="full-width-item">
+                            <label for="caste_category">Caste/Category:</label>
+                            <select id="caste_category" name="caste_category">
+                                <option value="">Select Category</option>
+                                <option value="General">General</option>
+                                <option value="OBC">OBC</option>
+                                <option value="SC">SC</option>
+                                <option value="ST">ST</option>
+                                <option value="Other">Other</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <hr class="full-width-section">
+                    <legend>🏠 Permanent Address</legend>
+                    <div class="form-grid">
+                        <div class="full-width-item">
+                            <label for="permanent_address">Street/Line 1:</label>
+                            <textarea id="permanent_address" name="permanent_address" rows="2"></textarea>
+                        </div>
+                        
+                        <div>
+                            <label for="city">City/Town:</label>
+                            <input type="text" id="city" name="city">
+                        </div>
+                        <div>
+                            <label for="state">State/Province:</label>
+                            <input type="text" id="state" name="state">
+                        </div>
+                        <div>
+                            <label for="zip_code">Zip/Postal Code:</label>
+                            <input type="text" id="zip_code" name="zip_code" maxlength="10">
+                        </div>
+                        
+                        <div class="full-width-item">
+                            <label for="country">Country:</label>
+                            <input type="text" id="country" name="country" value="India" required>
+                        </div>
+                    </div>
+                </fieldset>
+                
+                <fieldset id="academics">
+                    <legend>🎓 Course/Batch Selection (Required)</legend>
+                    <div class="form-grid">
+                        <div class="full-width-item">
+                            <label for="course_id">Course:</label>
+                            <select id="course_id" name="course_id" required>
+                                <option value="">Select Course</option>
+                            </select>
+                        </div>
+
+                        <div class="full-width-item">
+                            <label for="batch_id">Batch:</label>
+                            <select id="batch_id" name="batch_id" required>
+                                <option value="">Select Batch</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="fee-structure-display" class="full-width-item" style="border: 1px dashed #ccc; padding: 10px; margin-top: 20px; font-size: 0.95em;">
+                        Fee structure details will appear here upon Course and Batch selection.
+                    </div>
+                    
+                    <div id="subjects-display" class="full-width-item" style="border: 1px dashed #ccc; padding: 10px; margin-top: 20px; font-size: 0.95em;">
+                        <p>Subjects assigned to this Course will appear here.</p>
+                    </div>
+                </fieldset>
+
+                <fieldset id="parents">
+                    <legend>👨‍👩‍👧 Parent/Guardian Details (Official Records)</legend>
+                    <div class="form-grid">
+                        
+                        <div>
+                            <label for="parent_first_name">Parent First Name:</label>
+                            <input type="text" id="parent_first_name" name="parent_first_name">
+                        </div>
+                        <div>
+                            <label for="parent_last_name">Parent Last Name:</label>
+                            <input type="text" id="parent_last_name" name="parent_last_name">
+                        </div>
+                        <div>
+                            <label for="parent_occupation">Parent Occupation/Profession:</label>
+                            <input type="text" id="parent_occupation" name="parent_occupation" placeholder="e.g., Engineer, Teacher">
+                        </div>
+
+                        <div>
+                            <label for="parent_phone_number">Parent Phone:</label>
+                            <input type="tel" id="parent_phone_number" name="parent_phone_number">
+                        </div>
+                        <div>
+                            <label for="parent_email">Parent Email:</label>
+                            <input type="email" id="parent_email" name="parent_email">
+                        </div>
+                        <div>
+                            <label for="parent_annual_income">Parent Annual Income (₹):</label>
+                            <input type="number" id="parent_annual_income" name="parent_annual_income" step="0.01" placeholder="For financial aid/scholarship">
+                        </div>
+                        
+                        <div class="full-width-item">
+                            <label for="guardian_relation">Guardian's Relation to Student (If not Parent):</label>
+                            <input type="text" id="guardian_relation" name="guardian_relation" placeholder="e.g., Uncle, Legal Guardian">
+                        </div>
+                    </div>
+
+                    <hr class="full-width-section">
+                    <legend>🚨 Emergency Contacts</legend>
+                    <div class="form-grid">
+                        <div>
+                            <label for="emergency_contact_name">Emergency Contact Name:</label>
+                            <input type="text" id="emergency_contact_name" name="emergency_contact_name" placeholder="Secondary contact">
+                        </div>
+                        <div>
+                            <label for="emergency_contact_number">Emergency Contact Number:</label>
+                            <input type="tel" id="emergency_contact_number" name="emergency_contact_number" placeholder="Secondary contact number">
+                        </div>
+                        <div></div> 
+                    </div>
+                </fieldset>
+
+                <fieldset id="login">
+                    <legend>🔑 Student Login Credentials (Required)</legend>
+                    <p class="full-width-section">A new user account with role 'student' will be created.</p>
+                    <div class="form-grid">
+                        
+                        <div>
+                            <label for="username">Username:</label>
+                            <input type="text" id="username" name="username" required>
+                        </div>
+                        <div>
+                            <label for="email">Email (Login):</label>
+                            <input type="email" id="email" name="email" required>
+                        </div>
+                        <div>
+                            <label for="phone_number">Phone Number:</label>
+                            <input type="tel" id="phone_number" name="phone_number">
+                        </div>
+
+                        <div>
+                            <label for="password">Password:</label>
+                            <input type="password" id="password" name="password" required>
+                        </div>
+                        <div>
+                            <label for="confirm_password">Confirm Password:</label>
+                            <input type="password" id="confirm_password" name="confirm_password" required>
+                        </div>
+                        <div></div> 
+                    </div>
+                </fieldset>
+
+            </div>
+            <button type="submit">Add Student</button>
+        </form>
+    </div>
+    
+    </body>
+</html>

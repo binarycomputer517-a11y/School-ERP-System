@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Alumni Management</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') window.location.href = '/login';
+</script>
+<div class="container">
+    <h1>Alumni Management</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">Back to Dashboard</a></div>
+    <h2>Add Student to Alumni Network</h2>
+    <form id="alumni-form">
+        <label for="student-select">Select Graduated Student:</label>
+        <select id="student-select" name="student_id" required></select>
+        <label for="passing_year">Passing Year:</label>
+        <input type="number" id="passing_year" name="passing_year" placeholder="e.g., 2024" required>
+        <label for="current_profession">Current Profession:</label>
+        <input type="text" id="current_profession" name="current_profession">
+        <button type="submit">Add to Alumni</button>
+    </form>
+    <h2 style="margin-top: 40px;">Alumni List</h2>
+    <table>
+        <thead><tr><th>Student Name</th><th>Passing Year</th><th>Profession</th></tr></thead>
+        <tbody id="alumni-list-body"></tbody>
+    </table>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    async function loadDropdownsAndList() {
+        try {
+            // Fetch and populate students
+            const studentSelect = document.getElementById('student-select');
+            // Check for success status before parsing JSON
+            const studentRes = await fetch('/api/students', { headers: authHeaders });
+            if (!studentRes.ok) throw new Error(`Failed to fetch students: ${studentRes.status}`);
+            const students = await studentRes.json();
+
+            studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+            
+            // FIX: Filter out students with null/undefined ID and use first_name/last_name for display
+            studentSelect.innerHTML += students
+                .filter(s => s.id) 
+                .map(s => 
+                    `<option value="${s.id}">${s.first_name} ${s.last_name}</option>`
+                ).join('');
+
+            // Fetch and display alumni
+            const alumniRes = await fetch('/api/alumni', { headers: authHeaders });
+            // Check for success status 
+            if (!alumniRes.ok) throw new Error(`Failed to fetch alumni: ${alumniRes.status}`);
+
+            const alumni = await alumniRes.json();
+            const tableBody = document.getElementById('alumni-list-body');
+            tableBody.innerHTML = '';
+            // student_name field is expected from the updated backend query (alumni.js)
+            alumni.forEach(alum => {
+                tableBody.innerHTML += `<tr><td>${alum.student_name}</td><td>${alum.passing_year}</td><td>${alum.current_profession || 'N/A'}</td></tr>`;
+            });
+        } catch (err) {
+            console.error("Failed to load data:", err);
+            // Alert uses the error message to provide more context
+            alert("Could not load page data. Please try again. Details: " + err.message);
+        }
+    }
+
+    document.getElementById('alumni-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target).entries());
+        fetch('/api/alumni', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(data)
+        }).then(res => {
+            if (res.ok) {
+                alert('Alumni record added!');
+                this.reset();
+                loadDropdownsAndList(); // Reload everything
+            } else {
+                // Handle JSON error response from the fixed backend
+                res.json().then(json => alert('Error: ' + (json.error || json.details))).catch(() => {
+                    res.text().then(text => alert('Error: ' + text));
+                });
+            }
+        });
+    });
+
+    window.onload = loadDropdownsAndList;
+</script>
+</body>
+</html>

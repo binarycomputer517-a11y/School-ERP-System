@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Submissions</title>
+    <style>
+        /* --- Styles copied from style.css / homework-assignments.html --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; 
+            padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+            line-height: 1.6;
+        }
+
+        .container { 
+            max-width: 1300px; 
+            margin: auto; 
+            padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+
+        h1 { 
+            color: #C0392B; 
+            font-weight: bold; 
+            text-transform: uppercase; 
+            text-align: center; 
+            border-bottom: 5px double #000; 
+            padding-bottom: 15px; 
+            margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; 
+            font-weight: bold; 
+            border-bottom: 2px solid #999; 
+            padding-bottom: 5px; 
+            margin-top: 25px; 
+            margin-bottom: 15px;
+        }
+        .details-box {
+            border: 1px solid #555;
+            padding: 15px;
+            background-color: #F8F8F8;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .detail-item {
+            flex: 1;
+            min-width: 200px;
+            padding: 0 15px;
+        }
+        .detail-item strong { color: #005A9C; display: block; margin-bottom: 5px;}
+
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 15px; 
+            border: 1px solid #333; 
+        }
+        th, td { 
+            padding: 10px; 
+            text-align: left; 
+            border: 1px solid #CCC; 
+            font-size: 0.9em; 
+            border-collapse: collapse;
+        }
+        th { 
+            background-color: #333; 
+            color: white; 
+            text-transform: uppercase; 
+        }
+        tbody tr:hover { background-color: #f0f0f0; }
+
+        .action-btn { 
+            background-color: #005A9C; 
+            color: white; 
+            padding: 8px 12px; 
+            border: 2px solid #000; 
+            border-radius: 0; 
+            cursor: pointer; 
+            margin: 2px;
+            box-shadow: 2px 2px 0 #000; 
+            font-weight: bold;
+            font-size: 0.8em;
+            transition: box-shadow 0.1s, transform 0.1s;
+        }
+        .action-btn:hover { 
+            background-color: #003366; 
+            box-shadow: 1px 1px 0 #000; 
+            transform: translate(1px, 1px);
+        }
+        .action-btn.grade { background-color: #28a745; }
+        .action-btn.late { color: #C0392B; font-weight: bold;}
+    </style>
+</head>
+<body>
+    <script>
+        // --- Global Configuration (Must match assignments.js) ---
+        const token = localStorage.getItem('erp-token');
+        const sessionId = localStorage.getItem('active_session_id');
+        const userRole = localStorage.getItem('user-role'); 
+        
+        // This page is primarily for Managers (Teacher/Admin/Super Admin)
+        if (!token || !['Super Admin', 'Admin', 'Teacher', 'Coordinator'].includes(userRole)) { 
+            window.location.href = '/login'; 
+        }
+        
+        const authHeaders = { 
+            'Authorization': `Bearer ${token}`,
+            'X-Session-ID': sessionId 
+        };
+
+        // --- Helper for API Calls (Copied from homework-assignments.html) ---
+        async function handleApi(url, options = {}) {
+            options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: 'Server error.' }));
+                throw new Error(`API failed: ${errorBody.message}`);
+            }
+            return response.json();
+        }
+
+        // --- Utility: Get URL Parameter ---
+        function getUrlParameter(name) {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get(name);
+        }
+
+        // --- Core Load Functions ---
+
+        async function loadSubmissionsPage() {
+            const assignmentId = getUrlParameter('assignment_id');
+            const assignmentTitleEl = document.getElementById('assignment-title');
+            const submissionsTbody = document.getElementById('submissions-tbody');
+            
+            if (!assignmentId) {
+                assignmentTitleEl.textContent = 'Error: No Assignment ID specified.';
+                submissionsTbody.innerHTML = '<tr><td colspan="6">Cannot load submissions.</td></tr>';
+                return;
+            }
+
+            try {
+                // 1. Fetch Assignment Details (for context)
+                // NOTE: This uses the existing /api/assignments/:id route
+                const assignment = await handleApi(`/api/assignments/${assignmentId}`);
+                assignmentTitleEl.textContent = assignment.title;
+                document.getElementById('due-date').textContent = new Date(assignment.due_date).toLocaleString();
+                document.getElementById('max-marks-display').textContent = assignment.max_marks;
+                
+                // NOTE: These details need to be loaded from another API or included in the /api/assignments/:id response.
+                document.getElementById('course-batch').textContent = `${assignment.course_id} / ${assignment.batch_id}`; 
+                document.getElementById('subject').textContent = assignment.subject_id; 
+                
+                // 2. Fetch Submissions (Requires NEW Backend Route)
+                submissionsTbody.innerHTML = '<tr><td colspan="6">Fetching submissions...</td></tr>';
+                
+                // ⚠️ API INTEGRATION POINT: 
+                // Implement GET /api/submissions/:assignmentId on the backend to fetch this data.
+                const submissions = await handleApi(`/api/submissions/${assignmentId}`); 
+                
+                // 3. Render Submissions
+                renderSubmissions(submissions, assignment.max_marks);
+
+            } catch (error) {
+                assignmentTitleEl.textContent = 'Assignment Details Failed to Load';
+                submissionsTbody.innerHTML = `<tr><td colspan="6" style="color:#C0392B;">Error fetching data: ${error.message}</td></tr>`;
+            }
+        }
+
+        function renderSubmissions(submissions, maxMarks) {
+            const submissionsTbody = document.getElementById('submissions-tbody');
+            
+            if (!submissions || submissions.length === 0) {
+                 submissionsTbody.innerHTML = '<tr><td colspan="6">No submissions received yet.</td></tr>';
+                 return;
+            }
+
+            submissionsTbody.innerHTML = submissions.map(s => {
+                const marksDisplay = s.marks_obtained !== null 
+                    ? `<span style="color:#28a745; font-weight: bold;">${s.marks_obtained} / ${maxMarks}</span>`
+                    : '<span style="color:#C0392B;">Pending Grade</span>';
+                
+                // Requires s.is_late and s.submitted_at in API response
+                const statusLate = s.is_late ? `<span class="action-btn late" style="margin-top:0;">LATE</span>` : '';
+                
+                // Requires submission_path or submission_text from API
+                const submissionType = s.submission_path ? 'File' : (s.submission_text ? 'Text' : 'N/A');
+
+                return `
+                    <tr>
+                        <td>${s.student_name} (${s.roll_number})</td>
+                        <td>${new Date(s.submitted_at).toLocaleString()} ${statusLate}</td>
+                        <td>${submissionType}</td>
+                        <td>${marksDisplay}</td>
+                        <td>
+                            <button class="action-btn view" onclick="viewSubmissionDetails('${s.id}')">View Details</button>
+                            <button class="action-btn grade" onclick="openGradingModal('${s.id}', '${s.student_name}', ${s.marks_obtained || 'null'})">Grade</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // --- Action Handlers (Placeholders for Modals/APIs) ---
+        function viewSubmissionDetails(submissionId) {
+            alert(`Action: Open viewer for Submission ID: ${submissionId}`);
+        }
+
+        function openGradingModal(submissionId, studentName, currentMarks) {
+            const maxMarks = document.getElementById('max-marks-display').textContent;
+            const marks = prompt(`Enter marks (Max: ${maxMarks}) for ${studentName}:`, currentMarks || 0);
+            
+            if (marks !== null && !isNaN(parseInt(marks))) {
+                saveGrade(submissionId, parseInt(marks));
+            } else if (marks !== null) {
+                alert('Invalid input. Please enter a number.');
+            }
+        }
+        
+        async function saveGrade(submissionId, marks) {
+            
+            // ⚠️ API INTEGRATION POINT:
+            // Implement PUT /api/submissions/grade/:submissionId on the backend to save the grade.
+
+            try {
+                await handleApi(`/api/submissions/grade/${submissionId}`, { 
+                    method: 'PUT',
+                    body: JSON.stringify({ marks_obtained: marks, graded_by: userRole }) // Placeholder for user ID
+                });
+                alert('Grade saved successfully! Reloading...');
+                loadSubmissionsPage(); // Reload data after successful save
+            } catch (error) {
+                alert(`Error saving grade: ${error.message}`);
+            }
+        }
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadSubmissionsPage();
+        });
+    </script>
+    
+    <div class="container">
+        <a href="/homework-assignments.html" style="float: right; margin-top: -5px; font-weight: bold; color: #005A9C;">← Back to Assignments</a>
+        <h1 id="assignment-title">Loading Assignment...</h1>
+        <div style="clear:both;"></div>
+
+        <div class="details-box">
+            <div class="detail-item">
+                <strong>Course / Batch:</strong> 
+                <span id="course-batch">--</span>
+            </div>
+            <div class="detail-item">
+                <strong>Subject:</strong> 
+                <span id="subject">--</span>
+            </div>
+            <div class="detail-item">
+                <strong>Due Date:</strong> 
+                <span id="due-date">--</span>
+            </div>
+            <div class="detail-item">
+                <strong>Max Marks:</strong> 
+                <span id="max-marks-display">--</span>
+            </div>
+        </div>
+
+
+        <h2>Submissions List</h2>
+        <table id="submissions-table">
+            <thead>
+                <tr>
+                    <th>Student (Roll No.)</th>
+                    <th>Submitted At</th>
+                    <th>Submission Type</th>
+                    <th>Grade</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="submissions-tbody">
+                <tr><td colspan="6">Loading submissions...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

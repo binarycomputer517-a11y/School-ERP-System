@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manual Fee Collection</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .card h2, .card h3 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 10px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #357abd;
+        }
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .fee-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .summary-item {
+            background-color: var(--light-gray-color);
+            padding: 15px;
+            border-radius: 8px;
+        }
+        .summary-item h4 {
+            margin: 0 0 5px 0;
+            color: #666;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        .summary-item p {
+            margin: 0;
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+        .balance-due { color: var(--error-color); }
+        .balance-paid { color: var(--success-color); }
+        #payment-history-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        #payment-history-table th, #payment-history-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        #payment-history-table th {
+            background-color: var(--light-gray-color);
+            font-weight: 600;
+        }
+        #status-message {
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 5px;
+            text-align: center;
+            font-weight: 500;
+            display: none;
+        }
+        #status-message.success {
+            background-color: #e4f8e4;
+            color: var(--success-color);
+            border: 1px solid var(--success-color);
+            display: block;
+        }
+        #status-message.error {
+            background-color: #fbecec;
+            color: var(--error-color);
+            border: 1px solid var(--error-color);
+            display: block;
+        }
+        .hidden { display: none; }
+        /* NEW STYLE FOR FEE STRUCTURE LIST */
+        .fee-structure-list { 
+            max-height: 250px;
+            overflow-y: auto;
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            margin-top: 15px;
+        }
+        .fee-structure-list li {
+            padding: 10px 15px;
+            border-bottom: 1px dotted var(--border-color);
+        }
+        .fee-structure-list li:last-child {
+            border-bottom: none;
+        }
+        .fee-structure-list strong {
+            font-weight: 500;
+            font-size: 1.05em;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+        window.location.href = '/login';
+    }
+
+    // Function to handle authenticated PDF download
+    function downloadReceipt(paymentId) {
+        const token = localStorage.getItem('erp-token');
+        if (!token) {
+            alert("Authentication token missing. Please log in again.");
+            return;
+        }
+
+        const url = `/api/fees/receipt/${paymentId}`;
+        
+        // Make an authenticated fetch request
+        fetch(url, {
+            headers: { 'Authorization': `Bearer ${token}` } 
+        })
+        .then(response => {
+            if (response.status === 401) {
+                // Handle the Unauthorized error explicitly
+                throw new Error("Unauthorized. Please check your session.");
+            }
+            if (!response.ok) {
+                throw new Error(`Failed to download receipt: ${response.statusText}`);
+            }
+            return response.blob(); // Get the PDF data as a Blob
+        })
+        .then(blob => {
+            // Create a temporary download link
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `receipt-${paymentId}.pdf`;
+            document.body.appendChild(a);
+            a.click(); // Simulate a click to trigger the download
+            
+            // Clean up
+            window.URL.revokeObjectURL(url); 
+            a.remove();
+        })
+        .catch(error => {
+            alert(`Error downloading receipt: ${error.message}`);
+            console.error('Download error:', error);
+        });
+    }
+
+</script>
+<div class="container">
+    <h1>Manual Fee Collection</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">← Back to Dashboard</a>
+    <span style="margin: 0 15px;">|</span>
+        <a href="/online-payment.html">Make Online Payment →</a>
+    
+    </div>
+
+    <div class="card">
+        <h2>Select Student</h2>
+        <div class="form-group">
+            <label for="student-select">Choose a student to collect fees from:</label>
+            <select id="student-select" required></select>
+        </div>
+    </div>
+
+    <div id="fee-details-section" class="card hidden">
+        <h3 id="student-name-header">Fee Status</h3>
+        <p><small id="course-batch-info"></small></p>
+
+        <div class="fee-summary">
+            <div class="summary-item">
+                <h4>Total Fees (As per structure)</h4>
+                <p id="total-fees">₹0.00</p>
+            </div>
+            <div class="summary-item">
+                <h4>Total Paid</h4>
+                <p id="total-paid" class="balance-paid">₹0.00</p>
+            </div>
+            <div class="summary-item">
+                <h4>Balance Due</h4>
+                <p id="balance-due" class="balance-due">₹0.00</p>
+            </div>
+        </div>
+        
+        <h4>Fee Structure Breakdown</h4>
+        <ul id="fee-structure-list" class="fee-structure-list">
+            <li style="text-align: center;">Select a student to view details.</li>
+        </ul>
+        
+        <h4>Payment History</h4>
+        <table id="payment-history-table">
+            <thead>
+                <tr>
+                    <th>Receipt No</th>
+                    <th>Date</th>
+                    <th>Amount (₹)</th>
+                    <th>Mode</th>
+                </tr>
+            </thead>
+            <tbody id="payment-history-tbody"></tbody>
+        </table>
+    </div>
+
+    <div id="payment-section" class="card hidden">
+        <h2>Record Payment</h2>
+        <form id="payment-form">
+            <div class="form-group">
+                <label for="amount_paid">Amount to Collect (₹)</label>
+                <input type="number" id="amount_paid" name="amount_paid" step="0.01" required>
+            </div>
+            <div class="form-group">
+                <label for="payment_mode">Payment Mode</label>
+                <select id="payment_mode" name="payment_mode" required>
+                    <option value="Cash">Cash</option>
+                    <option value="Card">Card</option>
+                    <option value="UPI">UPI</option>
+                    <option value="Bank Transfer">Bank Transfer</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="notes">Notes (Optional)</label>
+                <input type="text" id="notes" name="notes" placeholder="e.g., Paid for October tuition">
+            </div>
+            <button type="submit" id="submit-button" class="submit-btn">Record Payment</button>
+        </form>
+    </div>
+    
+    <div id="status-message"></div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const studentSelect = document.getElementById('student-select');
+        const paymentSection = document.getElementById('payment-section');
+        const feeDetailsSection = document.getElementById('fee-details-section');
+        const paymentForm = document.getElementById('payment-form');
+        const statusMessage = document.getElementById('status-message');
+        const submitButton = document.getElementById('submit-button');
+        const authHeaders = { 'Authorization': `Bearer ${token}` };
+        
+        let selectedStudentId = null;
+
+        // Helper to safely convert a value to a number, defaulting to 0
+        const safeNum = (value) => value !== null && value !== undefined ? parseFloat(value) : 0.00;
+
+        // 1. Load the list of all students
+        async function loadStudents() {
+            try {
+                // Assuming /api/students returns student objects with student_id and roll_number
+                const response = await fetch('/api/students', { headers: authHeaders });
+                if (!response.ok) throw new Error('Failed to load students.');
+                const students = await response.json();
+                studentSelect.innerHTML = '<option value="">-- Select a Student --</option>';
+                students.forEach(student => {
+                    if (student && student.student_id) {
+                        const fullName = `${student.first_name} ${student.last_name}`;
+                        studentSelect.innerHTML += `<option value="${student.student_id}">${fullName} (Roll No: ${student.roll_number || 'N/A'})</option>`;
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading students:', error);
+                studentSelect.innerHTML = '<option value="">Error loading students</option>';
+            }
+        }
+
+        // 2. Fetch and display fee details for the selected student
+        async function loadStudentFeeDetails(studentId) {
+            if (!studentId) {
+                feeDetailsSection.classList.add('hidden');
+                paymentSection.classList.add('hidden');
+                return;
+            }
+            try {
+                // This is the endpoint that was failing: /api/fees/student/:studentId
+                const response = await fetch(`/api/fees/student/${studentId}`, { headers: authHeaders });
+                
+                // CRITICAL: Handle the 404 response gracefully
+                if (response.status === 404) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Student not found on the server.');
+                }
+                if (!response.ok) {
+                    throw new Error('Could not fetch fee details. Check network or server logs.');
+                }
+                
+                const data = await response.json();
+
+                const totalFees = safeNum(data.total_fees);
+                const totalPaid = safeNum(data.total_paid);
+                const balance = safeNum(data.balance);
+
+                document.getElementById('student-name-header').textContent = `Fee Status for ${data.student_name}`;
+                document.getElementById('course-batch-info').textContent = `Course: ${data.course_name} | Batch: ${data.batch_name}`;
+                document.getElementById('total-fees').textContent = `₹${totalFees.toFixed(2)}`;
+                document.getElementById('total-paid').textContent = `₹${totalPaid.toFixed(2)}`;
+                document.getElementById('balance-due').textContent = `₹${balance.toFixed(2)}`;
+                
+                const amountInput = document.getElementById('amount_paid');
+                amountInput.value = balance > 0 ? balance.toFixed(2) : '0.00';
+
+                // Display Fee Structure Breakdown
+                const structureList = document.getElementById('fee-structure-list');
+                structureList.innerHTML = ''; 
+                
+                if (data.fee_structure && data.fee_structure.length > 0) {
+                    data.fee_structure.forEach(item => {
+                        const li = document.createElement('li');
+                        li.className = 'd-flex justify-content-between';
+                        li.innerHTML = `<strong>${item.fee_name}:</strong> <span>₹${safeNum(item.amount).toFixed(2)}</span>`;
+                        structureList.appendChild(li);
+                    });
+                } else {
+                    structureList.innerHTML = '<li class="text-warning" style="text-align: center;">No defined fee structure found for this student\'s course/batch.</li>';
+                }
+
+                // Payment History 
+                const historyTbody = document.getElementById('payment-history-tbody');
+                historyTbody.innerHTML = '';
+                if (data.payments && data.payments.length > 0) {
+                    data.payments.forEach(p => {
+                        const row = `<tr>
+                            <td>${p.receipt_number}</td>
+                            <td>${new Date(p.payment_date).toLocaleDateString()}</td>
+                            <td>₹${parseFloat(p.amount_paid).toFixed(2)}</td>
+                            <td>${p.payment_mode}</td>
+                        </tr>`;
+                        historyTbody.innerHTML += row;
+                    });
+                } else {
+                    historyTbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No payment history found.</td></tr>';
+                }
+
+                feeDetailsSection.classList.remove('hidden');
+                paymentSection.classList.remove('hidden');
+                
+            } catch (error) {
+                statusMessage.className = 'error';
+                statusMessage.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        // Event listener for student dropdown change
+        studentSelect.addEventListener('change', () => {
+            selectedStudentId = studentSelect.value;
+            statusMessage.textContent = '';
+            statusMessage.className = '';
+            loadStudentFeeDetails(selectedStudentId);
+        });
+
+        // 3. Handle payment form submission
+        paymentForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!selectedStudentId) {
+                alert('Please select a student first.');
+                return;
+            }
+
+            submitButton.disabled = true;
+            statusMessage.className = '';
+            statusMessage.textContent = 'Processing payment...';
+            
+            const paymentData = {
+                // FIX: Removed parseInt() as student_id is a UUID string
+                student_id: selectedStudentId, 
+                amount_paid: parseFloat(document.getElementById('amount_paid').value),
+                payment_mode: document.getElementById('payment_mode').value,
+                notes: document.getElementById('notes').value
+            };
+
+            try {
+                const response = await fetch('/api/fees/collect', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...authHeaders },
+                    body: JSON.stringify(paymentData)
+                });
+
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.message || 'Payment recording failed.');
+                }
+                
+                statusMessage.className = 'success';
+                statusMessage.innerHTML = `Success! ${result.message}. Receipt No: ${result.receipt_number}. 
+                    <button onclick="downloadReceipt('${result.paymentId}')" style="color: inherit; font-weight: 600; border: none; background: none; cursor: pointer; text-decoration: underline;">
+                        Download Receipt
+                    </button>`; 
+
+                
+                paymentForm.reset();
+                // Refresh data to show new balance/history
+                await loadStudentFeeDetails(selectedStudentId); 
+
+            } catch (error) {
+                statusMessage.className = 'error';
+                statusMessage.textContent = `Error: ${error.message}`;
+            } finally {
+                submitButton.disabled = false;
+            }
+        });
+
+        loadStudents();
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enter Student Marks</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* Basic styling for the new table structure */
+        .container { max-width: 1200px; margin: auto; padding: 40px; background-color: #FFFFFF; box-shadow: 0 5px 15px rgba(0,0,0,0.05); border-radius: 4px; }
+        h1, h2 { color: #212529; font-weight: 300; text-transform: uppercase; border-bottom: 3px solid #C16744; padding-bottom: 8px; margin-top: 35px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 25px; border: 1px solid #E0E0E0; }
+        th, td { text-align: left; padding: 15px 12px; border-bottom: 1px solid #E0E0E0; }
+        th { background-color: #212529; color: #FFFFFF; font-weight: 600; }
+        .actions button { font-size: 11px; padding: 6px 12px; margin: 2px; background-color: #C16744; color: #FFFFFF; border: none; border-radius: 2px; cursor: pointer; }
+        .actions button.view-marksheet { background-color: #007BFF; }
+        .actions button.print-certificate { background-color: #28A745; }
+        .actions button.print-marksheet { background-color: #C16744; }
+        /* Style for the selection criteria grid */
+        #selection-criteria {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr) repeat(2, 0.5fr) 0.5fr; /* 6 columns */
+            gap: 15px;
+            align-items: end;
+            margin-bottom: 25px;
+        }
+        #selection-criteria select, #selection-criteria input, #selection-criteria button {
+            padding: 10px;
+            box-sizing: border-box;
+            border: 1px solid #E0E0E0;
+            border-radius: 2px;
+        }
+        #selection-criteria button {
+            background-color: #007BFF;
+            color: white;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+<script>
+    // --- Initial Authentication/Authorization Check ---
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const allowedRoles = ['Teacher', 'Admin'];
+
+    if (!token || !allowedRoles.includes(userRole)) {
+        window.location.href = '/login';
+    }
+
+    // --- Global Variables and Constants ---
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    let studentCache = [];
+    let examTypesCache = [];
+
+    // --- Core Functions ---
+
+    /**
+     * Initializes the page by fetching and populating the exam, class, and subject dropdowns.
+     */
+    async function initializePage() {
+        try {
+            const [examsRes, classesRes, subjectsRes] = await Promise.all([
+                fetch('/api/marks/exam-types', { headers: authHeaders }),
+                fetch('/api/timetable/classes', { headers: authHeaders }),
+                fetch('/api/timetable/subjects', { headers: authHeaders })
+            ]);
+
+            const exams = await examsRes.json();
+            const classes = await classesRes.json();
+            const subjects = await subjectsRes.json();
+            
+            examTypesCache = exams;
+            
+            const examSelect = document.getElementById('exam-select');
+            exams.forEach(e => examSelect.innerHTML += `<option value="${e.id}" data-pattern="${e.exam_pattern}" data-type="${e.marksheet_type}">${e.exam_name} (${e.marksheet_type == 2 ? 'Type 2' : 'Type 1'})</option>`);
+            
+            const classSelect = document.getElementById('class-select');
+            classes.forEach(c => classSelect.innerHTML += `<option value="${c.id}">${c.class_name}</option>`);
+
+            const subjectSelect = document.getElementById('subject-select');
+            subjects.forEach(s => subjectSelect.innerHTML += `<option value="${s.id}">${s.subject_name}</option>`);
+
+        } catch (error) {
+            console.error('Initial data load error:', error);
+            alert('Could not load initial data. Please reload.');
+        }
+    }
+
+    /**
+     * Fetches the list of students for the selected class/course and populates the marks entry table.
+     */
+    async function loadStudentList() {
+        const classId = document.getElementById('class-select').value;
+        const examId = document.getElementById('exam-select').value;
+        const subjectId = document.getElementById('subject-select').value;
+        const theoryMax = document.getElementById('theory-max-marks').value;
+        const practicalMax = document.getElementById('practical-max-marks').value;
+
+        if (!classId || !examId || !subjectId || theoryMax === '' || practicalMax === '') {
+            alert('Please complete all selection criteria including max marks.');
+            return;
+        }
+
+        const studentBody = document.getElementById('student-list-body');
+        const marksForm = document.getElementById('marks-form');
+
+        try {
+            const response = await fetch(`/api/students?class_id=${classId}`, { headers: authHeaders });
+            studentCache = await response.json();
+            
+            studentBody.innerHTML = '';
+            studentCache.forEach(student => {
+                const maxTheory = parseInt(theoryMax);
+                const maxPractical = parseInt(practicalMax);
+
+                studentBody.innerHTML += `
+                    <tr data-student-id="${student.student_id}">
+                        <td>${student.roll_number || 'N/A'}</td>
+                        <td>${student.student_name}</td>
+                        <td><input type="number" class="theory-marks-input" placeholder="0-${maxTheory}" min="0" max="${maxTheory}" step="0.5"></td>
+                        <td><input type="number" class="practical-marks-input" placeholder="0-${maxPractical}" min="0" max="${maxPractical}" step="0.5"></td>
+                    </tr>
+                `;
+            });
+            marksForm.style.display = 'block';
+        } catch (error) {
+            console.error(error);
+            studentBody.innerHTML = '<tr><td colspan="4">Could not load students.</td></tr>';
+        }
+    }
+
+    /**
+     * Loads the Marksheet and Certificate status for all students.
+     */
+    async function loadMarksheetStatusView() {
+        const statusBody = document.getElementById('marksheet-status-body');
+        statusBody.innerHTML = '<tr><td colspan="6">Loading marksheet status...</td></tr>';
+        
+        try {
+            const response = await fetch('/api/marks/status', { headers: authHeaders });
+            if (!response.ok) throw new Error('Failed to fetch marksheet status.');
+            
+            const studentsStatus = await response.json();
+            statusBody.innerHTML = '';
+
+            studentsStatus.forEach(student => {
+                const row = document.createElement('tr');
+                
+                const studentRoll = student.roll_number || 'N/A';
+                const studentName = student.student_name || 'Unknown';
+                const courseName = student.course_name || student.class_name || 'N/A';
+                const msStatus = student.marksheet_status || 'Pending';
+                const certStatus = student.certificate_status || 'Pending';
+                const lastExamId = student.last_exam_id || '';
+                
+                row.innerHTML = `
+                    <td>${studentRoll}</td>
+                    <td>${studentName}</td>
+                    <td>${courseName}</td>
+                    <td>${msStatus}</td>
+                    <td>${certStatus}</td>
+                    <td class="actions"></td>
+                `;
+                
+                const actionsCell = row.querySelector('.actions');
+                
+                // Add buttons only if Marksheet is Generated
+                if (msStatus === 'Generated' && lastExamId) {
+                    // View Button
+                    const viewButton = document.createElement('button');
+                    viewButton.textContent = 'View MS';
+                    viewButton.classList.add('view-marksheet');
+                    viewButton.onclick = () => viewDocument('marksheet', student.student_id, lastExamId);
+                    actionsCell.appendChild(viewButton);
+
+                    // Print Button
+                    const printButton = document.createElement('button');
+                    printButton.textContent = 'Print MS';
+                    printButton.classList.add('print-marksheet');
+                    printButton.onclick = () => printDocument('marksheet', student.student_id, lastExamId);
+                    actionsCell.appendChild(printButton);
+                }
+                
+                // Add button only if Certificate is Generated
+                if (certStatus === 'Generated') {
+                    // Print Certificate Button
+                    const certButton = document.createElement('button');
+                    certButton.textContent = 'Print Cert';
+                    certButton.classList.add('print-certificate');
+                    certButton.onclick = () => printDocument('certificate', student.student_id);
+                    actionsCell.appendChild(certButton);
+                }
+                
+                statusBody.appendChild(row);
+            });
+            
+            if (studentsStatus.length === 0) {
+                 statusBody.innerHTML = '<tr><td colspan="6">No students found or no marksheet data available.</td></tr>';
+            }
+
+        } catch (error) {
+            console.error('Error loading marksheet status:', error);
+            statusBody.innerHTML = `<tr><td colspan="6">Error loading status: ${error.message}.</td></tr>`;
+        }
+    }
+
+    /**
+     * Opens the Marksheet or Certificate in a new window.
+     * @param {string} type - 'marksheet' or 'certificate'.
+     * @param {string} studentId - The ID of the student.
+     * @param {string} [examId] - The ID of the exam.
+     */
+    function viewDocument(type, studentId, examId) {
+        if (type === 'marksheet') {
+            window.open(`/view-report-card.html?studentId=${studentId}&examId=${examId}`, '_blank');
+        }
+    }
+
+    /**
+     * Triggers the backend to generate a PDF for printing.
+     * @param {string} type - 'marksheet' or 'certificate'.
+     * @param {string} studentId - The ID of the student.
+     * @param {string} [examId] - The ID of the exam.
+     */
+    async function printDocument(type, studentId, examId) {
+        let apiUrl = '';
+        if (type === 'marksheet') {
+            apiUrl = `/api/marks/generate-reportcard-pdf?studentId=${studentId}&examId=${examId}`;
+        } else if (type === 'certificate') {
+            apiUrl = `/api/marks/generate-certificate-pdf?studentId=${studentId}`;
+        }
+        
+        if (apiUrl) {
+            try {
+                const response = await fetch(apiUrl, { headers: authHeaders });
+                if (!response.ok) throw new Error(`Failed to generate ${type}.`);
+                
+                const blob = await response.blob();
+                const fileURL = URL.createObjectURL(blob);
+                
+                const printWindow = window.open(fileURL, '_blank');
+                if (printWindow) {
+                    printWindow.onload = () => {
+                        URL.revokeObjectURL(fileURL); // Clean up the object URL
+                    };
+                } else {
+                    alert('Please allow pop-ups to view/print the document.');
+                }
+            } catch (error) {
+                alert(`Error generating ${type}: ${error.message}`);
+                console.error(error);
+            }
+        }
+    }
+
+    // --- Event Listeners and Initializers ---
+
+    // Handle the final submission of marks
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('marks-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const theoryMax = document.getElementById('theory-max-marks').value;
+            const practicalMax = document.getElementById('practical-max-marks').value;
+            
+            const marksData = {
+                exam_type_id: document.getElementById('exam-select').value,
+                class_id: document.getElementById('class-select').value,
+                subject_id: document.getElementById('subject-select').value,
+                records: []
+            };
+
+            if (!marksData.exam_type_id || !marksData.class_id || !marksData.subject_id || theoryMax === '' || practicalMax === '') {
+                alert('Please ensure all selection criteria and max marks are filled.');
+                return;
+            }
+
+            const studentRows = document.querySelectorAll('#student-list-body tr');
+            studentRows.forEach(row => {
+                const theoryMarks = row.querySelector('.theory-marks-input').value;
+                const practicalMarks = row.querySelector('.practical-marks-input').value;
+
+                if (theoryMarks || practicalMarks) {
+                    marksData.records.push({
+                        student_id: row.dataset.studentId,
+                        theory_obtained: theoryMarks || null,
+                        practical_obtained: practicalMarks || null,
+                        theory_max: theoryMax,
+                        practical_max: practicalMax,
+                    });
+                }
+            });
+
+            if (marksData.records.length === 0) {
+                alert('No marks were entered to save.');
+                return;
+            }
+            
+            fetch('/api/marks/enter', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(marksData)
+            })
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to save marks. Server responded with an error.');
+                return res.json();
+            })
+            .then(data => {
+                alert(data.message || 'Marks saved successfully!');
+                window.location.reload();
+            })
+            .catch(err => alert('An error occurred while saving marks: ' + err.message));
+        });
+    });
+
+
+    // Expose functions globally for inline HTML event handlers (e.g., onclick)
+    window.loadStudentList = loadStudentList;
+    window.loadMarksheetStatusView = loadMarksheetStatusView;
+    window.viewDocument = viewDocument;
+    window.printDocument = printDocument; // <-- CRITICAL FIX
+
+    window.onload = initializePage;
+</script>
+
+<div class="container">
+    <h1>Enter Student Marks</h1>
+    <div class="nav-links"><a href="/teacher-dashboard.html">← Back to Dashboard</a></div>
+
+    <div class="form-container">
+        <h2>Step 1: Select Exam, Class, and Subject</h2>
+        <div id="selection-criteria">
+            <label for="exam-select">Exam:</label>
+            <label for="class-select">Class:</label>
+            <label for="subject-select">Subject:</label>
+            <label for="theory-max-marks">Theory Max:</label>
+            <label for="practical-max-marks">Practical Max:</label>
+            <label></label>
+            <select id="exam-select" required><option value="">-- Select Exam --</option></select>
+            <select id="class-select" required><option value="">-- Select Class --</option></select>
+            <select id="subject-select" required><option value="">-- Select Subject --</option></select>
+            
+            <input type="number" id="theory-max-marks" placeholder="Theory Max Marks" min="0" required>
+            <input type="number" id="practical-max-marks" placeholder="Practical Max Marks" min="0" value="0">
+            
+            <button onclick="loadStudentList()">Load Students</button>
+        </div>
+    </div>
+
+    <form id="marks-form" style="display:none; margin-top: 20px;">
+        <h2>Step 2: Enter Marks</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Roll No.</th>
+                    <th>Student Name</th>
+                    <th>Theory Marks Obtained</th>
+                    <th>Practical Marks Obtained</th>
+                </tr>
+            </thead>
+            <tbody id="student-list-body"></tbody>
+        </table>
+        <button type="submit" style="margin-top: 20px;">Submit Marks</button>
+    </form>
+    
+    <section id="marksheet-status-section" style="margin-top: 40px;">
+        <h2>Marksheet & Certificate Status</h2>
+        <div style="margin-bottom: 20px; display: flex; gap: 15px;">
+            <button onclick="loadMarksheetStatusView()" style="background-color: #17A2B8;">Load All Status</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Roll No</th>
+                    <th>Name</th>
+                    <th>Course/Class</th>
+                    <th>MarkSheet Status</th>
+                    <th>Certificate Status</th>
+                    <th style="width: 250px;">Actions (View/Print)</th>
+                </tr>
+            </thead>
+            <tbody id="marksheet-status-body">
+                <tr><td colspan="6">Click 'Load All Status' to view generated documents.</td></tr>
+            </tbody>
+        </table>
+    </section>
+    
+</div>
+
+</body>
+</html>

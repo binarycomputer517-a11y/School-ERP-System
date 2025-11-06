@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Management & Teacher Onboarding (Neon Design)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        /* --- NEON THEME VARIABLES --- */
+        :root {
+            --bg-dark: #121212;
+            --neon-purple: #bb86fc; /* Primary glow color */
+            --neon-cyan: #03dac6;   /* Secondary accent color */
+            --text-light: #e0e0e0;
+            --card-bg: #1e1e1e;
+        }
+
+        /* --- BASE STYLES --- */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            padding: 30px; 
+            background-color: var(--bg-dark); 
+            color: var(--text-light); 
+        }
+        .container { 
+            max-width: 1400px; 
+            margin: auto; 
+            padding: 30px; 
+            background-color: var(--bg-dark); 
+            border-radius: 10px; 
+        }
+        h1 { 
+            color: var(--neon-purple); 
+            text-shadow: 0 0 5px var(--neon-purple); /* Neon Glow */
+            border-bottom: 2px solid var(--neon-purple); 
+            padding-bottom: 10px; 
+            margin-bottom: 30px; 
+            font-weight: 600;
+        }
+        h2 { 
+            color: var(--neon-cyan); 
+            text-shadow: 0 0 3px var(--neon-cyan);
+            border-bottom: 1px dashed #333; 
+            padding-bottom: 5px;
+            margin-top: 25px;
+            font-size: 1.5rem;
+        }
+        
+        /* --- CARD STYLES --- */
+        .card { 
+            padding: 20px; 
+            border: 1px solid #333;
+            border-left: 5px solid var(--neon-purple); /* Accent bar */
+            border-radius: 8px; 
+            margin-top: 20px; 
+            background-color: var(--card-bg); 
+            box-shadow: 0 0 15px rgba(187, 134, 252, 0.15); /* Soft outer glow */
+        }
+        
+        /* --- FORM & INPUT STYLES --- */
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .grid-layout { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .full-width { grid-column: 1 / -1; }
+
+        label { color: var(--text-light); font-weight: 500; font-size: 0.9em; margin-top: 10px; }
+        input, select, textarea { 
+            background-color: #2c2c2c; 
+            color: var(--neon-cyan); 
+            border: 1px solid #555; 
+            border-radius: 4px;
+        }
+        input:focus, select:focus, textarea:focus {
+            border-color: var(--neon-purple);
+            box-shadow: 0 0 5px var(--neon-purple);
+            outline: none;
+        }
+        
+        /* --- BUTTONS --- */
+        button { 
+            background-color: var(--neon-purple); 
+            color: var(--bg-dark); 
+            font-weight: bold; 
+            text-shadow: 0 0 2px #fff;
+            box-shadow: 0 0 10px rgba(187, 134, 252, 0.5); /* Strong button glow */
+            border: none;
+        }
+        button:hover { 
+            background-color: #d8b2ff; 
+            box-shadow: 0 0 15px var(--neon-purple);
+        }
+        .delete-btn { 
+            background-color: #cf6679; /* Neon red for dangerous actions */
+            box-shadow: none;
+        }
+        .delete-btn:hover { background-color: #eb8f9e; }
+        
+        /* --- TABLE & STATUS STYLES --- */
+        table { color: var(--text-light); }
+        th { background-color: #333; color: var(--neon-cyan); }
+        td { border-color: #333; }
+
+        .status-badge { padding: 4px 8px; border-radius: 3px; font-weight: 600; }
+        .status-Pending_Review { background-color: #ffe082; color: #333; }
+        .status-Interview_Scheduled { background-color: #8c9eff; color: #111; }
+        .status-Offered { background-color: var(--neon-cyan); color: #111; }
+        .status-Hired { background-color: var(--neon-purple); color: #111; }
+        .status-Rejected { background-color: #ff8a80; color: #111; }
+
+        .action-btns button { 
+             font-size: 11px; 
+             margin: 2px; 
+             padding: 4px 7px;
+             box-shadow: none;
+        }
+
+        /* --- MODAL STYLES (Adjusted for Dark Theme) --- */
+        .modal-content { 
+            background-color: var(--card-bg); 
+            color: var(--text-light); 
+            border: 1px solid var(--neon-purple);
+            box-shadow: 0 0 10px var(--neon-purple);
+            max-width: 650px;
+        }
+        .close-btn { color: #555; }
+        .close-btn:hover { color: var(--neon-purple); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Human Resources Management Dashboard</h1>
+        <p>Current Role: <strong id="user-role-display">Loading...</strong></p>
+        
+        <div class="top-nav-links" style="margin-bottom: 20px;">
+            <a href="/admin-dashboard.html" style="color: var(--neon-cyan);">← Back to Dashboard</a>
+        </div>
+
+        <div class="grid-layout">
+            <div>
+                <div class="card">
+                    <h2>Staff Directory & HR Details</h2>
+                    <p style="color: #ccc;">View and manage personnel records, roles, and salaries.</p>
+                    <table id="staff-directory-table">
+                        <thead>
+                            <tr>
+                                <th>Name / Role</th>
+                                <th>Department</th>
+                                <th>Salary (Annual)</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="directory-tbody">
+                            <tr><td colspan="4">Loading staff directory...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <h2>Applicant Tracking Dashboard</h2>
+                    <label for="job-select-applicant">Select Job Posting to View Applicants:</label>
+                    <select id="job-select-applicant" style="margin-bottom: 15px;"></select>
+                    
+                    <table id="applicant-table">
+                        <thead>
+                            <tr>
+                                <th>Applicant</th>
+                                <th>Applied On</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="applicants-tbody">
+                            <tr><td colspan="4">Select a job posting above.</td></tr>
+                        </tbody>
+                    </table>
+                    <div id="applicant-message" class="message-box" style="display:none;"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="card">
+                    <h2>Quick Add New Teacher/Staff</h2>
+                    <p style="color: #ccc;">Instantly onboard new permanent personnel.</p>
+                    <form id="add-teacher-form" class="grid-form">
+                        <input type="text" id="full_name" name="full_name" required placeholder="Full Name *">
+                        <input type="text" id="employee_id" name="employee_id" required placeholder="Employee ID *">
+                        
+                        <input type="text" id="designation" name="designation" placeholder="Designation">
+                        <input type="text" id="department_name" name="department_name" placeholder="Department Name">
+                        
+                        <input type="email" id="email" name="email" required placeholder="Email *">
+                        <input type="tel" id="phone_number" name="phone_number" placeholder="Phone Number">
+
+                        <input type="text" id="username" name="username" required autocomplete="off" placeholder="Login Username *">
+                        <input type="password" id="password" name="password" required autocomplete="new-password" placeholder="Initial Password *">
+
+                        <input type="hidden" id="department_id" name="department_id">
+                        <input type="hidden" id="date_of_birth" name="date_of_birth">
+                        <input type="hidden" id="hire_date" name="hire_date">
+                        <input type="hidden" id="address" name="address">
+                        
+                        <button type="submit" class="full-width" id="submit-button">➕ Add New Staff Record</button>
+                        <p id="error-msg" class="full-width error message-box" style="display:none;"></p>
+                    </form>
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <h2>Manage Job Postings</h2>
+                    <form id="job-posting-form">
+                        <label for="job-title">Job Title:</label>
+                        <input type="text" name="title" required placeholder="e.g., Senior Science Teacher">
+                        
+                        <label for="department-id-select">Department:</label>
+                        <select id="department-id-select" name="department_id" required></select>
+
+                        <label for="salary-range">Salary Range:</label>
+                        <input type="text" name="salary_range" placeholder="e.g., 50,000 - 65,000 / month">
+
+                        <div class="grid-form">
+                            <div>
+                                <label for="closing-date">Closing Date:</label>
+                                <input type="date" name="closing_date" required>
+                            </div>
+                            <div>
+                                <label for="job-status">Status:</label>
+                                <select id="job-status" name="status" required>
+                                    <option value="Open">Open</option>
+                                    <option value="Closed">Closed</option>
+                                    <option value="Filled">Filled</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <label for="description">Job Description:</label>
+                        <textarea name="description" rows="3" required></textarea>
+
+                        <button type="submit">Post New Job</button>
+                        <div id="job-post-message" class="message-box" style="display:none;"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-staff-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('edit-staff-modal')">×</span>
+            <h3>Edit HR Details for <span id="staff-name-modal"></span></h3>
+            <form id="edit-staff-form">
+                <input type="hidden" id="edit-user-id" name="id">
+                
+                <label for="edit-role">New Role:</label>
+                <select id="edit-role" name="new_role">
+                    <option value="Teacher">Teacher</option>
+                    <option value="Admin">Admin</option>
+                    <option value="HR">HR</option>
+                    <option value="Staff">Staff</option>
+                </select>
+
+                <label for="edit-department">Department:</label>
+                <select id="edit-department-id" name="department_id"></select>
+
+                <label for="edit-phone">Phone Number:</label>
+                <input type="text" id="edit-phone" name="phone_number">
+                
+                <label for="edit-salary">Annual Base Salary (₹):</label>
+                <input type="number" id="edit-salary" name="base_salary" step="0.01">
+
+                <button type="submit">Save HR Changes</button>
+            </form>
+        </div>
+    </div>
+    
+    <div id="applicant-status-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('applicant-status-modal')">×</span>
+            <h3>Update Application Status</h3>
+            <form id="update-applicant-form">
+                <p>Applicant: <strong id="applicant-name-status"></strong></p>
+                <input type="hidden" id="applicant-id-status">
+
+                <label for="status-select">Set New Status:</label>
+                <select id="status-select" name="new_status" required>
+                    <option value="Pending Review">Pending Review</option>
+                    <option value="Interview Scheduled">Interview Scheduled</option>
+                    <option value="Offered">Offered</option>
+                    <option value="Hired">Hired</option>
+                    <option value="Rejected">Rejected</option>
+                </select>
+                
+                <label for="status-notes">Notes:</label>
+                <textarea id="status-notes" name="notes" rows="2"></textarea>
+                
+                <button type="submit">Update Status</button>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_BASE = '/api/staffhr';
+        const TEACHER_API = '/api/teachers'; // API for quick staff add
+        const TOKEN = localStorage.getItem('erp-token');
+        const USER_ROLE = localStorage.getItem('user-role');
+        const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
+        
+        // Safety check to ensure only Admin/HR can access
+        if (!TOKEN || (USER_ROLE !== 'Admin' && USER_ROLE !== 'HR')) { window.location.href = '/login'; }
+
+        // DOM Elements
+        const userRoleDisplay = document.getElementById('user-role-display');
+        const directoryTbody = document.getElementById('directory-tbody');
+        const jobsTbody = document.getElementById('jobs-tbody');
+        const jobPostingForm = document.getElementById('job-posting-form');
+        const jobPostMessage = document.getElementById('job-post-message');
+        const departmentSelects = document.querySelectorAll('#department-id-select, #edit-department-id');
+        const jobSelectApplicant = document.getElementById('job-select-applicant');
+        const applicantsTbody = document.getElementById('applicants-tbody');
+        const quickAddForm = document.getElementById('add-teacher-form');
+        const quickAddErrorMsg = document.getElementById('error-msg');
+
+        let allDepartments = [];
+        let allStaff = []; 
+
+        // --- Helper Functions ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                // Redirect user to login on auth failure
+                throw new Error('Unauthorized or session expired. Redirecting.'); 
+            }
+            if (!response.ok) {
+                // ⭐ CRITICAL FIX: Robust error handling for 500 errors
+                let errorMessage = `API call failed with status: ${response.status} (${response.statusText}).`;
+                try {
+                    const errorBody = await response.json();
+                    errorMessage = errorBody.message || errorBody.error || errorMessage;
+                } catch (e) {
+                    errorMessage += ' Server returned a non-JSON error.';
+                }
+                console.error(`API Error on ${url}:`, errorMessage);
+                throw new Error(errorMessage);
+            }
+            return response.json();
+        }
+        
+        function showMessage(element, text, type) {
+            element.textContent = text;
+            element.className = `message-box ${type}`;
+            element.style.display = 'block';
+        }
+        
+        function closeModal(id) {
+            document.getElementById(id).style.display = 'none';
+        }
+
+        // --- Data Loading ---
+
+        async function loadDepartments() {
+            try {
+                // Endpoint: /api/staffhr/departments (Assumed to be correctly implemented in staffhr.js)
+                allDepartments = await handleApi(`${API_BASE}/departments`); 
+                
+                departmentSelects.forEach(select => {
+                    select.innerHTML = '<option value="">-- Select Department --</option>';
+                    allDepartments.forEach(d => {
+                        select.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+                    });
+                });
+            } catch (error) {
+                console.error("Error loading departments:", error);
+                // No need to alert; the UI will show an empty dropdown or log the error.
+            }
+        }
+
+        async function loadStaffDirectory() {
+            directoryTbody.innerHTML = '<tr><td colspan="4">Loading staff directory...</td></tr>';
+            try {
+                // Endpoint: /api/staffhr/directory (Fix should make this work)
+                allStaff = await handleApi(`${API_BASE}/directory`); 
+                directoryTbody.innerHTML = '';
+                
+                allStaff.forEach(s => {
+                    directoryTbody.innerHTML += `
+                        <tr>
+                            <td><strong>${s.full_name || s.username}</strong><br><small>${s.role}</small></td>
+                            <td>${s.department_name || 'Unassigned'}</td>
+                            <td>₹${parseFloat(s.base_salary || 0).toFixed(2)} / ${s.pay_frequency || 'Annual'}</td>
+                            <td class="action-btns">
+                                <button onclick="openEditStaffModal('${s.id}')">Edit HR</button>
+                                <button onclick="alert('TODO: View Leave Balance')">Leave</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+            } catch (error) {
+                console.error("Error loading staff directory:", error);
+                // Shows the detailed error message received from the server
+                directoryTbody.innerHTML = `<tr><td colspan="4" class="error">Failed to load staff directory: ${error.message}</td></tr>`;
+            }
+        }
+        
+        async function loadJobPostings() {
+            jobsTbody.innerHTML = '<tr><td colspan="4">Loading job postings...</td></tr>';
+            jobSelectApplicant.innerHTML = '<option value="">-- Select Job --</option>';
+
+            try {
+                // Endpoint: /api/staffhr/jobs/all
+                const allJobs = await handleApi(`${API_BASE}/jobs/all`); 
+                jobsTbody.innerHTML = '';
+                
+                allJobs.forEach(job => {
+                    jobsTbody.innerHTML += `
+                        <tr>
+                            <td>${job.title}</td>
+                            <td>${job.department_name}</td>
+                            <td>${job.closing_date ? new Date(job.closing_date).toLocaleDateString() : 'N/A'}</td>
+                            <td class="action-btns">
+                                <button onclick="selectJobForApplicants('${job.id}')">View Apps</button>
+                                <button onclick="alert('TODO: Edit Job')">Edit</button>
+                            </td>
+                        </tr>
+                    `;
+                    jobSelectApplicant.innerHTML += `<option value="${job.id}">${job.title} (${job.department_name})</option>`;
+                });
+
+                if (allJobs.length > 0) {
+                     jobSelectApplicant.value = allJobs[0].id;
+                     loadApplicants(allJobs[0].id);
+                } else {
+                     applicantsTbody.innerHTML = '<tr><td colspan="4">No active job postings.</td></tr>';
+                }
+
+            } catch (error) {
+                console.error("Error loading job postings:", error);
+                jobsTbody.innerHTML = `<tr><td colspan="4" class="error">Failed to load jobs: ${error.message}</td></tr>`;
+            }
+        }
+        
+        window.selectJobForApplicants = function(jobId) {
+             jobSelectApplicant.value = jobId;
+             loadApplicants(jobId);
+        }
+
+        async function loadApplicants(jobId) {
+            applicantsTbody.innerHTML = '<tr><td colspan="4">Loading applicants...</td></tr>';
+            showMessage(document.getElementById('applicant-message'), 'Fetching applicants...', 'info');
+
+            try {
+                // Endpoint: /api/staffhr/applicants/:jobId
+                const applicants = await handleApi(`${API_BASE}/applicants/${jobId}`);
+                applicantsTbody.innerHTML = '';
+                
+                applicants.forEach(app => {
+                    const statusClass = `status-${app.status.replace(/\s/g, '_')}`;
+                    
+                    applicantsTbody.innerHTML += `
+                        <tr>
+                            <td><strong>${app.applicant_name}</strong></td>
+                            <td>${app.created_at ? new Date(app.created_at).toLocaleDateString() : 'N/A'}</td>
+                            <td><span class="status-badge ${statusClass}">${app.status}</span></td>
+                            <td class="action-btns">
+                                <a href="${app.resume_url}" target="_blank" class="button" style="background-color: var(--neon-cyan);">Resume</a>
+                                <button onclick="openApplicantStatusModal('${app.id}', '${app.applicant_name}', '${app.status}')">Update</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                showMessage(document.getElementById('applicant-message'), `Found ${applicants.length} applications.`, 'success');
+
+            } catch (error) {
+                applicantsTbody.innerHTML = `<tr><td colspan="4" class="error">Failed to load applicants: ${error.message}</td></tr>`;
+                showMessage(document.getElementById('applicant-message'), `❌ Failed to load applicants.`, 'error');
+            }
+        }
+
+
+        // --- Modals and Forms ---
+        
+        // 1. Quick Add New Teacher/Staff Form (from add-teacher.html)
+        quickAddForm.addEventListener('submit', async function(event) {
+            event.preventDefault();
+            quickAddErrorMsg.style.display = 'none';
+            document.getElementById('submit-button').disabled = true;
+
+            const formData = new FormData(event.target);
+            const data = Object.fromEntries(formData.entries());
+
+            // Simple validation check for password
+            if (data.password.length < 6) {
+                showMessage(quickAddErrorMsg, 'Password must be at least 6 characters long.', 'error');
+                document.getElementById('submit-button').disabled = false;
+                return;
+            }
+            
+            // Data cleanup/validation for DB compatibility
+            data.date_of_birth = data.date_of_birth || null;
+            data.hire_date = data.hire_date || new Date().toISOString().substring(0, 10); // Default to today
+            data.address = data.address || null;
+            data.designation = data.designation || 'Teacher';
+            data.phone_number = data.phone_number || null;
+            data.email = data.email || null;
+            
+            // Ensure department_id is null if not provided
+            data.department_id = data.department_id || null; 
+            data.department_name = data.department_name || null; 
+            
+            // NOTE: POST /api/teachers endpoint is assumed to handle system user creation internally.
+            try {
+                const response = await handleApi(TEACHER_API, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showMessage(quickAddErrorMsg, `✅ Success! Staff ${result.teacher.full_name} created.`, 'success');
+                    event.target.reset(); 
+                    loadStaffDirectory(); // Refresh directory list
+                } else {
+                    showMessage(quickAddErrorMsg, `❌ Failed: ${result.message}`, 'error');
+                }
+
+            } catch (err) {
+                showMessage(quickAddErrorMsg, 'A network error occurred while submitting data.', 'error');
+                console.error('Submission Error:', err);
+            } finally {
+                document.getElementById('submit-button').disabled = false;
+            }
+        });
+
+
+        // 2. Job Posting Form
+        jobPostingForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = Object.fromEntries(new FormData(form));
+            showMessage(jobPostMessage, 'Posting job...', 'info');
+
+            try {
+                const result = await handleApi(`${API_BASE}/jobs`, { 
+                    method: 'POST', 
+                    body: JSON.stringify(data) 
+                });
+                showMessage(jobPostMessage, `✅ ${result.message}`, 'success');
+                form.reset();
+                loadJobPostings();
+            } catch (error) {
+                showMessage(jobPostMessage, `❌ Failed: ${error.message}`, 'error');
+            }
+        });
+        
+        // 3. Edit Staff Modal
+        window.openEditStaffModal = function(userId) {
+            const staff = allStaff.find(s => s.id === userId); 
+            if (!staff) { alert('Staff data not found.'); return; }
+
+            document.getElementById('edit-user-id').value = staff.id;
+            document.getElementById('staff-name-modal').textContent = staff.username || staff.full_name;
+            document.getElementById('edit-role').value = staff.role;
+            document.getElementById('edit-phone').value = staff.phone_number || '';
+            document.getElementById('edit-salary').value = parseFloat(staff.base_salary || 0).toFixed(2);
+            document.getElementById('edit-department-id').value = staff.department_id || '';
+            
+            document.getElementById('edit-staff-modal').style.display = 'block';
+        };
+
+        document.getElementById('edit-staff-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const userId = form.elements.id.value;
+            const data = Object.fromEntries(new FormData(form));
+            
+            try {
+                await handleApi(`${API_BASE}/details/${userId}`, { 
+                    method: 'PUT', 
+                    body: JSON.stringify(data) 
+                });
+                closeModal('edit-staff-modal');
+                loadStaffDirectory();
+                alert('HR details updated successfully!');
+            } catch (error) {
+                alert(`Update failed: ${error.message}`);
+            }
+        });
+
+        // 4. Update Applicant Status Modal
+        window.openApplicantStatusModal = function(appId, appName, currentStatus) {
+            document.getElementById('applicant-id-status').value = appId;
+            document.getElementById('applicant-name-status').textContent = appName;
+            document.getElementById('status-select').value = currentStatus;
+            document.getElementById('applicant-status-modal').style.display = 'block';
+        }
+        
+        document.getElementById('update-applicant-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const appId = form.elements['applicant-id-status'].value;
+            const newStatus = form.elements.new_status.value;
+            const notes = form.elements.notes.value;
+            
+            // Endpoint: PUT /api/staffhr/applicants/:applicationId/status
+            try {
+                await handleApi(`${API_BASE}/applicants/${appId}/status`, { 
+                    method: 'PUT', 
+                    body: JSON.stringify({ new_status: newStatus, notes: notes }) 
+                });
+                
+                closeModal('applicant-status-modal');
+                alert(`Status updated to ${newStatus}.`);
+                // Re-load applicants for the current job
+                const currentJobId = jobSelectApplicant.value;
+                if (currentJobId) loadApplicants(currentJobId); 
+
+            } catch (error) {
+                alert(`Status update failed: ${error.message}`);
+            }
+        });
+
+
+        // --- Initialization ---
+
+        // DOMContentLoaded listener is wrapped to ensure smooth execution flow
+        userRoleDisplay.textContent = USER_ROLE;
+            
+        // Initial data loads must happen sequentially
+        loadDepartments()
+            .then(() => loadStaffDirectory()) 
+            .then(() => loadJobPostings());
+        
+        jobSelectApplicant.addEventListener('change', (e) => loadApplicants(e.target.value));
+
+    </script>
+</body>
+</html>

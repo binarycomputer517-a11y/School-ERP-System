@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Health Records</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') window.location.href = '/login';
+</script>
+<div class="container">
+    <h1>Manage Student Health Records</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">Back to Dashboard</a></div>
+
+    <label for="student-select">Select Student to View/Edit Record:</label>
+    <select id="student-select"></select>
+
+    <form id="health-form" style="display: none; margin-top: 20px;">
+        <input type="hidden" id="student_id" name="student_id">
+        <label for="blood_group">Blood Group:</label>
+        <input type="text" id="blood_group" name="blood_group">
+        <label for="allergies">Allergies:</label>
+        <textarea id="allergies" name="allergies" rows="3"></textarea>
+        <label for="medical_conditions">Ongoing Medical Conditions:</label>
+        <textarea id="medical_conditions" name="medical_conditions" rows="3"></textarea>
+        <label for="emergency_contact_name">Emergency Contact Name:</label>
+        <input type="text" id="emergency_contact_name" name="emergency_contact_name">
+        <label for="emergency_contact_phone">Emergency Contact Phone:</label>
+        <input type="text" id="emergency_contact_phone" name="emergency_contact_phone">
+        <button type="submit">Save Health Record</button>
+    </form>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const studentSelect = document.getElementById('student-select');
+    const healthForm = document.getElementById('health-form');
+
+    window.onload = () => {
+        fetch('/api/students', { headers: authHeaders })
+            .then(res => res.json())
+            .then(students => {
+                studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+                students.forEach(student => {
+                    studentSelect.innerHTML += `<option value="${student.id}">${student.student_name}</option>`;
+                });
+            });
+    };
+
+    studentSelect.addEventListener('change', () => {
+        const studentId = studentSelect.value;
+        if (!studentId) {
+            healthForm.style.display = 'none';
+            return;
+        }
+        document.getElementById('student_id').value = studentId;
+        fetch(`/api/health/records/${studentId}`, { headers: authHeaders })
+            .then(res => res.json())
+            .then(record => {
+                healthForm.elements['blood_group'].value = record.blood_group || '';
+                healthForm.elements['allergies'].value = record.allergies || '';
+                healthForm.elements['medical_conditions'].value = record.medical_conditions || '';
+                healthForm.elements['emergency_contact_name'].value = record.emergency_contact_name || '';
+                healthForm.elements['emergency_contact_phone'].value = record.emergency_contact_phone || '';
+                healthForm.style.display = 'block';
+            });
+    });
+
+    healthForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e).entries());
+        fetch('/api/health/records', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(data)
+        }).then(res => {
+            if (res.ok) {
+                alert('Health record saved successfully!');
+            } else { alert('Error saving health record.'); }
+        });
+    });
+</script>
+</body>
+</html>

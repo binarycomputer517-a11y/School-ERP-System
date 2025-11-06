@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Profile</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <style>
+        :root {
+            --hud-bg: #0a0f18;
+            --hud-primary: #00f0ff;
+            --hud-secondary: #334155;
+            --hud-danger: #ff4747;
+            --hud-warning: #ffb800;
+            --hud-text: #cbd5e1;
+        }
+        
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: var(--hud-bg);
+            color: var(--hud-text);
+            margin: 0;
+            padding: 20px;
+            overflow-x: hidden;
+        }
+        
+        body::before {
+            content: "";
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02) 1px, transparent 1px, transparent 2px);
+            z-index: -1;
+            pointer-events: none;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            background-color: rgba(20, 29, 45, 0.8);
+            border: 1px solid var(--hud-secondary);
+            box-shadow: 0 0 25px rgba(0, 240, 255, 0.1);
+            backdrop-filter: blur(5px);
+        }
+        
+        .nav-links { padding: 10px 25px; border-bottom: 1px solid var(--hud-secondary); }
+        .nav-links a { color: var(--hud-primary); text-decoration: none; font-weight: 700; text-shadow: 0 0 5px var(--hud-primary); }
+        
+        .profile-header { padding: 25px; }
+        .profile-header-content { display: flex; align-items: center; }
+        
+        .profile-photo-container {
+            width: 130px;
+            height: 145px;
+            margin-right: 25px;
+            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
+            animation: pulse-border 3s infinite;
+        }
+        
+        .profile-header img { width: 100%; height: 100%; object-fit: cover; }
+
+        .profile-header .info h1 { margin: 0; font-size: 2em; display: flex; align-items: center; gap: 15px; color: #fff; text-shadow: 0 0 8px var(--hud-primary); }
+        .profile-header .info p { margin: 5px 0 0; opacity: 0.8; }
+        .badge { font-size: 0.6em; padding: 5px 10px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
+        .badge.active { background-color: var(--hud-primary); color: var(--hud-bg); animation: pulse-glow 2s infinite; }
+        .badge.archived { background-color: var(--hud-secondary); color: var(--hud-text); }
+        
+        .quick-actions { margin-top: 20px; display: flex; gap: 10px; }
+        .action-btn { background: transparent; color: var(--hud-primary); border: 1px solid var(--hud-primary); padding: 8px 15px; text-decoration: none; cursor: pointer; font-weight: 700; transition: all 0.2s; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
+        .action-btn:hover { background-color: var(--hud-primary); color: var(--hud-bg); box-shadow: 0 0 15px var(--hud-primary); }
+
+        .tabs { display: flex; flex-wrap: wrap; background-color: rgba(0,0,0,0.2); }
+        .tab-button { padding: 15px 20px; cursor: pointer; background: none; border: none; font-size: 0.9em; font-weight: 700; color: var(--hud-text); position: relative; }
+        .tab-button.active { color: var(--hud-primary); text-shadow: 0 0 5px var(--hud-primary); }
+        .tab-button.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background-color: var(--hud-primary); box-shadow: 0 0 8px var(--hud-primary); }
+
+        .tab-content { display: none; padding: 25px; animation: fadeIn 0.5s; }
+        .tab-content.active { display: block; }
+
+        .details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; background: var(--hud-secondary); border: 1px solid var(--hud-secondary); }
+        .detail-item { padding: 15px; background: var(--hud-bg); }
+        .detail-item strong { color: var(--hud-primary); display: block; margin-bottom: 4px; font-weight: 700; }
+        
+        .placeholder-hud {
+            text-align: center;
+            color: var(--hud-secondary);
+            border: 1px dashed var(--hud-secondary);
+            padding: 50px;
+            font-size: 1.2em;
+        }
+        .placeholder-hud i { font-size: 3em; display: block; margin-bottom: 15px; opacity: 0.5; }
+        
+        .medical-alert { border-left: 5px solid var(--hud-danger); background-color: rgba(255, 71, 71, 0.1); padding: 15px; margin-bottom: 20px; text-shadow: 0 0 5px var(--hud-danger); }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--hud-secondary); }
+        th { background-color: rgba(0, 240, 255, 0.05); color: var(--hud-primary); }
+        
+        #address-map { filter: invert(100%) grayscale(100%) brightness(1.5) contrast(1.2); border: 1px solid var(--hud-secondary); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 5px var(--hud-primary); } 50% { box-shadow: 0 0 15px var(--hud-primary); } }
+        @keyframes pulse-border { 0%, 100% { border: 2px solid var(--hud-primary); } 50% { border: 2px solid #fff; } }
+    </style>
+</head>
+<body>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token) { window.location.href = '/login'; }
+</script>
+
+<div class="container">
+    <div class="nav-links">
+        <a href="/view-student.html">« BACK_TO_DIRECTORY</a>
+    </div>
+
+    <div class="profile-header">
+        <div class="profile-header-content">
+            <div class="profile-photo-container">
+                <img id="student-photo" src="/images/default-avatar.png" alt="Student Photo">
+            </div>
+            <div class="info">
+                <h1><span id="full-name">Loading...</span><span id="status-badge"></span></h1>
+                <p>CLASS: <span id="class-name">N/A</span> | ROLL: <span id="roll-number">N/A</span></p>
+                <p>ADMISSION_ID: <span id="admission-number">N/A</span></p>
+            </div>
+        </div>
+        <div id="quick-actions" class="quick-actions"></div>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-button active" onclick="openTab(event, 'personal')">PERSONAL_DATA</button>
+        <button class="tab-button" onclick="openTab(event, 'guardians')">GUARDIANS</button>
+        <button class="tab-button" onclick="openTab(event, 'address')">ADDRESS</button>
+        <button class="tab-button" onclick="openTab(event, 'medical')">MEDICAL</button>
+        <button class="tab-button" onclick="openTab(event, 'documents')">DOCUMENTS</button>
+        <button class="tab-button" onclick="openTab(event, 'history')">HISTORY</button>
+        <button class="tab-button" onclick="openTab(event, 'logistics')">LOGISTICS</button>
+        <button class="tab-button" onclick="openTab(event, 'performance')">PERFORMANCE</button>
+        <button class="tab-button" onclick="openTab(event, 'library')">LIBRARY</button>
+        <button class="tab-button" onclick="openTab(event, 'discipline')">DISCIPLINE</button>
+        <button class="tab-button" onclick="openTab(event, 'communication')">COMMUNICATION</button>
+        <button class="tab-button" onclick="openTab(event, 'system')">SYSTEM_LOGS</button>
+    </div>
+    
+    <div id="personal" class="tab-content active">
+        <div class="details-grid" id="personal-grid"></div>
+        <div id="siblings-section" style="margin-top: 20px;"></div>
+    </div>
+    
+    <div id="guardians" class="tab-content"><div class="details-grid" id="guardians-grid"></div></div>
+    <div id="address" class="tab-content"><div class="details-grid" id="address-grid"></div><div id="address-map" style="height: 300px; margin-top:20px;"></div></div>
+    <div id="medical" class="tab-content"><div id="medical-content"></div></div>
+    <div id="logistics" class="tab-content"><div id="logistics-content"></div></div>
+    <div id="performance" class="tab-content" style="background: rgba(0,0,0,0.2); padding: 15px;"><canvas id="performanceChart"></canvas></div>
+
+    <div id="documents" class="tab-content"><div class="placeholder-hud"><i class="fas fa-folder-open"></i>// DOCUMENT_ARCHIVE //</div></div>
+    <div id="history" class="tab-content"><div class="placeholder-hud"><i class="fas fa-history"></i>// ACADEMIC_RECORD //</div></div>
+    <div id="library" class="tab-content"><div class="placeholder-hud"><i class="fas fa-book"></i>// LIBRARY_TRANSACTIONS //</div></div>
+    <div id="discipline" class="tab-content"><div class="placeholder-hud"><i class="fas fa-gavel"></i>// DISCIPLINARY_LOGS //</div></div>
+    <div id="communication" class="tab-content"><div class="placeholder-hud"><i class="fas fa-satellite-dish"></i>// COMMUNICATION_STREAM //</div></div>
+    <div id="system" class="tab-content"><div class="placeholder-hud"><i class="fas fa-cogs"></i>// SYSTEM_ACCESS_LOGS //</div></div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const studentId = urlParams.get('id');
+
+    function openTab(evt, tabName) {
+        let i, tabcontent, tabbuttons;
+        tabcontent = document.getElementsByClassName("tab-content");
+        for (i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
+        tabbuttons = document.getElementsByClassName("tab-button");
+        for (i = 0; i < tabbuttons.length; i++) { tabbuttons[i].classList.remove("active"); }
+        document.getElementById(tabName).style.display = "block";
+        evt.currentTarget.classList.add("active");
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        // ADDED CHECK: If no ID is provided, prevent the API call and show an error.
+        if (!studentId || studentId === 'undefined') {
+            document.body.innerHTML = '<h1>Error: No Student ID specified. Please ensure you clicked a link from the directory.</h1>';
+            return;
+        }
+        
+        try {
+            const res = await fetch(`/api/students/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!res.ok) {
+                if(res.status === 404) throw new Error('Student entity not found.');
+                if(res.status === 403) throw new Error('Access denied.');
+                throw new Error('Could not fetch student data.');
+            }
+            const student = await res.json();
+            populateProfile(student);
+        } catch (err) {
+            document.querySelector('.container').innerHTML = `<div style="padding:40px; text-align:center; color: var(--hud-danger);"><h2>ERROR: ${err.message}</h2></div>`;
+        }
+    });
+
+    function populateProfile(student) {
+        const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-GB') : 'N/A';
+        const na = (text) => text || 'N/A';
+        const fullName = `${na(student.first_name)} ${student.last_name || ''}`.trim();
+        document.title = `Profile: ${fullName}`;
+        
+        document.getElementById('full-name').textContent = fullName;
+        document.getElementById('class-name').textContent = na(student.class_name);
+        document.getElementById('roll-number').textContent = na(student.roll_number);
+        document.getElementById('admission-number').textContent = na(student.admission_number);
+        if (student.photo_path) { document.getElementById('student-photo').src = `/${student.photo_path.replace('public/', '')}`; }
+
+        const statusBadge = document.getElementById('status-badge');
+        statusBadge.textContent = student.is_active ? 'ACTIVE' : 'ARCHIVED';
+        statusBadge.className = `badge ${student.is_active ? 'active' : 'archived'}`;
+        
+        // FIX: Using the reliable studentId variable (read from URL) for links
+        // to prevent 'undefined' ID being passed to the ID card and edit pages.
+        document.getElementById('quick-actions').innerHTML = `
+            <a href="/edit-student.html?id=${studentId}" class="action-btn">EDIT_ENTITY</a>
+            <a href="/id-card.html?id=${studentId}" class="action-btn">ID_CARD</a>
+            <button onclick="alert('Password reset functionality to be implemented.')" class="action-btn">RESET_PASSWORD</button>
+        `;
+
+        document.getElementById('personal-grid').innerHTML = `
+            <div class="detail-item"><strong>FIRST_NAME</strong> <span>${na(student.first_name)}</span></div>
+            <div class="detail-item"><strong>LAST_NAME</strong> <span>${na(student.last_name)}</span></div>
+            <div class="detail-item"><strong>DATE_OF_BIRTH</strong> <span>${formatDate(student.date_of_birth)}</span></div>
+            <div class="detail-item"><strong>GENDER</strong> <span>${na(student.gender)}</span></div>
+            <div class="detail-item"><strong>CONTACT</strong> <span>${na(student.contact_number)}</span></div>
+            <div class="detail-item"><strong>EMAIL</strong> <span>${na(student.email)}</span></div>
+            <div class="detail-item"><strong>NATIONALITY</strong> <span>${na(student.nationality)}</span></div>
+            <div class="detail-item"><strong>RELIGION</strong> <span>${na(student.religion)}</span></div>
+        `;
+        
+        document.getElementById('guardians-grid').innerHTML = `
+            <div class="detail-item"><strong>FATHER_NAME</strong> <span>${na(student.father_name)}</span></div>
+            <div class="detail-item"><strong>FATHER_OCCUPATION</strong> <span>${na(student.father_occupation)}</span></div>
+            <div class="detail-item"><strong>MOTHER_NAME</strong> <span>${na(student.mother_name)}</span></div>
+            <div class="detail-item"><strong>MOTHER_OCCUPATION</strong> <span>${na(student.mother_occupation)}</span></div>
+        `;
+
+        document.getElementById('address-grid').innerHTML = `
+            <div class="detail-item"><strong>PRESENT_ADDRESS</strong> <span>${na(student.present_address)}</span></div>
+            <div class="detail-item"><strong>PERMANENT_ADDRESS</strong> <span>${na(student.permanent_address)}</span></div>
+        `;
+        
+        const map = L.map('address-map').setView([20.5937, 78.9629], 5);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
+        if(student.present_address) L.marker([20.5937, 78.9629]).addTo(map).bindPopup(student.present_address);
+
+        document.getElementById('medical-content').innerHTML = `
+            <div class="medical-alert"><strong>ALLERGIES:</strong> ${na(student.allergies)}</div>
+            <div class="details-grid">
+                <div class="detail-item"><strong>BLOOD_GROUP</strong> <span>${na(student.blood_group)}</span></div>
+                <div class="detail-item"><strong>EMERGENCY_CONTACT</strong> <span>${na(student.emergency_contact)}</span></div>
+                <div class="detail-item"><strong>MEDICAL_NOTES</strong> <span>${na(student.medical_notes)}</span></div>
+            </div>
+        `;
+
+        document.getElementById('logistics-content').innerHTML = `
+            <div class="details-grid">
+                <div class="detail-item"><strong>TRANSPORT_REQUIRED</strong> <span>${student.transport_required ? 'YES' : 'NO'}</span></div>
+                <div class="detail-item"><strong>HOSTEL_REQUIRED</strong> <span>${student.hostel_required ? 'YES' : 'NO'}</span></div>
+            </div>
+        `;
+        
+        // RESTORED: Sibling Info
+        document.getElementById('siblings-section').innerHTML = `
+            <h4 style="color: var(--hud-primary); margin-top: 30px;">SIBLING_DATA</h4>
+            <div class="placeholder-hud" style="padding: 20px; font-size: 1em;">// NO SIBLING INFORMATION ON RECORD //</div>
+        `;
+        
+        const ctx = document.getElementById('performanceChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['Term 1', 'Mid-Term', 'Term 2', 'Finals'],
+                datasets: [{ label: 'Overall Score', data: [75, 78, 85, 82], borderColor: 'var(--hud-primary)', backgroundColor: 'rgba(0, 240, 255, 0.2)', tension: 0.3, pointBackgroundColor: '#fff', pointBorderColor: 'var(--hud-primary)' }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { ticks: { color: 'var(--hud-text)' }, grid: { color: 'var(--hud-secondary)' } },
+                    x: { ticks: { color: 'var(--hud-text)' }, grid: { color: 'var(--hud-secondary)' } }
+                },
+                plugins: { legend: { labels: { color: 'var(--hud-text)' } } }
+            }
+        });
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Media Gallery</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* Placeholder styling for the gallery view */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .media-item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .media-item img, .media-item video {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+<script>
+    // Authentication check (standard for protected pages)
+    const token = localStorage.getItem('erp-token');
+    if (!token) window.location.href = '/login';
+</script>
+
+<div class="container">
+    <h1>School Media Gallery</h1>
+    <div class="nav-links">
+        <a href="/dashboard.html">Back to Dashboard</a> |
+        <a href="/upload-media.html" id="upload-link" style="display: none;">Upload Media</a>
+    </div>
+
+    <div style="margin-top: 20px; margin-bottom: 20px;">
+        <input type="text" id="search-media" placeholder="Search by event or title...">
+        <select id="media-filter">
+            <option value="">All Media</option>
+            <option value="Image">Images</option>
+            <option value="Video">Videos</option>
+        </select>
+        <button onclick="filterMedia()">Search</button>
+    </div>
+
+    <div id="gallery-container" class="gallery-grid">
+        <p id="loading-status">Loading media...</p>
+    </div>
+
+    <h3 id="no-media-message" style="display:none; text-align: center;">No media items found.</h3>
+
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const userRole = localStorage.getItem('user-role');
+    
+    // Show upload link only for admins/teachers
+    if (userRole === 'Admin' || userRole === 'Teacher') {
+        document.getElementById('upload-link').style.display = 'inline';
+    }
+
+    async function fetchMedia() {
+        const statusElement = document.getElementById('loading-status');
+        const galleryContainer = document.getElementById('gallery-container');
+        statusElement.style.display = 'block';
+        galleryContainer.innerHTML = '';
+        document.getElementById('no-media-message').style.display = 'none';
+        
+        try {
+            // Fetch media from the backend endpoint
+            const response = await fetch('/api/media', { headers: authHeaders });
+            
+            if (!response.ok) {
+                let errorDetails = `Failed to fetch media: ${response.status} ${response.statusText}`;
+                try {
+                    const errorJson = await response.json();
+                    errorDetails = errorJson.error || errorJson.details || errorDetails;
+                } catch (e) {}
+                throw new Error(errorDetails);
+            }
+            
+            const mediaItems = await response.json();
+            
+            statusElement.style.display = 'none';
+
+            if (mediaItems.length === 0) {
+                document.getElementById('no-media-message').style.display = 'block';
+                return;
+            }
+
+            mediaItems.forEach(item => {
+                galleryContainer.innerHTML += `
+                    <div class="media-item">
+                        ${item.media_type === 'Video' 
+                            // FIX: Use /uploads/${item.file_path} to prevent the double 'media/media' in the URL
+                            ? `<video controls src="/uploads/${item.file_path}"></video>`
+                            : `<img src="/uploads/${item.file_path}" alt="${item.title}">`
+                        }
+                        <h4>${item.title}</h4>
+                        <p><small>Type: ${item.media_type} | Date: ${new Date(item.upload_date).toLocaleDateString()}</small></p>
+                    </div>
+                `;
+            });
+
+        } catch (err) {
+            console.error("Error fetching media:", err);
+            statusElement.innerHTML = `Error loading media gallery. Details: ${err.message}`;
+            statusElement.style.display = 'block';
+        }
+    }
+
+    // Placeholder function for filtering
+    function filterMedia() {
+        console.log("Filtering media...");
+    }
+
+    window.onload = fetchMedia;
+</script>
+</body>
+</html>

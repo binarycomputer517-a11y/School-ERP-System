@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Leave Requests</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* --- Classic Professional Style Redesign --- */
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 0;
+            background-color: #eef1f5;
+            color: #333;
+            font-size: 14px;
+        }
+
+        .container {
+            max-width: 1200px; /* Increased width to accommodate filters */
+            margin: 25px auto;
+            padding: 25px;
+            background-color: #ffffff;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+
+        h2 {
+            font-family: Georgia, "Times New Roman", Times, serif;
+            color: #003366;
+            border-bottom: 2px solid #b0c4de;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            color: #005a9c;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .back-link:hover { text-decoration: underline; }
+
+        /* Filter Box Style */
+        .filter-box {
+            background-color: #f8f9fa;
+            border: 1px solid #d0d7de;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .filter-box label {
+            font-weight: bold;
+        }
+
+        /* Summary Panel */
+        .summary-panel {
+            background-color: #e6f0ff;
+            color: #003366;
+            padding: 10px 15px;
+            border-left: 5px solid #005a9c;
+            margin-bottom: 20px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        /* Table Styling */
+        .table {
+            border: 1px solid #aaa;
+            background-color: #fff;
+        }
+        .table th, .table td {
+            padding: 10px 12px;
+            border-right: 1px solid #ddd;
+        }
+        /* Action column needs more width */
+        .table th:last-child, .table td:last-child {
+            width: 250px; 
+            text-align: center;
+        }
+
+        .table thead th {
+            background-color: #e2e5e8;
+            color: #333;
+            font-weight: bold;
+            border-bottom: 2px solid #b0c4de;
+            border-top: none;
+            position: sticky;
+            top: 0;
+        }
+
+        .table tbody tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .table tbody tr:hover {
+            background-color: #f1f8ff;
+        }
+
+        /* Button Styling (Corporate Look) */
+        .btn-success {
+            background-color: #28a745;
+            border-color: #1e7e34;
+            transition: background-color 0.2s ease;
+        }
+        .btn-success:hover {
+            background-color: #1e7e34;
+            border-color: #19692c;
+        }
+        .btn-danger {
+            background-color: #dc3545;
+            border-color: #bd2130;
+            transition: background-color 0.2s ease;
+        }
+        .btn-danger:hover {
+            background-color: #bd2130;
+            border-color: #a71d2a;
+        }
+        .btn-info {
+             background-color: #17a2b8;
+             border-color: #117a8b;
+             color: white;
+        }
+        .btn-info:hover {
+             background-color: #117a8b;
+             border-color: #0b5f6b;
+        }
+        .btn-sm {
+            padding: 5px 10px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <a href="/manage-leave.html" class="back-link">← Back to Leave Hub</a>
+
+        <h2>Manage Leave Requests <i class="fa-solid fa-scale-balanced"></i></h2>
+        <p class="text-muted">Review, approve, or reject pending leave applications.</p>
+
+        <div class="filter-box">
+            <form id="filterRequestsForm" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label for="employeeSearch" class="form-label">Employee Name/ID</label>
+                    <input type="text" class="form-control" id="employeeSearch" placeholder="Filter by name or ID">
+                </div>
+                <div class="col-md-3">
+                    <label for="startDateFilter" class="form-label">Start Date From</label>
+                    <input type="date" class="form-control" id="startDateFilter">
+                </div>
+                <div class="col-md-3">
+                    <label for="endDateFilter" class="form-label">Start Date To</label>
+                    <input type="date" class="form-control" id="endDateFilter">
+                </div>
+                <div class="col-md-2">
+                    <button type="button" class="btn btn-primary w-100" onclick="loadPendingRequests()">Filter</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="summary-panel">
+            Total Pending Requests: <span id="pendingCount">0</span>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered mt-4">
+                <thead>
+                    <tr>
+                        <th>Employee Name</th>
+                        <th>Leave Type</th>
+                        <th>Dates</th>
+                        <th>Reason (Summary)</th>
+                        <th style="width: 250px;">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="manageRequestsTable">
+                    <tr>
+                        <td colspan="5" class="text-center text-muted">No pending leave requests found.</td>
+                    </tr>
+                    </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <div class="modal fade" id="requestDetailModal" tabindex="-1" aria-labelledby="requestDetailModalLabel" aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="requestDetailModalLabel">Leave Request Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body">
+            <p><strong>Request ID:</strong> <span id="modal-req-id"></span></p>
+            <p><strong>Employee:</strong> <span id="modal-employee-name"></span></p>
+            <p><strong>Type:</strong> <span id="modal-leave-type"></span></p>
+            <p><strong>Dates:</strong> <span id="modal-dates"></span></p>
+            <p><strong>Submission Date:</strong> <span id="modal-submission-date"></span></p>
+            <hr>
+            <h6>Full Reason:</h6>
+            <p id="modal-full-reason"></p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <button type="button" class="btn btn-danger" id="modal-reject-btn">Reject</button>
+            <button type="button" class="btn btn-success" id="modal-approve-btn">Approve</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/js/leave.js"></script>
+    
+    <script>
+        // CLIENT-SIDE LOGIC FOR NEW FEATURES
+        
+        let allPendingRequests = []; // Stores the full dataset after fetching
+        const detailModal = new bootstrap.Modal(document.getElementById('requestDetailModal'));
+        
+        /**
+         * Overrides the renderPendingRequests function from leave.js 
+         * to include new UI elements and update the count/summary.
+         */
+        const originalRenderPendingRequests = window.renderPendingRequests;
+        window.renderPendingRequests = function(requests) {
+            allPendingRequests = requests || [];
+            
+            // 1. Update Summary Count
+            document.getElementById('pendingCount').textContent = allPendingRequests.length;
+
+            // 2. Filter requests based on search/date inputs before rendering
+            const searchTerm = document.getElementById('employeeSearch').value.toLowerCase();
+            const startFilter = document.getElementById('startDateFilter').value;
+            const endFilter = document.getElementById('endDateFilter').value;
+            
+            const filteredRequests = allPendingRequests.filter(req => {
+                const nameMatch = (req.employee_name || '').toLowerCase().includes(searchTerm) || 
+                                  (req.id || '').toLowerCase().includes(searchTerm);
+                
+                const dateMatch = (!startFilter || req.start >= startFilter) &&
+                                  (!endFilter || req.start <= endFilter);
+                                  
+                return nameMatch && dateMatch;
+            });
+
+            const tbody = document.getElementById('manageRequestsTable');
+            tbody.innerHTML = '';
+            
+            if (filteredRequests.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">No pending leave requests found matching the current filters.</td></tr>';
+                 return;
+            }
+
+            filteredRequests.forEach(req => {
+                const summaryReason = req.reason ? req.reason.substring(0, 50) + (req.reason.length > 50 ? '...' : '') : 'N/A';
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${req.employee_name || 'N/A'}</td>
+                    <td>${req.type}</td>
+                    <td>${req.start} to ${req.end}</td>
+                    <td>${summaryReason}</td>
+                    <td class="text-center">
+                        <button class="btn btn-info btn-sm me-1" onclick="showRequestDetails('${req.id}')">
+                            <i class="fa-solid fa-eye"></i> Details
+                        </button>
+                        <button class="btn btn-success btn-sm me-1" onclick="processRequest('${req.id}', 'Approved')">Approve</button>
+                        <button class="btn btn-danger btn-sm" onclick="processRequest('${req.id}', 'Rejected')">Reject</button>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        };
+        
+        // Re-attach the initial load after DOM is ready
+        document.addEventListener('DOMContentLoaded', () => {
+            // Note: loadPendingRequests is called by the filter button now, 
+            // but we call it once on load to get the initial data.
+            window.loadPendingRequests(); 
+        });
+
+        // --- Modal Detail Logic ---
+
+        function showRequestDetails(requestId) {
+            const request = allPendingRequests.find(req => req.id === requestId);
+            
+            if (!request) {
+                alert('Request details not found.');
+                return;
+            }
+
+            // Populate Modal Fields
+            document.getElementById('modal-req-id').textContent = request.id;
+            document.getElementById('modal-employee-name').textContent = request.employee_name;
+            document.getElementById('modal-leave-type').textContent = request.type;
+            document.getElementById('modal-dates').textContent = `${request.start} to ${request.end}`;
+            document.getElementById('modal-submission-date').textContent = request.created_at || 'N/A'; // Assuming created_at is available
+            document.getElementById('modal-full-reason').textContent = request.reason;
+            
+            // Attach actions to modal buttons
+            document.getElementById('modal-approve-btn').onclick = async () => {
+                await processRequest(request.id, 'Approved');
+                detailModal.hide();
+            };
+            document.getElementById('modal-reject-btn').onclick = async () => {
+                await processRequest(request.id, 'Rejected');
+                detailModal.hide();
+            };
+            
+            detailModal.show();
+        }
+
+        // Expose function for HTML
+        window.showRequestDetails = showRequestDetails;
+
+        // Ensure the filter form reloads data without full page reload
+        document.getElementById('filterRequestsForm').addEventListener('submit', (e) => {
+            e.preventDefault();
+            loadPendingRequests();
+        });
+        
+    </script>
+</body>
+</html>

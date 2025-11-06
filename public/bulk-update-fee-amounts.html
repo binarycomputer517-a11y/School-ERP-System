@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Update Fee Amounts</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --warning-color: #f39c12;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        select, input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+        .update-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .submit-btn {
+            grid-column: 1 / -1;
+            padding: 12px;
+            background-color: var(--error-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #a72d21;
+        }
+        .warning-box {
+            padding: 15px;
+            background-color: #fbecec;
+            border: 1px solid var(--error-color);
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .status-log {
+            min-height: 100px;
+            background-color: #eee;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    const courseSelect = document.getElementById('course-select');
+    const feeTypeSelect = document.getElementById('fee-type-select');
+
+    /**
+     * Loads courses and populates the dropdown.
+     */
+    async function loadCourses() {
+        courseSelect.innerHTML = '<option value="">Loading courses...</option>';
+        try {
+            // API endpoint from academicswithfees.js
+            const courses = await handleApi('/api/academicswithfees/courses');
+            
+            courseSelect.innerHTML = '<option value="">-- Select Target Course --</option>';
+            if (courses.length > 0) {
+                courses.forEach(course => {
+                    courseSelect.innerHTML += `<option value="${course.course_id}">${course.course_name} (${course.course_code})</option>`;
+                });
+            } else {
+                 courseSelect.innerHTML += '<option value="">No courses available</option>';
+            }
+        } catch (error) {
+            console.error('Error loading courses:', error);
+            courseSelect.innerHTML = '<option value="">Error loading courses</option>';
+        }
+    }
+    
+    /**
+     * Loads fee categories/types and populates the dropdown.
+     */
+    async function loadFeeTypes() {
+        feeTypeSelect.innerHTML = '<option value="">Loading fee types...</option>';
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of fee components ❌
+            // NOTE: Using hardcoded values as a static list of fee structure fields is reasonable here.
+            const feeTypes = [
+                { id: 'admission_fee', name: 'Admission Fee' },
+                { id: 'registration_fee', name: 'Registration Fee' },
+                { id: 'examination_fee', name: 'Examination Fee' },
+                { id: 'transport_fee', name: 'Transport Fee (Monthly)' },
+                { id: 'hostel_fee', name: 'Hostel Fee (Monthly)' }
+            ]; 
+            // In a real app, this would replace: const feeTypes = await handleApi('/api/fees/categories');
+
+            feeTypeSelect.innerHTML = '<option value="">-- Select Fee Type --</option>';
+            feeTypes.forEach(type => {
+                 feeTypeSelect.innerHTML += `<option value="${type.id}">${type.name}</option>`;
+            });
+
+        } catch (error) {
+            console.error('Error loading fee types:', error);
+            feeTypeSelect.innerHTML = '<option value="">Error loading fee types</option>';
+        }
+    }
+
+    /**
+     * Handles the bulk fee update submission.
+     */
+    async function submitBulkUpdate(formData) {
+        const log = document.getElementById('status-log');
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+        log.innerHTML = `[${new Date().toLocaleTimeString()}] Initiating bulk update for Course ID ${formData.course_id}...<br>`;
+
+        if (!confirm(`WARNING: This will update the '${formData.fee_type_id}' by ${formData.update_type} ${formData.update_value} for ALL batches in the selected course. Proceed?`)) {
+            submitBtn.disabled = false;
+            return;
+        }
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to handle the bulk update ❌
+            const result = await handleApi('/api/fees/bulk-update', {
+                method: 'PUT',
+                body: JSON.stringify(formData)
+            });
+            
+            log.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ SUCCESS: ${result.batches_updated || 'Unknown number of'} structures updated.<br>`;
+            log.innerHTML += `[${new Date().toLocaleTimeString()}] Operation complete. Changes effective immediately for new invoices.<br>`;
+            log.scrollTop = log.scrollHeight;
+
+        } catch (error) {
+            log.innerHTML += `[${new Date().toLocaleTimeString()}] ❌ CRITICAL ERROR: ${error.message}<br>`;
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCourses();
+        loadFeeTypes();
+
+        document.getElementById('bulk-update-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = {
+                course_id: courseSelect.value,
+                fee_type_id: feeTypeSelect.value,
+                update_type: document.getElementById('update-type').value,
+                update_value: parseFloat(document.getElementById('update-value').value)
+            };
+            
+            if (!formData.course_id || !formData.fee_type_id) {
+                alert('Please select a Course and a Fee Type.');
+                return;
+            }
+            if (isNaN(formData.update_value) || formData.update_value === 0) {
+                 alert('Please enter a valid, non-zero update value.');
+                 return;
+            }
+
+            submitBulkUpdate(formData);
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Bulk Update Fee Amounts Across Batches</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <div class="warning-box">
+            <h4>⚠️ Warning: Irreversible Action</h4>
+            <p>This process directly modifies the **Fee Structure** for all batches within the selected course. Invoices already generated will NOT be affected.</p>
+        </div>
+        
+        <h2>Update Criteria</h2>
+        <form id="bulk-update-form">
+            <div class="update-grid">
+                <div class="form-group">
+                    <label for="course-select">Target Course (ALL Batches within this course will be affected):</label>
+                    <select id="course-select" required></select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="fee-type-select">Fee Component to Update:</label>
+                    <select id="fee-type-select" required></select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="update-type">Type of Change:</label>
+                    <select id="update-type" required>
+                        <option value="increase_fixed">Increase By Fixed Amount (₹)</option>
+                        <option value="decrease_fixed">Decrease By Fixed Amount (₹)</option>
+                        <option value="increase_percent">Increase By Percentage (%)</option>
+                        <option value="decrease_percent">Decrease By Percentage (%)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="update-value">Value of Change (₹ or %)</label>
+                    <input type="number" step="0.01" id="update-value" required min="0" placeholder="e.g., 500 or 10.50">
+                </div>
+            </div>
+            
+            <button type="submit" id="submit-btn" class="submit-btn">Execute Bulk Fee Update</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Process Log</h2>
+        <div class="status-log" id="status-log">
+            Awaiting update execution...
+        </div>
+    </div>
+</div>
+</body>
+</html>

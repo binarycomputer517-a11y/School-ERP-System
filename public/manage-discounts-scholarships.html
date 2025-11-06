@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Discounts & Scholarships</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .discount-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input[type="text"], input[type="number"], select, textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+        .submit-btn {
+            grid-column: 1 / -1;
+            padding: 12px;
+            background-color: var(--primary-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #357abd;
+        }
+        .discount-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .discount-table th, .discount-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9em;
+        }
+        .discount-table th {
+            background-color: var(--primary-color);
+            color: #fff;
+            font-weight: 600;
+        }
+        .status-active { color: var(--success-color); font-weight: 600; }
+        .status-expired { color: var(--error-color); font-weight: 600; }
+        .placeholder-message {
+            text-align: center;
+            padding: 20px 0;
+            color: var(--secondary-color);
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    /**
+     * Fetches and renders existing discounts/scholarships.
+     */
+    async function fetchAndRenderDiscounts() {
+        const tbody = document.getElementById('discounts-tbody');
+        tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">Loading existing discounts...</td></tr>';
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of discounts ❌
+            const discounts = await handleApi('/api/fees/discounts'); 
+            
+            tbody.innerHTML = '';
+            if (discounts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">No active discounts or scholarships found.</td></tr>';
+                return;
+            }
+
+            discounts.forEach(d => {
+                const isActive = new Date(d.expiry_date) > new Date();
+                const statusClass = isActive ? 'status-active' : 'status-expired';
+                const statusText = isActive ? 'Active' : 'Expired';
+                
+                const valueText = d.type === 'percent' 
+                    ? `${d.value}%` 
+                    : `₹${(d.value || 0).toFixed(2)}`;
+
+                const row = `<tr>
+                    <td>${d.name}</td>
+                    <td>${d.code}</td>
+                    <td>${valueText} (${d.type})</td>
+                    <td>${d.usage_limit || 'Unlimited'}</td>
+                    <td>${new Date(d.expiry_date).toLocaleDateString()}</td>
+                    <td><span class="${statusClass}">${statusText}</span></td>
+                    <td><button onclick="editDiscount(${d.id})">Edit</button></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error('Error fetching discounts:', error);
+            tbody.innerHTML = `<tr><td colspan="7" class="placeholder-message" style="color: var(--error-color);">Error loading data: ${error.message}</td></tr>`;
+        }
+    }
+
+    /**
+     * Handles form submission for creating or updating a discount.
+     */
+    async function submitDiscount(formData) {
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+
+        const discountId = formData.id;
+        const isUpdate = !!discountId;
+        const method = isUpdate ? 'PUT' : 'POST';
+        const url = isUpdate ? `/api/fees/discounts/${discountId}` : '/api/fees/discounts';
+
+        try {
+            // ❌ ACTUAL API CALL for submission ❌
+            await handleApi(url, { method: method, body: JSON.stringify(formData) });
+            
+            alert(`✅ Discount ${isUpdate ? 'updated' : 'created'} successfully!`);
+            document.getElementById('discount-form').reset();
+            fetchAndRenderDiscounts(); // Refresh list
+
+        } catch (error) {
+            alert(`❌ Error saving discount: ${error.message}`);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+    // Placeholder for editing a discount
+    function editDiscount(discountId) {
+        alert(`Loading Discount ID ${discountId} for editing (requires another API call to fetch single item).`);
+    }
+    
+    // Placeholder function to load fee categories
+    async function loadFeeCategories() {
+        const select = document.getElementById('fee-category-id');
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of fee categories ❌
+            const categories = [ /* await handleApi('/api/fees/categories') */ ]; 
+
+            select.innerHTML = '<option value="ALL">ALL (Total Fee)</option>';
+            categories.forEach(cat => {
+                select.innerHTML += `<option value="${cat.id}">${cat.name}</option>`;
+            });
+        } catch (error) {
+            console.error('Could not load fee categories:', error);
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadFeeCategories(); // Load categories first
+        fetchAndRenderDiscounts(); // Then load existing discounts
+
+        document.getElementById('discount-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = {
+                id: document.getElementById('discount-id').value,
+                name: document.getElementById('discount-name').value,
+                code: document.getElementById('discount-code').value,
+                type: document.getElementById('discount-type').value,
+                value: parseFloat(document.getElementById('discount-value').value),
+                usage_limit: parseInt(document.getElementById('usage-limit').value) || null,
+                expiry_date: document.getElementById('expiry-date').value,
+                fee_category_id: document.getElementById('fee-category-id').value, 
+            };
+            submitDiscount(formData);
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Manage Discounts & Scholarships</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Create/Edit Discount</h2>
+        <form id="discount-form">
+            <input type="hidden" id="discount-id">
+            <div class="discount-grid">
+                <div class="form-group">
+                    <label for="discount-name">Name (e.g., Merit Scholarship)</label>
+                    <input type="text" id="discount-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="discount-code">Code (e.g., MERIT50)</label>
+                    <input type="text" id="discount-code" required>
+                </div>
+                <div class="form-group">
+                    <label for="discount-type">Type</label>
+                    <select id="discount-type" required>
+                        <option value="percent">Percentage (%)</option>
+                        <option value="fixed">Fixed Amount (₹)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="discount-value">Value (Amount or Percent)</label>
+                    <input type="number" step="0.01" id="discount-value" required min="0">
+                </div>
+                <div class="form-group">
+                    <label for="usage-limit">Usage Limit (Max students)</label>
+                    <input type="number" id="usage-limit" placeholder="e.g., 50 or leave blank for unlimited">
+                </div>
+                <div class="form-group">
+                    <label for="expiry-date">Expiry Date</label>
+                    <input type="date" id="expiry-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="fee-category-id">Applies To Fee Category:</label>
+                    <select id="fee-category-id" required>
+                        <option value="ALL">ALL (Total Fee)</option>
+                        </select>
+                </div>
+            </div>
+            <button type="submit" id="submit-btn" class="submit-btn">Save Discount/Scholarship</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Existing Discounts & Scholarships</h2>
+        <table class="discount-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Code</th>
+                    <th>Value</th>
+                    <th>Usage Limit</th>
+                    <th>Expires</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="discounts-tbody">
+                <tr><td colspan="7" class="placeholder-message">Loading existing data...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

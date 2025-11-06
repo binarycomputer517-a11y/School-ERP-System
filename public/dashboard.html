@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Main Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f7f6; font-family: sans-serif; }
+        .container-fluid { max-width: 1400px; }
+        .sidebar { background-color: #003366; color: white; min-height: 100vh; padding: 20px; }
+        .sidebar a { color: #f0f0f0; text-decoration: none; padding: 10px 0; display: block; }
+        .sidebar a:hover { color: #bb86fc; background-color: #002244; }
+        
+        .header-bar { background-color: white; border-bottom: 1px solid #ddd; padding: 15px 20px; }
+        
+        .stat-card {
+            background-color: white;
+            border-left: 5px solid #007bff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .stat-value { font-size: 2em; font-weight: bold; color: #003366; }
+        .stat-label { font-size: 0.9em; color: #555; }
+    </style>
+</head>
+<body>
+
+<div class="d-flex">
+    <div class="sidebar d-none d-md-block">
+        <h3 class="text-white mb-4">ERP Admin</h3>
+        <p class="mb-2">User: <strong id="user-name-display">Admin</strong></p>
+        <p class="mb-4">Role: <strong id="user-role-display">Loading...</strong></p>
+        
+        <a href="/dashboard.html">🏠 Dashboard Home</a>
+        <a href="/exam-management.html">📝 Exam & Marks</a>
+        <a href="/manage-teachers.html">🧑‍🏫 Staff Management</a>
+        <a href="/manage-fees.html">💰 Fee Management</a>
+        <a href="/admin-timetable.html">📅 Timetable</a>
+        <a href="#" onclick="logout()">➡️ Logout</a>
+    </div>
+
+    <div class="flex-grow-1">
+        <div class="header-bar d-flex justify-content-between align-items-center">
+            <h2 class="mb-0 text-dark">Welcome Back!</h2>
+            <div>
+                <span class="badge bg-primary me-2">Session: <strong id="session-id-display">N/A</strong></span>
+                <span class="badge bg-secondary">Branch: <strong id="branch-id-display">N/A</strong></span>
+            </div>
+        </div>
+
+        <div class="container-fluid mt-4">
+            <div class="row">
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card border-success">
+                        <div class="stat-value text-success" id="stat-students">Loading...</div>
+                        <div class="stat-label">Total Active Students</div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card border-info">
+                        <div class="stat-value text-info" id="stat-teachers">Loading...</div>
+                        <div class="stat-label">Total Teachers/Staff</div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card border-warning">
+                        <div class="stat-value text-warning" id="stat-due">Loading...</div>
+                        <div class="stat-label">Total Fees Due (Current Month)</div>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6">
+                    <div class="stat-card border-danger">
+                        <div class="stat-value text-danger" id="stat-overdue">Loading...</div>
+                        <div class="stat-label">Overdue Library Books</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card p-3">
+                        <h4 class="text-dark">Recent Announcements</h4>
+                        <ul class="list-group list-group-flush" id="announcements-list">
+                            <li class="list-group-item text-muted">Loading announcements...</li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card p-3">
+                        <h4 class="text-dark">Quick Actions</h4>
+                        <a href="/add-student.html" class="btn btn-sm btn-outline-primary mb-2">➕ Add New Student</a>
+                        <a href="/add-teacher.html" class="btn btn-sm btn-outline-info mb-2">➕ Add New Staff</a>
+                        <a href="/online-payment-portal.html" class="btn btn-sm btn-outline-success">💰 Manage Payments</a>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const TOKEN = localStorage.getItem('erp-token');
+    
+    // FIX: Removed the check that locked out students. 
+    // Now, only check if the TOKEN is missing.
+    if (!TOKEN) { 
+        window.location.href = '/login.html'; 
+    }
+
+    const authHeaders = { 
+        'Authorization': `Bearer ${TOKEN}`,
+        'Content-Type': 'application/json'
+    };
+
+    function logout() {
+        localStorage.clear();
+        window.location.href = '/login.html';
+    }
+
+    async function fetchDashboardData() {
+        const userRole = localStorage.getItem('user-role');
+        
+        // Display user and session info immediately
+        document.getElementById('user-name-display').textContent = localStorage.getItem('user-name') || 'User';
+        document.getElementById('user-role-display').textContent = userRole || 'Loading...';
+        document.getElementById('session-id-display').textContent = localStorage.getItem('active_session_id') ? 'Active' : 'N/A';
+        document.getElementById('branch-id-display').textContent = localStorage.getItem('active_branch_id') ? 'Set' : 'N/A';
+
+        // Fetch core stats (logic should be adjusted on backend based on userRole)
+        try {
+            // NOTE: These API routes are placeholders. Your server must implement them.
+            const stats = await fetch('/api/dashboard/stats', { headers: authHeaders }).then(res => res.json());
+            
+            document.getElementById('stat-students').textContent = stats.total_students || 0;
+            document.getElementById('stat-teachers').textContent = stats.total_teachers || 0;
+            document.getElementById('stat-due').textContent = `₹${(stats.fees_due || 0).toFixed(2)}`;
+            document.getElementById('stat-overdue').textContent = stats.overdue_books || 0;
+
+        } catch (error) {
+            console.error('Failed to load dashboard stats:', error);
+            // Fallback for UI elements
+            document.getElementById('stat-students').textContent = 'Error';
+            document.getElementById('stat-teachers').textContent = 'Error';
+        }
+        
+        // Fetch announcements
+        try {
+            // Adjust announcement fetching based on user role
+            const roleEndpoint = userRole === 'Student' ? 'role/student' : 'role/admin';
+            const announcements = await fetch(`/api/announcements/${roleEndpoint}`, { headers: authHeaders }).then(res => res.json());
+            const list = document.getElementById('announcements-list');
+            list.innerHTML = '';
+            
+            if (announcements.length === 0) {
+                list.innerHTML = '<li class="list-group-item">No recent announcements.</li>';
+                return;
+            }
+
+            announcements.slice(0, 5).forEach(item => {
+                list.innerHTML += `<li class="list-group-item">
+                    <strong>${item.title}</strong>
+                    <small class="text-muted float-end">${new Date(item.created_at).toLocaleDateString()}</small>
+                </li>`;
+            });
+
+        } catch (error) {
+            console.error('Failed to load announcements:', error);
+            document.getElementById('announcements-list').innerHTML = '<li class="list-group-item text-danger">Failed to load announcements.</li>';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchDashboardData);
+</script>
+</body>
+</html>

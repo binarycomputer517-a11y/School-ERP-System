@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Issue a Book</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .form-container { max-width: 500px; margin: 40px auto; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+        .form-container h1 { text-align: center; }
+        .form-container label { display: block; margin-top: 15px; font-weight: bold; }
+        .form-container input, .form-container select { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .form-container button { width: 100%; padding: 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 25px; }
+        .form-container button:hover { background-color: #0056b3; }
+
+        #notification { position: fixed; top: 20px; right: 20px; padding: 15px; border-radius: 5px; color: white; z-index: 2000; display: none; }
+        .notification-success { background-color: #28a745; }
+        .notification-error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        // Only Admin and Librarian can issue books.
+        if (!token || !['Admin', 'Librarian'].includes(userRole)) {
+            window.location.href = '/login';
+        }
+    </script>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/manage-books.html">← Back to Library Dashboard</a> | 
+            <a href="/return-book.html">Return a Book</a>
+        </div>
+        
+        <div class="form-container">
+            <h1>Issue a Book</h1>
+            <form id="issue-form">
+                <label for="user-select">Select User (Student/Teacher):</label>
+                <select id="user-select" required>
+                    <option value="">-- Select User --</option>
+                </select>
+
+                <label for="book-select">Select Book Title (Available Copies):</label>
+                <select id="book-select" required>
+                    <option value="">-- Select Book --</option>
+                </select>
+
+                <label for="due-date">Due Date:</label>
+                <input type="date" id="due-date" required>
+                
+                <button type="submit">Issue Book</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="notification"></div>
+
+    <script>
+        const authHeaders = { 'Authorization': `Bearer ${token}` };
+        
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification-' + type;
+            notification.style.display = 'block';
+            setTimeout(() => { notification.style.display = 'none'; }, 4000);
+        }
+
+        // 1. Fetch data securely from API
+        async function fetchData(url, errorMsg) {
+            const response = await fetch(url, { headers: authHeaders });
+            
+            if (response.status === 403) {
+                // Specific handler for the common 403 error on /api/users
+                throw new Error(`${errorMsg}. Status: 403. Detail: Forbidden: You do not have permission to perform this action. Ensure you are logged in as an Admin or Librarian.`);
+            }
+            if (!response.ok) {
+                const detail = await response.text();
+                throw new Error(`${errorMsg}. Status: ${response.status}. Detail: ${detail}`);
+            }
+            return response.json();
+        }
+
+        // 2. Populate Dropdowns
+        async function populateDropdowns() {
+            try {
+                // Fetch users (Admin/Librarian/Teacher required)
+                const usersPromise = fetchData('/api/library/users', 'Failed to load users for issuing.');
+                
+                // Fetch books (All authorized users can see the catalog)
+                const booksPromise = fetchData('/api/library/books', 'Failed to load book catalog.');
+
+                const [users, books] = await Promise.all([usersPromise, booksPromise]);
+
+                // Populate User Select
+                const userSelect = document.getElementById('user-select');
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = `${user.username} (${user.role})`;
+                    userSelect.appendChild(option);
+                });
+
+                // Populate Book Select (only available copies)
+                const bookSelect = document.getElementById('book-select');
+                books.filter(book => book.available_quantity > 0)
+                      .forEach(book => {
+                        const option = document.createElement('option');
+                        option.value = book.id;
+                        option.textContent = `${book.title} by ${book.author} (Available: ${book.available_quantity})`;
+                        bookSelect.appendChild(option);
+                    });
+
+            } catch (error) {
+                console.error("Error populating dropdowns:", error);
+                showNotification(error.message, 'error');
+            }
+        }
+
+        // 3. Set today's date as the minimum for Due Date
+        function setMinDueDate() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0'); // Months start at 0
+            const dd = String(today.getDate()).padStart(2, '0');
+            document.getElementById('due-date').min = `${yyyy}-${mm}-${dd}`;
+        }
+
+
+        // 4. Form Submission Handler
+        document.getElementById('issue-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+
+            const book_id = document.getElementById('book-select').value;
+            const user_id = document.getElementById('user-select').value;
+            const due_date = document.getElementById('due-date').value;
+
+            if (!book_id || !user_id || !due_date) {
+                showNotification('Please select a user, a book, and a due date.', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/library/issue', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...authHeaders },
+                    body: JSON.stringify({ book_id, user_id, due_date })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // Reverted notification message to a standard success message.
+                    const successMessage = result.message || 'Book issued successfully!';
+                    showNotification(successMessage, 'success');
+                    
+                    // Reset form and reload dropdowns to reflect new available quantity
+                    document.getElementById('issue-form').reset();
+                    populateDropdowns(); 
+                } else {
+                    showNotification(result.message || 'Failed to issue book. Check server logs.', 'error');
+                }
+            } catch (error) {
+                console.error("Network or processing error:", error);
+                showNotification('An unexpected network error occurred.', 'error');
+            }
+        });
+
+        // Initialize on load
+        window.onload = () => {
+            setMinDueDate();
+            populateDropdowns();
+        };
+    </script>
+</body>
+</html>

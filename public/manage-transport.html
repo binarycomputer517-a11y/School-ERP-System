@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Transport Management</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* --- CLASSIC DESIGN STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 1200px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 1px solid #AAA; 
+            box-shadow: 4px 4px 0 #CCC; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #000; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 3px double #000; padding-bottom: 10px; margin-bottom: 25px; 
+            font-size: 2.0em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; border-bottom: 2px solid #999; 
+            padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px; 
+        }
+        h3 { 
+            color: #555; font-size: 1.1em; margin-top: 20px; 
+        }
+
+        /* Forms and Buttons */
+        form { margin-bottom: 20px; padding: 15px; border: 1px solid #E0E0E0; background-color: #F8F8F8; }
+        form input, form select { padding: 8px; margin-right: 10px; border: 1px solid #666; border-radius: 0; }
+        form button[type="submit"], .actions-cell button { 
+            background-color: #005A9C; color: white; padding: 8px 12px; border: 1px solid #000; 
+            box-shadow: 1px 1px 0 #000; cursor: pointer; border-radius: 0; margin-top: 0; 
+        }
+        .actions-cell button.delete { background-color: #C0392B; }
+        form button:hover { background-color: #003366; }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+        
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 25px; border: 3px solid #000; width: 80%; max-width: 500px; border-radius: 0; position: relative; box-shadow: 4px 4px 0 #AAA; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        #student-list-modal li { padding: 5px 0; border-bottom: 1px solid #eee; }
+        td .actions-cell button { margin: 2px 4px; padding: 4px 8px; font-size: 12px; }
+        .thumbnail { width: 60px; height: 40px; object-fit: cover; border-radius: 4px; cursor: pointer; vertical-align: middle; }
+        .thumbnail:hover { transform: scale(1.1); }
+        .stop-input-group { display: flex; align-items: center; margin-bottom: 8px; }
+        .stop-input-group input { flex-grow: 1; margin-right: 8px; }
+
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+            border: 1px solid #E0E0E0;
+            padding: 10px;
+            background-color: #F0F0F0;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: #005A9C;
+            font-weight: normal;
+            margin: 0 10px;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+
+<div id="student-modal" class="modal"><div class="modal-content"><span class="close-btn">×</span><h2>Students on Route</h2><ul id="student-list-modal"></ul></div></div>
+<div id="driver-modal" class="modal"><div class="modal-content"><span class="close-btn">×</span><h2>Assign Driver</h2><form id="assign-driver-form"><input type="hidden" id="assign-driver-vehicle-id"><label for="driver-select">Select a Driver:</label><select id="driver-select" required></select><button type="submit">Assign</button></form></div></div>
+<div id="edit-vehicle-modal" class="modal"><div class="modal-content"><span class="close-btn">×</span><h2>Edit Vehicle</h2><form id="edit-vehicle-form"><input type="hidden" id="edit-vehicle-id"><label>Model</label><input type="text" id="edit-vehicle-model" placeholder="Model"><label>Capacity</label><input type="number" id="edit-vehicle-capacity" placeholder="Capacity"><button type="submit">Save Changes</button></form></div></div>
+<div id="edit-driver-modal" class="modal"><div class="modal-content"><span class="close-btn">×</span><h2>Edit Driver</h2><form id="edit-driver-form"><input type="hidden" id="edit-driver-id"><label>Full Name</label><input type="text" id="edit-driver-name" placeholder="Full Name"><label>Phone Number</label><input type="text" id="edit-driver-phone" placeholder="Phone Number"><button type="submit">Save Changes</button></form></div></div>
+<div id="edit-route-modal" class="modal"><div class="modal-content"><span class="close-btn">×</span><h2>Edit Route</h2><form id="edit-route-form"><input type="hidden" id="edit-route-id"><label>Route Name</label><input type="text" id="edit-route-name" placeholder="Route Name" required><label>Assign Vehicle</label><select id="edit-route-vehicle-select" class="vehicle-select-dropdown"></select><label>Stops</label><div id="edit-stops-container"></div><button type="button" class="add-stop-btn">Add Stop</button><hr><button type="submit">Save Changes</button></form></div></div>
+<div id="upload-modal" class="modal"><div class="modal-content"><span class="close-btn">×</span><h2 id="upload-title">Upload File</h2><form id="upload-form" enctype="multipart/form-data"><input type="hidden" id="upload-id"><input type="hidden" id="upload-type"><input type="file" id="upload-file-input" name="file" required accept="image/*"><button type="submit">Upload</button></form></div></div>
+<div id="route-details-modal" class="modal"><div class="modal-content"><span class="close-btn">×</span><h2>Route Status Details</h2><div style="padding:10px 0;"><h4>Pickup Location (First Stop):</h4><p id="details-pickup-location">Loading...</p></div><div style="padding:10px 0;border-top:1px solid #eee;"><h4>Drop Location (Last Stop):</h4><p id="details-drop-location">Loading...</p></div><div style="padding:10px 0;border-top:1px solid #eee;"><h4>Vehicle Live Location:</h4><p id="details-live-location">Loading...</p></div></div></div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    // Check for Admin or Super Admin role
+    if (!token || (userRole !== 'Admin' && userRole !== 'Super Admin')) {
+        console.error("Access Denied: Only Admin or Super Admin can view Transport Management.");
+        window.location.href = '/login';
+    }
+</script>
+
+<div class="container">
+    <h1>Transport Management</h1>
+    <div class="nav-links">
+        <a href="/admin-dashboard.html">Back to Dashboard</a> | 
+        <a href="/assign-transport.html">Assign Student</a> |
+        <a href="/transport-reports.html">View Reports</a>| 
+        <a href="/bus-attendance.html">Bus Attendance</a>|
+        <a href="/track-bus.html">Track Bus</a>
+    </div>
+    <hr style="margin: 30px 0;">
+
+    <h2>Manage Vehicles</h2>
+    <form id="vehicle-form">
+        <input type="text" name="vehicle_number" placeholder="Vehicle Number (e.g., WB 74 A 1234)" required>
+        <input type="text" name="model" placeholder="Model (e.g., Tata Winger)">
+        <input type="number" name="capacity" placeholder="Capacity">
+        <button type="submit">Add Vehicle</button>
+    </form>
+    <h3 style="margin-top: 20px;">All Vehicles</h3>
+    <table>
+        <thead><tr><th>Photo</th><th>Vehicle Number</th><th>Model</th><th>Capacity</th><th>Assigned Driver</th><th>Actions</th></tr></thead>
+        <tbody id="vehicle-list-body"></tbody>
+    </table>
+
+    <hr style="margin: 30px 0;">
+
+    <h2>Manage Drivers</h2>
+    <form id="driver-form">
+        <input type="text" name="full_name" placeholder="Driver's Full Name" required>
+        <input type="text" name="license_number" placeholder="License Number" required>
+        <input type="text" name="phone_number" placeholder="Phone Number">
+        <button type="submit">Add Driver</button>
+    </form>
+    <h3 style="margin-top: 20px;">All Drivers</h3>
+    <table>
+        <thead><tr><th>License</th><th>Full Name</th><th>License Number</th><th>Phone Number</th><th>Actions</th></tr></thead>
+        <tbody id="driver-list-body"></tbody>
+    </table>
+
+    <hr style="margin: 30px 0;">
+
+    <h2>Manage Routes</h2>
+    <form id="route-form">
+        <input type="text" name="route_name" placeholder="Route Name" required>
+        <select name="vehicle_id" class="vehicle-select-dropdown"></select>
+        <label style="margin-top: 10px; display: block;">Stops</label>
+        <div id="add-stops-container"></div>
+        <button type="button" class="add-stop-btn">Add Stop</button>
+        <hr>
+        <button type="submit">Add Route</button>
+    </form>
+    <h3 style="margin-top: 20px;">All Routes</h3>
+    <table>
+        <thead><tr><th>Route Name</th><th>Assigned Vehicle</th><th>Actions</th></tr></thead>
+        <tbody id="route-list-body"></tbody>
+    </table>
+</div>
+
+<script>
+    const modals = {
+        student: document.getElementById('student-modal'),
+        driver: document.getElementById('driver-modal'),
+        editVehicle: document.getElementById('edit-vehicle-modal'),
+        editDriver: document.getElementById('edit-driver-modal'),
+        editRoute: document.getElementById('edit-route-modal'),
+        upload: document.getElementById('upload-modal'),
+        routeDetails: document.getElementById('route-details-modal')
+    };
+
+    // --- GENERIC MODAL HANDLING ---
+    Object.values(modals).forEach(modal => {
+        modal.querySelector('.close-btn').onclick = () => modal.style.display = 'none';
+    });
+    window.onclick = (event) => {
+        if (event.target.classList.contains('modal')) event.target.style.display = 'none';
+    };
+    
+    // --- STOP INPUT MANAGEMENT ---
+    function addStopInput(containerId, stopName = '') {
+        const container = document.getElementById(containerId);
+        const stopDiv = document.createElement('div');
+        stopDiv.className = 'stop-input-group';
+        
+        const stopInput = document.createElement('input');
+        stopInput.type = 'text';
+        stopInput.className = 'stop-name-input';
+        stopInput.value = stopName;
+        stopInput.placeholder = 'Enter stop name';
+
+        const removeBtn = document.createElement('button');
+        removeBtn.type = 'button';
+        removeBtn.textContent = 'Remove';
+        removeBtn.onclick = () => {
+            stopDiv.remove();
+        };
+        
+        stopDiv.appendChild(stopInput);
+        stopDiv.appendChild(removeBtn);
+        container.appendChild(stopDiv);
+    }
+
+    document.querySelector('#route-form .add-stop-btn').addEventListener('click', () => addStopInput('add-stops-container'));
+    document.querySelector('#edit-route-form .add-stop-btn').addEventListener('click', () => addStopInput('edit-stops-container'));
+
+    // --- DATA LOADING FUNCTIONS ---
+    async function loadVehicles() {
+        const tbody = document.getElementById('vehicle-list-body');
+        const vehicleSelects = document.querySelectorAll('.vehicle-select-dropdown');
+        try {
+            const res = await fetch('/api/transport/vehicles', { headers: authHeaders });
+            
+            // Check response status before parsing
+            if (!res.ok) {
+                console.error(`Failed to load vehicles. Status: ${res.status}`);
+                tbody.innerHTML = '<tr><td colspan="6">Error loading data. Check the API server.</td></tr>';
+                vehicleSelects.forEach(s => s.innerHTML = '<option value="">-- Error --</option>');
+                return;
+            }
+            
+            const vehicles = await res.json();
+            tbody.innerHTML = '';
+            vehicleSelects.forEach(s => s.innerHTML = '<option value="">-- No Vehicle --</option>');
+            vehicles.forEach(v => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${v.photo_url ? `<img src="${v.photo_url}" alt="Vehicle" class="thumbnail" onclick="window.open('${v.photo_url}')">` : 'No Photo'}</td>
+                        <td>${v.vehicle_number}</td>
+                        <td>${v.model || ''}</td>
+                        <td>${v.capacity || ''}</td>
+                        <td>${v.driver_name || 'N/A'}</td>
+                        <td class="actions-cell">
+                            <button onclick="openUploadModal('vehicle', '${v.id}')">Photo</button>
+                            <button onclick="openAssignDriverModal('${v.id}')">Driver</button>
+                            <button onclick="openEditVehicleModal('${v.id}', '${v.model || ''}', ${v.capacity || 0})">Edit</button>
+                            <button onclick="deleteVehicle('${v.id}')" class="delete">Del</button>
+                            <a href="/vehicle-details.html?id=${v.id}" class="button">Details</a>
+                        </td>
+                    </tr>`;
+                vehicleSelects.forEach(s => s.innerHTML += `<option value="${v.id}">${v.vehicle_number} - ${v.model}</option>`);
+            });
+        } catch (error) {
+            console.error("Fetch/Parse Error in loadVehicles:", error);
+            tbody.innerHTML = '<tr><td colspan="6">Network or JSON parse error.</td></tr>';
+            vehicleSelects.forEach(s => s.innerHTML = '<option value="">-- Error --</option>');
+        }
+    }
+
+    async function loadDrivers() {
+        const tbody = document.getElementById('driver-list-body');
+        try {
+            const res = await fetch('/api/transport/drivers', { headers: authHeaders });
+            
+            // Check response status before parsing
+            if (!res.ok) {
+                console.error(`Failed to load drivers. Status: ${res.status}`);
+                tbody.innerHTML = '<tr><td colspan="5">Error loading data. Check the API server.</td></tr>';
+                return;
+            }
+            
+            const drivers = await res.json();
+            tbody.innerHTML = '';
+            drivers.forEach(d => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${d.license_photo_url ? `<img src="${d.license_photo_url}" alt="License" class="thumbnail" onclick="window.open('${d.license_photo_url}')">` : 'No Photo'}</td>
+                        <td>${d.full_name}</td>
+                        <td>${d.license_number}</td>
+                        <td>${d.phone_number || ''}</td>
+                        <td class="actions-cell">
+                            <button onclick="openUploadModal('driver', '${d.id}')">License</button>
+                            <button onclick="openEditDriverModal('${d.id}', '${d.full_name}', '${d.phone_number || ''}')">Edit</button>
+                            <button onclick="deleteDriver('${d.id}')" class="delete">Del</button>
+                        </td>
+                    </tr>`;
+            });
+        } catch (error) {
+            console.error("Fetch/Parse Error in loadDrivers:", error);
+            tbody.innerHTML = '<tr><td colspan="5">Network or JSON parse error.</td></tr>';
+        }
+    }
+
+    async function loadRoutes() {
+        const tbody = document.getElementById('route-list-body');
+        try {
+            const res = await fetch('/api/transport/routes', { headers: authHeaders });
+            
+            // Check response status before parsing
+            if (!res.ok) {
+                console.error(`Failed to load routes. Status: ${res.status}`);
+                tbody.innerHTML = '<tr><td colspan="3">Error loading data. Check the API server.</td></tr>'; 
+                return;
+            }
+            
+            const routes = await res.json();
+            tbody.innerHTML = '';
+            routes.forEach(r => {
+                // Ensure IDs are strings when passed to functions
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${r.route_name}</td>
+                        <td>${r.vehicle_number || 'N/A'}</td>
+                        <td class="actions-cell">
+                            <button onclick="openRouteDetailsModal('${r.id}')">Details</button>
+                            <button onclick="viewStudentsOnRoute('${r.id}')">Students</button>
+                            <button onclick="openEditRouteModal('${r.id}', '${r.route_name}', '${r.vehicle_id || 'null'}')">Edit</button> 
+                            <button onclick="deleteRoute('${r.id}')" class="delete">Del</button>
+                        </td>
+                    </tr>`;
+            });
+        } catch (error) {
+            console.error("Fetch/Parse Error in loadRoutes:", error);
+            tbody.innerHTML = '<tr><td colspan="3">Network or JSON parse error.</td></tr>'; 
+        }
+    }
+
+    // --- MODAL OPENING FUNCTIONS ---
+    function openUploadModal(type, id) {
+        document.getElementById('upload-id').value = id;
+        document.getElementById('upload-type').value = type;
+        const fileInput = document.getElementById('upload-file-input');
+        if (type === 'vehicle') {
+            document.getElementById('upload-title').innerText = 'Upload Vehicle Photo';
+            fileInput.name = 'photo';
+        } else { // driver
+            document.getElementById('upload-title').innerText = 'Upload Driver License';
+            fileInput.name = 'license';
+        }
+        modals.upload.style.display = 'block';
+    }
+
+    async function openAssignDriverModal(vehicleId) {
+        document.getElementById('assign-driver-vehicle-id').value = vehicleId;
+        const driverSelect = document.getElementById('driver-select');
+        try {
+            const res = await fetch('/api/transport/drivers', { headers: authHeaders });
+            if (!res.ok) { throw new Error('Failed to load drivers.'); }
+            const drivers = await res.json();
+            driverSelect.innerHTML = '<option value="">-- Unassign Driver --</option>';
+            drivers.forEach(d => driverSelect.innerHTML += `<option value="${d.id}">${d.full_name}</option>`);
+        } catch (error) {
+            console.error("Error loading drivers for assignment:", error);
+            driverSelect.innerHTML = '<option value="">-- Error Loading Drivers --</option>';
+        }
+        modals.driver.style.display = 'block';
+    }
+
+    function openEditVehicleModal(id, model, capacity) {
+        document.getElementById('edit-vehicle-id').value = id;
+        document.getElementById('edit-vehicle-model').value = model;
+        document.getElementById('edit-vehicle-capacity').value = capacity;
+        modals.editVehicle.style.display = 'block';
+    }
+
+    function openEditDriverModal(id, name, phone) {
+        document.getElementById('edit-driver-id').value = id;
+        document.getElementById('edit-driver-name').value = name;
+        document.getElementById('edit-driver-phone').value = phone;
+        modals.editDriver.style.display = 'block';
+    }
+    
+    async function openEditRouteModal(id, name, vehicleId) {
+        document.getElementById('edit-route-id').value = id;
+        document.getElementById('edit-route-name').value = name;
+        
+        // Populate vehicle dropdown and set current vehicle
+        await loadVehicles(); 
+        document.getElementById('edit-route-vehicle-select').value = vehicleId === 'null' ? '' : vehicleId;
+
+        const stopsContainer = document.getElementById('edit-stops-container');
+        stopsContainer.innerHTML = ''; 
+        try {
+            const res = await fetch(`/api/transport/routes/${id}/stops`, { headers: authHeaders });
+            if (!res.ok) { throw new Error('Failed to load route stops.'); }
+            const stops = await res.json();
+            if (stops.length > 0) {
+                stops.forEach(stop => addStopInput('edit-stops-container', stop));
+            } else {
+                addStopInput('edit-stops-container');
+            }
+        } catch (error) {
+            console.error("Error loading route stops:", error);
+            addStopInput('edit-stops-container'); // Ensure one input is always present
+        }
+        modals.editRoute.style.display = 'block';
+    }
+    
+    async function openRouteDetailsModal(routeId) {
+        const modal = modals.routeDetails;
+        const pickupEl = document.getElementById('details-pickup-location');
+        const dropEl = document.getElementById('details-drop-location');
+        const liveEl = document.getElementById('details-live-location');
+        pickupEl.textContent = 'Loading...';
+        dropEl.textContent = 'Loading...';
+        liveEl.textContent = 'Loading...';
+        modal.style.display = 'block';
+        try {
+            const res = await fetch(`/api/transport/routes/${routeId}/status`, { headers: authHeaders });
+            if (!res.ok) { throw new Error('Failed to fetch route status.'); }
+            const data = await res.json();
+            pickupEl.textContent = data.pickupLocation || 'Not defined';
+            dropEl.textContent = data.dropLocation || 'Not defined';
+            if (data.liveLocation) {
+                const mapUrl = `https://www.google.com/maps/search/?api=1&query=${data.liveLocation.lat},${data.liveLocation.lng}`;
+                liveEl.innerHTML = `Lat: ${data.liveLocation.lat}, Lng: ${data.liveLocation.lng} <br> <a href="${mapUrl}" target="_blank">View on Google Maps</a>`;
+            } else {
+                liveEl.textContent = 'Live location not available.';
+            }
+        } catch (error) {
+            console.error(error);
+            pickupEl.textContent = 'Error loading data.';
+            dropEl.textContent = 'Error loading data.';
+            liveEl.textContent = 'Error loading data.';
+        }
+    }
+
+    async function viewStudentsOnRoute(routeId) {
+        try {
+            const res = await fetch(`/api/transport/routes/${routeId}/students`, { headers: authHeaders });
+            if (!res.ok) { throw new Error('Failed to load students.'); }
+            const students = await res.json();
+            const list = document.getElementById('student-list-modal');
+            list.innerHTML = students.length > 0 ? students.map(s => `<li>${s.student_name} (Boarding: ${s.boarding_stop || 'N/A'})</li>`).join('') : '<li>No students assigned.</li>';
+        } catch (error) {
+            console.error("Error viewing students on route:", error);
+            document.getElementById('student-list-modal').innerHTML = '<li>Error loading student data.</li>';
+        }
+        modals.student.style.display = 'block';
+    }
+
+    // --- DELETE FUNCTIONS ---
+    async function deleteVehicle(id) { if (confirm('Are you sure you want to delete this vehicle?')) { await fetch(`/api/transport/vehicles/${id}`, { method: 'DELETE', headers: authHeaders }); loadVehicles(); loadRoutes(); } }
+    async function deleteDriver(id) { if (confirm('Are you sure you want to delete this driver?')) { await fetch(`/api/transport/drivers/${id}`, { method: 'DELETE', headers: authHeaders }); loadDrivers(); loadVehicles(); } }
+    async function deleteRoute(id) { if (confirm('Are you sure you want to delete this route?')) { await fetch(`/api/transport/routes/${id}`, { method: 'DELETE', headers: authHeaders }); loadRoutes(); } }
+
+    // --- FORM EVENT LISTENERS ---
+    document.getElementById('vehicle-form').addEventListener('submit', async function(e){ e.preventDefault(); const res = await fetch('/api/transport/vehicles', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify(Object.fromEntries(new FormData(this))) }); if (res.ok) { this.reset(); loadVehicles(); } else { res.text().then(text => alert('Error: ' + text)); } });
+    document.getElementById('driver-form').addEventListener('submit', async function(e){ e.preventDefault(); const res = await fetch('/api/transport/drivers', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify(Object.fromEntries(new FormData(this))) }); if (res.ok) { this.reset(); loadDrivers(); } else { res.text().then(text => alert('Error: ' + text)); } });
+    
+    document.getElementById('route-form').addEventListener('submit', async function(e) { 
+        e.preventDefault(); 
+        const route_name = this.elements['route_name'].value; 
+        const vehicle_id = this.elements['vehicle_id'].value; 
+        const stopInputs = this.querySelectorAll('#add-stops-container .stop-name-input'); 
+        const stops = Array.from(stopInputs).map(input => input.value).filter(val => val.trim() !== ''); 
+        const res = await fetch('/api/transport/routes', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json', ...authHeaders }, 
+            body: JSON.stringify({ route_name, vehicle_id, stops, monthly_fee: 0 }) // Pass monthly_fee=0
+        }); 
+        if (res.ok) { 
+            this.reset(); 
+            document.getElementById('add-stops-container').innerHTML = ''; 
+            addStopInput('add-stops-container'); 
+            loadRoutes(); 
+        } else { res.text().then(text => alert('Error: ' + text)); } 
+    });
+    
+    document.getElementById('edit-vehicle-form').addEventListener('submit', async function(e) { e.preventDefault(); const id = this.elements['edit-vehicle-id'].value; await fetch(`/api/transport/vehicles/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ model: this.elements['edit-vehicle-model'].value, capacity: this.elements['edit-vehicle-capacity'].value }) }); modals.editVehicle.style.display = 'none'; loadVehicles(); });
+    document.getElementById('edit-driver-form').addEventListener('submit', async function(e) { e.preventDefault(); const id = this.elements['edit-driver-id'].value; await fetch(`/api/transport/drivers/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ full_name: this.elements['edit-driver-name'].value, phone_number: this.elements['edit-driver-phone'].value }) }); modals.editDriver.style.display = 'none'; loadDrivers(); });
+    
+    document.getElementById('edit-route-form').addEventListener('submit', async function(e) { 
+        e.preventDefault(); 
+        const id = this.elements['edit-route-id'].value; 
+        const route_name = this.elements['edit-route-name'].value; 
+        const vehicle_id = this.elements['edit-route-vehicle-select'].value; 
+        const stopInputs = this.querySelectorAll('#edit-stops-container .stop-name-input'); 
+        const stops = Array.from(stopInputs).map(input => input.value).filter(val => val.trim() !== ''); 
+        const res = await fetch(`/api/transport/routes/${id}`, { 
+            method: 'PUT', 
+            headers: { 'Content-Type': 'application/json', ...authHeaders }, 
+            body: JSON.stringify({ route_name, vehicle_id, stops, monthly_fee: 0 }) // Pass monthly_fee=0
+        }); 
+        if(res.ok){ 
+            modals.editRoute.style.display = 'none'; 
+            loadRoutes(); 
+        } else { alert('Update failed.'); } 
+    });
+    
+    document.getElementById('assign-driver-form').addEventListener('submit', async function(e) { e.preventDefault(); const vehicleId = this.elements['assign-driver-vehicle-id'].value; await fetch(`/api/transport/vehicles/${vehicleId}/assign-driver`, { method: 'PUT', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify({ driver_id: this.elements['driver-select'].value || null }) }); modals.driver.style.display = 'none'; loadVehicles(); });
+    document.getElementById('upload-form').addEventListener('submit', async function(e) { e.preventDefault(); const id = this.elements['upload-id'].value; const type = this.elements['upload-type'].value; const endpoint = type === 'vehicle' ? `/api/transport/vehicles/${id}/photo` : `/api/transport/drivers/${id}/license`; const res = await fetch(endpoint, { method: 'POST', headers: authHeaders, body: new FormData(this) }); if(res.ok){ modals.upload.style.display = 'none'; this.reset(); type === 'vehicle' ? loadVehicles() : loadDrivers(); } else { alert('Upload failed.'); } });
+
+    // --- INITIAL LOAD ---
+    window.onload = () => {
+        loadVehicles();
+        loadDrivers();
+        loadRoutes();
+        addStopInput('add-stops-container');
+    };
+</script>
+
+</body>
+</html>

@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Study Material & Resources</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f8; font-family: sans-serif; }
+        .container { max-width: 1000px; }
+        h1 { color: #003366; font-weight: bold; }
+        .text-primary { color: #003366 !important; }
+        .text-secondary { color: #5e35b1 !important; }
+        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .list-group-item:hover { background-color: #f0f2f8; }
+        .subject-header { 
+            background-color: #e8eaf6; 
+            color: #003366; 
+            font-weight: bold; 
+            padding: 10px 15px; 
+            margin-top: 15px;
+            border-bottom: 2px solid #5e35b1;
+        }
+        .icon-small { font-size: 1.2em; margin-right: 8px; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <header class="mb-4 d-flex justify-content-between align-items-center">
+            <h1>Study Material & Resources</h1>
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
+        </header>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h4 class="text-secondary mb-3">Available Modules & Downloads</h4>
+                
+                <div id="material-container">
+                    <p class="text-center text-muted">Loading your assigned resources...</p>
+                </div>
+                
+                <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        // ⭐ CRITICAL FIX: Use the consistent 'profile-id' key
+        const studentId = localStorage.getItem('profile-id'); 
+        
+        // --- Helper function for API calls (using the standard structure) ---
+        async function handleApi(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                     alert('Session expired or unauthorized. Please log in again.');
+                     window.location.href = '/login.html';
+                     throw new Error('Unauthorized');
+                }
+                throw new Error(`API call failed with status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        /**
+         * Maps content type to a visual icon and action text.
+         */
+        function getContentDetails(contentType) {
+            switch (contentType) {
+                case 'PDF': return { icon: '📄', action: 'Download PDF', color: 'btn-outline-danger' };
+                case 'VIDEO': return { icon: '▶️', action: 'Watch Video', color: 'btn-outline-primary' };
+                case 'EXTERNAL': return { icon: '🔗', action: 'View Link', color: 'btn-outline-info' };
+                case 'QUIZ': return { icon: '📝', action: 'Start Quiz', color: 'btn-outline-warning' };
+                default: return { icon: '📚', action: 'Open Resource', color: 'btn-outline-secondary' };
+            }
+        }
+
+        /**
+         * Loads, filters, and renders study material from the assigned modules.
+         */
+        async function loadStudyMaterial() {
+            const container = document.getElementById('material-container');
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.style.display = 'none';
+
+            // Check based on the unified key
+            if (!studentId || !token) {
+                container.innerHTML = '<p class="text-danger text-center">Login error: ID/Token missing. Please log in again.</p>';
+                return;
+            }
+            
+            container.innerHTML = '<p class="text-center text-muted">Loading your assigned resources...</p>';
+
+            try {
+                // IMPORTANT: Reuse the student assignments API for consistency.
+                // The URL below assumes the necessary route is added to onlineLearning.js:
+                const assignments = await handleApi(`/api/online-learning/assignments/student/${studentId}`);
+
+                if (assignments.length === 0) {
+                    container.innerHTML = '<p class="text-center text-info">No study material or modules are currently assigned to you.</p>';
+                    return;
+                }
+
+                // Group materials by subject for cleaner display
+                const groupedMaterial = assignments.reduce((acc, assign) => {
+                    const subjectName = assign.subject_name || 'Uncategorized';
+                    if (!acc[subjectName]) acc[subjectName] = [];
+                    acc[subjectName].push(assign);
+                    return acc;
+                }, {});
+
+                container.innerHTML = ''; // Clear loading message
+                
+                // Render the grouped materials
+                for (const subject in groupedMaterial) {
+                    container.innerHTML += `<div class="subject-header">${subject}</div>`;
+                    
+                    const ul = document.createElement('ul');
+                    ul.className = 'list-group list-group-flush mb-4';
+
+                    groupedMaterial[subject].forEach(material => {
+                        const details = getContentDetails(material.content_type);
+                        
+                        // Check if content_url is available to make it clickable
+                        const contentUrl = material.content_url || '#';
+                        const isDisabled = contentUrl === '#';
+                        
+                        const li = document.createElement('li');
+                        li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                        li.innerHTML = `
+                            <div style="flex-grow: 1;">
+                                <h5 class="mb-1 text-primary">
+                                    <span class="icon-small">${details.icon}</span> 
+                                    ${material.title}
+                                </h5>
+                                <p class="mb-0 small text-muted">
+                                    Module ID: ${material.module_id}
+                                </p>
+                            </div>
+                            
+                            <a href="${contentUrl}" target="_blank" class="btn btn-sm ${details.color} ${isDisabled ? 'disabled' : ''}" 
+                               ${isDisabled ? 'aria-disabled="true"' : ''}>
+                                ${details.action}
+                            </a>
+                        `;
+                        ul.appendChild(li);
+                    });
+                    container.appendChild(ul);
+                }
+
+            } catch (error) {
+                console.error('Error loading study material:', error);
+                errorMessage.textContent = `Error: Failed to load study material. (${error.message})`;
+                errorMessage.style.display = 'block';
+                container.innerHTML = '<p class="text-center text-danger">Failed to connect to the resources server.</p>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadStudyMaterial);
+    </script>
+</body>
+</html>

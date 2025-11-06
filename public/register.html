@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register New User</title>
+    <style>
+        /* --- CLASSIC STYLES --- */
+        body { font-family: 'Times New Roman', serif; background-color: #f8f8f8; padding: 2em; }
+        .container { max-width: 600px; margin: auto; padding: 30px; background: white; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; border-radius: 0; }
+        h1 { color: #000; font-weight: bold; border-bottom: 2px solid #555; padding-bottom: 10px; margin-bottom: 20px; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input[type="text"], input[type="password"], select, input[type="number"] { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 0; box-sizing: border-box; }
+        button { background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; border-radius: 0; box-shadow: 1px 1px 0 #000; cursor: pointer; margin-top: 15px; }
+        #message { margin-top: 15px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        // Ensure only Super Admin or Admin can access this registration page
+        if (!token || (userRole !== 'Admin' && userRole !== 'Super Admin')) {
+            window.location.href = '/login.html';
+        }
+    </script>
+    <div class="container">
+        <h1>Register New User</h1>
+        <div class="nav-links">
+            <a href="/admin-dashboard.html">← Back to Dashboard</a>
+        </div>
+
+        <form id="register-form">
+            <label for="username">Username:</label>
+            <input type="text" id="username" name="username" required>
+            
+            <label for="password">Password:</label>
+            <input type="password" id="password" name="password" required>
+
+            <label for="role">Role:</label>
+            <select id="role" name="role" required>
+                <option value="Admin">Admin</option>
+                <option value="Teacher">Teacher</option>
+                <option value="Student">Student</option>
+                <option value="Parent">Parent</option>
+                <option value="Accountant">Accountant</option>
+                <option value="Librarian">Librarian</option>
+                <option value="Hostel Manager">Hostel Manager</option>
+            </select>
+
+            <label for="reference_id">Reference ID (Optional UUID):</label>
+            <input type="text" id="reference_id" name="reference_id" placeholder="UUID of associated record (e.g., Student ID)">
+            <p style="font-size: 0.8em; color: #6c757d;">
+                For roles like 'Teacher', 'Student', or 'Parent', enter the corresponding ID (UUID) from their respective profile table here.
+            </p>
+            
+            <button type="submit">Register User</button>
+        </form>
+        <div id="message" style="margin-top: 15px;"></div>
+    </div>
+    <script>
+        document.getElementById('register-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const messageDiv = document.getElementById('message');
+            const data = Object.fromEntries(new FormData(e.target).entries());
+
+            // Clean up: ensure empty fields are null for the API (especially UUIDs)
+            if (!data.reference_id) {
+                data.reference_id = null;
+            }
+
+            try {
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('erp-token')}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    messageDiv.textContent = `User ${data.username} registered successfully!`;
+                    messageDiv.style.color = 'green';
+                    e.target.reset();
+                } else {
+                    // Throw error to catch block for centralized error display
+                    throw new Error(result.message || 'Registration failed. The username might already exist.');
+                }
+            } catch (error) {
+                messageDiv.textContent = error.message;
+                messageDiv.style.color = 'red';
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enroll in Club</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || !['Admin', 'Teacher'].includes(localStorage.getItem('user-role'))) { window.location.href = '/login'; }
+</script>
+<div class="container">
+    <h1>Enroll Student in a Club</h1>
+    <div class="nav-links"><a href="/manage-clubs-events.html">Back to Clubs & Events</a></div>
+    <form id="enroll-form">
+        <label for="student-select">Select Student:</label>
+        <select id="student-select" name="student_id" required></select>
+
+        <label for="club-select">Select Club:</label>
+        <select id="club-select" name="club_id" required></select>
+        
+        <button type="submit">Enroll Student</button>
+    </form>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    async function populateDropdowns() {
+        try {
+            const studentSelect = document.getElementById('student-select');
+            const clubSelect = document.getElementById('club-select');
+            
+            const [students, clubs] = await Promise.all([
+                fetch('/api/students', { headers: authHeaders }).then(res => res.json()),
+                fetch('/api/clubs-events/clubs', { headers: authHeaders }).then(res => res.json())
+            ]);
+
+            studentSelect.innerHTML = '<option value="">-- Select a Student --</option>' + students.map(s => `<option value="${s.id}">${s.student_name} (Class: ${s.class_name})</option>`).join('');
+            clubSelect.innerHTML = '<option value="">-- Select a Club --</option>' + clubs.map(c => `<option value="${c.id}">${c.club_name}</option>`).join('');
+
+        } catch (error) {
+            console.error("Failed to populate dropdowns:", error);
+            alert("Could not load necessary data. Please try again.");
+        }
+    }
+
+    document.getElementById('enroll-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(this).entries());
+        // UPDATED: Corrected the API endpoint from '/api/clubs/enroll' to '/api/clubs-events/members'
+        fetch('/api/clubs-events/members', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(data)
+        }).then(res => {
+            if (res.ok) {
+                alert('Student enrolled successfully!');
+                document.getElementById('enroll-form').reset();
+            } else { res.text().then(text => alert('Error: ' + text)); }
+        });
+    });
+
+    window.onload = populateDropdowns;
+</script>
+</body>
+</html>

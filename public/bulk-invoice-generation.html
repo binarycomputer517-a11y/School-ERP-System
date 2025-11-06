@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bulk Invoice Generation</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --warning-color: #f39c12;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        select, input[type="date"], input[type="text"], textarea {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+        .generation-controls {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .submit-btn {
+            grid-column: 1 / -1;
+            padding: 12px;
+            background-color: var(--success-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #219d55;
+        }
+        #status-log {
+            min-height: 150px;
+            background-color: #333;
+            color: #fff;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: monospace;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    // Variable declarations moved inside DOMContentLoaded
+
+    // 1. Load Courses
+    // NOTE: courseSelect must be passed as an argument or defined in scope
+    async function loadCourses(courseSelect) {
+        courseSelect.innerHTML = '<option value="">Loading courses...</option>';
+        try {
+            // API endpoint from academicswithfees.js
+            const courses = await handleApi('/api/academicswithfees/courses');
+            
+            courseSelect.innerHTML = '<option value="">-- Select Course (Required) --</option>';
+            if (courses.length > 0) {
+                courses.forEach(course => {
+                    courseSelect.innerHTML += `<option value="${course.course_id}">${course.course_name} (${course.course_code})</option>`;
+                });
+            } else {
+                 courseSelect.innerHTML += '<option value="">No courses available</option>';
+            }
+        } catch (error) {
+            console.error('Error loading courses:', error);
+            courseSelect.innerHTML = '<option value="">Error loading courses</option>';
+        }
+    }
+
+    // 2. Load Batches based on Course selection
+    // NOTE: batchSelect must be passed as an argument or defined in scope
+    async function loadBatches(courseSelect, batchSelect) {
+        const courseId = courseSelect.value;
+        
+        batchSelect.innerHTML = '<option value="">Loading batches...</option>';
+        batchSelect.disabled = true;
+
+        if (!courseId) {
+            batchSelect.innerHTML = '<option value="">All Batches</option>';
+            return;
+        }
+
+        try {
+            // API endpoint from academicswithfees.js
+            const batches = await handleApi(`/api/academicswithfees/courses/${courseId}/batches`);
+            
+            batchSelect.innerHTML = '<option value="">All Batches</option>'; // Always offer 'All Batches'
+            if (batches.length > 0) {
+                batches.forEach(batch => {
+                    batchSelect.innerHTML += `<option value="${batch.batch_id}">${batch.batch_name} (${batch.batch_code})</option>`;
+                });
+                batchSelect.disabled = false;
+            } else {
+                 batchSelect.innerHTML = '<option value="">No batches for this course</option>';
+            }
+        } catch (error) {
+            console.error('Error loading batches:', error);
+            batchSelect.innerHTML = '<option value="">Error loading batches</option>';
+        }
+    }
+
+
+    // Placeholder function for bulk generation
+    async function generateInvoices(formData) {
+        const log = document.getElementById('status-log');
+        const submitBtn = document.getElementById('submit-generation-btn');
+        submitBtn.disabled = true;
+        log.innerHTML = `[${new Date().toLocaleTimeString()}] Starting invoice generation for Course ID ${formData.course_id}...<br>`;
+
+        try {
+            // ⭐ ACTUAL API CALL for bulk generation ⭐
+            const result = await handleApi('/api/invoices/bulk-generate', {
+                method: 'POST',
+                body: JSON.stringify(formData)
+            });
+            
+            // Assuming the response contains result.message and result.total_invoices
+            log.innerHTML += `[${new Date().toLocaleTimeString()}] ${result.message}<br>`;
+            log.innerHTML += `[${new Date().toLocaleTimeString()}] ✅ SUCCESS: ${result.total_invoices || 'Unknown number of'} invoices generated and marked as pending.<br>`;
+            log.scrollTop = log.scrollHeight;
+
+        } catch (error) {
+            log.innerHTML += `[${new Date().toLocaleTimeString()}] ❌ ERROR: ${error.message}<br>`;
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // ⭐ FIX: Elements are now selected ONLY after the DOM is fully loaded.
+        const courseSelect = document.getElementById('course-select');
+        const batchSelect = document.getElementById('batch-select');
+        const form = document.getElementById('generation-form');
+        
+        // Initial data load - pass elements to functions
+        loadCourses(courseSelect);
+        loadBatches(courseSelect, batchSelect); // Load initial 'All Batches' state
+
+        // Event listener for course selection change
+        courseSelect.addEventListener('change', () => {
+            loadBatches(courseSelect, batchSelect);
+        });
+        
+        form.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = {
+                course_id: courseSelect.value,
+                batch_id: batchSelect.value || null, // Send null if 'All Batches' is selected
+                due_date: document.getElementById('due-date').value,
+                notes: document.getElementById('invoice-notes').value
+            };
+            
+            if (!formData.course_id || !formData.due_date) {
+                alert('Please select a Course and Due Date.');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to generate invoices? This action cannot be reversed.')) {
+                generateInvoices(formData);
+            }
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Bulk Invoice Generation</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>1. Generation Criteria</h2>
+        <form id="generation-form">
+            <div class="generation-controls">
+                <div class="form-group">
+                    <label for="course-select">Target Course:</label>
+                    <select id="course-select" required>
+                         <option value="">-- Loading Courses... --</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="batch-select">Target Batch (Optional):</label>
+                    <select id="batch-select" disabled>
+                        <option value="">All Batches</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="due-date">Invoice Due Date:</label>
+                    <input type="date" id="due-date" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="invoice-notes">Notes for Invoice (Optional):</label>
+                    <input type="text" id="invoice-notes" placeholder="e.g., Q1 Tuition Fee">
+                </div>
+                
+                <button type="submit" id="submit-generation-btn" class="submit-btn">Generate Invoices</button>
+            </div>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>2. Status Log</h2>
+        <div id="status-log">
+            Awaiting generation command...
+        </div>
+    </div>
+</div>
+</body>
+</html>

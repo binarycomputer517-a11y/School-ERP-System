@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Discipline Management</title>
+    <style>
+        /* --- CLASSIC DESIGN STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #EFEFEF; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 1200px; margin: auto; padding: 40px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #C0392B; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #555; 
+            padding-bottom: 8px; margin-top: 25px; 
+        }
+        
+        .grid-layout { display: grid; grid-template-columns: 1fr 2fr; gap: 30px; }
+        .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; color: #333; }
+        input, select, textarea { 
+            width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; 
+            border: 1px solid #555; border-radius: 0; background-color: #FFFFFF;
+        }
+        button { 
+            background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; 
+            border-radius: 0; cursor: pointer; margin-top: 15px; box-shadow: 2px 2px 0 #000;
+            transition: all 0.2s ease;
+        }
+        button:hover { background-color: #003366; box-shadow: 1px 1px 0 #000; }
+        
+        .card { padding: 25px; border: 1px solid #005A9C; border-radius: 0; margin-top: 20px; background-color: #f7faff; }
+        .message-box { padding: 15px; border-radius: 0; margin-top: 20px; font-weight: bold; border: 1px solid #333;}
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background-color: #cce5ff; color: #004085; border: 1px solid #b8daff; }
+
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+        
+        .severity-Low { color: #28a745; font-weight: bold; }
+        .severity-Medium { color: #ffc107; font-weight: bold; }
+        .severity-High { color: #fd7e14; font-weight: bold; }
+        .severity-Critical { color: #dc3545; font-weight: bold; }
+        .status-badge { padding: 4px 8px; border-radius: 0; font-weight: bold; font-size: 0.75em; text-transform: uppercase; border: 1px solid #000; }
+        .status-Reported { background-color: #ffc107; color: #333; }
+        .status-Under_Review { background-color: #005A9C; color: white; }
+        .status-Resolved { background-color: #28a745; color: white; }
+
+        /* Modal Styles */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.4); }
+        .modal-content { background-color: #fff; margin: 10% auto; padding: 30px; border: 3px solid #000; width: 80%; max-width: 600px; box-shadow: 8px 8px 0 #000; position: relative; border-radius: 0; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Student Discipline Portal</h1>
+        <p>Current Role: <strong id="user-role-display">Loading...</strong></p>
+
+        <div class="grid-layout">
+            <div id="reporting-section" class="card">
+                <h2>Report New Incident</h2>
+                <form id="incident-report-form">
+                    <div class="form-grid">
+                        <div>
+                            <label for="student-id">Student ID (UUID):</label>
+                            <input type="text" id="student-id" name="student_id" placeholder="e.g., UUID of Student User" required>
+                        </div>
+                        <div>
+                            <label for="incident-date">Date & Time of Incident:</label>
+                            <input type="datetime-local" id="incident-date" name="incident_date" required>
+                        </div>
+                    </div>
+                    
+                    <div class="form-grid">
+                        <div>
+                            <label for="incident-type">Incident Type:</label>
+                            <select id="incident-type" name="incident_type" required>
+                                <option value="Tardiness">Tardiness / Truancy</option>
+                                <option value="Verbal Misconduct">Verbal Misconduct</option>
+                                <option value="Physical Harm">Physical Harm / Fighting</option>
+                                <option value="Property Damage">Property Damage</option>
+                                <option value="Academic Dishonesty">Academic Dishonesty</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="severity">Severity Level:</label>
+                            <select id="severity" name="severity" required>
+                                <option value="Low">Low (e.g., minor distraction)</option>
+                                <option value="Medium">Medium (e.g., repeated tardiness)</option>
+                                <option value="High">High (e.g., severe misconduct)</option>
+                                <option value="Critical">Critical (e.g., violence/illegal)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <label for="location">Location:</label>
+                    <input type="text" id="location" name="location" placeholder="e.g., Library, Classroom 10B" required>
+
+                    <label for="description">Detailed Description:</label>
+                    <textarea id="description" name="description" rows="4" required></textarea>
+
+                    <button type="submit">Submit Incident Report</button>
+                    <div id="report-message" class="message-box" style="display:none;"></div>
+                </form>
+            </div>
+            
+            <div id="history-section" class="card">
+                <h2>Student Discipline History</h2>
+                <form id="history-lookup-form">
+                    <label for="history-student-id">Search Student ID:</label>
+                    <input type="text" id="history-student-id" name="student_id" placeholder="Enter Student UUID or self-ID">
+                    <button type="submit">View History</button>
+                </form>
+                
+                <div id="history-message" class="message-box" style="display:none;"></div>
+
+                <div id="history-results" style="margin-top: 20px;">
+                    <h3>Records for <span id="history-student-name">...</span></h3>
+                    <table id="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Severity</th>
+                                <th>Reported By</th>
+                                <th>Action Taken</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody">
+                            <tr><td colspan="6" style="text-align: center;">No history loaded.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <section id="resolution-dashboard" class="card" style="margin-top: 30px; display:none;">
+            <h2>Pending Incident Resolution</h2>
+            <table id="pending-incidents-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Student</th>
+                        <th>Type</th>
+                        <th>Date</th>
+                        <th>Severity</th>
+                        <th>Reported By</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="pending-tbody">
+                    <tr><td colspan="7" style="text-align: center;">No incidents currently pending review.</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
+    <div id="action-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="document.getElementById('action-modal').style.display='none'">&times;</span>
+            <h3 id="modal-incident-title">Record Action for Incident: </h3>
+            <form id="action-form">
+                <label for="action-type">Action Type:</label>
+                <select id="action-type" required>
+                    <option value="Warning">Official Warning</option>
+                    <option value="Detention">Detention</option>
+                    <option value="Suspension">Suspension</option>
+                    <option value="Expulsion">Expulsion</option>
+                    <option value="Counselling Referral">Counselling Referral</option>
+                </select>
+                
+                <label for="effective-date">Effective Date:</label>
+                <input type="date" id="effective-date" required>
+                
+                <label for="completion-date">Completion Date (Optional/For Suspension):</label>
+                <input type="date" id="completion-date">
+
+                <label for="action-details">Action Details / Rationale:</label>
+                <textarea id="action-details" rows="3" required></textarea>
+
+                <button type="submit">Finalize Action & Resolve Incident</button>
+            </form>
+        </div>
+    </div>
+
+
+    <script>
+        const API_BASE = '/api/discipline';
+        const TOKEN = localStorage.getItem('erp-token');
+        const USER_ROLE = localStorage.getItem('user-role') || 'Guest';
+        const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
+        
+        // --- Role Definitions for Control ---
+        const APPROVER_ROLES = ['Super Admin', 'Admin', 'Counsellor'];
+        const REPORTER_ROLES = ['Super Admin', 'Admin', 'Teacher'];
+
+        // DOM elements
+        const userRoleDisplay = document.getElementById('user-role-display');
+        const reportForm = document.getElementById('incident-report-form');
+        const reportMessage = document.getElementById('report-message');
+        const historyLookupForm = document.getElementById('history-lookup-form');
+        const historyTbody = document.getElementById('history-tbody');
+        const historyStudentName = document.getElementById('history-student-name');
+        const resolutionDashboard = document.getElementById('resolution-dashboard');
+        const pendingTbody = document.getElementById('pending-tbody');
+        const actionModal = document.getElementById('action-modal');
+        const actionForm = document.getElementById('action-form');
+        const modalIncidentTitle = document.getElementById('modal-incident-title');
+        const reportingSection = document.getElementById('reporting-section');
+
+        let currentIncidentId = null;
+
+        // --- Helper Functions ---
+        async function handleApi(url, options = {}) {
+            // CRITICAL FIX: Block API call if TOKEN is missing to prevent 401/403 errors
+            if (!TOKEN) {
+                 // Throwing error allows the calling function's catch block to display a message
+                 throw new Error('Unauthorized: Session token is missing. Please log in.');
+            }
+            
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            // Handle 401/403 explicitly
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                // window.location.href = '/login'; // Uncomment in production to redirect
+                throw new Error('Unauthorized: Session expired or privileges insufficient. Please log in.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                // FIX: Add check for the specific 'Target student not found' message
+                const errorMessage = errorBody.message || `API call failed with status ${response.status}.`;
+                throw new Error(errorMessage);
+            }
+            return response.json();
+        }
+        
+        function showMessage(element, text, type) {
+            element.textContent = text;
+            element.className = `message-box ${type}`;
+            element.style.display = 'block';
+        }
+
+        // --- 1. Incident Reporting ---
+        reportForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            showMessage(reportMessage, 'Submitting report...', 'info');
+
+            // CRITICAL FIX: Use optional chaining (?.) and nullish coalescing (?? '') 
+            // to safely access the value, preventing TypeError if an input field is missing.
+            const formData = {
+                student_id: form.elements.student_id?.value ?? '',
+                incident_date: form.elements.incident_date?.value ?? '',
+                incident_type: form.elements.incident_type?.value ?? '',
+                description: form.elements.description?.value ?? '',
+                location: form.elements.location?.value ?? '',
+                severity: form.elements.severity?.value ?? '',
+                // MITIGATION: Send USER_ID as fallback for reported_by_id if JWT fails
+                reporter_id_fallback: USER_ID 
+            };
+
+            try {
+                const result = await handleApi(`${API_BASE}/report`, { 
+                    method: 'POST', 
+                    body: JSON.stringify(formData) 
+                });
+                
+                showMessage(reportMessage, `✅ Report submitted! Incident ID: ${result.incident_id}`, 'success');
+                form.reset();
+                if (APPROVER_ROLES.includes(USER_ROLE)) {
+                    fetchPendingIncidents(); // Auto-refresh dashboard
+                }
+                
+            } catch (error) {
+                // Displaying the specific error message provided by the server
+                showMessage(reportMessage, `❌ Submission Failed: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+
+        // --- 2. Action & Resolution ---
+        window.openActionModal = function(incidentId, studentName, incidentType) {
+            currentIncidentId = incidentId;
+            modalIncidentTitle.textContent = `Record Action for: ${studentName} - ${incidentType}`;
+            actionForm.reset();
+            actionModal.style.display = 'block';
+        }
+
+        actionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            
+            const formData = {
+                action_type: form.elements.action_type.value,
+                action_details: form.elements.action_details.value,
+                effective_date: form.elements.effective_date.value,
+                completion_date: form.elements.completion_date.value || null,
+            };
+            
+            if (!confirm(`Confirm recording ${formData.action_type} for incident ${currentIncidentId.slice(0, 8)}...?`)) {
+                submitBtn.disabled = false;
+                return;
+            }
+
+            try {
+                const result = await handleApi(`${API_BASE}/action/${currentIncidentId}`, { 
+                    method: 'POST', 
+                    body: JSON.stringify(formData) 
+                });
+                
+                alert(`✅ Action recorded: ${result.message}`);
+                actionModal.style.display = 'none';
+                fetchPendingIncidents(); // Refresh dashboard
+                
+            } catch (error) {
+                alert(`❌ Action recording failed: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+
+        // --- 3. Resolution Dashboard ---
+        async function fetchPendingIncidents() {
+            pendingTbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">Loading pending incidents...</td></tr>';
+            try {
+                const incidents = await handleApi(`${API_BASE}/incidents/pending`);
+                
+                if (incidents.length === 0) {
+                    pendingTbody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No incidents currently pending resolution.</td></tr>';
+                    return;
+                }
+
+                pendingTbody.innerHTML = incidents.map(inc => `
+                    <tr>
+                        <td>${inc.id.slice(0, 8)}...</td>
+                        <td><strong>${inc.student_name || 'Name Unknown'}</strong></td>
+                        <td>${inc.incident_type}</td>
+                        <td>${new Date(inc.incident_date).toLocaleDateString()}</td>
+                        <td class="severity-${inc.severity}">${inc.severity}</td>
+                        <td>${inc.reported_by}</td>
+                        <td>
+                            <button onclick="openActionModal('${inc.id}', '${inc.student_name}', '${inc.incident_type}')" style="padding: 5px;">Record Action</button>
+                        </td>
+                    </tr>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error fetching pending incidents:', error);
+                pendingTbody.innerHTML = `<tr><td colspan="7" class="error" style="text-align: center;">Failed to load data: ${error.message}</td></tr>`;
+            }
+        }
+        
+        // --- 4. History Lookup ---
+        historyLookupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const studentId = document.getElementById('history-student-id').value.trim();
+            const historyMessage = document.getElementById('history-message');
+            
+            if (!studentId) {
+                showMessage(historyMessage, 'Please enter a Student ID.', 'error');
+                return;
+            }
+            showMessage(historyMessage, 'Fetching history...', 'info');
+            historyTbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading...</td></tr>';
+            historyStudentName.textContent = '...';
+
+            // Security check: Role must be authorized for *any* record, otherwise must query self ID.
+            const isAuthorizedViewer = APPROVER_ROLES.includes(USER_ROLE);
+            if (!isAuthorizedViewer && studentId !== USER_ID) {
+                 showMessage(historyMessage, '❌ Access Denied: Staff/Students can only view their own discipline records.', 'error');
+                 historyTbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Access Denied.</td></tr>';
+                 return;
+            }
+
+
+            try {
+                // If not an authorized viewer, enforce that the query uses their own ID
+                const targetId = isAuthorizedViewer ? studentId : USER_ID;
+                const history = await handleApi(`${API_BASE}/history/${targetId}`);
+                
+                if (history.length === 0) {
+                    historyTbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No discipline records found for this ID.</td></tr>';
+                    historyStudentName.textContent = targetId;
+                    showMessage(historyMessage, 'History retrieved.', 'success');
+                    return;
+                }
+                
+                historyStudentName.textContent = history[0].student_name || targetId; 
+                
+                // Group records by incident ID for display
+                const incidentsMap = new Map();
+                history.forEach(rec => {
+                    const id = rec.incident_id;
+                    if (!incidentsMap.has(id)) {
+                        incidentsMap.set(id, {
+                            ...rec,
+                            actions: []
+                        });
+                    }
+                    if (rec.action_type) {
+                        incidentsMap.get(id).actions.push(rec);
+                    }
+                });
+                
+                historyTbody.innerHTML = Array.from(incidentsMap.values()).map(inc => {
+                    const actionDisplay = inc.actions.length > 0 
+                        ? `${inc.actions[0].action_type} (Details: ${inc.actions[0].action_details.substring(0, 30)}...)`
+                        : 'None Recorded';
+                    
+                    return `
+                        <tr>
+                            <td>${new Date(inc.incident_date).toLocaleDateString()}</td>
+                            <td>${inc.incident_type}</td>
+                            <td class="severity-${inc.severity}">${inc.severity}</td>
+                            <td>${inc.reported_by}</td>
+                            <td>${actionDisplay}</td>
+                            <td><span class="status-badge status-${inc.status}">${inc.status}</span></td>
+                        </tr>
+                    `;
+                }).join('');
+                
+                showMessage(historyMessage, `Found ${history.length} records.`, 'success');
+
+            } catch (error) {
+                console.error('History Lookup Error:', error);
+                historyTbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Error loading history.</td></tr>';
+                showMessage(historyMessage, `❌ Error: ${error.message}`, 'error');
+            }
+        });
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            userRoleDisplay.textContent = USER_ROLE;
+            
+            // 1. Determine visibility of Resolution Dashboard based on Super Admin/Admin/Counsellor roles
+            if (APPROVER_ROLES.includes(USER_ROLE)) {
+                resolutionDashboard.style.display = 'block';
+                // Only attempt fetch if a token is present, otherwise, the catch block in fetchPendingIncidents handles it.
+                if (TOKEN) {
+                    fetchPendingIncidents();
+                } else {
+                     pendingTbody.innerHTML = '<tr><td colspan="7" class="error" style="text-align: center;">Session Expired. Please log in to view the dashboard.</td></tr>';
+                }
+            }
+            
+            // 2. Determine visibility of Reporting Section based on Super Admin/Admin/Teacher roles
+            if (!REPORTER_ROLES.includes(USER_ROLE)) {
+                 reportingSection.innerHTML = '<p class="error">You must be logged in as authorized staff (Admin or Teacher) to report an incident.</p>';
+            } else if (!TOKEN) { // Specific check for reporters whose session has expired
+                 reportingSection.innerHTML = '<p class="error">Session expired. Please log in to submit a report.</p>';
+            }
+        });
+    </script>
+</body>
+</html>

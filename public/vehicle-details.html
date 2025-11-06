@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vehicle Details</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+    .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+    .section-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+    .modal {
+        display: none; 
+        position: fixed; 
+        z-index: 1000; 
+        left: 0; 
+        top: 0; 
+        width: 100%; 
+        height: 100%; 
+        overflow: auto; 
+        background-color: rgba(0,0,0,0.5);
+    }
+    .modal-content {
+        background-color: #fefefe;
+        margin: 10% auto;
+        padding: 20px;
+        border: 1px solid #888;
+        width: 80%;
+        max-width: 500px;
+        border-radius: 8px;
+        position: relative;
+    }
+    .close-btn {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+    }
+    .is-expired { color: red; font-weight: bold; }
+</style>
+</head>
+<body>
+
+<div id="maintenance-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h2>Log New Service Record</h2><form id="maintenance-form"><input type="date" name="service_date" required><input type="number" name="odometer_reading" placeholder="Odometer Reading"><textarea name="details" placeholder="Service Details (e.g., Oil Change, Tire Rotation)" required></textarea><input type="number" step="0.01" name="cost" placeholder="Cost ($)"><button type="submit">Save Record</button></form></div></div>
+<div id="document-modal" class="modal"><div class="modal-content"><span class="close-btn">&times;</span><h2>Add New Document</h2><form id="document-form"><select name="document_type" required><option value="">-- Select Type --</option><option value="Insurance">Insurance</option><option value="Pollution Certificate">Pollution Certificate</option><option value="Permit">Permit</option><option value="Registration">Registration</option></select><label>Issue Date</label><input type="date" name="issue_date"><label>Expiry Date</label><input type="date" name="expiry_date" required><input type="file" name="document"><button type="submit">Save Document</button></form></div></div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') window.location.href = '/login';
+</script>
+
+<div class="container">
+    <h1 id="vehicle-header">Loading Vehicle...</h1>
+    <div class="nav-links"><a href="/manage-transport.html">← Back to Transport Management</a></div>
+    
+    <div class="details-grid" style="margin-top: 30px;">
+        <div>
+            <div class="section-header">
+                <h2>Maintenance History</h2>
+                <button id="add-maintenance-btn">Log Service</button>
+            </div>
+            <table>
+                <thead><tr><th>Date</th><th>Details</th><th>Cost</th></tr></thead>
+                <tbody id="maintenance-body"></tbody>
+            </table>
+        </div>
+        <div>
+            <div class="section-header">
+                <h2>Documents & Renewals</h2>
+                <button id="add-document-btn">Add Document</button>
+            </div>
+            <table>
+                <thead><tr><th>Type</th><th>Expiry Date</th><th>File</th></tr></thead>
+                <tbody id="documents-body"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const vehicleId = new URLSearchParams(window.location.search).get('id');
+    const maintenanceModal = document.getElementById('maintenance-modal');
+    const documentModal = document.getElementById('document-modal');
+
+    // Modal Handling
+    document.getElementById('add-maintenance-btn').onclick = () => maintenanceModal.style.display = 'block';
+    document.getElementById('add-document-btn').onclick = () => documentModal.style.display = 'block';
+    maintenanceModal.querySelector('.close-btn').onclick = () => maintenanceModal.style.display = 'none';
+    documentModal.querySelector('.close-btn').onclick = () => documentModal.style.display = 'none';
+
+    async function loadVehicleDetails() {
+        if (!vehicleId) {
+            document.getElementById('vehicle-header').textContent = 'Vehicle ID not found.';
+            return;
+        }
+        try {
+            const res = await fetch(`/api/transport/vehicles/${vehicleId}/details`, { headers: authHeaders });
+            const data = await res.json();
+            
+            // Populate Header
+            document.getElementById('vehicle-header').textContent = `Details for ${data.details.vehicle_number} (${data.details.model})`;
+            
+            // Populate Maintenance Table
+            const maintenanceBody = document.getElementById('maintenance-body');
+            maintenanceBody.innerHTML = data.maintenance.length ? '' : '<tr><td colspan="3">No records found.</td></tr>';
+            data.maintenance.forEach(rec => {
+                maintenanceBody.innerHTML += `<tr><td>${new Date(rec.service_date).toLocaleDateString()}</td><td>${rec.details}</td><td>$${rec.cost || 0}</td></tr>`;
+            });
+
+            // Populate Documents Table
+            const documentsBody = document.getElementById('documents-body');
+            documentsBody.innerHTML = data.documents.length ? '' : '<tr><td colspan="3">No documents found.</td></tr>';
+            const today = new Date();
+            today.setHours(0,0,0,0);
+            data.documents.forEach(doc => {
+                const expiryDate = new Date(doc.expiry_date);
+                const isExpired = expiryDate < today;
+                documentsBody.innerHTML += `
+                    <tr>
+                        <td>${doc.document_type}</td>
+                        <td class="${isExpired ? 'is-expired' : ''}">${expiryDate.toLocaleDateString()} ${isExpired ? '(EXPIRED)' : ''}</td>
+                        <td>${doc.document_url ? `<a href="${doc.document_url}" target="_blank">View File</a>` : 'Not Uploaded'}</td>
+                    </tr>`;
+            });
+
+        } catch (error) {
+            console.error(error);
+            alert('Failed to load vehicle details.');
+        }
+    }
+
+    // Form Submissions
+    document.getElementById('maintenance-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(this));
+        data.vehicle_id = vehicleId;
+        const res = await fetch('/api/transport/maintenance', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify(data) });
+        if(res.ok) {
+            maintenanceModal.style.display = 'none';
+            this.reset();
+            loadVehicleDetails();
+        } else { alert('Failed to save record.'); }
+    });
+    
+    document.getElementById('document-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        const docFile = formData.get('document');
+        formData.delete('document'); // Remove file from form data for the first request
+        
+        const data = Object.fromEntries(formData.entries());
+        data.vehicle_id = vehicleId;
+
+        // Step 1: Create the document record
+        const res1 = await fetch('/api/transport/documents', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify(data) });
+        if (!res1.ok) { return alert('Failed to save document record.'); }
+        
+        const { id: docId } = await res1.json();
+
+        // Step 2: If there's a file, upload it
+        if (docFile && docFile.size > 0) {
+            const fileFormData = new FormData();
+            fileFormData.append('document', docFile);
+            const res2 = await fetch(`/api/transport/documents/${docId}/upload`, { method: 'POST', headers: authHeaders, body: fileFormData });
+            if (!res2.ok) { return alert('Record saved, but file upload failed.'); }
+        }
+
+        documentModal.style.display = 'none';
+        this.reset();
+        loadVehicleDetails();
+    });
+
+    window.onload = loadVehicleDetails;
+</script>
+
+</body>
+</html>

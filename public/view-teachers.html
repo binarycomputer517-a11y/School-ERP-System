@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>View & Manage Teachers</title>
+    <link href="https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        /* --- CLASSIC STYLES --- */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #f8f8f8; color: #333; }
+        .container { max-width: 1400px; margin: auto; padding: 40px; background-color: #ffffff; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; border-radius: 0; }
+        h1 { color: #000; font-weight: bold; text-transform: uppercase; border-bottom: 4px double #000; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }
+        .filter-container { display: flex; gap: 15px; margin-bottom: 20px; align-items: center; flex-wrap: wrap; }
+        input, select, button { padding: 8px 10px; border: 1px solid #555; border-radius: 0; box-sizing: border-box; }
+        
+        /* Button Styles */
+        button, a.btn { 
+            padding: 8px 10px;
+            border: 1px solid #000; 
+            border-radius: 0; 
+            cursor: pointer; 
+            box-shadow: 1px 1px 0 #000;
+            transition: none; 
+            text-decoration: none;
+            display: inline-block;
+        }
+        button { background-color: #005A9C; color: white; }
+        button.btn-danger { background-color: #C0392B; }
+        button.btn-warning { background-color: #FFC300; color: #333; }
+        a.btn-success { background-color: #28a745; color: white; }
+        a.btn-secondary { background-color: #777; color: white; }
+        
+        /* NEW STYLE for Manage Departments Link */
+        .btn-info-link {
+            background-color: #17A2B8; /* Info Blue */
+            color: white;
+        }
+        
+        button:hover, a.btn:hover { opacity: 0.9; box-shadow: 0 0 0 #000; }
+        
+        /* Table Styles */
+        .teacher-table { width: 100%; border-collapse: collapse; }
+        .teacher-table th, .teacher-table td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+        .teacher-table th { background-color: #333; color: #FFFFFF; font-weight: bold; cursor: pointer; }
+        .teacher-table th.sort-asc::after { content: ' ▲'; }
+        .teacher-table th.sort-desc::after { content: ' ▼'; }
+        
+        /* ID Card Styles - For Print */
+        .id-card-template { 
+            width: 320px; height: 540px; border: 1px solid #000; border-radius: 0; margin: 20px auto; position: relative; text-align: center; font-size: 14px; 
+            box-shadow: 2px 2px 5px #888; background-color: #fff; padding: 0; overflow: hidden;
+        }
+        .id-card-header { background-color: #005A9C; color: white; padding: 10px 0; font-size: 1.5em; }
+        .id-card-role { background-color: #ffc107; color: #333; padding: 5px 0; font-weight: bold; font-size: 1.1em; }
+        
+        @media print {
+            body > *:not(.print-container) { display: none; }
+            .print-container { display: block !important; width: 100%; text-align: center; }
+            .print-container img { display: block; margin: 10px auto; page-break-after: always; width: 320px; height: 540px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-controls">
+            <h1>Staff Directory & Management</h1>
+            <div class="nav-links" style="margin-bottom: 20px; display: flex; gap: 10px;">
+                <a href="/admin-dashboard.html" class="btn btn-secondary">← Dashboard</a>
+                
+                <a href="/manage-departments.html" class="btn btn-info-link">🏢 Manage Departments</a>
+                
+                <a href="/add-teacher.html" class="btn btn-success">➕ Add New Staff</a>
+            </div>
+        </div>
+
+        <div class="filter-container">
+            <input type="text" id="search-input" placeholder="Search by Name or ID..." style="flex-grow: 1;">
+            <select id="department-filter"><option value="">All Departments</option></select>
+            <button id="search-btn">Filter</button>
+            <button id="reset-btn" class="btn-danger">Reset</button>
+            <button id="print-all-id-btn" class="btn-warning">🪪 Print All ID Cards</button>
+        </div>
+
+        <div class="table-responsive">
+            <table class="teacher-table" id="teacher-table">
+                <thead>
+                    <tr>
+                        <th data-sort-key="employee_id">Employee ID</th>
+                        <th data-sort-key="full_name">Full Name</th>
+                        <th data-sort-key="designation">Designation</th>
+                        <th data-sort-key="email">Email</th>
+                        <th data-sort-key="department_name">Department</th>
+                        <th data-sort-key="hire_date">Joined</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="teachers-list">
+                    <tr><td colspan="8" style="text-align: center;">Loading staff list...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api/teachers';
+        const TOKEN = localStorage.getItem('erp-token');
+        let allTeachers = [];
+        let currentSortKey = 'employee_id';
+        let isAscending = true;
+
+        // --- Utility function for authenticated fetch ---
+        async function authenticatedFetch(url, options = {}) {
+            options.headers = { 
+                'Authorization': `Bearer ${TOKEN}`,
+                'Content-Type': 'application/json',
+                ...options.headers 
+            };
+            const response = await fetch(url, options);
+            if (response.status === 401 || response.status === 403) {
+                alert('Session expired or unauthorized. Please log in again.');
+                localStorage.clear();
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            // CRITICAL FIX: The 500 error from backend will be caught here
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ message: response.statusText }));
+                // Custom error message to help diagnose backend issue
+                throw new Error(`Failed to retrieve teachers list. Server responded with: ${response.status} ${error.message || response.statusText}`);
+            }
+            return response;
+        }
+        
+        // --- 1. DATA FETCHING AND INITIAL RENDER ---
+        async function fetchTeachers() {
+            const tbody = document.getElementById('teachers-list');
+            try {
+                const response = await authenticatedFetch(API_URL, { method: 'GET' });
+                allTeachers = await response.json();
+                
+                if (!Array.isArray(allTeachers)) allTeachers = [];
+                
+                populateFilters(allTeachers);
+                sortAndRender(allTeachers, currentSortKey, isAscending);
+
+            } catch(e) { 
+                console.error('Error fetching teachers:', e);
+                // Display the custom error message received from the backend/fetch utility
+                tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">Error: ${e.message}. (Check API/Token)</td></tr>`;
+            }
+        }
+
+        function renderTeachersTable(teachers) {
+            const tbody = document.getElementById('teachers-list');
+            if (!teachers || teachers.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="8" style="text-align: center;">No staff members found matching criteria.</td></tr>';
+                 return;
+            }
+            
+            tbody.innerHTML = teachers.map(t => `
+                <tr>
+                    <td>${t.employee_id}</td>
+                    <td>${t.full_name}</td>
+                    <td>${t.designation || 'N/A'}</td>
+                    <td>${t.email}</td>
+                    <td>${t.department_name || 'N/A'}</td>
+                    <td>${t.hire_date ? new Date(t.hire_date).toLocaleDateString() : 'N/A'}</td>
+                    <td><span class="status-badge status-active">${t.is_active ? 'Active' : 'Inactive'}</span></td>
+                    <td>
+                        <button class="btn-warning" onclick="window.location.href='/edit-teacher.html?id=${t.id}'">Edit</button>
+                        <button class="btn-danger" onclick="deleteTeacher('${t.id}', '${t.full_name}')">Delete</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function populateFilters(teachers) {
+            const departmentFilter = document.getElementById('department-filter');
+            while (departmentFilter.options.length > 1) {
+                departmentFilter.remove(1);
+            }
+            
+            // NOTE: This relies on the API providing 'department_name' field via JOIN.
+            const departments = [...new Set(teachers.map(t => t.department_name).filter(Boolean))].sort();
+            
+            departments.forEach(dept => {
+                const option = document.createElement('option');
+                option.value = dept;
+                option.textContent = dept;
+                departmentFilter.appendChild(option);
+            });
+        }
+
+        // --- 2. SORTING LOGIC ---
+        function getSortValue(teacher, key) {
+            const value = teacher[key];
+            if (key === 'hire_date' && value) return new Date(value).getTime();
+            if (key === 'employee_id') return String(value || '').toUpperCase();
+            return String(value || '').toLowerCase();
+        }
+
+        function sortAndRender(teachers, key, asc) {
+            teachers.sort((a, b) => {
+                const valA = getSortValue(a, key);
+                const valB = getSortValue(b, key);
+
+                if (valA < valB) return asc ? -1 : 1;
+                if (valA > valB) return asc ? 1 : -1;
+                return 0;
+            });
+
+            document.querySelectorAll('.teacher-table th').forEach(th => {
+                th.classList.remove('sort-asc', 'sort-desc');
+            });
+            const header = document.querySelector(`th[data-sort-key="${key}"]`);
+            if (header) {
+                header.classList.add(asc ? 'sort-asc' : 'sort-desc');
+            }
+
+            renderTeachersTable(teachers);
+        }
+
+        document.getElementById('teacher-table').addEventListener('click', (e) => {
+            const th = e.target.closest('th');
+            if (th && th.hasAttribute('data-sort-key')) {
+                const newKey = th.getAttribute('data-sort-key');
+                if (newKey === currentSortKey) {
+                    isAscending = !isAscending;
+                } else {
+                    currentSortKey = newKey;
+                    isAscending = true;
+                }
+                const filteredTeachers = applyFilters(allTeachers);
+                sortAndRender(filteredTeachers, currentSortKey, isAscending);
+            }
+        });
+
+        // --- 3. FILTERING LOGIC ---
+        function applyFilters(teachers) {
+            const searchInput = document.getElementById('search-input').value.toLowerCase();
+            const departmentFilter = document.getElementById('department-filter').value;
+            
+            return teachers.filter(t => {
+                const matchesSearch = t.full_name.toLowerCase().includes(searchInput) || 
+                                      t.employee_id.toLowerCase().includes(searchInput);
+                
+                const matchesDepartment = departmentFilter === '' || 
+                                          t.department_name === departmentFilter;
+                
+                return matchesSearch && matchesDepartment;
+            });
+        }
+
+        function handleFilter() {
+            const filtered = applyFilters(allTeachers);
+            sortAndRender(filtered, currentSortKey, isAscending); 
+        }
+
+        document.getElementById('search-btn').addEventListener('click', handleFilter);
+
+        document.getElementById('reset-btn').addEventListener('click', () => {
+            document.getElementById('search-input').value = '';
+            document.getElementById('department-filter').value = '';
+            currentSortKey = 'employee_id';
+            isAscending = true;
+            sortAndRender(allTeachers, currentSortKey, isAscending);
+        });
+
+        // --- 4. DELETE ACTION ---
+        async function deleteTeacher(id, name) {
+            if (!confirm(`Are you sure you want to delete staff member: ${name}? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                await authenticatedFetch(`${API_URL}/${id}`, {
+                    method: 'DELETE'
+                });
+
+                allTeachers = allTeachers.filter(t => t.id !== id);
+                alert(`${name} deleted successfully!`);
+                handleFilter(); 
+
+            } catch (e) {
+                alert(`Deletion failed: ${e.message}`);
+                console.error('Fetch error on delete:', e);
+            }
+        }
+        window.deleteTeacher = deleteTeacher; 
+
+        // --- 5. ID CARD PRINTING LOGIC ---
+        function createIdCardElement(teacher) {
+            const card = document.createElement('div');
+            card.className = 'id-card-template';
+            
+            card.innerHTML = `
+                <div class="id-card-header">
+                    <h2>Your School Name</h2>
+                </div>
+                <div class="id-card-role">
+                    STAFF ID CARD
+                </div>
+                <div style="padding: 15px; text-align: center;">
+                    <div style="width: 100px; height: 100px; background-color: #DDD; border: 1px solid #333; margin: 15px auto 10px; display: flex; align-items: center; justify-content: center; font-size: 0.8em;">
+                        [Photo Area]
+                    </div>
+                    <h3 style="margin: 5px 0; color: #000; font-size: 1.4em;">${teacher.full_name}</h3>
+                    <p style="margin: 5px 0;"><strong>ID:</strong> ${teacher.employee_id}</p>
+                    <p style="margin: 5px 0;"><strong>Role:</strong> ${teacher.designation || 'Staff'}</p>
+                    <p style="margin: 5px 0;"><strong>Dept:</strong> ${teacher.department_name || 'N/A'}</p>
+                    <div style="margin-top: 30px; font-size: 12px; border-top: 1px dashed #CCC; padding-top: 10px;">
+                        <p style="margin-bottom: 5px;">This card is school property.</p>
+                        <div style="width: 100px; height: 30px; border-bottom: 1px solid #000; margin: 5px auto;"></div>
+                        <p>Authorized Signature</p>
+                    </div>
+                </div>
+            `;
+            return card;
+        }
+
+        async function printAllIdCards() {
+            if (allTeachers.length === 0) {
+                alert('No staff data available to print ID cards.');
+                return;
+            }
+
+            const tempContainer = document.createElement('div');
+            tempContainer.style.position = 'fixed';
+            tempContainer.style.top = '-9999px';
+            tempContainer.className = 'print-container-temp';
+            document.body.appendChild(tempContainer);
+            
+            const cardPromises = allTeachers.map(teacher => {
+                const cardElement = createIdCardElement(teacher);
+                tempContainer.appendChild(cardElement);
+
+                return html2canvas(cardElement, { 
+                    scale: 3, 
+                    useCORS: true 
+                }).then(canvas => {
+                    const img = document.createElement('img');
+                    img.src = canvas.toDataURL('image/png');
+                    return img;
+                });
+            });
+
+            const cardImages = await Promise.all(cardPromises);
+            
+            const printWindow = window.open('', '_blank');
+            if (!printWindow) {
+                alert("Please allow pop-ups for printing.");
+                tempContainer.remove();
+                return;
+            }
+            
+            printWindow.document.write('<html><head><title>Staff ID Cards</title>');
+            printWindow.document.write('<style>@page { size: auto; margin: 0; } body { margin: 0; padding: 10px; text-align: center; } .print-container img { display: block; margin: 10px auto; page-break-after: always; width: 320px; height: 540px; }</style>');
+            printWindow.document.write('</head><body><div class="print-container">');
+            
+            cardImages.forEach(img => {
+                printWindow.document.body.querySelector('.print-container').appendChild(img);
+            });
+            
+            printWindow.document.write('</div></body></html>');
+            printWindow.document.close();
+
+            setTimeout(() => {
+                printWindow.print();
+                printWindow.close();
+                tempContainer.remove();
+            }, 100); 
+        }
+        
+        document.getElementById('print-all-id-btn').addEventListener('click', printAllIdCards);
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', fetchTeachers); 
+    </script>
+</body>
+</html>

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Book Borrowing History</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        if (!token || localStorage.getItem('user-role') !== 'Admin') {
+            window.location.href = '/login';
+        }
+    </script>
+
+    <div class="container">
+        <h1 id="book-title-header">Loading Book History...</h1>
+        <div class="nav-links">
+            <a href="/manage-books.html">← Back to Book Management</a>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Borrower</th>
+                    <th>Issue Date</th>
+                    <th>Return Date</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="history-table-body">
+                </tbody>
+        </table>
+    </div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    window.onload = async () => {
+        const historyBody = document.getElementById('history-table-body');
+        try {
+            // Get the book ID from the URL (e.g., /book-history.html?id=123)
+            const urlParams = new URLSearchParams(window.location.search);
+            const bookId = urlParams.get('id');
+
+            if (!bookId) {
+                document.getElementById('book-title-header').textContent = "Error: No Book ID provided.";
+                return;
+            }
+
+            // Fetch both the book's details and its history at the same time
+            const [bookRes, historyRes] = await Promise.all([
+                fetch(`/api/library/books/${bookId}`, { headers: authHeaders }),
+                fetch(`/api/library/books/${bookId}/history`, { headers: authHeaders })
+            ]);
+
+            if (!bookRes.ok || !historyRes.ok) {
+                throw new Error('Failed to fetch book data.');
+            }
+
+            const book = await bookRes.json();
+            const history = await historyRes.json();
+
+            // Update the page title with the book's name
+            document.getElementById('book-title-header').textContent = `History for: ${book.title}`;
+
+            if (history.length === 0) {
+                historyBody.innerHTML = '<tr><td colspan="4">This book has never been issued.</td></tr>';
+                return;
+            }
+
+            // Populate the history table
+            let rowsHtml = '';
+            history.forEach(record => {
+                rowsHtml += `
+                    <tr>
+                        <td>${record.username}</td>
+                        <td>${new Date(record.issue_date).toLocaleDateString()}</td>
+                        <td>${record.return_date ? new Date(record.return_date).toLocaleDateString() : 'Not Returned'}</td>
+                        <td>${record.status}</td>
+                    </tr>
+                `;
+            });
+            historyBody.innerHTML = rowsHtml;
+
+        } catch (error) {
+            console.error('Error loading book history:', error);
+            historyBody.innerHTML = '<tr><td colspan="4">Could not load history.</td></tr>';
+        }
+    };
+</script>
+</body>
+</html>

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Fee Calculator</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .options {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        #fee-details {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+    </style>
+</head>
+<body>
+<script>
+    // Authentication Check
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+        window.location.href = '/login';
+    }
+</script>
+
+<div class="container">
+    <h1>Student Fee Calculator</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">← Back to Dashboard</a></div>
+
+    <h2>Calculate Student's Total Fee</h2>
+    <form id="fee-calculator-form">
+        <div class="form-grid">
+            <div>
+                <label for="course_code">কোর্স কোড (Course Code):</label>
+                <input type="text" id="course_code" required placeholder="e.g., BCA-SLG">
+            </div>
+            <div>
+                <label for="batch_code">ব্যাচ কোড (Batch Code):</label>
+                <input type="text" id="batch_code" required placeholder="e.g., BCA-SLG-25">
+            </div>
+            <div>
+                <label for="course_duration_months">কোর্সের সময়সীমা (মাসে):</label>
+                <input type="number" id="course_duration_months" required placeholder="e.g., 36">
+            </div>
+        </div>
+        
+        <div class="options" style="margin-top: 20px;">
+            <label>অন্যান্য সুবিধা (Additional Facilities):</label>
+            <input type="checkbox" id="has_transport" name="has_transport">
+            <label for="has_transport">ট্রান্সপোর্ট (Transport)</label>
+            
+            <input type="checkbox" id="has_hostel" name="has_hostel">
+            <label for="has_hostel">হোস্টেল (Hostel)</label>
+        </div>
+
+        <button type="submit" style="margin-top: 20px;">Calculate Fees</button>
+    </form>
+
+    <div id="fee-details">
+        <h3>Fee Breakdown</h3>
+        <table id="fee-breakdown-table">
+            <thead>
+                <tr>
+                    <th>Fee Type</th>
+                    <th>Calculation</th>
+                    <th>Amount (₹)</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+        <hr>
+        <h3 id="total-fee"></h3>
+    </div>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    let allFeeStructures = []; // To store fee structures from the API
+
+    // Fetch all fee structures when the page loads
+    window.onload = function() {
+        fetch('/api/fees/structures', { headers: authHeaders })
+            .then(res => res.json())
+            .then(data => {
+                allFeeStructures = data;
+                console.log("Fee structures loaded.", allFeeStructures);
+            })
+            .catch(err => {
+                console.error("Failed to load fee structures:", err);
+                alert("Could not load fee structures from the server. Please check the API.");
+            });
+    };
+
+    document.getElementById('fee-calculator-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        // --- Get form values ---
+        const courseCode = document.getElementById('course_code').value.trim();
+        const batchCode = document.getElementById('batch_code').value.trim();
+        const duration = parseInt(document.getElementById('course_duration_months').value);
+        const hasTransport = document.getElementById('has_transport').checked;
+        const hasHostel = document.getElementById('has_hostel').checked;
+
+        // --- Validation: First 6 characters must match ---
+        if (courseCode.substring(0, 6) !== batchCode.substring(0, 6)) {
+            alert("Error: Course Code এবং Batch Code এর প্রথম 6টি অক্ষর অবশ্যই একই হতে হবে।");
+            return;
+        }
+
+        if (isNaN(duration) || duration <= 0) {
+            alert("Error: Please enter a valid course duration.");
+            return;
+        }
+
+        // --- Fee Calculation Logic ---
+        let feeBreakdown = [];
+        let totalAmount = 0;
+
+        // Helper function to find a fee from the loaded structures
+        const getFee = (feeType) => {
+            // This is a simple search. For a more robust system, you might filter by class/course ID.
+            return allFeeStructures.find(s => s.fee_type.toLowerCase() === feeType.toLowerCase());
+        };
+
+        // --- Type 1: Base Fees (One-time) ---
+        const oneTimeFees = ["Admission Fee", "Registration Fee", "Examination Fee"];
+        oneTimeFees.forEach(feeName => {
+            const fee = getFee(feeName);
+            if (fee) {
+                const amount = parseFloat(fee.amount);
+                feeBreakdown.push({ name: feeName, calculation: "One-time", amount: amount.toFixed(2) });
+                totalAmount += amount;
+            }
+        });
+
+        // --- Type 2 & 3: Conditional Monthly Fees (Transport/Hostel) ---
+        // This logic covers both Type 2 (both checked) and Type 3 (one is checked)
+        if (hasTransport) {
+            const transportFee = getFee("Transport Fee");
+            if (transportFee) {
+                const monthlyAmount = parseFloat(transportFee.amount);
+                const calculatedAmount = monthlyAmount * duration;
+                feeBreakdown.push({ 
+                    name: "Transport Fee", 
+                    calculation: `₹${monthlyAmount.toFixed(2)} x ${duration} months`, 
+                    amount: calculatedAmount.toFixed(2) 
+                });
+                totalAmount += calculatedAmount;
+            }
+        }
+
+        if (hasHostel) {
+            const hostelFee = getFee("Hostel Fee");
+            if (hostelFee) {
+                const monthlyAmount = parseFloat(hostelFee.amount);
+                const calculatedAmount = monthlyAmount * duration;
+                feeBreakdown.push({ 
+                    name: "Hostel Fee", 
+                    calculation: `₹${monthlyAmount.toFixed(2)} x ${duration} months`, 
+                    amount: calculatedAmount.toFixed(2) 
+                });
+                totalAmount += calculatedAmount;
+            }
+        }
+        
+        // --- Display the results ---
+        const tableBody = document.querySelector("#fee-breakdown-table tbody");
+        tableBody.innerHTML = ''; // Clear previous results
+        feeBreakdown.forEach(item => {
+            tableBody.innerHTML += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.calculation}</td>
+                    <td>${item.amount}</td>
+                </tr>
+            `;
+        });
+
+        document.getElementById('total-fee').innerText = `Total Payable Amount: ₹${totalAmount.toFixed(2)}`;
+        document.getElementById('fee-details').style.display = 'block';
+    });
+</script>
+</body>
+</html>

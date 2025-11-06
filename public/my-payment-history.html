@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment History</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #eef1f5;
+        }
+        .container-classic {
+            max-width: 1000px;
+            margin: 25px auto;
+            padding: 30px;
+            background-color: #ffffff;
+            border: 1px solid #ccc;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        h1 {
+            font-family: Georgia, "Times New Roman", Times, serif;
+            color: #003366;
+            border-bottom: 2px solid #b0c4de;
+            padding-bottom: 10px;
+        }
+        .summary-card {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: .375rem;
+            padding: 1.25rem;
+        }
+        .summary-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .summary-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #212529;
+        }
+        .summary-value.text-danger {
+            color: #dc3545 !important;
+        }
+        .summary-value.text-success {
+            color: #198754 !important;
+        }
+        .table-responsive {
+            margin-top: 2rem;
+        }
+        .text-end {
+            text-align: right;
+        }
+        .status-success { color: #198754; font-weight: bold; }
+        .status-pending { color: #ffc107; font-weight: bold; }
+        .status-failed { color: #dc3545; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="container-classic">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Payment History</h1>
+            <a href="/student-dashboard.html" class="btn btn-outline-primary">Back to Dashboard</a>
+        </div>
+
+        <div id="error-message" class="alert alert-danger" style="display: none;"></div>
+
+        <div class="row g-3">
+            <div class="col-md-4">
+                <div class="summary-card">
+                    <div class="summary-label">TOTAL DUE</div>
+                    <div class="summary-value" id="total-due">Loading...</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="summary-card">
+                    <div class="summary-label">TOTAL PAID</div>
+                    <div class="summary-value text-success" id="total-paid">Loading...</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="summary-card">
+                    <div class="summary-label">BALANCE DUE</div>
+                    <div class="summary-value" id="balance-due">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th scope="col">Date</th>
+                        <th scope="col">Receipt No.</th>
+                        <th scope="col">Description</th>
+                        <th scope="col">Method</th>
+                        <th scope="col">Status</th>
+                        <th scope="col" class="text-end">Amount Paid</th>
+                    </tr>
+                </thead>
+                <tbody id="payment-table-body">
+                    <tr>
+                        <td colspan="6" class="text-center">Loading payment history...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const studentId = localStorage.getItem('profile-id'); // ⭐ Use the consistent 'profile-id' key
+        const token = localStorage.getItem('erp-token');
+        const errorMessageDiv = document.getElementById('error-message');
+        const tableBody = document.getElementById('payment-table-body');
+
+        // --- Helper function for API calls ---
+        async function handleApi(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                     alert('Session expired or unauthorized. Please log in again.');
+                     window.location.href = '/login.html';
+                     throw new Error('Unauthorized');
+                }
+                const error = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(`API call failed with status: ${response.status}. ${error.message}`);
+            }
+            return response.json();
+        }
+
+        function showStatus(status) {
+            const statusClass = status.toLowerCase();
+            if (statusClass.includes('success') || statusClass.includes('paid')) {
+                return `<span class="status-success">${status}</span>`;
+            } else if (statusClass.includes('pending') || statusClass.includes('processing')) {
+                return `<span class="status-pending">${status}</span>`;
+            } else if (statusClass.includes('failed') || statusClass.includes('cancelled')) {
+                return `<span class="status-failed">${status}</span>`;
+            }
+            return status;
+        }
+        
+        function formatCurrency(amount) {
+            if (amount === undefined || amount === null) return 'N/A';
+            return `₹${Number(amount).toFixed(2).toLocaleString('en-IN')}`;
+        }
+
+        async function loadPaymentHistory() {
+            if (!studentId || !token) {
+                errorMessageDiv.textContent = 'Login error: Profile ID or Token missing.';
+                errorMessageDiv.style.display = 'block';
+                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Authentication required.</td></tr>';
+                return;
+            }
+
+            try {
+                // Fetch consolidated fee summary and payment transactions
+                // Assumes a single endpoint that returns both:
+                const data = await handleApi(`/api/finance/student/${studentId}/payments/history`);
+                
+                if (!data) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">No financial records found.</td></tr>';
+                    return;
+                }
+
+                // --- 1. Update Summary Cards ---
+                const summary = data.summary || {};
+                const totalDue = summary.total_due || 0;
+                const totalPaid = summary.total_paid || 0;
+                const balance = totalDue - totalPaid;
+
+                document.getElementById('total-due').textContent = formatCurrency(totalDue);
+                document.getElementById('total-paid').textContent = formatCurrency(totalPaid);
+                
+                const balanceElement = document.getElementById('balance-due');
+                balanceElement.textContent = formatCurrency(balance);
+                balanceElement.classList.remove('text-success', 'text-danger');
+                if (balance > 0) {
+                    balanceElement.classList.add('text-danger');
+                } else if (balance <= 0) {
+                    balanceElement.classList.add('text-success');
+                }
+
+                // --- 2. Render Transaction History ---
+                const transactions = data.transactions || [];
+
+                if (transactions.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">No payment transactions found.</td></tr>';
+                    return;
+                }
+
+                tableBody.innerHTML = transactions.map(t => `
+                    <tr>
+                        <td>${new Date(t.payment_date).toLocaleDateString()}</td>
+                        <td>${t.receipt_number || 'N/A'}</td>
+                        <td>${t.description || 'Fee Payment'}</td>
+                        <td>${t.payment_method || 'Online'}</td>
+                        <td>${showStatus(t.status)}</td>
+                        <td class="text-end">${formatCurrency(t.amount)}</td>
+                    </tr>
+                `).join('');
+
+
+            } catch (error) {
+                console.error('Error loading payment history:', error);
+                errorMessageDiv.textContent = `Error: Failed to load payment history. (${error.message})`;
+                errorMessageDiv.style.display = 'block';
+                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to connect to the finance server.</td></tr>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadPaymentHistory);
+    </script>
+</body>
+</html>

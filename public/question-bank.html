@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Question Bank Management</title>
+    </head>
+<body>
+
+    <div class="container">
+        <h1>Central Question Bank Interface (F7)</h1>
+        <p><a href="/online-exam.html">← Back to Exam Manager</a></p>
+
+        <div class="grid">
+            
+            <div class="controls">
+                </div>
+
+            <div class="list-area">
+                <h3>Question Repository (Total: <span id="question-count">0</span>)</h3>
+                
+                <div style="margin-bottom: 15px;">
+                    <button class="btn-primary" onclick="alert('Opens modal for bulk import (CSV/Excel).')">Bulk Import</button>
+                    <button class="btn-primary" onclick="alert('Opens modal to export questions.')">Export</button>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 5%;">ID</th>
+                            <th style="width: 50%;">Question Text</th>
+                            <th style="width: 15%;">Subject</th>
+                            <th style="width: 10%;">Answer</th>
+                            <th style="width: 10%;">Marks</th>
+                            <th style="width: 10%;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="question-list-tbody">
+                        <tr><td colspan="6">Loading questions...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/online-exam';
+        
+        // FIX: Re-implementing authenticated API handler for this page
+        async function handleApi(url, options = {}) {
+            const token = localStorage.getItem('erp-token');
+            const authHeaders = { 'Authorization': `Bearer ${token}` };
+            
+            options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+                throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message}`);
+            }
+            return response.json();
+        }
+
+        /**
+         * FIX: Added DELETE functionality
+         */
+        async function deleteQuestion(id, questionText) {
+            if (!confirm(`Are you sure you want to delete Question ID ${id}: "${questionText.substring(0, 50)}..."? This action is permanent.`)) {
+                return;
+            }
+            try {
+                await handleApi(`${API_BASE}/question-bank/${id}`, { method: 'DELETE' });
+                alert(`✅ Question ID ${id} deleted successfully.`);
+                loadQuestions(); // Reload the list
+            } catch (error) {
+                alert(`❌ Error deleting question: ${error.message}`);
+            }
+        }
+
+
+        async function loadQuestions() {
+            const tbody = document.getElementById('question-list-tbody');
+            tbody.innerHTML = '<tr><td colspan="6">Fetching questions from bank...</td></tr>';
+            document.getElementById('question-count').textContent = '...';
+
+            try {
+                // FIX: Use handleApi for authenticated fetch
+                const questions = await handleApi(`${API_BASE}/question-bank`);
+
+                tbody.innerHTML = '';
+                if (questions.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6">No questions found in the bank.</td></tr>';
+                }
+
+                questions.forEach(q => {
+                    const subjectName = q.subject_name || 'N/A';
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${q.id}</td>
+                            <td>${q.question_text.substring(0, 80)}...</td>
+                            <td>${subjectName}</td>
+                            <td>${q.correct_option}</td>
+                            <td>${q.marks}</td>
+                            <td>
+                                <button onclick="editQuestion(${q.id})">Edit</button>
+                                <button style="background-color: #dc3545; color: white; border: none;" onclick="deleteQuestion(${q.id}, '${q.question_text.replace(/'/g, "\\'")}')">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+                document.getElementById('question-count').textContent = questions.length;
+
+            } catch (error) {
+                console.error("Error loading question bank:", error);
+                tbody.innerHTML = `<tr><td colspan="6" style="color: red;">Error loading question bank. Check authentication/server logs: ${error.message}</td></tr>`;
+            }
+        }
+        
+        function openAddQuestionModal() {
+            alert('Opening modal for detailed single question entry.');
+        }
+
+        function editQuestion(id) {
+            alert(`Editing question ID: ${id}`);
+        }
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadQuestions();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Report Card View</title>
+    <style>
+        /* CSS for Display and Print Formatting */
+        body {
+            font-family: 'Times New Roman', serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: #333;
+        }
+
+        .report-container {
+            width: 210mm; /* A4 width */
+            min-height: 297mm; /* A4 height */
+            margin: 0 auto;
+            padding: 25px;
+            background-color: #fff;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            border: 1px solid #ccc;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+        }
+
+        header h1 {
+            font-size: 24px;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        .student-info, .exam-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+
+        .student-info div, .exam-details div {
+            padding: 5px 0;
+        }
+
+        .marks-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            font-size: 13px;
+        }
+
+        .marks-table th, .marks-table td {
+            border: 1px solid #333;
+            padding: 8px 10px;
+            text-align: left;
+        }
+
+        .marks-table th {
+            background-color: #f5f5f5;
+            text-align: center;
+        }
+
+        .totals {
+            margin-top: 20px;
+            text-align: right;
+            font-weight: bold;
+            font-size: 15px;
+        }
+        
+        /* Utility for print-only or screen-only content */
+        .print-only { display: none; }
+        .screen-only { margin-top: 30px; text-align: center; }
+
+        /* Media Query for Print: Remove shadows, change margins, display print-only elements */
+        @media print {
+            body {
+                background-color: #fff;
+                padding: 0;
+            }
+            .report-container {
+                width: 100%;
+                min-height: auto;
+                box-shadow: none;
+                border: none;
+                margin: 0;
+            }
+            /* Hide UI elements (buttons, links) during print */
+            .screen-only, header a { display: none; }
+            .print-only { display: block; }
+        }
+    </style>
+</head>
+<body>
+<div class="report-container">
+    <header>
+        <div class="print-only" style="margin-bottom: 5px;"></div>
+        <h1>Report Card</h1>
+        <h2 id="exam-name" style="font-size: 20px; margin-top: 5px; border-bottom: none;">Loading Exam Name...</h2>
+    </header>
+
+    <section class="student-info">
+        <div><strong>Student Name:</strong> <span id="student-name">...</span></div>
+        <div><strong>Course Name:</strong> <span id="course-name">...</span></div>
+        <div><strong>Roll Number:</strong> <span id="roll-number">...</span></div>
+        <div id="cumulative-status"></div>
+    </section>
+    
+    <section class="marks-summary">
+        <table class="marks-table">
+            <thead>
+                <tr>
+                    <th rowspan="2">Subject</th>
+                    <th id="topic-header" style="display:none;">Topic</th>
+                    <th colspan="2">Theory Marks</th>
+                    <th colspan="2">Practical Marks</th>
+                    <th colspan="2">Total Marks</th>
+                </tr>
+                <tr>
+                    <th id="topic-sub-header" style="display:none;">Code/Name</th>
+                    <th>Max</th>
+                    <th>Obtained</th>
+                    <th>Max</th>
+                    <th>Obtained</th>
+                    <th>Max</th>
+                    <th>Obtained</th>
+                </tr>
+            </thead>
+            <tbody id="marks-body">
+                <tr><td colspan="8" style="text-align: center;">Loading marks data...</td></tr>
+            </tbody>
+        </table>
+        <div id="no-marks-message" style="text-align: center; color: red; margin-top: 20px; display: none;">No marks found for this student and exam selection.</div>
+    </section>
+    
+    <section class="totals">
+        Total Max Marks: <span id="grand-total-max">0</span> | 
+        Total Marks Obtained: <span id="grand-total-obtained">0</span>
+    </section>
+    
+    <footer class="print-only" style="margin-top: 50px; text-align: right; font-size: 12px;">
+        <p>Date of Issue: <span id="issue-date">...</span></p>
+        <p>Authorized Signature: _________________________</p>
+    </footer>
+
+    <div class="screen-only">
+        <button onclick="window.print()" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; cursor: pointer;">Print Report Card</button>
+        <a href="javascript:history.back()" style="margin-left: 20px; color: #333;">← Back</a>
+    </div>
+
+</div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    // Utility to get query parameters from URL
+    function getQueryParam(param) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(param);
+    }
+    
+    // Main function to fetch and render the report card
+    async function loadReportCard() {
+        const studentId = getQueryParam('studentId');
+        const examId = getQueryParam('examId');
+        const marksBody = document.getElementById('marks-body');
+        
+        // 0. Authorization Check (basic)
+        if (!token) {
+            window.location.href = '/login'; // Redirect if no token
+            return;
+        }
+
+        if (!studentId || !examId) {
+            marksBody.innerHTML = '<tr><td colspan="8" style="text-align: center;">Missing Student ID or Exam ID in URL.</td></tr>';
+            return;
+        }
+
+        try {
+            // Fetch data from the server's Report Card API
+            const response = await fetch(`/api/marks/reportcard?studentId=${studentId}&examId=${examId}`, { headers: authHeaders });
+            
+            if (!response.ok) {
+                // Attempt to parse JSON error message if status is not OK
+                const errorData = await response.json().catch(() => ({ message: 'Failed to load report card data.' }));
+                throw new Error(errorData.message);
+            }
+
+            const data = await response.json();
+            
+            // 1. Fill Student and Exam Details
+            document.getElementById('student-name').textContent = data.student_name || 'N/A';
+            document.getElementById('course-name').textContent = data.course_name || 'N/A';
+            document.getElementById('roll-number').textContent = data.roll_number || 'N/A';
+            document.getElementById('exam-name').textContent = data.exam_name || 'Report Card';
+            document.getElementById('issue-date').textContent = new Date().toLocaleDateString();
+
+            // Handle cumulative status
+            const cumulativeStatus = document.getElementById('cumulative-status');
+            cumulativeStatus.innerHTML = `<strong>Report Status:</strong> ${data.is_cumulative ? 'Cumulative Report' : 'Current Exam Only'}`;
+
+            // 2. Prepare Marks Table
+            let grandTotalMax = 0;
+            let grandTotalObtained = 0;
+            marksBody.innerHTML = '';
+            
+            if (data.marks && data.marks.length > 0) {
+                document.getElementById('no-marks-message').style.display = 'none';
+
+                // Check if the marksheet type is Topic-Based (Marksheet Type 2)
+                const isTopicBased = data.marks.some(m => m.topic_name);
+                if (isTopicBased) {
+                    document.getElementById('topic-header').style.display = 'table-cell';
+                    document.getElementById('topic-sub-header').style.display = 'table-cell';
+                } else {
+                     // Ensure Topic header is hidden if no topic data is found
+                    document.getElementById('topic-header').style.display = 'none';
+                    document.getElementById('topic-sub-header').style.display = 'none';
+                }
+
+                data.marks.forEach(m => {
+                    const theoryMax = parseFloat(m.total_theory_max) || 0;
+                    const practicalMax = parseFloat(m.total_practical_max) || 0;
+                    const theoryObtained = parseFloat(m.total_theory_obtained) || 0;
+                    const practicalObtained = parseFloat(m.total_practical_obtained) || 0;
+                    
+                    const totalMax = theoryMax + practicalMax;
+                    const totalObtained = theoryObtained + practicalObtained;
+
+                    grandTotalMax += totalMax;
+                    grandTotalObtained += totalObtained;
+
+                    const row = document.createElement('tr');
+                    let topicCell = '';
+                    
+                    if (isTopicBased) {
+                        // If it's topic-based, include the topic cell.
+                        topicCell = `<td>${m.topic_name || m.topic_code || 'N/A'}</td>`;
+                    } 
+
+                    row.innerHTML = `
+                        <td>${m.subject_name || m.subject_code || 'N/A'}</td>
+                        ${isTopicBased ? topicCell : ''}
+                        <td style="text-align: center;">${theoryMax.toFixed(2)}</td>
+                        <td style="text-align: center;">${theoryObtained.toFixed(2)}</td>
+                        <td style="text-align: center;">${practicalMax.toFixed(2)}</td>
+                        <td style="text-align: center;">${practicalObtained.toFixed(2)}</td>
+                        <td style="text-align: center; font-weight: bold;">${totalMax.toFixed(2)}</td>
+                        <td style="text-align: center; font-weight: bold;">${totalObtained.toFixed(2)}</td>
+                    `;
+                    marksBody.appendChild(row);
+                });
+            } else {
+                document.getElementById('no-marks-message').style.display = 'block';
+                marksBody.innerHTML = '';
+            }
+            
+            // 3. Update Grand Totals
+            document.getElementById('grand-total-max').textContent = grandTotalMax.toFixed(2);
+            document.getElementById('grand-total-obtained').textContent = grandTotalObtained.toFixed(2);
+
+        } catch (error) {
+            console.error('Error loading report card:', error);
+            marksBody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">Error: ${error.message}</td></tr>`;
+        }
+    }
+
+    // Initialize the page on load
+    window.onload = loadReportCard;
+</script>
+</body>
+</html>

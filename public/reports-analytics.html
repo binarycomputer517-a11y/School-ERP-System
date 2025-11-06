@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reports & Analytics Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f4f6f9; font-family: sans-serif; }
+        .container { max-width: 1300px; }
+        h1 { color: #003366; font-weight: bold; }
+        .info-box {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+            border-left: 5px solid;
+            /* Added for real-time visual feedback */
+            transition: all 0.2s ease-in-out;
+        }
+        .box-title { color: #6c757d; font-size: 0.9rem; margin-bottom: 5px; }
+        .box-value { font-size: 2rem; font-weight: bold; }
+        .chart-card {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            height: 400px; /* Standard chart height */
+        }
+        /* Highlight class for live updates */
+        .live-update {
+            background-color: #e6ffed !important;
+            border-color: #28a745 !important;
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container mt-5">
+        <header class="mb-5 d-flex justify-content-between align-items-center">
+            <h1>📈 Academic & Financial Analytics</h1>
+            <a href="/admin-dashboard.html" class="btn btn-sm btn-outline-primary">← Back to Dashboard</a>
+        </header>
+
+        <section id="filter-controls" class="card p-4 mb-4 shadow-sm">
+            <h4 class="text-secondary mb-3">Data Filters</h4>
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label for="session-select" class="form-label small fw-bold">Academic Session</label>
+                    <select id="session-select" class="form-select"></select>
+                </div>
+                <div class="col-md-3">
+                    <label for="course-select" class="form-label small fw-bold">Course/Program</label>
+                    <select id="course-select" class="form-select"></select>
+                </div>
+                <div class="col-md-3">
+                    <label for="date-range-select" class="form-label small fw-bold">Date Range</label>
+                    <select id="date-range-select" class="form-select">
+                        <option value="current_month">Current Month</option>
+                        <option value="last_30_days">Last 30 Days</option>
+                        <option value="current_year" selected>Current Academic Year</option>
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <button id="apply-filters-btn" class="btn btn-primary w-100">Apply Filters</button>
+                </div>
+            </div>
+        </section>
+
+        <section id="kpi-summaries" class="row">
+            <div class="col-lg-3 col-md-6">
+                <div class="info-box" style="border-color: #007bff;">
+                    <div class="box-title">Total Students</div>
+                    <div id="total-students" class="box-value">...</div>
+                    <p class="small text-muted mb-0">Active enrollment count.</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div id="fees-collected-box" class="info-box" style="border-color: #28a745;">
+                    <div class="box-title">Total Fees Collected (₹)</div>
+                    <div id="fees-collected" class="box-value">...</div>
+                    <p class="small text-muted mb-0">Net fees received in selected period.</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="info-box" style="border-color: #ffc107;">
+                    <div class="box-title">Outstanding Fees (₹)</div>
+                    <div id="fees-outstanding" class="box-value text-warning">...</div>
+                    <p class="small text-muted mb-0">Total amount due across all students.</p>
+                </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+                <div class="info-box" style="border-color: #dc3545;">
+                    <div class="box-title">Enrollment Growth (%)</div>
+                    <div id="enrollment-growth" class="box-value">...</div>
+                    <p class="small text-muted mb-0">Growth rate vs. previous period.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="data-visuals" class="row">
+            <h3 class="text-primary my-3 d-flex justify-content-between align-items-center">
+                Key Performance Indicators
+                <button id="export-csv-btn" class="btn btn-sm btn-outline-primary">Export Data (CSV)</button>
+            </h3>
+            <p id="loading-message" class="text-center text-muted">Initializing dashboard...</p>
+            
+            <div class="col-lg-6">
+                <div class="chart-card mb-4">
+                    <canvas id="enrollment-by-course"></canvas>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="chart-card mb-4">
+                    <canvas id="fees-collection-monthly"></canvas>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="chart-card mb-4">
+                    <canvas id="student-performance-grade-distribution"></canvas>
+                </div>
+            </div>
+        </section>
+    </div>
+    
+    <script>
+        // --- GLOBAL CONFIG ---
+        const TOKEN = localStorage.getItem('erp-token'); 
+        const API_BASE_REPORTS = '/api/reports'; 
+        const API_BASE_ACADEMICS = '/api/academicswithfees'; // Base for courses and sessions
+        let chartInstances = {}; // To manage Chart.js instances
+        
+        if (!TOKEN) {
+             alert('Authorization required. Redirecting to login.');
+             window.location.href = '/login.html';
+        }
+
+        // --- Helper function for authenticated API calls ---
+        
+        // Helper for Reports (uses API_BASE_REPORTS)
+        async function fetchReportData(endpoint, params = {}) {
+            const url = new URL(API_BASE_REPORTS + endpoint, window.location.origin);
+            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
+            
+            const response = await fetch(url.toString(), {
+                headers: { 
+                    'Authorization': `Bearer ${TOKEN}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(`Failed to fetch report data: ${response.status} - ${errorBody.message}`);
+            }
+            return response.json();
+        }
+
+        // Helper for Academics Dropdowns (uses API_BASE_ACADEMICS)
+        async function fetchAcademicsData(endpoint) {
+             const response = await fetch(API_BASE_ACADEMICS + endpoint, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(`Failed to fetch academic data: ${response.status} - ${errorBody.message}`);
+            }
+            return response.json();
+        }
+
+
+        // --- Chart Rendering Functions (omitted for brevity) ---
+        
+        function destroyCharts() {
+            Object.values(chartInstances).forEach(chart => chart.destroy());
+            chartInstances = {};
+        }
+
+        function renderEnrollmentByCourse(data) {
+            destroyCharts(); // Destroy existing charts before creating new ones
+            const ctx = document.getElementById('enrollment-by-course').getContext('2d');
+            chartInstances.enrollment = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: data.map(item => item.course_name),
+                    datasets: [{
+                        label: 'Students by Course',
+                        data: data.map(item => item.count),
+                        backgroundColor: [
+                            '#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8'
+                        ],
+                        hoverOffset: 8
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: 'Enrollment Distribution by Course' }
+                    }
+                }
+            });
+        }
+        
+        function renderFeesCollectionMonthly(data) {
+            const ctx = document.getElementById('fees-collection-monthly').getContext('2d');
+            chartInstances.fees = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(item => item.month), // e.g., ['Jan', 'Feb', 'Mar']
+                    datasets: [{
+                        label: 'Fees Collected (Monthly)',
+                        data: data.map(item => item.amount),
+                        borderColor: '#28a745',
+                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: 'Monthly Fees Collection Trend' }
+                    },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+        
+        function renderGradeDistribution(data) {
+            const ctx = document.getElementById('student-performance-grade-distribution').getContext('2d');
+            chartInstances.grades = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.map(item => item.grade), // e.g., ['A+', 'A', 'B+', 'F']
+                    datasets: [{
+                        label: 'Students by Final Grade',
+                        data: data.map(item => item.count),
+                        backgroundColor: data.map(item => {
+                            if (item.grade === 'F') return '#dc3545';
+                            if (item.grade.startsWith('A')) return '#28a745';
+                            return '#007bff';
+                        })
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: 'Overall Grade Distribution' }
+                    },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        // --- Main Loading Logic ---
+        
+        async function loadReports(filters = {}) {
+            // CRITICAL FIX: Reference the element once and check for its existence
+            const loadingMessageElement = document.getElementById('loading-message');
+            if (loadingMessageElement) {
+                loadingMessageElement.textContent = 'Loading and processing data...';
+                loadingMessageElement.style.display = 'block';
+            }
+            
+            // Show the main error container for subsequent errors
+            const errorMessageElement = document.getElementById('error-message');
+            errorMessageElement.style.display = 'none';
+
+            try {
+                // 1. Fetch KPI Summaries
+                const summaries = await fetchReportData('/summaries', filters);
+                
+                // Update KPI boxes
+                if (summaries) { 
+                    document.getElementById('total-students').textContent = summaries.totalStudents.toLocaleString();
+                    document.getElementById('fees-collected').textContent = `₹${summaries.feesCollected.toLocaleString()}`;
+                    document.getElementById('fees-outstanding').textContent = `₹${summaries.feesOutstanding.toLocaleString()}`;
+                    document.getElementById('enrollment-growth').textContent = `${summaries.enrollmentGrowth}%`;
+                }
+                
+                // 2. Fetch Detailed Data for Charts
+                const [enrollmentData, feesData, gradeData] = await Promise.all([
+                    fetchReportData('/enrollment-by-course', filters),
+                    fetchReportData('/fees-collection-monthly', filters),
+                    fetchReportData('/grade-distribution', filters)
+                ]);
+                
+                // 3. Render Charts
+                renderEnrollmentByCourse(enrollmentData);
+                renderFeesCollectionMonthly(feesData);
+                renderGradeDistribution(gradeData);
+
+                if (loadingMessageElement) {
+                    loadingMessageElement.style.display = 'none';
+                }
+
+            } catch (error) {
+                console.error('CRITICAL REPORT LOAD ERROR:', error);
+                if (loadingMessageElement) {
+                     loadingMessageElement.style.display = 'none';
+                }
+                errorMessageElement.textContent = `Could not load reports: ${error.message}`;
+                errorMessageElement.style.display = 'block';
+            }
+        }
+        
+        // --- Initialization and Event Handling ---
+        
+        function getFilterValues() {
+            return {
+                session: document.getElementById('session-select').value,
+                course: document.getElementById('course-select').value,
+                dateRange: document.getElementById('date-range-select').value,
+            };
+        }
+        
+        // DYNAMICALLY FETCH DROPDOWN DATA
+        async function populateDropdowns() {
+            const sessionSelect = document.getElementById('session-select');
+            const courseSelect = document.getElementById('course-select');
+            
+            try {
+                // Fetch Academic Sessions (from /api/academicswithfees/academic-sessions)
+                const sessions = await fetchAcademicsData('/academic-sessions');
+                sessionSelect.innerHTML = sessions.map(s => `
+                    <option value="${s.id}" ${s.is_active ? 'selected' : ''}>${s.session_name}</option>
+                `).join('');
+                
+                // Fetch Courses (from /api/academicswithfees/courses)
+                const courses = await fetchAcademicsData('/courses');
+                courseSelect.innerHTML = '<option value="">All Courses</option>';
+                courseSelect.innerHTML += courses.map(c => `
+                    <option value="${c.course_id}">${c.course_name}</option>
+                `).join('');
+
+            } catch (error) {
+                console.warn('Failed to populate filter dropdowns. Check backend academic routes.', error);
+                // Ensure selectors are NOT null if data fails, preventing crash
+                sessionSelect.innerHTML = '<option value="">N/A (Load Error)</option>';
+                courseSelect.innerHTML = '<option value="">All Courses</option>';
+            }
+        }
+        
+        function setupExportHandlers() {
+             document.getElementById('export-csv-btn').addEventListener('click', () => {
+                 alert("CSV export initiated. (Requires backend endpoint /api/reports/export/csv)");
+                 // Actual implementation would involve calling a specific backend export endpoint
+             });
+        }
+
+
+        document.addEventListener('DOMContentLoaded', () => {
+            populateDropdowns();
+            setupExportHandlers();
+            
+            // Wait for dropdowns to populate before loading initial reports
+            // This structure ensures loadReports is only called once the DOM is ready.
+            setTimeout(() => {
+                loadReports(getFilterValues());
+            }, 50); 
+            
+            document.getElementById('apply-filters-btn').addEventListener('click', () => {
+                loadReports(getFilterValues());
+            });
+        });
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Allocate Hostel Room</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    // --- CONSOLIDATED SCRIPT BLOCK 1: Declare token once and perform auth check ---
+    const token = localStorage.getItem('erp-token');
+    // NOTE: The previous code inferred 'Admin' role is required.
+    if (!token || localStorage.getItem('user-role') !== 'Admin') window.location.href = '/login'; 
+</script>
+<div class="container">
+    <h1>Allocate Student to Hostel Room</h1>
+    <div class="nav-links"><a href="/manage-hostel.html">← Back to Hostel Management</a></div>
+
+    <form id="allocation-form">
+        <label for="student-select">Select Student:</label>
+        <select id="student-select" name="student_id" required></select>
+
+        <label for="room-select">Select Available Room:</label>
+        <select id="room-select" name="room_id" required></select>
+        
+        <button type="submit">Allocate Room</button>
+    </form>
+
+    <h2 style="margin-top: 40px;">Current Allocations</h2>
+    <table>
+        <thead><tr><th>Student Name</th><th>Hostel</th><th>Room Number</th></tr></thead>
+        <tbody id="allocation-list-body"></tbody>
+    </table>
+</div>
+<script>
+    // --- SCRIPT BLOCK 2: Use the already declared 'token' variable ---
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    // Helper function for safe fetching 
+    async function fetchSafe(url) {
+        const res = await fetch(url, { headers: authHeaders });
+        if (!res.ok) throw new Error(res.statusText);
+        return res.json();
+    }
+
+    async function populateDropdowns() {
+        const studentSelect = document.getElementById('student-select');
+        const roomSelect = document.getElementById('room-select');
+
+        try {
+            // Fetch students and rooms simultaneously
+            const [students, rooms] = await Promise.all([
+                fetchSafe('/api/students'),
+                fetchSafe('/api/hostel/rooms')
+            ]);
+
+            // Populate Student Select: Include enrollment_no for clear identification (requested update)
+            // The student ID used here (s.id) is correct because hostel_allocations references students.id via a FK to users.id.
+            studentSelect.innerHTML = '<option value="">-- Select a Student --</option>' + 
+                students
+                    .filter(s => !s.deleted_at) // Filter out soft-deleted students
+                    .map(s => `<option value="${s.id}">${s.first_name} ${s.last_name} (${s.enrollment_no})</option>`)
+                    .join('');
+            
+            // Populate Room Select
+            const availableRooms = rooms.filter(r => r.current_occupancy < r.capacity);
+            roomSelect.innerHTML = '<option value="">-- Select an Available Room --</option>' + 
+                availableRooms.map(r => `<option value="${r.id}">${r.hostel_name} - Room ${r.room_number} (${r.current_occupancy}/${r.capacity})</option>`).join('');
+
+        } catch (error) {
+            console.error("Failed to populate dropdowns:", error);
+            alert("Could not load necessary data. Please check server logs.");
+        }
+    }
+
+    function loadAllocations() {
+        const tableBody = document.getElementById('allocation-list-body');
+        fetch('/api/hostel/allocations', { headers: authHeaders })
+            .then(res => res.json())
+            .then(allocations => {
+                tableBody.innerHTML = '';
+                if (allocations.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="3">No students are currently allocated to any room.</td></tr>';
+                    return;
+                }
+                allocations.forEach(alloc => {
+                    tableBody.innerHTML += `<tr><td>${alloc.student_name}</td><td>${alloc.hostel_name}</td><td>${alloc.room_number}</td></tr>`;
+                });
+            })
+            .catch(error => console.error("Failed to load allocations:", error));
+    }
+
+    document.getElementById('allocation-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // --- HARDENED DATA COLLECTION AND VALIDATION ---
+        const studentId = document.getElementById('student-select').value;
+        const roomId = document.getElementById('room-select').value;
+        
+        const data = {
+            student_id: studentId,
+            room_id: roomId
+        };
+        
+        // Client-side validation: check for empty strings
+        if (!data.student_id || data.student_id === "") {
+            alert("Action failed: Please select a student for allocation.");
+            return;
+        }
+        if (!data.room_id || data.room_id === "") {
+            alert("Action failed: Please select an available room.");
+            return;
+        }
+        // ------------------------------------------------
+
+        fetch('/api/hostel/allocate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(data)
+        }).then(res => {
+            if (res.ok) {
+                alert('Student allocated successfully!');
+                // Reset form and reload data to show updated lists
+                this.reset();
+                populateDropdowns();
+                loadAllocations();
+            } else { 
+                // Display the specific server error message (400)
+                res.json().then(errorBody => alert('Error: ' + errorBody.message))
+                   .catch(() => res.text().then(text => alert('Allocation Error: ' + text)));
+            }
+        })
+        .catch(error => alert("Allocation failed due to network error: " + error.message));
+    });
+
+    window.onload = () => {
+        populateDropdowns();
+        loadAllocations();
+    };
+</script>
+</body>
+</html>

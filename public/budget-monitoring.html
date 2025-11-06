@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Annual Budget Monitoring Tool</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #797d7f;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .budget-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .metric-box {
+            background-color: var(--light-gray-color);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .metric-box h3 {
+            margin: 0 0 5px 0;
+            font-size: 0.9em;
+            color: var(--dark-gray-color);
+        }
+        .metric-box p {
+            margin: 0;
+            font-size: 1.5em;
+            font-weight: 700;
+        }
+        .budget-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .budget-table th, .budget-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9em;
+        }
+        .budget-table th {
+            background-color: var(--primary-color);
+            color: #fff;
+            font-weight: 600;
+        }
+        .variance-positive { color: var(--success-color); }
+        .variance-negative { color: var(--error-color); }
+        .placeholder-message {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--secondary-color);
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    /**
+     * Fetches and renders the annual budget monitoring data.
+     */
+    async function fetchAndRenderBudget() {
+        const tbody = document.getElementById('budget-tbody');
+        tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">Fetching budget data...</td></tr>';
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return budget data ❌
+            const budgetData = await handleApi('/api/reports/annual-budget'); 
+            
+            // Assuming budgetData contains total_budget, actual_spend, and categories breakdown
+            const totalBudget = parseFloat(budgetData.total_budget) || 0;
+            const actualSpend = parseFloat(budgetData.actual_spend) || 0;
+            const variance = totalBudget - actualSpend;
+
+            document.getElementById('total-budget-metric').textContent = `₹${totalBudget.toFixed(2)}`;
+            document.getElementById('actual-spend-metric').textContent = `₹${actualSpend.toFixed(2)}`;
+            document.getElementById('variance-metric').textContent = `₹${variance.toFixed(2)}`;
+            document.getElementById('variance-metric').style.color = variance >= 0 ? 'var(--success-color)' : 'var(--error-color)';
+            
+            tbody.innerHTML = '';
+            if (!budgetData.categories || budgetData.categories.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">No budget categories found for this year.</td></tr>';
+                return;
+            }
+
+            budgetData.categories.forEach(c => {
+                const catVariance = c.budgeted - c.actual;
+                const varianceClass = catVariance >= 0 ? 'variance-positive' : 'variance-negative';
+                const row = `<tr>
+                    <td>${c.category_name}</td>
+                    <td>₹${(c.budgeted || 0).toFixed(2)}</td>
+                    <td>₹${(c.actual || 0).toFixed(2)}</td>
+                    <td class="${varianceClass}">₹${catVariance.toFixed(2)}</td>
+                    <td>${((c.actual / c.budgeted) * 100).toFixed(1)}%</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error('Error fetching budget data:', error);
+            tbody.innerHTML = `<tr><td colspan="5" class="placeholder-message" style="color: var(--error-color);">Error loading budget: ${error.message}</td></tr>`;
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchAndRenderBudget();
+
+        document.getElementById('year-select').addEventListener('change', () => {
+            fetchAndRenderBudget({ year: document.getElementById('year-select').value });
+        });
+        
+        document.getElementById('export-btn').addEventListener('click', () => {
+            alert('Exporting Budget Monitoring Report.');
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Annual Budget Monitoring Tool</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Summary & Controls</h2>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+            <label for="year-select" style="font-weight: 600;">Fiscal Year:</label>
+            <select id="year-select" style="width: 150px; padding: 8px; border-radius: 4px;">
+                <option value="2025">2025 - 2026</option>
+                <option value="2024">2024 - 2025</option>
+            </select>
+            <button id="export-btn" class="submit-btn" style="background-color: var(--secondary-color); padding: 8px 15px;">Export Report</button>
+        </div>
+        
+        <div class="budget-grid">
+            <div class="metric-box">
+                <h3>Total Budgeted</h3>
+                <p id="total-budget-metric">₹0.00</p>
+            </div>
+            <div class="metric-box">
+                <h3>Actual Spend (YTD)</h3>
+                <p id="actual-spend-metric">₹0.00</p>
+            </div>
+            <div class="metric-box">
+                <h3>Variance</h3>
+                <p id="variance-metric">₹0.00</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Category Breakdown</h2>
+        <table class="budget-table">
+            <thead>
+                <tr>
+                    <th>Budget Category</th>
+                    <th>Budgeted Amount (₹)</th>
+                    <th>Actual Spend (₹)</th>
+                    <th>Variance (₹)</th>
+                    <th>% Used</th>
+                </tr>
+            </thead>
+            <tbody id="budget-tbody">
+                <tr><td colspan="5" class="placeholder-message">Load a fiscal year to view budget tracking.</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

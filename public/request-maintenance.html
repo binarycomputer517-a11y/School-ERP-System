@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hostel Maintenance Request</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Student') window.location.href = '/login';
+</script>
+<div class="container">
+    <h1>Hostel Maintenance</h1>
+    <div class="nav-links"><a href="/student-dashboard.html">← Back to Dashboard</a></div>
+
+    <h2>Submit a New Request</h2>
+    <form id="maintenance-form">
+        <label for="category">Category:</label>
+        <select name="category" id="category" required>
+            <option value="">-- Select Category --</option>
+            <option value="Electrical">Electrical (Fan, Light, Switch)</option>
+            <option value="Plumbing">Plumbing (Tap, Shower, Drain)</option>
+            <option value="Carpentry">Carpentry (Door, Window, Furniture)</option>
+            <option value="Other">Other</option>
+        </select>
+
+        <label for="description">Describe the Issue:</label>
+        <textarea name="description" id="description" rows="4" required></textarea>
+        
+        <button type="submit">Submit Request</button>
+    </form>
+
+    <h2 style="margin-top: 40px;">My Request History</h2>
+    <table>
+        <thead><tr><th>Category</th><th>Description</th><th>Status</th><th>Date Submitted</th></tr></thead>
+        <tbody id="history-body"></tbody>
+    </table>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    function loadMyRequests() {
+        const tableBody = document.getElementById('history-body');
+        fetch('/api/hostel/me/maintenance', { headers: authHeaders })
+            .then(res => res.json())
+            .then(requests => {
+                tableBody.innerHTML = '';
+                if (requests.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4">You have no maintenance request history.</td></tr>';
+                    return;
+                }
+                requests.forEach(req => {
+                    tableBody.innerHTML += `
+                        <tr>
+                            <td>${req.category}</td>
+                            <td>${req.description}</td>
+                            <td><strong>${req.status}</strong></td>
+                            <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                        </tr>`;
+                });
+            });
+    }
+
+    document.getElementById('maintenance-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(this).entries());
+        fetch('/api/hostel/maintenance', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(data)
+        }).then(res => {
+            if (res.ok) {
+                alert('Request submitted successfully!');
+                this.reset();
+                loadMyRequests();
+            } else { res.text().then(text => alert('Error: ' + text)); }
+        });
+    });
+
+    window.onload = loadMyRequests;
+</script>
+</body>
+</html>

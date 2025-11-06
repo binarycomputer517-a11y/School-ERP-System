@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Assignments & Modules</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f8; font-family: sans-serif; }
+        .container { max-width: 1000px; }
+        h1 { color: #003366; font-weight: bold; }
+        .text-primary { color: #003366 !important; }
+        .text-secondary { color: #5e35b1 !important; }
+        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .list-group-item:hover { background-color: #f0f2f8; }
+        .status-badge { font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; }
+        
+        /* Status colors */
+        .status-Assigned { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status-Completed { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-Overdue { background-color: #ffc107; color: #383d41; border: 1px solid #ffeeba; }
+        .status-Draft { background-color: #f0f0f0; color: #6c757d; border: 1px solid #e9ecef; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <header class="mb-4 d-flex justify-content-between align-items-center">
+            <h1>My Assignments & Learning Modules</h1>
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
+        </header>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h4 class="text-secondary mb-3">Your Current Assignments</h4>
+                
+                <ul id="assignments-list" class="list-group list-group-flush">
+                    <li class="list-group-item text-center text-muted">Loading your assignments...</li>
+                </ul>
+                
+                <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        // ⭐ UPDATED: Use 'profile-id' for consistency
+        const studentId = localStorage.getItem('profile-id'); 
+        const ONLINE_LEARNING_API_BASE = '/api/online-learning'; // Define base URL
+
+        // --- Helper function for API calls ---
+        async function handleApi(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                if (response.status === 401 || response.status === 403) {
+                     alert('Session expired or unauthorized. Please log in again.');
+                     window.location.href = '/login.html';
+                     throw new Error('Unauthorized');
+                }
+                const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+                throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message}`);
+            }
+            return response.json();
+        }
+
+        /**
+         * Determines the assignment status based on due date and completion date.
+         */
+        function getAssignmentStatus(dueDateStr, completionDateStr, currentStatus) {
+            if (completionDateStr) return 'Completed';
+            if (currentStatus === 'Completed') return 'Completed';
+
+            const now = new Date();
+            if (dueDateStr) {
+                const dueDate = new Date(dueDateStr);
+                // Check if the due date is in the past
+                if (dueDate < now) {
+                    return 'Overdue';
+                }
+            }
+            return currentStatus || 'Assigned';
+        }
+
+        /**
+         * Loads and renders the list of modules/assignments for the student.
+         */
+        async function loadAssignments() {
+            const listElement = document.getElementById('assignments-list');
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.style.display = 'none';
+
+            // Check based on the unified key
+            if (!studentId || !token) {
+                listElement.innerHTML = '<li class="list-group-item text-danger">Login error: ID/Token missing. Please log in again.</li>';
+                return;
+            }
+            
+            listElement.innerHTML = '<li class="list-group-item text-center text-muted">Loading your assignments...</li>';
+
+            try {
+                // Fetch data from the live API endpoint
+                const url = `${ONLINE_LEARNING_API_BASE}/assignments/student/${studentId}`;
+                const assignments = await handleApi(url);
+
+                if (assignments.length === 0) {
+                    listElement.innerHTML = '<li class="list-group-item text-center text-info">You have no active assignments or modules currently assigned.</li>';
+                    return;
+                }
+
+                listElement.innerHTML = ''; // Clear loading message
+
+                assignments.forEach(assignment => {
+                    const status = getAssignmentStatus(assignment.due_date, assignment.completion_date, assignment.status);
+                    const dueDate = assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'N/A';
+                    const completionDate = assignment.completion_date ? new Date(assignment.completion_date).toLocaleDateString() : 'N/A';
+
+                    const actionUrl = `/student/module-viewer.html?id=${assignment.module_id}`;
+                    
+                    listElement.innerHTML += `
+                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                            <div style="flex-grow: 1;">
+                                <h5 class="mb-1 text-primary">
+                                    <a href="${actionUrl}" class="text-decoration-none text-primary">${assignment.title}</a>
+                                </h5>
+                                <p class="mb-0 small text-muted">
+                                    Subject: <strong>${assignment.subject_name || 'N/A'}</strong> &bull; 
+                                    Type: ${assignment.content_type || 'Module'}
+                                </p>
+                                <p class="mb-0 small">Due: ${dueDate}</p>
+                            </div>
+                            
+                            <div class="d-flex flex-column align-items-end">
+                                <span class="status-badge status-${status} mb-2">${status.toUpperCase()}</span>
+                                <a href="${actionUrl}" class="btn btn-sm btn-outline-secondary">
+                                    ${status === 'Completed' ? 'View Content' : 'Start/Resume'}
+                                </a>
+                            </div>
+                        </li>
+                    `;
+                });
+
+            } catch (error) {
+                console.error('Error loading assignments:', error);
+                errorMessage.textContent = `Error: Failed to load assignments. (${error.message})`;
+                errorMessage.style.display = 'block';
+                listElement.innerHTML = '<li class="list-group-item text-center text-danger">Failed to connect to the assignment server.</li>';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAssignments);
+    </script>
+</body>
+</html>

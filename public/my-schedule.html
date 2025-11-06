@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Schedule - Feature 7</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .schedule-container {
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .schedule-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .schedule-table th, .schedule-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .schedule-table th {
+            background-color: #3f51b5; /* Deeper blue for personal schedule */
+            color: white;
+        }
+        .filter-controls {
+            margin-bottom: 20px;
+        }
+        /* Style for schedule content depending on the user role */
+        .teacher-slot { background-color: #e6f7ff; }
+        .student-slot { background-color: #f0fff0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>👤 My Schedule (Feature 7)</h1>
+        <div class="nav-links">
+            <a href="/admin-dashboard.html" class="btn btn-secondary">← Back to Dashboard</a>
+            <a href="/timetable.html" class="btn btn-info">📅 Full Timetable</a>
+        </div>
+
+        <div class="schedule-container">
+            <h3 id="user-schedule-title">Schedule for Today</h3>
+            
+            <div class="filter-controls">
+                <label for="day-filter">Filter by Day:</label>
+                <select id="day-filter" style="padding: 8px; border-radius: 4px;">
+                    <option value="">Show Today's Schedule</option>
+                    <option value="Monday">Monday</option>
+                    <option value="Tuesday">Tuesday</option>
+                    <option value="Wednesday">Wednesday</option>
+                    <option value="Thursday">Thursday</option>
+                    <option value="Friday">Friday</option>
+                    <option value="Saturday">Saturday</option>
+                </select>
+                <button class="btn btn-success" onclick="print()">🖨️ Print My Schedule</button>
+            </div>
+
+            <table class="schedule-table">
+                <thead>
+                    <tr>
+                        <th>Day</th>
+                        <th>Time</th>
+                        <th>Subject / Course</th>
+                        <th>Teacher / Class</th>
+                        <th>Room</th>
+                    </tr>
+                </thead>
+                <tbody id="my-schedule-body">
+                    <tr><td colspan="5">Loading your personal schedule...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+        const TOKEN = localStorage.getItem('erp-token');
+        // ⭐ UPDATED: Use 'profile-id' for consistency
+        const PROFILE_ID = localStorage.getItem('profile-id'); 
+        
+        const scheduleBody = document.getElementById('my-schedule-body');
+        const dayFilter = document.getElementById('day-filter');
+        const userTitle = document.getElementById('user-schedule-title');
+
+        let personalScheduleData = [];
+
+        // Function to fetch the current user's schedule (student or teacher)
+        async function loadMySchedule() {
+            if (!TOKEN || !PROFILE_ID) {
+                scheduleBody.innerHTML = `<tr><td colspan="5" style="color: red;">Error: Not authenticated or Profile ID missing. Please log in.</td></tr>`;
+                return;
+            }
+
+            try {
+                // FIX: Removed redundant '/timetable' prefix since it's already in the endpoint
+                // Assuming the backend endpoint is /api/timetable/my-schedule
+                const response = await fetch(`${API_BASE}/timetable/my-schedule`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 403) {
+                         throw new Error('Access Denied: Your role cannot view this schedule.');
+                    }
+                    if (response.status === 404) {
+                         // This now means student info was missing (per server logic), not the route itself
+                         throw new Error('Schedule not found for your enrollment details (Status 404).');
+                    }
+                    throw new Error(`Failed to fetch schedule: HTTP Status ${response.status}`);
+                }
+
+                personalScheduleData = await response.json();
+                
+                // Assuming the server response includes the full schedule for today
+                const today = new Date().toLocaleString('en-us', { weekday: 'long' });
+                userTitle.textContent = `Schedule for Today (${today})`;
+                
+                // NOTE: The current backend logic only fetches today's schedule. 
+                // The filter is disabled until the backend can support full-week data.
+                dayFilter.disabled = true;
+
+                displaySchedule(personalScheduleData, today);
+
+            } catch (error) {
+                scheduleBody.innerHTML = `<tr><td colspan="5" style="color: red; text-align: center;">${error.message}. Please check server logs for details.</td></tr>`;
+                console.error('Schedule Load Error:', error);
+            }
+        }
+
+        // The display function is modified to align with the server's structured output.
+        function displaySchedule(data, currentDay) {
+            
+            if (data.length === 0) {
+                scheduleBody.innerHTML = `<tr><td colspan="5" style="text-align: center;">No classes scheduled for today (${currentDay}).</td></tr>`;
+                return;
+            }
+
+            scheduleBody.innerHTML = data.map(slot => {
+                // The server returns: { time: "HH:MM - HH:MM", class_name: "...", subject: "...", teacher_name: "..." }
+                const timeStr = slot.time; 
+                
+                // Determine user context based on available fields from server (Student vs Teacher)
+                const isStudentView = !!slot.teacher_name; // If teacher_name is present, it's a student's schedule
+                
+                // Set the display columns
+                const subjectOrCourse = slot.subject; // Subject is universal
+                const teacherOrClass = isStudentView ? slot.teacher_name : slot.class_name;
+                const rowClass = isStudentView ? 'student-slot' : 'teacher-slot';
+
+                return `
+                    <tr class="${rowClass}">
+                        <td>${currentDay}</td>
+                        <td>${timeStr}</td>
+                        <td>${subjectOrCourse}</td>
+                        <td>${teacherOrClass}</td>
+                        <td>${slot.room_number || 'N/A'}</td> </tr>
+                `;
+            }).join('');
+        }
+        
+        // This function is no longer needed since the server returns formatted time
+        /* function formatTime(timeString) {
+             const [hours, minutes] = timeString.split(':');
+             const h = parseInt(hours);
+             const ampm = h >= 12 ? 'PM' : 'AM';
+             const formattedHour = h % 12 || 12;
+             return `${formattedHour}:${minutes} ${ampm}`;
+        } */
+
+        // dayFilter.addEventListener('change', displaySchedule); // Disabled until full-week support is added to API
+        document.addEventListener('DOMContentLoaded', loadMySchedule);
+    </script>
+</body>
+</html>

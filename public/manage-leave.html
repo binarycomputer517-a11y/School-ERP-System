@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Leave Management</title>
+    <style>
+        /* --- GLOBAL STYLES (CLASSIC DESIGN) --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #EFEFEF; 
+            color: #111; 
+        }
+        .container { 
+            max-width: 1200px; margin: auto; padding: 40px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #000; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #555;
+            padding-bottom: 8px; margin-top: 30px; font-size: 1.5em;
+        }
+        h3 {
+            color: #555; font-weight: bold; border-bottom: 1px dotted #999;
+            padding-bottom: 5px; margin-top: 20px; font-size: 1.2em;
+        }
+        
+        /* Balance Display */
+        #balance-display { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+        .balance-item { 
+            border: 1px solid #005A9C; padding: 15px; border-radius: 0; min-width: 150px; 
+            background-color: #e6f7ff; 
+        }
+        .balance-item strong { color: #003366; display: block; font-size: 1.2em; }
+        .balance-item span { font-size: 0.9em; color: #555; }
+
+        label { display: block; margin-top: 10px; font-weight: bold; color: #333; }
+        input, select, textarea { 
+            width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; 
+            border: 1px solid #555; border-radius: 0; background-color: #fff;
+        }
+        button { 
+            background-color: #C0392B; color: white; padding: 10px 15px; border: 2px solid #000; 
+            cursor: pointer; margin-top: 15px; box-shadow: 2px 2px 0 #000; font-weight: bold;
+            border-radius: 0;
+        }
+        .btn-red { background-color: #777; }
+        .btn-red:hover { background-color: #555; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #333; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; }
+        
+        /* Status Badges */
+        .status-badge { padding: 3px 8px; border-radius: 0; font-weight: bold; font-size: 0.8em; text-transform: uppercase; border: 1px solid #333;}
+        .status-badge.Pending { background-color: #ffc107; color: #333; }
+        .status-badge.Approved { background-color: #28a745; color: white; }
+        .status-badge.Rejected { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Leave Management System</h1>
+
+        <div id="admin-view" style="display: none;">
+            <div class="card">
+                <h2>Pending Approvals</h2>
+                <table id="approvals-table">
+                    <thead>
+                        <tr>
+                            <th>User</th>
+                            <th>Role</th>
+                            <th>Type</th>
+                            <th>Dates</th>
+                            <th>Days</th>
+                            <th>Reason</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="approvals-tbody"></tbody>
+                </table>
+            </div>
+            <hr>
+        </div>
+
+        <div class="grid-layout">
+            <div class="card">
+                <h2>My Leave Balances</h2>
+                <div id="balance-display">
+                    <p>Loading balances...</p>
+                </div>
+                
+                <h3 id="apply-title">Apply for Leave</h3>
+                <form id="apply-leave-form">
+                    <label for="leave-type">Leave Type:</label>
+                    <select id="leave-type" name="leave_type_id" required>
+                        <option value="">Loading types...</option>
+                    </select>
+
+                    <label for="start-date">Start Date:</label>
+                    <input type="date" id="start-date" name="start_date" required>
+                    
+                    <label for="end-date">End Date:</label>
+                    <input type="date" id="end-date" name="end_date" required>
+
+                    <p style="font-size: 0.9em; margin-top: 5px;">Calculated Working Days: <strong id="calculated-days">0</strong></p>
+
+                    <label for="reason">Reason:</label>
+                    <textarea id="reason" name="reason" rows="3" required></textarea>
+
+                    <button type="submit" id="submit-btn">Submit Application</button>
+                    <p id="apply-error" style="color:red; margin-top: 10px;"></p>
+                </form>
+            </div>
+
+            <div class="card">
+                <h2>My Application History</h2>
+                <table id="history-table">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Dates</th>
+                            <th>Days</th>
+                            <th>Status</th>
+                            <th>Approver</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-tbody">
+                        <tr><td colspan="5">Loading history...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/leave';
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        const userId = localStorage.getItem('user-id'); // Use user-id stored at login
+        
+        if (!token) { window.location.href = '/login'; }
+
+        // --- Helper Functions ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                window.location.href = '/login';
+                throw new Error('Unauthorized or session expired.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                throw new Error(errorBody.message || 'API call failed.');
+            }
+            return response.json();
+        }
+        
+        // Helper: Calculate number of working days (Mon-Fri) - Requires Moment.js
+        function calculateWorkingDays(startDate, endDate) {
+            // Assume moment.js is loaded
+            let start = moment(startDate);
+            let end = moment(endDate);
+            if (start.isAfter(end)) return 0;
+            
+            let workingDays = 0;
+            let current = start;
+
+            while (current.isSameOrBefore(end)) {
+                // Exclude Saturday (6) and Sunday (0)
+                if (current.day() !== 0 && current.day() !== 6) {
+                    workingDays++;
+                }
+                current.add(1, 'days');
+            }
+            return workingDays;
+        }
+
+        // --- Data Fetching ---
+
+        async function loadLeaveTypes() {
+            const select = document.getElementById('leave-type');
+            try {
+                // GET /api/leave/types endpoint is now implemented and authorized
+                const types = await handleApi(`${API_BASE}/types`); 
+                
+                select.innerHTML = '<option value="">-- Select Leave Type --</option>';
+                
+                // Filter types relevant to the user's role
+                const filteredTypes = types.filter(t => t.applicable_to === userRole || t.applicable_to === 'Both' || ['Admin', 'Super Admin'].includes(userRole));
+
+                filteredTypes.forEach(t => {
+                    select.innerHTML += `<option value="${t.id}">${t.name} (${t.code})</option>`;
+                });
+            } catch (error) {
+                console.error('Error loading leave types:', error);
+                document.getElementById('apply-error').textContent = 'Error loading leave types.';
+                select.innerHTML = '<option value="">Error loading types</option>';
+            }
+        }
+
+        async function fetchLeaveBalances() {
+            const display = document.getElementById('balance-display');
+            display.innerHTML = '<p>Loading balances...</p>';
+            try {
+                // GET /api/leave/balance endpoint is now implemented and authorized
+                const balances = await handleApi(`${API_BASE}/balance`);
+                
+                if (balances.length === 0) {
+                    display.innerHTML = '<p>No defined leave balances for your role.</p>';
+                    return;
+                }
+
+                display.innerHTML = balances.map(b => `
+                    <div class="balance-item">
+                        <strong>${b.current_balance}</strong>
+                        <span>${b.leave_type} (${b.type_code})</span>
+                        <small style="color: #003366;">Allowance: ${b.allowance} days</small>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error fetching balances:', error);
+                document.getElementById('apply-error').textContent = 'Failed to load balances.';
+                display.innerHTML = '<p style="color: red;">Failed to load balances.</p>';
+            }
+        }
+        
+        async function fetchLeaveHistory() {
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '<tr><td colspan="5">Loading history...</td></tr>';
+            try {
+                // GET /api/leave/history endpoint is now implemented and authorized
+                const history = await handleApi(`${API_BASE}/history`);
+                
+                tbody.innerHTML = history.map(h => `
+                    <tr>
+                        <td>${h.leave_type}</td>
+                        <td>${moment(h.start_date).format('MMM D')} to ${moment(h.end_date).format('MMM D')}</td>
+                        <td>${h.total_days}</td>
+                        <td><span class="status-badge ${h.status}">${h.status}</span></td>
+                        <td>${h.approver || 'N/A'}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="5">No application history found.</td></tr>';
+
+            } catch (error) {
+                console.error('Error fetching history:', error);
+                document.getElementById('apply-error').textContent = 'Failed to load history.';
+                tbody.innerHTML = '<tr><td colspan="5" style="color:red;">Failed to load history.</td></tr>';
+            }
+        }
+        
+        async function fetchPendingApprovals() {
+            const tbody = document.getElementById('approvals-tbody');
+            const isAdminView = ['Admin', 'Super Admin', 'Coordinator'].includes(userRole);
+            
+            if (!isAdminView) return;
+            document.getElementById('admin-view').style.display = 'block';
+
+            tbody.innerHTML = '<tr><td colspan="7">Loading pending applications...</td></tr>';
+            try {
+                // GET /api/leave/approvals/pending endpoint is now implemented and authorized
+                const approvals = await handleApi(`${API_BASE}/approvals/pending`);
+
+                tbody.innerHTML = approvals.map(app => `
+                    <tr data-application-id="${app.id}">
+                        <td>${app.applicant_name}</td>
+                        <td>${app.applicant_role}</td>
+                        <td>${app.leave_type}</td>
+                        <td>${moment(app.start_date).format('YYYY-MM-DD')}</td>
+                        <td>${app.total_days}</td>
+                        <td><small>${app.reason.substring(0, 50)}...</small></td>
+                        <td>
+                            <button onclick="processApproval('${app.id}', 'Approved')">Approve</button>
+                            <button onclick="processApproval('${app.id}', 'Rejected', prompt('Reason for rejection:'))" class="btn-red">Reject</button>
+                        </td>
+                    </tr>
+                `).join('') || '<tr><td colspan="7">No pending applications.</td></tr>';
+
+            } catch (error) {
+                console.error('Error fetching approvals:', error);
+                tbody.innerHTML = '<tr><td colspan="7" style="color:red;">Failed to load approval list.</td></tr>';
+            }
+        }
+
+
+        // --- Event Handlers ---
+
+        document.getElementById('apply-leave-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            document.getElementById('apply-error').textContent = '';
+            const form = e.target;
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+
+            const formData = {
+                leave_type_id: form.elements.leave_type_id.value,
+                start_date: form.elements.start_date.value,
+                end_date: form.elements.end_date.value,
+                reason: form.elements.reason.value,
+            };
+
+            try {
+                // POST /api/leave/apply endpoint is now implemented and authorized
+                const result = await handleApi(`${API_BASE}/apply`, { 
+                    method: 'POST', 
+                    body: JSON.stringify(formData) 
+                });
+                
+                alert(`✅ ${result.message}`);
+                form.reset();
+                fetchLeaveBalances();
+                fetchLeaveHistory();
+
+            } catch (error) {
+                document.getElementById('apply-error').textContent = `❌ Application Failed: ${error.message}`;
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+        
+        // Live calculation of working days
+        document.getElementById('start-date').addEventListener('change', updateDayCalculation);
+        document.getElementById('end-date').addEventListener('change', updateDayCalculation);
+
+        function updateDayCalculation() {
+            const startDate = document.getElementById('start-date').value;
+            const endDate = document.getElementById('end-date').value;
+
+            if (startDate && endDate) {
+                const days = calculateWorkingDays(startDate, endDate);
+                const startMoment = moment(startDate);
+                const endMoment = moment(endDate);
+
+                if (startMoment.isAfter(endMoment)) {
+                     document.getElementById('calculated-days').textContent = 'Start date must be before end date.';
+                } else if (days === 0 && startMoment.isSameOrBefore(endMoment)) {
+                    document.getElementById('calculated-days').textContent = 'Dates are on a weekend.';
+                } else {
+                    document.getElementById('calculated-days').textContent = days;
+                }
+            }
+        }
+        
+        // Approval Handler (Exported to global scope for button clicks)
+        window.processApproval = async function(applicationId, status, rejectionReason = null) {
+            if (!confirm(`Are you sure you want to ${status.toUpperCase()} this application?`)) return;
+
+            try {
+                // PUT /api/leave/approval/:applicationId endpoint is now implemented and authorized
+                await handleApi(`${API_BASE}/approval/${applicationId}`, { 
+                    method: 'PUT', 
+                    body: JSON.stringify({ status, rejection_reason: rejectionReason }) 
+                });
+                
+                alert(`Application ${status.toLowerCase()} successfully.`);
+                fetchPendingApprovals();
+                fetchLeaveBalances(); // Update balances immediately
+            } catch (error) {
+                alert(`Failed to process approval: ${error.message}`);
+            }
+        }
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchLeaveBalances();
+            fetchLeaveHistory();
+            fetchPendingApprovals();
+            loadLeaveTypes();
+            // Initialize day calculation on load if moment is available
+            updateDayCalculation(); 
+        });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+</body>
+</html>

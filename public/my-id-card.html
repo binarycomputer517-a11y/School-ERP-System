@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student ID Card Download (Geometric Unique Design)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/davidshimjs-qrcodejs@0.0.2/qrcode.min.js"></script> 
+    
+    <style>
+        /* CSS styles omitted for brevity */
+        :root {
+            --brand-primary: #003366; 
+            --brand-accent: #5e35b1; 
+            --brand-light: #f8f8f8; 
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--brand-light); padding: 10px; }
+        .container { max-width: 900px; margin: auto; }
+        
+        #id-card-template { width: 205px; height: 335px; border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); background: #ffffff; padding: 0; position: relative; overflow: hidden; text-align: center; margin: 20px auto; }
+        .frame-top { background-color: var(--brand-primary); clip-path: polygon(0 0, 100% 0, 100% 30%, 0% 70%); }
+        .card-header-area { color: white; padding: 10px 15px 5px 15px; }
+        #card-photo { width: 75px; height: 75px; border-radius: 50%; border: 4px solid #ffffff; box-shadow: 0 0 10px rgba(0,0,0,0.3); object-fit: cover; }
+        #card-name { color: var(--brand-accent); }
+        
+        .verification-footer { position: absolute; bottom: 0; left: 0; width: 100%; height: 60px; padding: 8px 15px; display: flex; justify-content: space-between; align-items: center; z-index: 15; background-color: rgba(255, 255, 255, 0.9); }
+        @media print { .no-print { display: none; } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+            <h1>Student Identity Card (Geometric Unique Design)</h1>
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
+        </div>
+        
+        <div class="id-card-container">
+            <div id="id-card-template">
+                
+                <div class="frame-top" style="position: absolute; top: 0; left: 0; width: 100%; height: 50%; z-index: 1;"></div>
+                <div class="frame-bottom" style="position: absolute; bottom: 0; right: 0; width: 100%; height: 50%; background-color: var(--brand-accent); opacity: 0.1; z-index: 1;"></div>
+                
+                <div class="card-header-area" style="position: relative; z-index: 5;">
+                    <span style="font-size: 11px; font-weight: 900; color: white;">ACME SCHOOL LTD.</span>
+                    <div class="grade-badge">GRADE: <span id="card-grade">N/A</span></div>
+                    <div class="school-slogan">OFFICIAL STUDENT IDENTITY</div>
+                </div>
+
+                <div class="content-center-block" style="position: relative; z-index: 10;">
+                    <img id="card-photo" src="https://placehold.co/75x75/cccccc/333333?text=Photo" alt="Student Photo">
+                    <h3 id="card-name">Loading Name...</h3>
+                </div>
+                
+                <div class="card-details-grid">
+                    <div class="id-detail-box"><strong>Student ID</strong><span class="id-detail-value" id="card-id">N/A</span></div>
+                    <div class="id-detail-box"><strong>Roll Number</strong><span class="id-detail-value" id="card-roll">N/A</span></div>
+                    <div class="id-detail-box"><strong>Father's Name</strong><span class="id-detail-value" id="card-father">N/A</span></div>
+                    <div class="id-detail-box"><strong>D.O.B.</strong><span class="id-detail-value" id="card-dob">N/A</span></div>
+                    <div class="id-detail-box"><strong>Blood Group</strong><span class="id-detail-value" id="card-blood">N/A</span></div>
+                    <div class="id-detail-box"><strong>Valid Until</strong><span class="id-detail-value" id="card-expiry">N/A</span></div>
+                </div>
+
+                <div class="verification-footer">
+                    <div id="qrcode-canvas-container"></div>
+                    
+                    <div class="signature-area">
+                        <img src="https://placehold.co/100x25/ffffff/003366?text=Signature" alt="Signature" class="signature-img">
+                        <span class="signature-text">Authorized Signatory</span>
+                    </div>
+                </div>
+                
+            </div>
+        </div>
+
+        <div class="text-center no-print mt-4">
+            <button class="btn btn-primary me-2" onclick="printIDCard()">🖨️ Print ID Card</button>
+            <button class="btn btn-success" onclick="generatePDF()">⬇️ Download as PDF</button>
+        </div>
+    </div> 
+
+    <script 
+        src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script 
+        src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <script>
+        const profileId = localStorage.getItem('profile-id'); 
+        const token = localStorage.getItem('erp-token');
+        
+        // --- Authenticated API Handler ---
+        async function handleApi(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: 'No server message provided.' }));
+                throw new Error(`API call failed with status: ${response.status}. Details: ${errorBody.message}`);
+            }
+            return response.json();
+        }
+        
+        /**
+         * Generates a scannable QR Code using the qrcode.js library.
+         */
+        function generateQRCode(data, targetId, size) {
+            const qrContainer = document.getElementById(targetId);
+            if (qrContainer) qrContainer.innerHTML = ''; 
+            if (typeof QRCode === 'undefined') {
+                console.error("QRCode library not loaded.");
+                return;
+            }
+            new QRCode(qrContainer, {
+                text: data, width: size, height: size, colorDark: "#000000", colorLight: "#ffffff", correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+        
+        // --- Core Logic ---
+        
+        async function loadIDCardData() {
+            const cardTemplate = document.getElementById('id-card-template');
+            
+            if (!profileId || !token) {
+                cardTemplate.innerHTML = '<p style="color:red; text-align:center;">Error: Login credentials (profile-id or erp-token) not found. Please log in again.</p>';
+                return;
+            }
+
+            try {
+                // Fetch student data using the profileId (which must be the User ID)
+                const data = await handleApi(`/api/students/${profileId}`);
+                
+                const fullName = `${data.first_name || ''} ${data.last_name || ''}`.trim();
+                const uniqueIdData = `VERIFY_STUDENT_ID:${data.id || 'N/A'}-RN:${data.enrollment_no || 'N/A'}`;
+                
+                // Inject Data
+                document.getElementById('card-name').textContent = fullName || 'STUDENT NAME';
+                document.getElementById('card-id').textContent = data.id || 'N/A'; // This is the Student Profile ID (s.id)
+                document.getElementById('card-roll').textContent = data.enrollment_no || 'N/A';
+                
+                // Mandatory Data injections:
+                document.getElementById('card-father').textContent = data.parent_first_name || 'N/A';
+                document.getElementById('card-dob').textContent = data.dob ? new Date(data.dob).toLocaleDateString() : 'N/A';
+                document.getElementById('card-blood').textContent = data.blood_group || 'N/A';
+                document.getElementById('card-grade').textContent = data.course_name || 'N/A'; 
+                document.getElementById('card-expiry').textContent = data.academic_session_end_date || 'N/A'; 
+                
+                if (data.profile_image_path) {
+                    document.getElementById('card-photo').src = data.profile_image_path;
+                }
+                
+                generateQRCode(uniqueIdData, 'qrcode-canvas-container', 45);
+
+            } catch (error) {
+                console.error("Failed to load ID Card data:", error);
+                cardTemplate.innerHTML = `<p style="color:red; text-align:center;">Error: Failed to fetch student data (${error.message}).</p>`;
+            }
+        }
+
+        function printIDCard() {
+            window.print(); 
+        }
+
+        /**
+         * Converts the ID card template into a downloadable PDF document.
+         */
+        function generatePDF() {
+            const input = document.getElementById('id-card-template');
+            const studentName = document.getElementById('card-name').textContent || 'Student_ID_Card';
+            
+            if (typeof html2canvas === 'undefined' || typeof window.jspdf === 'undefined') {
+                 alert("PDF libraries are not loaded. Cannot generate PDF.");
+                 return;
+            }
+
+            html2canvas(input, { scale: 4, useCORS: true }).then((canvas) => {
+                const { jsPDF } = window.jspdf;
+                const imgData = canvas.toDataURL('image/png');
+                const pdfWidth = 54;
+                const pdfHeight = 85.6;
+                
+                const pdf = new jsPDF('p', 'mm', [pdfWidth, pdfHeight]); 
+                pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight); 
+                pdf.save(`${studentName.replace(/[^a-zA-Z0-9]/g, '_')}_ID_Card_Standard.pdf`);
+            }).catch(error => {
+                console.error("PDF Generation Failed:", error);
+                alert(`PDF generation failed: ${error.message}.`);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', loadIDCardData);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

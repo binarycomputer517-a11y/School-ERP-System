@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Search Library Catalog</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .search-filters { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+        .status-available { color: green; font-weight: bold; }
+        .status-issued { color: #d9534f; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        if (!token) { // Accessible by Student, Teacher, Admin
+            window.location.href = '/login';
+        }
+    </script>
+
+    <div class="container">
+        <h1>Search the Library Catalog (OPAC)</h1>
+        <div class="nav-links">
+            <a href="/student-dashboard.html">← Back to My Dashboard</a>
+        </div>
+
+        <div class="search-filters">
+            <input type="text" id="search-input" placeholder="Search by title, author, or ISBN...">
+            <select id="category-filter"><option value="">All Categories</option></select>
+            <button onclick="searchBooks()">Search</button>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Title</th>
+                    <th>Author</th>
+                    <th>Categories</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="results-body">
+                </tbody>
+        </table>
+    </div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    function loadCategories() {
+        const catFilter = document.getElementById('category-filter');
+        fetch('/api/library/categories', { headers: authHeaders })
+            .then(res => res.json())
+            .then(cats => {
+                cats.forEach(c => catFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+            });
+    }
+
+    function searchBooks() {
+        const resultsBody = document.getElementById('results-body');
+        resultsBody.innerHTML = '<tr><td colspan="5">Searching...</td></tr>';
+
+        const search = document.getElementById('search-input').value;
+        const category = document.getElementById('category-filter').value;
+        
+        let url = `/api/library/books?`;
+        if (search) url += `search=${encodeURIComponent(search)}&`;
+        if (category) url += `category=${category}&`;
+        
+        fetch(url, { headers: authHeaders })
+            .then(res => res.json())
+            .then(books => {
+                resultsBody.innerHTML = '';
+                if (books.length === 0) {
+                    resultsBody.innerHTML = '<tr><td colspan="5">No books found matching your criteria.</td></tr>';
+                    return;
+                }
+
+                books.forEach(book => {
+                    let statusHtml, actionHtml;
+                    if (book.available_quantity > 0) {
+                        statusHtml = `<span class="status-available">Available</span>`;
+                        actionHtml = `<span>-</span>`;
+                    } else {
+                        statusHtml = `<span class="status-issued">Issued</span>`;
+                        actionHtml = `<button onclick="reserveBook(${book.id})">Reserve</button>`;
+                    }
+
+                    resultsBody.innerHTML += `
+                        <tr>
+                            <td>${book.title}</td>
+                            <td>${book.author}</td>
+                            <td>${book.categories ? book.categories.join(', ') : 'N/A'}</td>
+                            <td>${statusHtml}</td>
+                            <td>${actionHtml}</td>
+                        </tr>
+                    `;
+                });
+            });
+    }
+
+    function reserveBook(bookId) {
+        if (!confirm('Are you sure you want to reserve this book? You will be notified when it becomes available.')) {
+            return;
+        }
+
+        fetch('/api/library/reserve', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify({ book_id: bookId })
+        }).then(res => {
+            if (res.ok) {
+                alert('Book reserved successfully! Check your dashboard for reservation status.');
+                searchBooks(); // Refresh the search results to potentially update the UI
+            } else {
+                res.text().then(text => alert('Error: ' + text));
+            }
+        });
+    }
+
+    // Load categories and perform an initial search when the page loads
+    window.onload = () => {
+        loadCategories();
+        searchBooks();
+    };
+</script>
+</body>
+</html>

@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assignment Management Dashboard</title>
+    <style>
+        /* --- Classic Block Design CSS --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; 
+            padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+            line-height: 1.6;
+        }
+
+        .container { 
+            max-width: 1300px; 
+            margin: auto; 
+            padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+
+        h1 { 
+            color: #C0392B; 
+            font-weight: bold; 
+            text-transform: uppercase; 
+            text-align: center; 
+            border-bottom: 5px double #000; 
+            padding-bottom: 15px; 
+            margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; 
+            font-weight: bold; 
+            border-bottom: 2px solid #999; 
+            padding-bottom: 5px; 
+            margin-top: 25px; 
+            margin-bottom: 15px;
+        }
+
+        .grid-layout { 
+            display: grid;
+            grid-template-columns: 1fr 2fr; 
+            gap: 30px;
+        }
+        .card { 
+            margin-bottom: 20px; 
+        }
+
+        form { 
+            margin-bottom: 20px; 
+            padding: 15px; 
+            border: 1px solid #E0E0E0; 
+            background-color: #F8F8F8; 
+        }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input[type="text"], 
+        input[type="datetime-local"], 
+        input[type="number"], 
+        select, 
+        textarea { 
+            padding: 8px; 
+            margin-right: 10px; 
+            border: 1px solid #555; 
+            border-radius: 0; 
+            width: 100%; 
+            margin-bottom: 10px;
+            box-sizing: border-box;
+            display: block;
+        }
+
+        button[type="submit"], .action-btn { 
+            background-color: #005A9C; 
+            color: white; 
+            padding: 10px 15px; 
+            border: 2px solid #000; 
+            border-radius: 0; 
+            cursor: pointer; 
+            margin-top: 5px; 
+            box-shadow: 2px 2px 0 #000; 
+            font-weight: bold;
+            transition: box-shadow 0.1s, transform 0.1s;
+        }
+        button[type="submit"]:hover, .action-btn:hover { 
+            background-color: #003366; 
+            box-shadow: 1px 1px 0 #000; 
+            transform: translate(1px, 1px);
+        }
+
+        .edit-message {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #ffc107;
+            border: 1px solid #ff9800;
+            font-weight: bold;
+            display: none;
+        }
+
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 15px; 
+            border: 1px solid #333; 
+        }
+        th, td { 
+            padding: 10px; 
+            text-align: left; 
+            border: 1px solid #CCC; 
+            font-size: 0.9em; 
+            border-collapse: collapse;
+        }
+        th { 
+            background-color: #333; 
+            color: white; 
+            text-transform: uppercase; 
+        }
+        tbody tr:hover { background-color: #f0f0f0; }
+
+        .action-btn { 
+            margin: 2px; 
+            padding: 5px 8px; 
+            font-size: 0.8em; 
+            border: 1px solid #000; 
+            box-shadow: 1px 1px 0 #000;
+            margin-top: 0; 
+        }
+        .action-btn.edit { background-color: #ffc107; color: #333; }
+        .action-btn.delete { background-color: #dc3545; color: white; }
+        .action-btn.view { background-color: #17a2b8; color: white; }
+        
+        @media (max-width: 900px) {
+            .grid-layout { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+    <script>
+        // --- Global Configuration ---
+        const token = localStorage.getItem('erp-token');
+        const sessionId = localStorage.getItem('active_session_id');
+        const userRole = localStorage.getItem('user-role'); 
+        
+        if (!token || (userRole !== 'Admin' && userRole !== 'Super Admin')) { 
+            window.location.href = '/login'; 
+        }
+        
+        const authHeaders = { 
+            'Authorization': `Bearer ${token}`,
+            'X-Session-ID': sessionId 
+        };
+
+        // --- Helper for API Calls ---
+        async function handleApi(url, options = {}) {
+            options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+            const response = await fetch(url, options);
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: 'Server error.' }));
+                throw new Error(`API failed: ${errorBody.message}`);
+            }
+            return response.json();
+        }
+
+        // --- Feature Handlers ---
+        function viewSubmissions(assignmentId) {
+            alert(`Action: View all submissions for Assignment ID: ${assignmentId}`);
+        }
+
+        async function editAssignment(assignmentId) {
+            resetForm();
+            const form = document.getElementById('assignment-form');
+            try {
+                const data = await handleApi(`/api/assignments/${assignmentId}`);
+                
+                form.elements['assignment-id'].value = data.id;
+                
+                const courseSelect = form.elements.course_id;
+                courseSelect.value = data.course_id;
+                
+                await loadBatchesForCourse(data.course_id, form.elements.batch_id, data.batch_id);
+
+                form.elements.subject_id.value = data.subject_id;
+                form.elements.title.value = data.title;
+                form.elements.instructions.value = data.instructions;
+                form.elements.due_date.value = data.due_date; 
+                form.elements.max_marks.value = data.max_marks;
+
+                document.getElementById('submit-btn').textContent = 'Update Assignment';
+                document.getElementById('edit-alert').style.display = 'block';
+
+            } catch (error) {
+                alert(`❌ Error loading assignment for edit: ${error.message}`);
+            }
+        }
+
+        async function deleteAssignment(assignmentId, title) {
+            if (!confirm(`Are you sure you want to DELETE the assignment: "${title}"? This action cannot be undone and will remove all submissions.`)) {
+                return;
+            }
+            
+            try {
+                await handleApi(`/api/assignments/${assignmentId}`, { method: 'DELETE' });
+                alert(`✅ Assignment "${title}" deleted successfully.`);
+                fetchAndRenderAssignments();
+            } catch (error) {
+                alert(`❌ Error deleting assignment: ${error.message}`);
+            }
+        }
+
+        // --- IMPLEMENTED Print/Export Function ---
+        function printAssignments() {
+            const tableContainer = document.getElementById('assignments-table');
+            const tableHTML = tableContainer.outerHTML;
+            
+            const printWindow = window.open('', '', 'height=600,width=800');
+            
+            printWindow.document.write('<html><head><title>Assignments Report</title>');
+            
+            // Add basic printing CSS
+            printWindow.document.write('<style>');
+            printWindow.document.write(`
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                h1 { font-size: 1.5em; text-align: center; margin-bottom: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                th, td { border: 1px solid #000; padding: 8px; text-align: left; font-size: 0.9em; }
+                th { background-color: #f0f0f0; }
+                /* Hide the Actions column on printout */
+                th:last-child, td:last-child { display: none; }
+            `);
+            printWindow.document.write('</style>');
+            printWindow.document.write('</head><body>');
+            
+            // Add the title and the table
+            printWindow.document.write('<h1>Assignment Management Report</h1>');
+            printWindow.document.write(tableHTML);
+            printWindow.document.write('</body></html>');
+            
+            printWindow.document.close();
+            
+            // Trigger the print dialogue
+            printWindow.focus();
+            printWindow.print();
+        }
+
+        function resetForm() {
+            const form = document.getElementById('assignment-form');
+            form.reset();
+            form.elements['assignment-id'].value = '';
+            document.getElementById('submit-btn').textContent = 'Create Assignment';
+            document.getElementById('edit-alert').style.display = 'none';
+        }
+
+        // --- Helper Function for Batch Loading ---
+        async function loadBatchesForCourse(courseId, batchSelect, selectedBatchId = null) {
+            batchSelect.innerHTML = '<option value="">Loading batches...</option>';
+            batchSelect.disabled = true;
+
+            if (!courseId) {
+                batchSelect.innerHTML = '<option value="">Select Course First</option>';
+                return;
+            }
+
+            try {
+                const batches = await handleApi(`/api/academicswithfees/courses/${courseId}/batches`);
+                batchSelect.innerHTML = '<option value="">-- Select Batch --</option>';
+                batches.forEach(b => {
+                    const isSelected = selectedBatchId === b.batch_id ? 'selected' : '';
+                    batchSelect.innerHTML += `<option value="${b.batch_id}" ${isSelected}>${b.batch_name}</option>`;
+                });
+                batchSelect.disabled = false;
+            } catch (err) {
+                batchSelect.innerHTML = '<option value="">Error loading batches</option>';
+            }
+        }
+
+        // --- Core Load Functions ---
+
+        async function loadDependencies(courseSelect, subjectSelect) {
+            try {
+                const [courses, subjects] = await Promise.all([
+                    handleApi('/api/academicswithfees/courses'),
+                    handleApi('/api/academicswithfees/subjects')
+                ]);
+
+                const populate = (select, items, idKey, nameKey) => {
+                    select.innerHTML = `<option value="">-- Select --</option>`;
+                    items.forEach(item => {
+                        select.innerHTML += `<option value="${item[idKey]}">${item[nameKey]}</option>`;
+                    });
+                };
+
+                populate(courseSelect, courses, 'course_id', 'course_name');
+                populate(subjectSelect, subjects, 'subject_id', 'subject_name');
+
+            } catch (error) {
+                console.error('Error loading dependencies:', error);
+                alert('Could not load course/subject lists.');
+            }
+        }
+        
+        async function fetchAndRenderAssignments() {
+            const tbody = document.getElementById('assignments-tbody');
+            tbody.innerHTML = '<tr><td colspan="6">Loading assignments...</td></td></tr>';
+            try {
+                const assignments = await handleApi('/api/assignments/manager');
+                tbody.innerHTML = assignments.map(a => `
+                    <tr>
+                        <td>${a.title}</td>
+                        <td>${a.course_name} / ${a.batch_name}</td>
+                        <td>${a.subject_name}</td>
+                        <td>${new Date(a.due_date).toLocaleString()}</td>
+                        <td>${a.total_submissions} Submissions</td>
+                        <td>
+                            <button class="action-btn view" onclick="viewSubmissions('${a.id}')">View</button>
+                            <button class="action-btn edit" onclick="editAssignment('${a.id}')">Edit</button>
+                            <button class="action-btn delete" onclick="deleteAssignment('${a.id}', '${a.title.replace(/'/g, "\\'")}')">Delete</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                tbody.innerHTML = `<tr><td colspan="6" style="color:#C0392B;">Error fetching list: ${error.message}</td></tr>`;
+            }
+        }
+
+
+        // --- Form Submission ---
+        async function submitForm(e) {
+            e.preventDefault();
+            const form = e.target;
+            const submitBtn = document.getElementById('submit-btn');
+            submitBtn.disabled = true;
+
+            const formData = {
+                course_id: form.elements.course_id.value,
+                batch_id: form.elements.batch_id.value,
+                subject_id: form.elements.subject_id.value,
+                title: form.elements.title.value,
+                instructions: form.elements.instructions.value,
+                due_date: form.elements.due_date.value,
+                max_marks: form.elements.max_marks.value,
+                id: form.elements['assignment-id'].value
+            };
+
+            const isUpdate = !!formData.id;
+            const url = isUpdate ? `/api/assignments/${formData.id}` : '/api/assignments';
+            const method = isUpdate ? 'PUT' : 'POST';
+
+            try {
+                await handleApi(url, { method: method, body: JSON.stringify(formData) });
+                alert(`✅ Assignment ${isUpdate ? 'updated' : 'created'} successfully!`);
+                resetForm();
+                fetchAndRenderAssignments();
+            } catch (error) {
+                alert(`❌ Error saving assignment: ${error.message}`);
+            } finally {
+                submitBtn.disabled = false;
+            }
+        }
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const courseSelect = document.getElementById('course-select');
+            const batchSelect = document.getElementById('batch-select');
+            const subjectSelect = document.getElementById('subject-select');
+            const assignmentForm = document.getElementById('assignment-form');
+
+            courseSelect.addEventListener('change', async () => {
+                const courseId = courseSelect.value;
+                await loadBatchesForCourse(courseId, batchSelect);
+            });
+
+            if (assignmentForm) {
+                assignmentForm.addEventListener('submit', submitForm);
+            }
+            
+            loadDependencies(courseSelect, subjectSelect);
+            fetchAndRenderAssignments();
+        });
+    </script>
+    
+    <div class="container">
+        <a href="/admin-dashboard.html" style="float: right; margin-top: -5px; font-weight: bold; color: #005A9C;">← Back to Admin</a>
+        <h1>Assignment Management Dashboard</h1>
+        <div style="clear:both;"></div>
+
+        <div class="grid-layout">
+            <div class="card form-area"> 
+                <h2>Create New Assignment</h2>
+                <form id="assignment-form">
+                    <input type="hidden" id="assignment-id" name="id">
+
+                    <label for="course-select">Course:</label>
+                    <select id="course-select" name="course_id" required>
+                        <option value="">Loading...</option>
+                    </select>
+
+                    <label for="batch-select">Batch:</label>
+                    <select id="batch-select" name="batch_id" required disabled>
+                        <option value="">Select Course First</option>
+                    </select>
+                    
+                    <label for="subject-select">Subject:</label>
+                    <select id="subject-select" name="subject_id" required>
+                        <option value="">Loading...</option>
+                    </select>
+
+                    <label for="title">Title:</label>
+                    <input type="text" id="title" name="title" required>
+
+                    <label for="instructions">Instructions:</label>
+                    <textarea id="instructions" name="instructions" rows="4"></textarea>
+
+                    <label for="due-date">Due Date:</label>
+                    <input type="datetime-local" id="due-date" name="due_date" required>
+                    
+                    <label for="max-marks">Max Marks:</label>
+                    <input type="number" id="max-marks" name="max_marks" value="10" min="1" required>
+
+                    <div id="edit-alert" class="edit-message">
+                        You are currently **editing** an assignment. Click "Update" to save changes or clear the form to create new.
+                        <button type="button" onclick="resetForm()" style="margin-top: 5px; background-color: #dc3545; color: white; padding: 5px 10px; border: 1px solid #000; box-shadow: 1px 1px 0 #000; float: right;">X Clear Form</button>
+                    </div>
+
+                    <button type="submit" id="submit-btn">Create Assignment</button>
+                </form>
+            </div>
+
+            <div class="card table-area">
+                <h2>Active Assignments & Submissions</h2>
+                
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 10px;">
+                    <button class="action-btn view" onclick="printAssignments()" style="margin-top: 0;">Print/Export</button>
+                </div>
+                
+                <table id="assignments-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Course/Batch</th>
+                            <th>Subject</th>
+                            <th>Due Date</th>
+                            <th>Submissions</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assignments-tbody">
+                        <tr><td colspan="6">Loading assignments...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

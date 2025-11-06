@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Cash/Bank Transaction Daybook</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #797d7f;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .report-controls {
+            display: flex;
+            gap: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            align-items: center;
+        }
+        .report-controls label {
+            font-weight: 500;
+        }
+        .report-controls input[type="date"], .report-controls select {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .daybook-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .daybook-table th, .daybook-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85em;
+        }
+        .daybook-table th {
+            background-color: var(--primary-color);
+            color: #fff;
+            font-weight: 600;
+        }
+        .daybook-table .credit { color: var(--success-color); font-weight: 600; }
+        .daybook-table .debit { color: var(--error-color); font-weight: 600; }
+        .daybook-table tfoot td {
+            font-weight: 700;
+            background-color: var(--light-gray-color);
+        }
+        .placeholder-message {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--secondary-color);
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    /**
+     * Fetches and renders the daily transaction daybook.
+     */
+    async function fetchAndRenderDaybook(filters) {
+        const tbody = document.getElementById('daybook-tbody');
+        const tfoot = document.getElementById('daybook-tfoot');
+        tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">Fetching transaction data...</td></tr>';
+        tfoot.innerHTML = '';
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return categorized transactions ❌
+            const queryString = new URLSearchParams(filters).toString();
+            const transactions = await handleApi('/api/reports/daybook?' + queryString); 
+            
+            tbody.innerHTML = '';
+            if (transactions.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">No transactions recorded for the selected period.</td></tr>';
+                return;
+            }
+
+            let totalCredit = 0;
+            let totalDebit = 0;
+            
+            transactions.forEach(t => {
+                const amount = parseFloat(t.amount) || 0;
+                const isCredit = t.type === 'Credit' || amount >= 0;
+                
+                if (isCredit) totalCredit += amount;
+                else totalDebit += amount;
+
+                const row = `<tr>
+                    <td>${t.transaction_id}</td>
+                    <td>${new Date(t.date).toLocaleDateString()}</td>
+                    <td>${t.description}</td>
+                    <td>${t.account || 'Cash'}</td>
+                    <td>${t.reference || 'N/A'}</td>
+                    <td class="credit">${isCredit ? '₹' + amount.toFixed(2) : '-'}</td>
+                    <td class="debit">${!isCredit ? '₹' + Math.abs(amount).toFixed(2) : '-'}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+            
+            const netBalance = totalCredit + totalDebit; // totalDebit is negative here if used in calc
+            tfoot.innerHTML = `<tr>
+                <td colspan="5" style="text-align: right;">TOTALS:</td>
+                <td class="credit">₹${totalCredit.toFixed(2)}</td>
+                <td class="debit">₹${Math.abs(totalDebit).toFixed(2)}</td>
+            </tr>
+            <tr>
+                <td colspan="5" style="text-align: right;">NET MOVEMENT:</td>
+                <td colspan="2" style="font-weight: 700; color: ${netBalance >= 0 ? 'var(--success-color)' : 'var(--error-color)'};">
+                    ₹${netBalance.toFixed(2)} (${netBalance >= 0 ? 'Increase' : 'Decrease'})
+                </td>
+            </tr>`;
+
+        } catch (error) {
+            console.error('Error fetching daybook:', error);
+            tbody.innerHTML = `<tr><td colspan="7" class="placeholder-message" style="color: var(--error-color);">Error loading daybook: ${error.message}</td></tr>`;
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initial load of the daybook (usually set to today's date)
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('report-date').value = today;
+        fetchAndRenderDaybook({ date: today, account: 'All' });
+
+        document.getElementById('daybook-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const filters = {
+                date: document.getElementById('report-date').value,
+                account: document.getElementById('account-filter').value,
+            };
+            fetchAndRenderDaybook(filters);
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Daily Cash/Bank Transaction Daybook</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Report Controls</h2>
+        <form id="daybook-form">
+            <div class="report-controls">
+                <label for="report-date">Select Date:</label>
+                <input type="date" id="report-date" required>
+                
+                <label for="account-filter">Account:</label>
+                <select id="account-filter">
+                    <option value="All">All Accounts</option>
+                    <option value="Cash">Cash Account</option>
+                    <option value="Bank1">Bank Account - SBI</option>
+                    <option value="Bank2">Bank Account - HDFC</option>
+                </select>
+                
+                <button type="submit" class="submit-btn" style="background-color: var(--primary-color);">View Daybook</button>
+                <button type="button" class="submit-btn" style="background-color: var(--secondary-color);" onclick="alert('Exporting Daybook to CSV.')">Export</button>
+            </div>
+        </form>
+
+        <h2>Transactions</h2>
+        <table class="daybook-table">
+            <thead>
+                <tr>
+                    <th>TXN ID</th>
+                    <th>Date</th>
+                    <th>Description/Purpose</th>
+                    <th>Account</th>
+                    <th>Reference</th>
+                    <th>Credit (In)</th>
+                    <th>Debit (Out)</th>
+                </tr>
+            </thead>
+            <tbody id="daybook-tbody">
+                <tr><td colspan="7" class="placeholder-message">Select a date and click 'View Daybook'.</td></tr>
+            </tbody>
+            <tfoot id="daybook-tfoot"></tfoot>
+        </table>
+    </div>
+</div>
+</body>
+</html>

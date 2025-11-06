@@ -1,0 +1,1312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payroll Management - Pay Run Control</title>
+    <style>
+        /* --- GLOBAL CLASSIC DOCUMENT STYLES --- */
+        body {
+            font-family: 'Times New Roman', serif;
+            margin: 0;
+            padding: 2em;
+            background-color: #EFEFEF; /* Off-white paper background */
+            color: #333; /* High contrast text */
+        }
+        .container {
+            max-width: 1200px;
+            margin: auto;
+            padding: 40px;
+            background-color: #FFFFFF; /* Pure white content block */
+            border: 2px solid #333; /* Thick, high-contrast border */
+            box-shadow: 6px 6px 0 #AAA; /* Pronounced, classic drop shadow */
+            border-radius: 0; /* Square corners */
+        }
+        h1 {
+            color: #000;
+            font-weight: bold;
+            text-transform: uppercase;
+            text-align: center;
+            border-bottom: 5px double #000;
+            padding-bottom: 15px;
+            margin-top: 0;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+        h2 {
+            color: #005A9C;
+            font-weight: bold;
+            text-transform: uppercase;
+            border-bottom: 2px solid #555;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            font-size: 1.5em;
+        }
+        h3 {
+            color: #555;
+            font-weight: bold;
+            border-bottom: 1px dotted #999;
+            padding-bottom: 5px;
+            margin-top: 20px;
+            font-size: 1.2em;
+        }
+        
+        /* --- FORMS & INPUTS --- */
+        label { display: block; margin-top: 10px; font-weight: bold; color: #333; font-size: 0.9em; }
+        input[type="date"], input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 8px;
+            margin-top: 3px;
+            box-sizing: border-box;
+            border: 1px solid #555;
+            border-radius: 0;
+            background-color: #FFFFFF;
+        }
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        .form-section {
+            border: 1px solid #005A9C;
+            border-radius: 0;
+            padding: 25px;
+            margin-top: 15px;
+            background-color: #f8f9fa;
+        }
+        
+        /* --- BUTTONS --- */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        button {
+            background-color: #C0392B;
+            color: #FFFFFF;
+            padding: 8px 12px;
+            border: 2px solid #000;
+            cursor: pointer;
+            flex-grow: 1;
+            font-size: 0.9em;
+            font-weight: bold;
+            box-shadow: 2px 2px 0 #000;
+            border-radius: 0;
+        }
+        button:hover { background-color: #A62D21; box-shadow: 1px 1px 0 #000; }
+        button:disabled {
+             background-color: #ccc;
+             color: #666;
+             border-color: #999;
+             box-shadow: none;
+             cursor: not-allowed;
+        }
+
+        /* --- TABLE STYLES --- */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border: 1px solid #ddd;
+            font-size: 0.9em;
+        }
+        th {
+            background-color: #333;
+            color: #fff;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .audit-summary {
+            text-align: right;
+            font-weight: bold;
+            padding: 10px;
+            border: 1px solid #005A9C;
+            background-color: #e6f7ff;
+        }
+        
+        /* --- STATUS STYLES --- */
+        .status-badge {
+            padding: 2px 5px;
+            border: 1px solid #333;
+            font-size: 0.8em;
+            font-weight: bold;
+            text-transform: capitalize;
+            border-radius: 0;
+        }
+        .status-Pending { background-color: #ffc107; color: #333; }
+        .status-Approved_HR { background-color: #007bff; color: white; }
+        .status-Approved_SM { background-color: #28a745; color: white; }
+        .status-Frozen { background-color: #17a2b8; color: white; }
+        .status-Disbursed { background-color: #6f42c1; color: white; }
+
+        .error-msg { color: #C0392B; margin-top: 10px; font-weight: bold; }
+        #pending-warning {
+            background-color: #ffc107;
+            color: #333;
+            padding: 8px;
+            text-align: center;
+            font-weight: bold;
+            margin-bottom: 15px;
+            border: 1px solid #333;
+            display: none;
+        }
+        
+        /* --- Modal Styles --- */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6);
+            align-items: center; justify-content: center;
+        }
+        .modal-content {
+            background-color: #ffffff; margin: 10% auto; padding: 30px; border: 3px solid #000; width: 90%; max-width: 500px; 
+            box-shadow: 8px 8px 0 #000; position: relative; border-radius: 0;
+        }
+        /* Payslip Modal has a different max-width */
+        #payslip-modal .modal-content {
+             max-width: 700px;
+        }
+        .close-btn { color: #aaa; float: right; font-size: 24px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+    
+    <div id="pending-warning">
+        ⚠️ This pay run is currently **Pending Approval**. Disbursement controls are disabled until approved.
+    </div>
+
+    <div classs="container">
+        <h1>Payroll Management</h1>
+        <p>
+            <a href="/admin-dashboard.html" style="color: #005A9C; text-decoration: underline; font-weight: bold;">← Back to Dashboard</a>
+        </p>
+        
+        <section id="payroll-run-section">
+            <h2>Payroll Run Control</h2>
+            
+            <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 15px;">
+                <label for="run-history" style="margin-top: 0; display: inline;">Select Past Run:</label>
+                <select id="run-history" style="width: auto; flex-grow: 0;">
+                    <option value="current">Current Calculation (New)</option>
+                    </select>
+                <button type="button" id="load-run-btn" style="flex-grow: 0; width: auto; background-color: #005A9C;">Load</button>
+            </div>
+            
+            <div class="form-section">
+                <h3>Global Run Settings & Mode</h3>
+                <div class="form-grid">
+                    <div>
+                        <label for="tax-rate-global">Tax Rate (Global %):</label>
+                        <input type="number" id="tax-rate-global" value="15" step="0.1" max="100">
+                    </div>
+                    <div>
+                        <label for="calc-mode">Calculation Mode:</label>
+                        <select id="calc-mode">
+                            <option value="GrossToNet">Gross-to-Net (Standard)</option>
+                            <option value="NetToGross" disabled>Net-to-Gross (Simulation)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="absence-integration">Absence Integration:</label>
+                        <select id="absence-integration">
+                            <option value="auto">Auto-Deduct Approved Leave</option>
+                            <option value="manual">Manual Verification Required</option>
+                        </select>
+                    </div>
+                </div>
+
+                <form id="payroll-run-form">
+                    <h4>Run Period and Filters</h4>
+                    <div class="form-grid">
+                        <div>
+                            <label for="pay-period-start">Pay Period Start Date:</label>
+                            <input type="date" id="pay-period-start" name="pay-period-start" required>
+                        </div>
+                        <div>
+                            <label for="pay-period-end">Pay Period End Date:</label>
+                            <input type="date" id="pay-period-end" name="pay-period-end" required>
+                        </div>
+                        <div>
+                            <label for="batch-filter">Filter by Batch/Group:</label>
+                            <select id="batch-filter" name="batch-filter">
+                                <option value="All">All Employees</option>
+                                <option value="Teachers">Teachers</option>
+                                <option value="Admin">Admin Staff</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="department-filter">Filter by Department:</label>
+                            <select id="department-filter" name="department-filter">
+                                <option value="All">All Departments</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div id="payroll-error-msg" class="error-msg"></div>
+                    <div class="button-group">
+                        <button type="submit" id="calculate-btn">Calculate Payroll</button>
+                        <button type="button" id="revert-btn" style="display:none;">Revert Last Run</button>
+                    </div>
+                </form>
+            </div>
+            <div id="loading-msg" class="info-msg" style="display:none;">
+                <p>Loading employee data for name cross-reference...</p>
+            </div>
+        </section>
+
+        <section id="payroll-audit-section" style="margin-top: 30px;">
+            <h2>Pay Run Audit & Approval 
+                (Run ID: <span id="current-run-id">N/A</span> 
+                - Status: <span id="run-status-indicator" class="status-badge status-Pending">Pending</span>)
+            </h2>
+            
+            <div style="font-size: 0.9em; margin-bottom: 10px;">
+                Last Calculated: <span id="last-modified-stamp">N/A</span> | 
+                <span style="cursor: pointer; color: #005A9C; text-decoration: underline;" onclick="viewHistoryLog()">View Data Change Log</span>
+                <p style="margin-top: 5px;">
+                    **Current User Role:** <span id="user-role-display">HR_STAFF</span> 
+                </p>
+                
+                <input type="text" id="audit-search-input" placeholder="Search employee name or ID within the audit table..." style="width: 50%; margin-top: 5px;">
+            </div>
+            
+            <table id="payroll-audit-table">
+                <thead>
+                    <tr>
+                        <th>Employee ID</th>
+                        <th>Name</th>
+                        <th>Days Paid</th>
+                        <th>Gross Pay</th>
+                        <th>Tax & Deductions</th>
+                        <th>Net Pay</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="payroll-table-body">
+                    <tr><td colspan="8" id="audit-table-status">Select period and Calculate to start a Pay Run.</td></tr>
+                </tbody>
+            </table>
+
+            <div id="audit-summary" class="audit-summary" style="display: none;">
+                <p>Total Deductions: ₹<span id="summary-deductions">0</span></p>
+                <p>Total Employees: <span id="summary-employee-count">0</span> | Total Net Disbursement: ₹<span id="summary-net-disbursement">0</span></p>
+            </div>
+
+            <div class="button-group" id="workflow-control">
+                <button type="button" id="approve-hr-btn" disabled>HR Approve</button>
+                <button type="button" id="approve-sm-btn" disabled>SM Approve</button>
+                <button type="button" id="freeze-btn" disabled>Freeze Pay Run Data</button>
+                <button type="button" id="disburse-btn" disabled>Disburse Payment</button>
+                <button type="button" id="bank-file-btn" disabled>Generate Bank File</button>
+                <button type="button" id="email-bulk-btn" disabled>Bulk Email Payslips</button>
+                <button type="button" id="export-btn">Export Audit CSV</button>
+                <button type="button" id="custom-report-btn" style="flex-grow: 0; width: auto; background-color: #005A9C;">Custom Report</button>
+            </div>
+        </section>
+
+    </div>
+
+    <div id="adjustment-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="document.getElementById('adjustment-modal').style.display='none'">&times;</span>
+            <h3 id="adjustment-modal-title">Adjust Payroll</h3>
+            <form id="adjustment-form">
+                <label for="adjustment-type">Adjustment Type:</label>
+                <select id="adjustment-type">
+                    <option value="bonus">Bonus/Incentive</option>
+                    <option value="deduction">Fine/Deduction</option>
+                    <option value="reimbursement">Reimbursement</option>
+                </select>
+                <label for="adjustment-amount">Amount (₹):</label>
+                <input type="number" id="adjustment-amount" step="0.01" required>
+                <label for="adjustment-reason">Reason:</label>
+                <input type="text" id="adjustment-reason" required>
+                <button type="submit" style="margin-top: 15px;">Apply Adjustment</button>
+            </form>
+        </div>
+    </div>
+    
+    <div id="2fa-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="document.getElementById('2fa-modal').style.display='none'">&times;</span>
+            <h3>Security Check Required</h3>
+            <p>Enter the 6-digit code sent to your registered device for final disbursement approval.</p>
+            <form id="2fa-form">
+                <label for="2fa-code">6-Digit Code:</label>
+                <input type="number" id="2fa-code" min="100000" max="999999" required>
+                <button type="submit" style="margin-top: 15px;">Verify & Disburse</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="payslip-modal" class="modal">
+        <div class="modal-content" id="payslip-content">
+            <div style="text-align: right; margin-bottom: 10px;">
+                <button onclick="printPayslip()">Print Payslip</button>
+                <span class="close-btn" onclick="document.getElementById('payslip-modal').style.display='none'">&times;</span>
+            </div>
+            <div id="payslip-body" style="line-height: 1.5;">
+                </div>
+        </div>
+    </div>
+
+<script>
+        // --- Core & Advanced Features ---
+        const API_BASE = '/api/payroll'; 
+        const TOKEN = localStorage.getItem('erp-token'); 
+        
+        // --- DOM Element Declarations ---
+        const payrollRunForm = document.getElementById('payroll-run-form');
+        const payrollTableBody = document.getElementById('payroll-table-body');
+        const auditSummaryDiv = document.getElementById('audit-summary');
+        const summaryCountSpan = document.getElementById('summary-employee-count');
+        const summaryNetSpan = document.getElementById('summary-net-disbursement');
+        const summaryDeductionsSpan = document.getElementById('summary-deductions');
+        const loadingMsg = document.getElementById('loading-msg');
+        
+        const approveHrBtn = document.getElementById('approve-hr-btn');
+        const approveSmBtn = document.getElementById('approve-sm-btn');
+        const disburseBtn = document.getElementById('disburse-btn');
+        const freezeBtn = document.getElementById('freeze-btn');
+        const bankFileBtn = document.getElementById('bank-file-btn');
+        const emailBulkBtn = document.getElementById('email-bulk-btn');
+        const exportBtn = document.getElementById('export-btn');
+        
+        const runStatusIndicator = document.getElementById('run-status-indicator');
+        const lastModifiedStamp = document.getElementById('last-modified-stamp');
+        const pendingWarning = document.getElementById('pending-warning');
+        const auditSearchInput = document.getElementById('audit-search-input');
+        const adjustmentModal = document.getElementById('adjustment-modal');
+        const adjustmentModalTitle = document.getElementById('adjustment-modal-title');
+        const adjustmentForm = document.getElementById('adjustment-form');
+        const userRoleDisplay = document.getElementById('user-role-display');
+        
+        const taxRateInput = document.getElementById('tax-rate-global');
+        const calcModeSelect = document.getElementById('calc-mode');
+        const payslipBody = document.getElementById('payslip-body'); 
+        
+        const twoFaModal = document.getElementById('2fa-modal');
+        const twoFaForm = document.getElementById('2fa-form');
+
+        // --- NEW ---
+        const runHistorySelect = document.getElementById('run-history');
+        const loadRunBtn = document.getElementById('load-run-btn');
+
+        let teacherLookupMap = {}; // Key: "EMP001", Value: "Full Name"
+        let employeeDetailsMap = {}; // Key: "UUID", Value: { ...employee data }
+        let payrollRunData = []; 
+        let currentRunStatus = 'Pending'; 
+        let currentUserRole = localStorage.getItem('user-role') || 'HR_STAFF'; 
+        
+        // Global variable for attendance (Integrated in Part 2)
+        let attendanceMap = new Map(); 
+        
+        // --- API Helper Function ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                window.location.href = '/login';
+                throw new Error('Unauthorized or session expired.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                throw new Error(errorBody.message || 'API call failed.');
+            }
+            // Attempt to return JSON, fall back to simple response object if empty
+            try {
+                return await response.json();
+            } catch (e) {
+                return { status: 'success', message: response.statusText || 'Operation successful' };
+            }
+        }
+        
+        // --- Core & Advanced Features ---
+
+        window.viewHistoryLog = function() {
+            const log = `
+                --- Data Change Log for PAY-RUN ---
+                [${new Date().toLocaleString()}] Calculated by SYSTEM. Status: ${currentRunStatus}.
+                [${new Date().toLocaleString()}] Tax Rate set to ${taxRateInput.value}% by SYSTEM.
+                [${new Date().toLocaleString()}] User ${currentUserRole} updated payroll settings.
+            `;
+            alert(log);
+        }
+
+        // =========================================================
+        // fetchEmployeeData (Correctly uses /api/teachers and parses JSON)
+        // =========================================================
+        async function fetchEmployeeData() {
+            employeeDetailsMap = {};
+            teacherLookupMap = {}; // This will use the "EMP001" style ID
+            loadingMsg.style.display = 'block';
+            
+            // Map common roles to internal workflow roles for UI logic
+            let displayRole = currentUserRole;
+            if (['Admin', 'Super Admin'].includes(currentUserRole)) {
+                displayRole = 'SENIOR_MGNT';
+            } else if (currentUserRole === 'HR') {
+                 displayRole = 'HR_STAFF';
+            } else if (currentUserRole ==='Teacher' || currentUserRole === 'Coordinator') {
+                 displayRole = 'HR_STAFF';
+            }
+            currentUserRole = displayRole;
+            userRoleDisplay.textContent = currentUserRole;
+
+            try {
+                // Call /api/teachers (this route is now fixed to join dept data)
+                const employees = await handleApi('/api/teachers');
+
+                if (!employees || employees.length === 0) {
+                    console.warn('No employee data found from /api/teachers.');
+                    document.getElementById('payroll-error-msg').textContent = 'Failed to load employee data.';
+                    return;
+                }
+
+                // Use to populate department filter
+                const departmentSet = new Map();
+
+                employees.forEach(t => {
+                    // We need both the 'EMP001' style ID and the 'UUID'
+                    if (t.user_id && t.employee_id) { 
+                        
+                        let baseSalaryFromDept = 40000; // Default fallback value
+                        let bankAccountFromDept = 'N/A';
+                        let allowances = {};
+
+                        // Parse the Department Description JSON
+                        if (t.department_description) {
+                            try {
+                                const deptDesc = JSON.parse(t.department_description);
+                                
+                                const payroll = deptDesc.payroll_template;
+                                // Handle the nested payroll_template key from manage-departments.html
+                                const actualPayroll = payroll && payroll.payroll_template ? payroll.payroll_template : payroll;
+
+                                if (actualPayroll) {
+                                    if (actualPayroll.base_salary) {
+                                        baseSalaryFromDept = parseFloat(actualPayroll.base_salary);
+                                    }
+                                    if (actualPayroll.bank_account_number) {
+                                        bankAccountFromDept = actualPayroll.bank_account_number;
+                                    }
+                                    
+                                    // Store all allowances
+                                    allowances = {
+                                        hra: actualPayroll.allowance_hra || 0,
+                                        da: actualPayroll.allowance_da || 0,
+                                        other: actualPayroll.allowance_other || 0,
+                                        fixed_deductions: actualPayroll.fixed_deductions || 0,
+                                        tax_rate: actualPayroll.tax_deduction_rate ? (parseFloat(actualPayroll.tax_deduction_rate) / 100) : null // Convert % to decimal
+                                    };
+                                }
+                            } catch (e) {
+                                console.warn(`Could not parse department description for employee ${t.employee_id}:`, e);
+                            }
+                        }
+                        
+                        // Use pay_grade (if it's an override) or fall back to the department's base salary
+                        t.pay_grade = parseFloat(t.pay_grade) || baseSalaryFromDept; 
+                        t.department = t.department_name || t.department || 'N/A';
+                        
+                        // Assign the bank account number
+                        t.account_number = t.account_number || bankAccountFromDept;
+                        
+                        // Assign allowances
+                        t.allowances = allowances;
+
+                        // Use user_id (UUID) as the primary key for employeeDetailsMap (for attendance matching)
+                        employeeDetailsMap[t.user_id] = t; 
+                        
+                        // Use the 'EMP001' style ID for the name lookup map (for display)
+                        teacherLookupMap[t.employee_id] = t.full_name;
+                        
+                        // Populate department filter with Department ID (department_id) and Name
+                        if (t.department_id && !departmentSet.has(t.department_id)) { 
+                            departmentSet.set(t.department_id, t.department);
+                        }
+                    }
+                });
+
+                // Populate Department Filter 
+                const departments = Array.from(departmentSet, ([id, name]) => ({ id, name }))
+                                         .sort((a, b) => a.name.localeCompare(b.name));
+                                         
+                const deptFilter = document.getElementById('department-filter');
+                deptFilter.innerHTML = '<option value="All">All Departments</option>';
+                departments.forEach(dept => {
+                    // Use the department's UUID (from department_id) as the value
+                    deptFilter.innerHTML += `<option value="${dept.id}">${dept.name}</option>`;
+                });
+                
+            } catch (error) {
+                console.error("Error fetching employee data for name lookup:", error);
+                document.getElementById('payroll-error-msg').textContent = `Failed to load employee names for lookup: ${error.message}.`;
+            } finally {
+                loadingMsg.style.display = 'none';
+            }
+        }
+
+        // =========================================================
+        // UPDATED: calculateAndRenderPayroll (Attendance Integration)
+        // =========================================================
+        async function calculateAndRenderPayroll(e) {
+            e.preventDefault();
+            
+            const periodStart = document.getElementById('pay-period-start').value;
+            const periodEnd = document.getElementById('pay-period-end').value;
+            const globalTaxRate = parseFloat(taxRateInput.value) / 100;
+
+            if (new Date(periodStart) >= new Date(periodEnd)) {
+                document.getElementById('payroll-error-msg').textContent = 'Pay Period End Date must be after Start Date.';
+                return;
+            }
+
+            document.getElementById('payroll-error-msg').textContent = '';
+            
+            const startDate = new Date(periodStart);
+            const month = startDate.getMonth() + 1; // JS months are 0-11
+            const year = startDate.getFullYear();
+            
+            const batchFilter = document.getElementById('batch-filter').value;
+            const deptFilterValue = document.getElementById('department-filter').value;
+            
+            if (batchFilter === 'All') {
+                 document.getElementById('payroll-error-msg').textContent = 'Please select a specific Batch/Group (Teachers or Admin) to integrate attendance.';
+                 return;
+            }
+
+            // --- 3. Fetch Real Attendance Data (AND POPULATE attendanceMap) ---
+            const attendanceRole = batchFilter === 'Teachers' ? 'Teacher' : 'Employee';
+            
+            const optional_filter_id = deptFilterValue === 'All' ? '' : deptFilterValue;
+            attendanceMap = new Map(); // Reset global attendance map
+            
+            try {
+                // This will now work because attendance.js is fixed
+                const attendanceApiUrl = `/api/attendance/report/consolidated?role=${attendanceRole}&month=${month}&year=${year}&optional_filter_id=${optional_filter_id}`;
+                
+                const attendanceData = await handleApi(attendanceApiUrl);
+                
+                if (attendanceData && attendanceData.users) {
+                    attendanceData.users.forEach(user => {
+                        let presentCount = 0;
+                        
+                        user.attendance.forEach(att => {
+                            const attDate = new Date(att.attendance_date);
+                            
+                            // Check if attendance status falls within the pay period
+                            if (attDate >= new Date(periodStart) && attDate <= new Date(periodEnd)) {
+                                
+                                const status = att.status;
+                                if (status === 'present' || status === 'late') {
+                                    presentCount += 1;
+                                } else if (status === 'half-day') {
+                                    presentCount += 0.5;
+                                }
+                                // Absent/Leave/Holiday status results in 0 pay days added
+                            }
+                        });
+                        
+                        // Store the calculated days paid, keyed by user.user_id (UUID)
+                        attendanceMap.set(user.user_id, { daysPresent: presentCount });
+                    });
+                }
+                console.log('Attendance Map Populated:', attendanceMap);
+
+            } catch (error) {
+                console.error("Failed to fetch attendance data:", error);
+                document.getElementById('payroll-error-msg').textContent = `Warning: Failed to fetch attendance data. Using default days. ${error.message}`;
+            }
+
+            // --- 4. Filter Employees to Pay (using existing client-side logic) ---
+            const employeesToPay = Object.values(employeeDetailsMap).filter(emp => {
+                // Use department_id for department matching
+                const matchesDept = deptFilterValue === 'All' || emp.department_id === deptFilterValue;
+                const matchesBatch = batchFilter === 'All' || 
+                                     (batchFilter === 'Teachers' && (emp.department !== 'Administration' && emp.department !== 'Security')) ||
+                                     (batchFilter === 'Admin' && emp.department === 'Administration');
+                return matchesDept && matchesBatch;
+            });
+
+            if (employeesToPay.length === 0) {
+                 payrollTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center;">No employees found matching filter criteria.</td></tr>`;
+                 updateSummary(0, 0, 0);
+                 payrollRunData = [];
+                 return;
+            }
+
+            // --- 5. Calculate Payroll using CORRECT Pro-Rata Logic ---
+            let totalNetDisbursement = 0;
+            let totalGrossPay = 0;
+            let totalDeductions = 0;
+            let employeesMissingAttendance = 0; // New Counter
+            
+            const daysInMonth = new Date(year, month, 0).getDate(); 
+
+            payrollRunData = employeesToPay.map((emp) => {
+                
+                const baseSalary = emp.pay_grade; // Annual Pay Grade
+                const monthlyBase = baseSalary / 12;
+
+                // Get monthly allowances
+                const allowances = emp.allowances || {};
+                const monthlyHRA = allowances.hra || 0;
+                const monthlyDA = allowances.da || 0;
+                const monthlyOther = allowances.other || 0;
+                const totalMonthlyAllowances = monthlyHRA + monthlyDA + monthlyOther;
+
+                // Calculate TOTAL monthly pay
+                const totalMonthlyPay = monthlyBase + totalMonthlyAllowances;
+
+                // Calculate daily rate based on actual days in month
+                const dailyRate = totalMonthlyPay / daysInMonth;
+                
+                // Get the real days paid from our attendance map
+                const attendance = attendanceMap.get(emp.user_id);
+                
+                // Use daysPresent from the map, or default to full days if data is missing
+                let daysPaid = daysInMonth; 
+                if (attendance && typeof attendance.daysPresent === 'number') {
+                    daysPaid = attendance.daysPresent;
+                } else {
+                     employeesMissingAttendance++;
+                }
+                
+                if (daysPaid <= 0) {
+                    // Force skip this employee from the payroll run if days paid is zero
+                    return null; 
+                }
+                
+                // CORRECTED GROSS PAY
+                const grossPay = dailyRate * daysPaid;
+                
+                // Get deductions
+                const fixedDeduction = allowances.fixed_deductions || 0; 
+                const taxRate = allowances.tax_rate || globalTaxRate;
+                
+                // Calculate Tax only on the calculated Gross Pay
+                const taxAndStatutory = grossPay * taxRate;
+                const totalRunDeductions = taxAndStatutory + fixedDeduction; 
+                
+                const netPay = grossPay - totalRunDeductions;
+                
+                totalNetDisbursement += netPay;
+                totalGrossPay += grossPay; // Track actual gross pay
+                totalDeductions += totalRunDeductions;
+
+                // Prepare Payslip Snapshot
+                const snapshot = {
+                    full_name: emp.full_name,
+                    employee_id: emp.employee_id,
+                    department: emp.department || 'N/A',
+                    pay_grade: emp.pay_grade,
+                    account_number: emp.account_number,
+                    days_paid: daysPaid,
+                    status: 'Pending',
+                    pay_period_start: periodStart,
+                    pay_period_end: periodEnd,
+                    tax_rate: taxRate,
+                    
+                    // Proportional pay components
+                    basic_salary_portion: totalMonthlyPay > 0 ? (monthlyBase / totalMonthlyPay) * grossPay : 0,
+                    hra_portion: totalMonthlyPay > 0 ? ((monthlyHRA) / totalMonthlyPay) * grossPay : 0,
+                    da_portion: totalMonthlyPay > 0 ? ((monthlyDA) / totalMonthlyPay) * grossPay : 0,
+                    other_portion: totalMonthlyPay > 0 ? ((monthlyOther) / totalMonthlyPay) * grossPay : 0,
+                    
+                    income_tax_amount: taxAndStatutory,
+                    fixed_deductions: fixedDeduction,
+                    total_gross: grossPay,
+                    total_deductions: totalRunDeductions,
+                    total_net: netPay
+                };
+
+
+                return {
+                    employee_id: emp.employee_id, // "EMP001"
+                    user_id: emp.user_id,         // "UUID"
+                    full_name: emp.full_name,     // Added full_name for export/display fallbacks
+                    gross_pay: grossPay,
+                    tax_deductions: totalRunDeductions,
+                    net_pay: netPay,
+                    days_paid: daysPaid, // Now using real data
+                    status: 'Pending',
+                    payslip_snapshot: snapshot // Include the snapshot object
+                };
+            }).filter(item => item !== null); // Filter out employees with 0 days paid
+
+            currentRunStatus = 'Pending';
+            renderPayrollAudit(payrollRunData);
+            
+            updateSummary(payrollRunData.length, totalNetDisbursement, totalDeductions);
+            document.getElementById('current-run-id').textContent = `PAY-${new Date().getTime().toString().slice(-6)}`;
+            lastModifiedStamp.textContent = new Date().toLocaleString();
+            updateWorkflowUI();
+            
+            let alertMessage = `Payroll Calculated for ${payrollRunData.length} employees (Gross: ₹${Math.round(totalGrossPay)}).`;
+            if (employeesMissingAttendance > 0) {
+                alertMessage += ` (Warning: ${employeesMissingAttendance} employee(s) were calculated with full days due to missing attendance data.)`;
+            }
+            alert(alertMessage);
+        }
+
+
+        function renderPayrollAudit(data) {
+            if (data.length === 0) {
+                 payrollTableBody.innerHTML = `<tr><td colspan="8" style="text-align: center;">No payroll records generated.</td></tr>`;
+                 return;
+            }
+
+            payrollTableBody.innerHTML = data.map(item => {
+                // --- This logic is now updated to handle both new and loaded data ---
+                const employeeName = teacherLookupMap[item.employee_id] || item.full_name || 'NAME UNKNOWN'; 
+                const employee = employeeDetailsMap[item.user_id]; 
+                
+                // Get pay grade either from current details map or the loaded snapshot
+                const payGrade = employee 
+                    ? employee.pay_grade 
+                    : (item.payslip_snapshot && item.payslip_snapshot.pay_grade ? item.payslip_snapshot.pay_grade : 'N/A');
+                
+                let statusClass = `status-${item.status.replace(/\s/g, '_')}`;
+
+                return `
+                    <tr data-name="${employeeName.toLowerCase()}" data-id="${(item.employee_id || item.user_id).toLowerCase()}">
+                        <td>${item.employee_id || item.user_id}</td> <td>
+                            <strong>${employeeName}</strong>
+                            <button style="font-size: 0.8em; padding: 5px;" onclick="viewPayGrade('${employeeName}', '${payGrade}')">Pay Grade</button>
+                        </td>
+                        <td>${item.days_paid}</td>
+                        <td class="gross-pay">₹${Math.round(item.gross_pay)}</td>
+                        <td class="deductions">₹${Math.round(item.tax_deductions || item.deductions)}</td>
+                        <td class="net-pay">₹${Math.round(item.net_pay)}</td>
+                        <td><span class="status-badge ${statusClass}">${item.status.replace('_', ' ')}</span></td>
+                        <td>
+                            <button style="font-size: 0.8em; padding: 5px;" onclick="openAdjustmentModal('${item.employee_id || item.user_id}', '${employeeName}')" ${currentRunStatus === 'Frozen' || currentRunStatus === 'Disbursed' ? 'disabled' : ''}>Adjust</button>
+                            <button style="font-size: 0.8em; padding: 5px;" onclick="viewPayslip('${item.user_id}')">Slip</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // =========================================================
+        // UPDATED: viewPayslip Function (Handles both new and loaded data)
+        // =========================================================
+        window.viewPayslip = function(userId) { 
+            
+            // Find by user_id which is the guaranteed unique key
+            let payrollItem = payrollRunData.find(item => item.user_id === userId);
+            
+            if (!payrollItem) {
+                alert('Payroll run data not found for this employee.');
+                return;
+            }
+            
+            // Check if we have a pre-generated snapshot (from a loaded run or recent calculation)
+            let snapshot;
+            if (payrollItem.payslip_snapshot) {
+                // CRITICAL FIX: Ensure parsing if it is a string (from a loaded run)
+                snapshot = (typeof payrollItem.payslip_snapshot === 'string') 
+                            ? JSON.parse(payrollItem.payslip_snapshot) 
+                            : payrollItem.payslip_snapshot;
+            } else {
+                // This path should ideally not be hit if calculation generated a snapshot
+                alert('Payslip snapshot is missing for this payroll item.');
+                return;
+            }
+            
+            const employeeIdDisplay = snapshot.employee_id || (payrollItem.employee_id || 'N/A');
+            
+            // --- Use snapshot data to build payslip ---
+            const payPeriod = snapshot.pay_period_start 
+                ? `${new Date(snapshot.pay_period_start).toLocaleDateString()} to ${new Date(snapshot.pay_period_end).toLocaleDateString()}`
+                : `${document.getElementById('pay-period-start').value} to ${document.getElementById('pay-period-end').value}`;
+            
+            const safe_account_number = snapshot.account_number ?? 'N/A';
+            const last_four_digits = safe_account_number === 'N/A' ? 'N/A' : safe_account_number.slice(-4);
+            
+            const formatRupee = (amount) => new Intl.NumberFormat('en-IN').format(Math.round(amount));
+            
+            const content = `
+                <style>
+                    .payslip-box { border: 2px solid #333; padding: 20px; font-family: Arial, sans-serif; background: #fff; }
+                    .payslip-header { text-align: center; border-bottom: 2px double #333; padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; }
+                    .payslip-header img { max-height: 50px; }
+                    .payslip-header h2 { margin: 0; color: #005A9C; font-size: 1.5em; }
+                    
+                    .employee-details-grid {
+                        display: grid;
+                        grid-template-columns: 1fr 1fr;
+                        gap: 10px 20px;
+                        padding: 15px;
+                        background-color: #f8f9fa;
+                        border: 1px solid #ddd;
+                        margin-bottom: 20px;
+                        font-size: 0.9em;
+                    }
+                    .employee-details-grid p { margin: 2px 0; }
+                    .employee-details-grid p strong { display: inline-block; width: 120px; color: #555; }
+                    
+                    .payslip-tables-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+                    .payslip-table { width: 100%; border-collapse: collapse; }
+                    .payslip-table th { background-color: #f0f0f0; padding: 8px; text-align: left; border-bottom: 2px solid #333; }
+                    .payslip-table td { padding: 8px; border-bottom: 1px solid #eee; }
+                    .payslip-table tr.total-row td { font-weight: bold; border-top: 2px solid #333; background-color: #f8f9fa; }
+                    
+                    .net-pay-box { margin-top: 20px; padding: 15px; background-color: #e6f7ff; border: 2px solid #005A9C; text-align: center; }
+                    .net-pay-box h3 { margin: 0; font-size: 1.3em; color: #005A9C; }
+                    .net-pay-box p { margin: 5px 0 0; font-size: 0.8em; color: #555; }
+                </style>
+                <div class="payslip-box">
+                    <div class="payslip-header">
+                        <img src="/img/logo.png" alt="School Logo" style="opacity: 0.5;"/> 
+                        <h2>YOUR SCHOOL NAME</h2>
+                        <div style="width: 50px;">&nbsp;</div> 
+                    </div>
+                    <h3 style="text-align: center; margin-top: 0; margin-bottom: 20px; font-weight: bold;">PAYSLIP FOR ${payPeriod}</h3>
+                    <div class="employee-details-grid">
+                        <p><strong>Employee Name:</strong> ${snapshot.full_name}</p>
+                        <p><strong>Employee ID:</strong> ${employeeIdDisplay}</p>
+                        <p><strong>Department:</strong> ${snapshot.department}</p>
+                        <p><strong>Annual Pay Grade:</strong> ₹${new Intl.NumberFormat('en-IN').format(snapshot.pay_grade)}</p>
+                        <p><strong>Days Paid:</strong> ${snapshot.days_paid}</p>
+                        <p><strong>Transfer A/C:</strong> ****${last_four_digits}</p>
+                    </div>
+                    <div class="payslip-tables-container">
+                        <div>
+                            <table class="payslip-table">
+                                <thead><tr><th colspan="2">✅ Earnings</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Basic Salary (Pro-rated)</td><td align="right">₹${formatRupee(snapshot.basic_salary_portion)}</td></tr>
+                                    <tr><td>HRA Allowance (Pro-rated)</td><td align="right">₹${formatRupee(snapshot.hra_portion)}</td></tr>
+                                    <tr><td>DA Allowance (Pro-rated)</td><td align="right">₹${formatRupee(snapshot.da_portion)}</td></tr>
+                                    <tr><td>Other Allowances (Pro-rated)</td><td align="right">₹${formatRupee(snapshot.other_portion)}</td></tr>
+                                    <tr class="total-row">
+                                        <td>Total Gross Pay</td>
+                                        <td align="right">₹${formatRupee(snapshot.total_gross)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div>
+                            <table class="payslip-table">
+                                <thead><tr><th colspan="2">❌ Deductions</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Income Tax (${(snapshot.tax_rate * 100).toFixed(1)}%)</td><td align="right">₹${formatRupee(snapshot.income_tax_amount)}</td></tr>
+                                    <tr><td>Fixed Statutory Deductions</td><td align="right">₹${formatRupee(snapshot.fixed_deductions)}</td></tr>
+                                    <tr><td>&nbsp;</td><td align="right">&nbsp;</td></tr>
+                                    <tr><td>&nbsp;</td><td align="right">&nbsp;</td></tr>
+                                    <tr class="total-row">
+                                        <td>Total Deductions</td>
+                                        <td align="right">₹${formatRupee(snapshot.total_deductions)}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="net-pay-box">
+                        <h3>NET PAYABLE: ₹${formatRupee(snapshot.total_net)}</h3>
+                        <p>Run Status: ${snapshot.status.replace('_', ' ')}</p>
+                    </div>
+                </div>
+            `;
+            
+            payslipBody.innerHTML = content;
+            document.getElementById('payslip-modal').style.display = 'block';
+        };
+
+
+        // Print Function
+        window.printPayslip = function() {
+            window.print();
+        };
+
+
+        window.viewPayGrade = function(name, payGrade) {
+            alert(`${name}'s annual Pay Grade/Salary is: ₹${new Intl.NumberFormat().format(payGrade)}`);
+        }
+
+        window.openAdjustmentModal = function(employeeId, employeeName) {
+            if (currentRunStatus !== 'Pending' || runHistorySelect.value !== 'current') {
+                 alert('Cannot adjust payroll once it is Approved, Frozen, or Disbursed, or when viewing a past run.');
+                 return;
+            }
+            adjustmentModalTitle.textContent = `Adjust Payroll for ${employeeName} (${employeeId})`;
+            adjustmentModal.style.display = 'block';
+            
+            adjustmentForm.reset();
+            adjustmentForm.dataset.employeeId = employeeId;
+        }
+
+        adjustmentForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const id = adjustmentForm.dataset.employeeId;
+            const amount = parseFloat(document.getElementById('adjustment-amount').value);
+            const type = document.getElementById('adjustment-type').value;
+            const reason = document.getElementById('adjustment-reason').value;
+            
+            alert(`Adjustment applied (Simulated):\nEmployee ID: ${id}\nType: ${type}\nAmount: ₹${amount.toFixed(2)}\nReason: ${reason}\n\nNOTE: Run recalculation needed to apply changes.`);
+            adjustmentModal.style.display = 'none';
+        });
+
+        function updateSummary(count, totalNet, totalDeductions) {
+            auditSummaryDiv.style.display = count > 0 ? 'block' : 'none';
+            summaryCountSpan.textContent = count;
+            summaryNetSpan.textContent = Math.round(totalNet);
+            summaryDeductionsSpan.textContent = Math.round(totalDeductions);
+        }
+
+        function updateWorkflowUI() {
+            runStatusIndicator.textContent = currentRunStatus.replace('_', ' ');
+            runStatusIndicator.className = `status-badge status-${currentRunStatus}`;
+            
+            const isFrozen = currentRunStatus === 'Frozen' || currentRunStatus === 'Disbursed';
+            const isApprovedHR = currentRunStatus === 'Approved_HR';
+            const isApprovedSM = currentRunStatus === 'Approved_SM';
+            
+            const canApproveHR = (currentUserRole === 'HR_STAFF' || currentUserRole === 'Admin' || currentUserRole === 'Super Admin');
+            const canApproveSM = (currentUserRole === 'SENIOR_MGNT' || currentUserRole === 'Admin' || currentUserRole === 'Super Admin');
+
+            // --- UPDATED: Lock buttons if not on "current" run ---
+            const isLocked = isFrozen || runHistorySelect.value !== 'current';
+            
+            document.querySelectorAll('.form-grid input, .form-grid select').forEach(el => el.disabled = isLocked);
+            document.getElementById('calculate-btn').disabled = isLocked;
+            
+            approveHrBtn.disabled = isLocked || !(currentRunStatus === 'Pending' && canApproveHR);
+            approveSmBtn.disabled = isLocked || !(((isApprovedHR || currentRunStatus === 'Pending') && canApproveSM) || (currentRunStatus === 'Pending' && currentUserRole === 'Super Admin'));
+            freezeBtn.disabled = isLocked || !isApprovedSM; // Freeze requires Approved_SM
+            
+            // Disbursement controls require Approved_SM AND not Locked
+            disburseBtn.disabled = isLocked || !isApprovedSM; 
+            bankFileBtn.disabled = isLocked || !isApprovedSM;
+            
+            emailBulkBtn.disabled = payrollRunData.length === 0;
+
+            pendingWarning.style.display = currentRunStatus !== 'Approved_SM' && currentRunStatus !== 'Disbursed' && payrollRunData.length > 0 && !isLocked ? 'block' : 'none';
+        }
+
+        approveHrBtn.addEventListener('click', () => {
+             if (currentRunStatus === 'Pending' && confirm(`Confirm HR approval? This moves the run to Senior Management review.`)) {
+                currentRunStatus = 'Approved_HR';
+                alert('HR Approval Granted. Status updated to Approved (HR).');
+                updateWorkflowUI();
+            }
+        });
+
+        approveSmBtn.addEventListener('click', () => {
+             const isSM = ['SENIOR_MGNT', 'Admin', 'Super Admin'].includes(currentUserRole);
+             
+             if (currentRunStatus === 'Approved_HR' && isSM && confirm(`Confirm Senior Management approval? This makes the run eligible for disbursement.`)) {
+                currentRunStatus = 'Approved_SM';
+                alert('Senior Management Approval Granted. Run is fully approved.');
+                updateWorkflowUI();
+            } else if (currentRunStatus === 'Pending' && isSM) {
+                currentRunStatus = 'Approved_SM';
+                alert('Senior Management Approval Granted, bypassing HR review. Run is fully approved.');
+                updateWorkflowUI();
+            } else if (!isSM) {
+                alert('You must be a Senior Manager, Admin, or Super Admin to perform this action.');
+            }
+        });
+
+        // --- UPDATED: freezeBtn now saves to API ---
+        freezeBtn.addEventListener('click', async () => { // Make it async
+            if (currentRunStatus === 'Approved_SM' && confirm('Confirm freezing this pay run? This will save the run permanently.')) {
+                
+                // 1. ডেটা প্রস্তুত করুন
+                const payload = {
+                    pay_period_start: document.getElementById('pay-period-start').value,
+                    pay_period_end: document.getElementById('pay-period-end').value,
+                    status: 'Frozen',
+                    total_employees: payrollRunData.length,
+                    // Use actual summed values, not just the rounded summary display
+                    total_gross_pay: payrollRunData.reduce((sum, item) => sum + item.gross_pay, 0), 
+                    total_deductions: payrollRunData.reduce((sum, item) => sum + item.tax_deductions, 0), 
+                    total_net_pay: payrollRunData.reduce((sum, item) => sum + item.net_pay, 0),
+                    
+                    // সমস্ত কর্মচারীর ডেটা পাঠান
+                    run_details: payrollRunData.map(item => {
+                        const employee = employeeDetailsMap[item.user_id];
+                        // If employeeDetailsMap lacks the data (e.g., loaded external data), use the snapshot
+                        if (!employee && !item.payslip_snapshot) return null; 
+
+                        // Use the snapshot generated during calculation (or re-generate if needed, though it should exist)
+                        let snapshot = item.payslip_snapshot;
+                        if (typeof snapshot === 'string') {
+                             try { snapshot = JSON.parse(snapshot); } catch (e) { snapshot = {}; }
+                        }
+
+                        return {
+                            user_id: item.user_id,
+                            full_name: item.full_name || 'N/A', // Use full_name from runData or fallback
+                            department_name: (employee ? employee.department : snapshot.department) || 'N/A',
+                            days_paid: item.days_paid,
+                            gross_pay: item.gross_pay,
+                            deductions: item.tax_deductions,
+                            net_pay: item.net_pay,
+                            payslip_snapshot: snapshot // Ensure the snapshot is passed here (it gets stringified in payroll.js)
+                        };
+                    }).filter(item => item !== null) // Filter out any null items
+                };
+
+                // 2. API কল করুন
+                try {
+                    const result = await handleApi('/api/payroll/save-run', {
+                        method: 'POST',
+                        body: JSON.stringify(payload)
+                    });
+
+                    // 3. সফল হলে UI আপডেট করুন
+                    currentRunStatus = 'Frozen';
+                    alert('Pay Run Data Frozen and Saved successfully!');
+                    
+                    // Reload history to show the new run in the dropdown
+                    await loadPayrollHistory(); 
+                    
+                    // Update UI status and unlock necessary elements
+                    updateWorkflowUI();
+
+                } catch (error) {
+                    console.error('Error saving payroll run:', error);
+                    alert('Error saving payroll run: ' + error.message);
+                }
+
+            } else {
+                alert('Only fully Approved pay runs can be Frozen.');
+            }
+        });
+
+        disburseBtn.addEventListener('click', () => {
+             if (currentRunStatus === 'Approved_SM') {
+                alert('Initiating Two-Factor Authentication check for disbursement...');
+                twoFaModal.style.display = 'block';
+             } else {
+                 alert('Pay run must be fully Approved before Disbursing.');
+             }
+        });
+        
+        twoFaForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            const code = document.getElementById('2fa-code').value;
+            if (code === '123456') { 
+                twoFaModal.style.display = 'none';
+                currentRunStatus = 'Disbursed';
+                alert('2FA Successful. Payment Disbursed! Transaction ID: TXN' + new Date().getTime());
+                // TODO: Add an API call here to update the run status to 'Disbursed' in the database
+                updateWorkflowUI();
+            } else {
+                alert('Invalid 2FA code. Disbursement failed.');
+            }
+        });
+        
+        bankFileBtn.addEventListener('click', () => {
+             if (currentRunStatus === 'Approved_SM') {
+                alert('Generating ACH/SEPA Bank Transfer File (.csv) for the run.');
+             } else {
+                alert('Must be fully Approved to generate the Bank File.');
+             }
+        });
+        
+        emailBulkBtn.addEventListener('click', () => {
+            if (payrollRunData.length > 0) {
+                 alert(`Simulating email delivery of ${payrollRunData.length} payslips now.`);
+            } else {
+                 alert('No payroll data to email slips for.');
+            }
+        });
+        
+        exportBtn.addEventListener('click', () => {
+            if (payrollRunData.length === 0) {
+                alert('No payroll data to export. Please calculate a run first.');
+                return;
+            }
+            
+            const header = ["Employee ID", "Full Name", "Days Paid", "Gross Pay", "Total Deductions", "Net Pay", "Status", "Pay Grade"];
+            const rows = payrollRunData.map(item => {
+                const employeeName = teacherLookupMap[item.employee_id] || item.full_name || 'NAME UNKNOWN';
+                const snapshot = item.payslip_snapshot ? (typeof item.payslip_snapshot === 'string' ? JSON.parse(item.payslip_snapshot) : item.payslip_snapshot) : null;
+                const payGrade = (employeeDetailsMap[item.user_id] ? employeeDetailsMap[item.user_id].pay_grade : (snapshot ? snapshot.pay_grade : 'N/A'));
+                
+                return [
+                    item.employee_id || (snapshot ? snapshot.employee_id : item.user_id),
+                    employeeName.replace(/"/g, '""'), 
+                    item.days_paid,
+                    Math.round(item.gross_pay),
+                    Math.round(item.tax_deductions || item.deductions),
+                    Math.round(item.net_pay),
+                    item.status,
+                    payGrade
+                ];
+            });
+
+            let csvContent = "data:text/csv;charset=utf-8," 
+                + header.join(",") + "\n"
+                + rows.map(e => e.map(cell => `"${cell}"`).join(",")).join("\n"); 
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `payroll_audit_${document.getElementById('current-run-id').textContent}_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click(); 
+            document.body.removeChild(link);
+            alert('Payroll data exported successfully!');
+        });
+        
+        auditSearchInput.addEventListener('keyup', (e) => {
+            const query = e.target.value.toLowerCase();
+            const rows = payrollTableBody.querySelectorAll('tr');
+
+            rows.forEach(row => {
+                const name = row.dataset.name || '';
+                const id = row.dataset.id || '';
+                
+                if (name.includes(query) || id.includes(query)) {
+                    row.style.display = '';
+                } else {
+                    row.style.display = 'none';
+                }
+            });
+        });
+
+        // --- Initialization ---
+        payrollRunForm.addEventListener('submit', calculateAndRenderPayroll);
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            currentUserRole = localStorage.getItem('user-role') || 'HR_STAFF';
+            
+            if (['Admin', 'Super Admin'].includes(currentUserRole)) {
+                currentUserRole = 'SENIOR_MGNT'; 
+            } else if (currentUserRole === 'HR') {
+                 currentUserRole = 'HR_STAFF';
+            } else if (currentUserRole === 'Teacher' || currentUserRole === 'Coordinator') {
+                 currentUserRole = 'HR_STAFF'; 
+            }
+            
+            fetchEmployeeData(); // This loads current employee data for new runs
+            loadPayrollHistory(); // <--- FIX 3: CALL HISTORY FUNCTION
+            updateWorkflowUI(); 
+        });
+// =========================================================
+// === History Loading and Loading Logic ===
+// =========================================================
+
+/**
+ * Loads the list of saved runs from the server and populates the dropdown.
+ */
+async function loadPayrollHistory() {
+    try {
+        const historyList = await handleApi(`${API_BASE}/run-history-list`);
+        
+        // Keep the "Current Calculation" option
+        runHistorySelect.innerHTML = '<option value="current">Current Calculation (New)</option>';
+        
+        historyList.forEach(run => {
+            const start = new Date(run.pay_period_start).toLocaleDateString();
+            const end = new Date(run.pay_period_end).toLocaleDateString();
+            const status = run.status.replace('_', ' ');
+            
+            runHistorySelect.innerHTML += `
+                <option value="${run.run_id}">Run ID: ${run.run_id.slice(0, 8)} | ${start} - ${end} (${status})</option>
+            `;
+        });
+        
+    } catch (error) {
+        console.error("Error loading payroll history:", error);
+        alert('Failed to load past payroll runs.');
+    }
+}
+
+/**
+ * Loads the details for a selected run ID.
+ */
+loadRunBtn.addEventListener('click', async () => {
+    const runId = runHistorySelect.value;
+    
+    if (runId === 'current') {
+        // Reset to initial state
+        payrollRunData = [];
+        currentRunStatus = 'Pending';
+        document.getElementById('current-run-id').textContent = 'N/A';
+        lastModifiedStamp.textContent = 'N/A';
+        payrollTableBody.innerHTML = `<tr><td colspan="8" id="audit-table-status">Select period and Calculate to start a Pay Run.</td></tr>`;
+        updateSummary(0, 0, 0);
+        updateWorkflowUI();
+        return;
+    }
+    
+    loadingMsg.style.display = 'block'; // Added loading indicator
+    
+    try {
+        const runDetails = await handleApi(`${API_BASE}/run-details/${runId}`);
+        
+        const summary = runDetails.run_summary;
+        const details = runDetails.run_details;
+        
+        // 1. Update Global Settings
+        document.getElementById('pay-period-start').value = summary.pay_period_start.slice(0, 10);
+        document.getElementById('pay-period-end').value = summary.pay_period_end.slice(0, 10);
+        
+        // 2. Update Status and Summary
+        currentRunStatus = summary.status;
+        document.getElementById('current-run-id').textContent = runId.slice(0, 8);
+        lastModifiedStamp.textContent = new Date(summary.run_date).toLocaleString();
+        
+        updateSummary(summary.total_employees, summary.total_net_pay, summary.total_deductions);
+        
+        // 3. Populate Payroll Data for Audit Table (CRITICAL FIXES APPLIED HERE)
+        payrollRunData = details.map(item => {
+            
+            // FIX 1: Explicitly parse payslip_snapshot if it's a JSON string (The core issue)
+            let snapshot = item.payslip_snapshot;
+            if (typeof snapshot === 'string') {
+                try {
+                    snapshot = JSON.parse(snapshot);
+                } catch (e) {
+                    console.error('Failed to parse payslip_snapshot JSON:', e);
+                    snapshot = {}; 
+                }
+            }
+            
+            // FIX 2: Retrieve employee_id from the reliable snapshot data
+            // It falls back to regex or 'N/A' if the snapshot is empty/missing employee_id
+            const employeeId = snapshot.employee_id || item.full_name.match(/\((.*?)\)/)?.[1] || 'N/A'; 
+
+            return {
+                employee_id: employeeId,
+                user_id: item.user_id,
+                full_name: item.full_name,
+                gross_pay: parseFloat(item.gross_pay),
+                tax_deductions: parseFloat(item.deductions), // Note: payroll_run_details stores total deductions here
+                net_pay: parseFloat(item.net_pay),
+                days_paid: parseFloat(item.days_paid),
+                status: summary.status,
+                // Use the (now parsed) snapshot object
+                payslip_snapshot: snapshot 
+            }
+        });
+        
+        renderPayrollAudit(payrollRunData);
+        updateWorkflowUI();
+        alert(`Payroll Run ID ${runId.slice(0, 8)} loaded successfully!`);
+        
+    } catch (error) {
+        console.error("Error loading payroll run details:", error);
+        alert('Failed to load payroll run details: ' + error.message);
+    } finally {
+        loadingMsg.style.display = 'none';
+    }
+});
+
+// =========================================================
+// === END History Loading and Loading Logic ===
+// =========================================================
+    </script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate Tax Compliance Statements</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #797d7f;
+            --warning-color: #f39c12;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 700px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .export-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        .export-grid select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+        .submit-btn {
+            grid-column: 1 / -1;
+            padding: 12px;
+            background-color: var(--warning-color);
+            color: #333;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #e68a00;
+        }
+        .info-message {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border: 1px solid var(--secondary-color);
+            border-radius: 5px;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+
+    /**
+     * Handles form submission to trigger the Tax Compliance Statement export.
+     */
+    async function exportTaxStatement(formData) {
+        const submitBtn = document.getElementById('export-btn');
+        const messageBox = document.getElementById('export-message');
+        submitBtn.disabled = true;
+        messageBox.className = 'info-message';
+        messageBox.textContent = `Generating ${formData.tax_type} statement for Fiscal Year ${formData.fiscal_year}...`;
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return file directly (e.g., as a Blob) ❌
+            const response = await fetch(`/api/reports/tax-compliance?${new URLSearchParams(formData)}`, { 
+                headers: { 'Authorization': `Bearer ${token}` } 
+            });
+
+            if (!response.ok) {
+                throw new Error(response.statusText || 'Failed to generate report.');
+            }
+            
+            // Assume the server returns a Blob/File
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${formData.tax_type}_Compliance_${formData.fiscal_year}.${formData.format.toLowerCase()}`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+            
+            messageBox.textContent = `✅ Export complete! Check your downloads folder.`;
+            messageBox.style.borderColor = 'var(--primary-color)';
+            messageBox.style.backgroundColor = 'var(--light-gray-color)';
+
+        } catch (error) {
+            messageBox.textContent = `❌ Export Error: ${error.message}`;
+            messageBox.style.borderColor = 'var(--error-color)';
+            messageBox.style.backgroundColor = '#fbecec';
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('tax-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = {
+                tax_type: document.getElementById('tax-type').value,
+                fiscal_year: document.getElementById('fiscal-year').value,
+                format: document.getElementById('export-format').value,
+            };
+            exportTaxStatement(formData);
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Generate Tax Compliance Statements</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Statement Criteria</h2>
+        <form id="tax-form">
+            <div class="export-grid">
+                <div class="form-group">
+                    <label for="tax-type">Tax Type:</label>
+                    <select id="tax-type" required>
+                        <option value="GST">GST (Goods and Services Tax)</option>
+                        <option value="VAT">VAT (Value Added Tax)</option>
+                        <option value="Income">Income Tax (Annual Filing)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="fiscal-year">Fiscal Year:</label>
+                    <select id="fiscal-year" required>
+                        <option value="2025-2026">2025 - 2026</option>
+                        <option value="2024-2025">2024 - 2025</option>
+                        <option value="2023-2024">2023 - 2024</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="export-format">Output Format:</label>
+                    <select id="export-format" required>
+                        <option value="JSON">JSON (for direct portal upload)</option>
+                        <option value="PDF">PDF Summary</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reporting-period">Reporting Period:</label>
+                    <select id="reporting-period">
+                        <option value="annual">Annual</option>
+                        <option value="quarter-q4">Q4 (Jan-Mar)</option>
+                        <option value="quarter-q3">Q3 (Oct-Dec)</option>
+                    </select>
+                </div>
+            </div>
+            <button type="submit" id="export-btn" class="submit-btn">Generate Tax Statement</button>
+            <div id="export-message" class="info-message">
+                Generate official tax statements required for compliance filings.
+            </div>
+        </form>
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View Pending Invoice List</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #797d7f;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --warning-color: #f39c12;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .filter-controls {
+            display: flex;
+            gap: 20px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            align-items: center;
+        }
+        .filter-controls select, .filter-controls input {
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        #invoice-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        #invoice-table th, #invoice-table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9em;
+        }
+        #invoice-table th {
+            background-color: var(--primary-color);
+            color: #fff;
+            font-weight: 600;
+        }
+        .status-overdue { color: var(--error-color); font-weight: 600; }
+        .status-pending { color: var(--warning-color); font-weight: 600; }
+        .action-btn {
+            padding: 6px 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85em;
+            margin-right: 5px;
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        .placeholder-message {
+            text-align: center;
+            padding: 40px 0;
+            color: var(--secondary-color);
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+
+    // Function to load courses and populate the filter dropdown
+    async function loadCourses() {
+        const courseFilter = document.getElementById('course-filter');
+        const initialOption = courseFilter.querySelector('option[value=""]');
+        courseFilter.innerHTML = ''; 
+        courseFilter.appendChild(initialOption); // Keep the default "All Courses" option
+        
+        try {
+            // Use the established endpoint for fetching all courses
+            const courses = await handleApi('/api/academicswithfees/courses');
+            
+            courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course.course_id;
+                option.textContent = `${course.course_name} (${course.course_code})`;
+                courseFilter.appendChild(option);
+            });
+            
+        } catch (error) {
+            console.error('Error loading courses for filter:', error);
+            const errorOption = document.createElement('option');
+            errorOption.value = '';
+            errorOption.textContent = 'Error loading courses';
+            courseFilter.appendChild(errorOption);
+        }
+    }
+
+
+    // Placeholder function for fetching pending invoices
+    async function fetchPendingInvoices(filters) {
+        const tbody = document.getElementById('invoice-tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">Loading pending invoices...</td></tr>';
+        
+        try {
+            // ❌ ACTUAL API CALL ❌
+            const queryString = new URLSearchParams(filters).toString();
+            // This is the endpoint that was added to fees.js
+            const invoices = await handleApi('/api/invoices/pending?' + queryString);
+            
+            renderInvoices(invoices);
+
+        } catch (error) {
+            console.error('Error fetching pending invoices:', error);
+            // ⭐ NEW FIX: Add a more specific error message when a 404 occurs
+            let errorMessage = error.message;
+            if (errorMessage.includes('404 (Not Found)')) {
+                 errorMessage = 'API Endpoint not found. Ensure the server is running and the routing file (fees.js) is correctly loaded.';
+            }
+
+            tbody.innerHTML = `<tr><td colspan="8" class="placeholder-message" style="color: var(--error-color);">Error loading data: ${errorMessage}</td></tr>`;
+        }
+    }
+
+    // Placeholder function to render results
+    function renderInvoices(invoices) {
+        const tbody = document.getElementById('invoice-tbody');
+        tbody.innerHTML = '';
+        
+        if (invoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">No pending invoices found.</td></tr>';
+            return;
+        }
+        
+        // This loop structure is ready for real data
+        invoices.forEach(inv => {
+            const isOverdue = new Date(inv.due_date) < new Date();
+            const statusClass = isOverdue ? 'status-overdue' : 'status-pending';
+            const statusText = isOverdue ? 'Overdue' : 'Pending';
+
+            const row = `<tr>
+                <td>${inv.invoice_number}</td>
+                <td>${inv.student_name} (${inv.roll_number})</td>
+                <td>${inv.course}</td>
+                <td>₹${inv.amount.toFixed(2)}</td>
+                <td>${new Date(inv.issue_date).toLocaleDateString()}</td>
+                <td>${new Date(inv.due_date).toLocaleDateString()}</td>
+                <td><span class="${statusClass}">${statusText}</span></td>
+                <td>
+                    <button class="action-btn" onclick="alert('Sending reminder for Invoice ${inv.invoice_number}')">Send Reminder</button>
+                    <button class="action-btn" onclick="alert('Viewing PDF for Invoice ${inv.invoice_number}')">View PDF</button>
+                </td>
+            </tr>`;
+            tbody.innerHTML += row;
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCourses(); // Populate course list on load
+        
+        // Get filter values and load data when "Apply Filters" is clicked
+        document.querySelector('.filter-controls button').addEventListener('click', () => {
+            const filters = {
+                course_id: document.getElementById('course-filter').value,
+                status: document.getElementById('status-filter').value,
+                q: document.getElementById('search-input').value.trim()
+            };
+            fetchPendingInvoices(filters);
+        });
+        
+        fetchPendingInvoices({}); // Initial data load
+    });
+</script>
+
+<div class="container">
+    <h1>View Pending Invoice List</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Filter & Search</h2>
+        <div class="filter-controls">
+            <label for="course-filter">Course:</label>
+            <select id="course-filter">
+                <option value="">All Courses</option>
+                </select>
+
+            <label for="status-filter">Status:</label>
+            <select id="status-filter">
+                <option value="pending" selected>All Pending</option>
+                <option value="overdue">Overdue Only</option>
+            </select>
+            
+            <input type="text" id="search-input" placeholder="Search by Student or Invoice ID">
+
+            <button class="action-btn">Apply Filters</button>
+        </div>
+
+        <h2>Outstanding Invoices</h2>
+        <table id="invoice-table">
+            <thead>
+                <tr>
+                    <th>Invoice No.</th>
+                    <th>Student</th>
+                    <th>Course</th>
+                    <th>Amount Due (₹)</th>
+                    <th>Date Issued</th>
+                    <th>Due Date</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="invoice-tbody">
+                <tr><td colspan="8" class="placeholder-message">Loading pending invoice data...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

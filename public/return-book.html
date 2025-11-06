@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Return a Book</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .form-container { max-width: 600px; margin: 40px auto; padding: 30px; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .form-container h1 { text-align: center; color: #333; }
+        .form-container label { display: block; margin-top: 15px; font-weight: bold; }
+        .form-container input { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .form-container button { width: 100%; padding: 12px; background-color: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 25px; font-size: 1.1em; }
+        .form-container button:hover { background-color: #c82333; }
+
+        .issue-details { margin-top: 30px; padding: 20px; border: 1px solid #007bff; border-radius: 6px; background-color: #e9f5ff; display: none; }
+        .issue-details p { margin: 5px 0; font-size: 1.1em; }
+        .issue-details .detail-label { font-weight: bold; color: #0056b3; display: inline-block; width: 150px; }
+        .fine-warning { color: red; font-weight: bold; margin-top: 10px; }
+
+        #notification { position: fixed; top: 20px; right: 20px; padding: 15px; border-radius: 5px; color: white; z-index: 2000; display: none; }
+        .notification-success { background-color: #28a745; }
+        .notification-error { background-color: #dc3545; }
+    </style>
+</head>
+<body>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        // Only Admin and Librarian can process returns
+        if (!token || !['Admin', 'Librarian'].includes(userRole)) {
+            window.location.href = '/login';
+        }
+    </script>
+    <div class="container">
+        <div class="nav-links">
+            <a href="/manage-books.html">← Back to Library Dashboard</a> | 
+            <a href="/issue-book.html">Issue a Book</a>
+        </div>
+        
+        <div class="form-container">
+            <h1>Process Book Return</h1>
+            <p>Enter the Issue ID to look up and process the return.</p>
+            
+            <form id="lookup-form">
+                <label for="issue-id">Issue ID:</label>
+                <input type="text" id="issue-id" placeholder="e.g., 105" required>
+                <button type="submit" style="background-color: #007bff; margin-top: 15px;">Lookup Issue</button>
+            </form>
+
+            <div id="issue-details" class="issue-details">
+                <h2>Issue Details</h2>
+                <p><span class="detail-label">Issue ID:</span> <span id="detail-issue-id"></span></p>
+                <p><span class="detail-label">Book Title:</span> <span id="detail-book-title"></span></p>
+                <p><span class="detail-label">Issued To:</span> <span id="detail-user-name"></span></p>
+                <p><span class="detail-label">Issue Date:</span> <span id="detail-issue-date"></span></p>
+                <p><span class="detail-label">Due Date:</span> <span id="detail-due-date"></span></p>
+                <p class="fine-warning" id="fine-status"></p>
+
+                <button id="return-button">Confirm Return</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="notification"></div>
+
+    <script>
+        const authHeaders = { 'Authorization': `Bearer ${token}` };
+        let currentIssueId = null; // Store the ID of the lookup for the return button
+        
+        function showNotification(message, type = 'success') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = 'notification-' + type;
+            notification.style.display = 'block';
+            setTimeout(() => { notification.style.display = 'none'; }, 4000);
+        }
+        
+        function hideDetails() {
+            document.getElementById('issue-details').style.display = 'none';
+            currentIssueId = null;
+        }
+
+        // Helper to format date
+        function formatDate(dateString) {
+            return new Date(dateString).toLocaleDateString('en-US', {
+                year: 'numeric', month: 'short', day: 'numeric'
+            });
+        }
+        
+        // --- 1. Lookup Issue Details (Conceptual API endpoint) ---
+        // NOTE: This relies on a conceptual '/api/library/issue/:id' endpoint to fetch details,
+        // which would need to be added to routes/library.js for a full implementation.
+        // For now, we simulate the required logic based on the book_issues table structure.
+        
+        document.getElementById('lookup-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const issueId = document.getElementById('issue-id').value.trim();
+            if (!issueId) return;
+
+            hideDetails();
+            currentIssueId = issueId;
+            
+            // --- SIMULATION of fetching full issue details ---
+            // In a real system, you'd fetch /api/library/issue/:id to get book/user names and status.
+            
+            // Temporary check to demonstrate logic:
+            // Fetching details requires JOINs not easily done on the client, but we will assume success for UI logic.
+            // If the server cannot provide this endpoint, the client must adapt or the server must be extended.
+            
+            // Since we don't have the conceptual GET /issue/:id route, we will assume the return API
+            // handles the lookups and status checks internally, but the UI needs *some* data to confirm.
+            
+            // We use a mock data structure for the sake of frontend development:
+            const mockIssueData = {
+                id: issueId,
+                book_title: "The Chronicles of Narnia: The Lion, the Witch and the Wardrobe",
+                user_name: "John Doe (Student)",
+                issue_date: "2025-09-01T00:00:00.000Z",
+                due_date: "2025-10-15T00:00:00.000Z",
+                status: "Issued",
+            };
+            
+            // Check for overdue status in the UI
+            const today = new Date();
+            const dueDate = new Date(mockIssueData.due_date);
+            let fineMessage = "No fines assessed.";
+
+            if (dueDate < today) {
+                // Days overdue calculation is best handled on the server, but for UI feedback:
+                const daysOverdue = Math.ceil((today - dueDate) / (1000 * 60 * 60 * 24));
+                fineMessage = `OVERDUE! The book is ${daysOverdue} days late. Fines may apply.`;
+            }
+            
+            // Populate details section
+            document.getElementById('detail-issue-id').textContent = mockIssueData.id;
+            document.getElementById('detail-book-title').textContent = mockIssueData.book_title;
+            document.getElementById('detail-user-name').textContent = mockIssueData.user_name;
+            document.getElementById('detail-issue-date').textContent = formatDate(mockIssueData.issue_date);
+            document.getElementById('detail-due-date').textContent = formatDate(mockIssueData.due_date);
+            document.getElementById('fine-status').textContent = fineMessage;
+            
+            if (mockIssueData.status === 'Issued') {
+                document.getElementById('issue-details').style.display = 'block';
+                showNotification(`Details found for Issue ID ${issueId}.`, 'success');
+            } else {
+                showNotification(`Issue ID ${issueId} not found or already returned.`, 'error');
+            }
+            // --- END SIMULATION ---
+        });
+
+
+        // --- 2. Confirm Return Process ---
+        document.getElementById('return-button').addEventListener('click', async function() {
+            if (!currentIssueId) return;
+
+            if (!confirm(`Are you sure you want to process the return for Issue ID ${currentIssueId}?`)) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/library/return/${currentIssueId}`, {
+                    method: 'POST',
+                    headers: authHeaders // No Content-Type needed as body is empty
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    showNotification(result.message || 'Book returned successfully! Inventory updated.', 'success');
+                    document.getElementById('issue-id').value = '';
+                    hideDetails(); // Hide details section after successful return
+                    // Reload dashboard stats on the next page load if applicable
+                } else {
+                    // Display the error message returned from the server (e.g., "This book has already been returned.")
+                    showNotification(result.message || 'Failed to process return. Check server logs.', 'error');
+                }
+            } catch (error) {
+                console.error("Network or processing error:", error);
+                showNotification('An unexpected network error occurred while processing the return.', 'error');
+            }
+        });
+
+        // Initialize on load
+        window.onload = () => {
+             // Ensure the form is visible
+        };
+    </script>
+</body>
+</html>

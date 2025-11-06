@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Exam Schedule</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f8; font-family: sans-serif; }
+        .container { max-width: 1000px; }
+        h1 { color: #003366; font-weight: bold; }
+        .text-primary { color: #003366 !important; }
+        .text-secondary { color: #5e35b1 !important; }
+        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .table thead th { background-color: #003366; color: white; border-bottom: none; }
+        .table tbody tr:hover { background-color: #f0f2f8; }
+        #exam-details-card { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <header class="mb-4 d-flex justify-content-between align-items-center">
+            <h1>My Exam Schedule</h1>
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
+        </header>
+
+        <div class="card p-4 mb-4 shadow-sm">
+            <h3 class="text-secondary mb-3">Select Exam Series</h3>
+            <div class="row g-3 align-items-center">
+                <div class="col-md-8">
+                    <select id="exam-select" class="form-select" onchange="loadSchedule()">
+                        <option value="">-- Select an Exam (e.g., Midterm, Final) --</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <span id="selected-exam-info" class="text-muted small">Select an exam above to view details.</span>
+                </div>
+            </div>
+        </div>
+
+        <div id="exam-details-card" class="card shadow-sm">
+            <div class="card-header bg-white">
+                <h4 class="mb-0 text-primary">Schedule for <span id="schedule-exam-name">...</span></h4>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Duration</th>
+                            <th>Location</th>
+                        </tr>
+                    </thead>
+                    <tbody id="schedule-table-body">
+                        </tbody>
+                </table>
+                <div id="schedule-message" class="p-3 text-center text-muted small" style="display:none;">
+                    No schedule entries found for this exam.
+                </div>
+            </div>
+        </div>
+        
+        <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const studentId = localStorage.getItem('student-id'); 
+        
+        // --- Helper function for API calls ---
+        async function handleApi(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) {
+                // Assuming session check as in other files
+                if (response.status === 401 || response.status === 403) {
+                     alert('Session expired or unauthorized. Please log in again.');
+                     window.location.href = '/login.html';
+                     throw new Error('Unauthorized');
+                }
+                throw new Error(`API call failed with status: ${response.status}`);
+            }
+            return response.json();
+        }
+
+        let studentCourseId = null;
+        let studentBatchId = null;
+
+        /**
+         * 1. Fetches student's profile to get course/batch.
+         * 2. Fetches all exams.
+         * 3. Filters exams to only show those relevant to the student.
+         */
+        async function loadExams() {
+            const examSelect = document.getElementById('exam-select');
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.style.display = 'none';
+
+            if (!studentId || !token) {
+                examSelect.innerHTML = '<option value="">Login error: ID/Token missing.</option>';
+                return;
+            }
+
+            try {
+                // A. Get Student Course/Batch (Uses API from students.js)
+                const studentData = await handleApi(`/api/students/${studentId}`);
+                studentCourseId = studentData.course_id;
+                studentBatchId = studentData.batch_id;
+                
+                if (!studentCourseId || !studentBatchId) {
+                    examSelect.innerHTML = '<option value="">Enrollment Error: Course/Batch not set.</option>';
+                    return;
+                }
+
+                // B. Get All Exams (Uses API from exams.js)
+                // NOTE: This endpoint MUST be authorized for the 'Student' role in exams.js
+                const exams = await handleApi('/api/exams/list');
+
+                // C. Filter exams relevant to the student's enrollment
+                const relevantExams = exams.filter(exam => 
+                    exam.course_id === studentCourseId && exam.batch_id === studentBatchId
+                );
+
+                if (relevantExams.length === 0) {
+                    examSelect.innerHTML = '<option value="">No exams found for your course/batch.</option>';
+                    return;
+                }
+
+                examSelect.innerHTML = '<option value="">-- Select an Exam Series --</option>';
+                relevantExams.forEach(exam => {
+                    const examTotalMarks = exam.max_theory_marks + (exam.max_practical_marks || 0);
+                    examSelect.innerHTML += `
+                        <option value="${exam.exam_id}" 
+                                data-name="${exam.exam_name}"
+                                data-type="${exam.exam_type}"
+                                data-total-marks="${examTotalMarks}">
+                            ${exam.exam_name} (${exam.exam_type}) - ${exam.batch_code || 'N/A'}
+                        </option>
+                    `;
+                });
+
+            } catch (error) {
+                console.error('Error loading exams:', error);
+                errorMessage.textContent = `Error: Failed to load exam list. (${error.message})`;
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        /**
+         * Loads the schedule for the currently selected exam.
+         */
+        async function loadSchedule() {
+            const examSelect = document.getElementById('exam-select');
+            const examId = examSelect.value;
+            const scheduleBody = document.getElementById('schedule-table-body');
+            const scheduleCard = document.getElementById('exam-details-card');
+            const examInfo = document.getElementById('selected-exam-info');
+            const scheduleMessage = document.getElementById('schedule-message');
+            const errorMessage = document.getElementById('error-message');
+            
+            scheduleBody.innerHTML = '';
+            scheduleMessage.style.display = 'none';
+            errorMessage.style.display = 'none';
+
+            if (!examId) {
+                scheduleCard.style.display = 'none';
+                examInfo.textContent = 'Select an exam above to view details.';
+                return;
+            }
+            
+            const selectedOption = examSelect.options[examSelect.selectedIndex];
+            const examName = selectedOption.getAttribute('data-name');
+            const examType = selectedOption.getAttribute('data-type');
+            const examTotalMarks = selectedOption.getAttribute('data-total-marks');
+
+            document.getElementById('schedule-exam-name').textContent = `${examName} (${examType})`;
+            examInfo.textContent = `Total Marks: ${examTotalMarks}`;
+            scheduleCard.style.display = 'block';
+            scheduleBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading schedule...</td></tr>';
+
+            try {
+                // Uses API endpoint from exams.js: GET /api/exams/schedule/:exam_id
+                // NOTE: This endpoint MUST also be authorized for the 'Student' role in exams.js
+                const schedules = await handleApi(`/api/exams/schedule/${examId}`);
+                
+                if (schedules.length === 0) {
+                    scheduleMessage.textContent = 'No schedule entries found for this exam series.';
+                    scheduleMessage.style.display = 'block';
+                    scheduleBody.innerHTML = '';
+                    return;
+                }
+
+                schedules.forEach(schedule => {
+                    const startTime = new Date(`2000/01/01 ${schedule.start_time}`);
+                    const endTime = new Date(`2000/01/01 ${schedule.end_time}`);
+                    // Calculate duration in minutes for display
+                    const durationMinutes = (endTime - startTime) / 60000; 
+                    const durationText = durationMinutes > 0 ? `${durationMinutes} minutes` : 'N/A';
+                    
+                    // Format Date
+                    const examDate = new Date(schedule.exam_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                    
+                    // Format Time (e.g., 09:00 AM - 12:00 PM)
+                    const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
+                    const startTimeFormatted = startTime.toLocaleTimeString('en-US', timeOptions);
+                    const endTimeFormatted = endTime.toLocaleTimeString('en-US', timeOptions);
+
+                    scheduleBody.innerHTML += `
+                        <tr>
+                            <td>${schedule.subject_name} (${schedule.subject_code})</td>
+                            <td>${examDate}</td>
+                            <td>${startTimeFormatted} - ${endTimeFormatted}</td>
+                            <td>${durationText}</td>
+                            <td>${schedule.exam_center} - ${schedule.room_number}</td>
+                        </tr>
+                    `;
+                });
+
+            } catch (error) {
+                console.error('Error loading schedule:', error);
+                scheduleBody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">Failed to load schedule.</td></tr>`;
+                errorMessage.textContent = `Error: Failed to load schedule. (${error.message})`;
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadExams);
+    </script>
+</body>
+</html>

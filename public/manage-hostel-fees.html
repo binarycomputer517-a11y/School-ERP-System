@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Hostel Fees</title>
+    <style>
+        /* --- CLASSIC DESIGN STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 1000px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #C0392B; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; border-bottom: 2px solid #999; 
+            padding-bottom: 5px; margin-top: 40px; margin-bottom: 20px;
+        }
+
+        /* Form & Input Styles */
+        form { margin-bottom: 20px; padding: 15px; border: 1px solid #E0E0E0; background-color: #F8F8F8; }
+        input, select { 
+            padding: 8px; margin-right: 10px; border: 1px solid #555; border-radius: 0; 
+            width: 90%; margin-bottom: 10px;
+        }
+        
+        button { 
+            background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; 
+            border-radius: 0; cursor: pointer; margin-top: 5px; box-shadow: 2px 2px 0 #000;
+            font-weight: bold;
+        }
+        button:hover { background-color: #003366; box-shadow: 1px 1px 0 #000; }
+        
+        .fee-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-bottom: 30px; }
+        .status-paid { color: #28a745; font-weight: bold; }
+        .status-due { color: #ffc107; }
+        .status-overdue { color: #dc3545; font-weight: bold; }
+
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+
+        /* Navigation */
+        .nav-links { margin-bottom: 20px; text-align: center; }
+        .nav-links a { text-decoration: none; color: #005A9C; font-weight: bold; }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const HOSTEL_ADMIN_ROLES = ['Admin', 'Super Admin'];
+
+    // Update authorization check
+    if (!token || !HOSTEL_ADMIN_ROLES.includes(userRole)) { 
+        window.location.href = '/login'; 
+    }
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    // --- Helper to fetch data safely ---
+    async function fetchSafe(url) {
+        try {
+            const res = await fetch(url, { headers: authHeaders });
+            if (!res.ok) {
+                 const errorBody = await res.json().catch(() => ({ message: res.statusText }));
+                 throw new Error(errorBody.message);
+            }
+            const data = await res.json();
+            // Ensure the return value is an array
+            return Array.isArray(data) ? data : []; 
+        } catch (error) {
+            console.error(`API Error on ${url}:`, error.message);
+            if (error.message.includes('Not Found')) {
+                // Better error message if API endpoint is missing
+                alert(`API Error 404: The endpoint ${url.split('/api/hostel')[1]} is not configured on the server.`);
+            }
+            return [];
+        }
+    }
+
+    function loadStructures() {
+        const select = document.getElementById('structure-select');
+        if (!select) return;
+
+        fetchSafe('/api/hostel/fees/structures')
+            .then(structures => {
+                select.innerHTML = '<option value="">-- Select a Structure --</option>';
+                structures.forEach(s => {
+                    select.innerHTML += `<option value="${s.id}">${s.structure_name} (₹${s.amount})</option>`;
+                });
+            });
+    }
+
+    function loadInvoices() {
+        const tableBody = document.getElementById('invoices-body');
+        if (!tableBody) return;
+
+        fetchSafe('/api/hostel/fees/invoices')
+            .then(invoices => {
+                tableBody.innerHTML = '';
+                if (invoices.length === 0) {
+                     tableBody.innerHTML = '<tr><td colspan="6">No invoices found.</td></tr>';
+                     return;
+                }
+                
+                invoices.forEach(i => {
+                    // Calculate amount remaining due
+                    const amountDue = (parseFloat(i.amount_due) - parseFloat(i.amount_paid)).toFixed(2);
+                    let actionBtn = amountDue > 0 ? 
+                        `<button onclick="recordPayment('${i.id}', ${amountDue})">Record Payment</button>` : 
+                        'Paid in Full';
+                        
+                    // Determine status class based on the returned status string
+                    const statusClass = i.status ? `status-${i.status.toLowerCase().replace(' ', '-')}` : '';
+
+                    tableBody.innerHTML += `
+                        <tr>
+                            <td>${i.student_name}</td>
+                            <td>${i.structure_name}</td>
+                            <td>₹${i.amount_due} (Paid: ₹${i.amount_paid})</td>
+                            <td class="${statusClass}"><strong>${i.status}</strong></td>
+                            <td>${new Date(i.due_date).toLocaleDateString()}</td>
+                            <td>${actionBtn}</td>
+                        </tr>
+                    `;
+                });
+            });
+    }
+
+    function recordPayment(invoiceId, remainingDue) {
+        const amount = prompt(`Invoice requires ₹${remainingDue} remaining. Enter amount received:`, remainingDue);
+        
+        // Ensure amount is valid and positive
+        if (amount && !isNaN(amount) && parseFloat(amount) > 0) {
+            fetch(`/api/hostel/fees/invoices/${invoiceId}/record-payment`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify({ amount: parseFloat(amount) })
+            }).then(res => {
+                if(res.ok){ alert('Payment recorded!'); loadInvoices(); } 
+                else { 
+                    res.text().then(text => {
+                        let errorMsg = 'Error recording payment.';
+                        try {
+                            // Try parsing JSON error body if available
+                            const errorObj = JSON.parse(text);
+                            errorMsg = errorObj.message || errorMsg;
+                        } catch {
+                            errorMsg = text;
+                        }
+                        alert(errorMsg); 
+                    }); 
+                }
+            });
+        } else if (amount !== null) {
+            alert('Invalid or zero amount entered.');
+        }
+    }
+
+    // --- Submission Handler Block ---
+    const structureForm = document.getElementById('structure-form');
+    const generateForm = document.getElementById('generate-form');
+
+    if (structureForm) {
+        structureForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(this).entries());
+            fetch('/api/hostel/fees/structures', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(data)
+            }).then(async res => { // Changed to async to use await for error parsing
+                if(res.ok){ 
+                    alert('Structure created successfully!'); 
+                    this.reset(); 
+                    loadStructures(); 
+                } else { 
+                    try {
+                        const errorBody = await res.json();
+                        alert('Error: ' + (errorBody.message || JSON.stringify(errorBody)));
+                    } catch (e) {
+                        const rawText = await res.text();
+                        alert('Error saving structure (Server response was not JSON or was generic): ' + rawText);
+                    }
+                }
+            });
+        });
+    }
+
+    if (generateForm) {
+        generateForm.addEventListener('submit', function(e){
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(this).entries());
+            
+            // Client-side validation for required fields
+            if (!data.fee_structure_id || !data.due_date) {
+                alert('Please select a Fee Structure and Due Date.');
+                return;
+            }
+            
+            if (confirm('Are you sure you want to generate invoices for all allocated hostel students? This action cannot be undone.')) {
+                fetch('/api/hostel/fees/generate-invoices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', ...authHeaders },
+                    body: JSON.stringify(data)
+                }).then(res => res.text().then(text => { 
+                    alert(text); 
+                    loadInvoices(); 
+                }))
+                .catch(error => alert("Invoice generation failed: " + error.message));
+            }
+        });
+    }
+
+    window.onload = () => {
+        loadStructures();
+        loadInvoices();
+    };
+</script>
+
+<div class="container">
+    <h1>Hostel Fees Management</h1>
+    <div class="nav-links">
+        <a href="/manage-hostel.html">← Back to Hostel Management</a>
+    </div>
+
+    <div class="fee-grid">
+        <div>
+            <h2>Create Fee Structure</h2>
+            <form id="structure-form">
+                <input type="text" name="structure_name" placeholder="Structure Name (e.g., Annual Mess)" required>
+                <input type="number" name="amount" placeholder="Amount (e.g., 5000.00)" required min="0.01" step="0.01">
+                <select name="frequency" required>
+                    <option value="">-- Select Frequency --</option>
+                    <option value="Monthly">Monthly</option>
+                    <option value="Quarterly">Quarterly</option>
+                    <option value="Annual">Annual</option>
+                    <option value="One-Time">One-Time</option>
+                </select>
+                <button type="submit">Save Structure</button>
+            </form>
+        </div>
+        
+        <div>
+            <h2>Generate Invoices</h2>
+            <form id="generate-form">
+                <select name="fee_structure_id" id="structure-select" required>
+                    <option value="">-- Select a Structure --</option>
+                </select>
+                <input type="date" name="due_date" required>
+                <button type="submit">Generate Invoices</button>
+            </form>
+        </div>
+    </div>
+    
+    <hr>
+
+    <h2>All Hostel Invoices</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Fee Structure</th>
+                <th>Amount (Due/Paid)</th>
+                <th>Status</th>
+                <th>Due Date</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="invoices-body">
+            <tr><td colspan="6">Loading invoices...</td></tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

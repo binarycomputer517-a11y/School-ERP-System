@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Student Profile</title>
+    
+    <script src="edit-student.js" defer></script> 
+    
+    <style>
+        /* BASE ERP STYLES (Kept for consistency) */
+        :root {
+            --primary-color: #005A9C; /* Institutional Blue */
+            --accent-color: #C0392B; /* Deep Red for accents/buttons */
+            --border-color: #333333; /* Dark Border */
+            --font-serif: 'Times New Roman', serif;
+            --font-sans: Arial, sans-serif;
+            --tab-background: #f1f1f1;
+            --tab-active-color: #ffffff;
+        }
+        
+        body {
+            font-family: var(--font-serif);
+            background-color: #f8f8f8;
+            padding: 40px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: #ffffff;
+            border: 2px solid var(--border-color);
+            box-shadow: 6px 6px 0px #cccccc;
+            padding: 30px 40px;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            border-bottom: 3px double var(--border-color);
+            padding-bottom: 15px;
+            margin-bottom: 30px;
+            font-family: var(--font-sans);
+            font-weight: bold;
+        }
+        
+        #loadingMessage {
+            text-align: center;
+            color: var(--primary-color);
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        /* Input & Button Styles (simplified for brevity) */
+        label { display: block; margin-top: 10px; margin-bottom: 4px; font-weight: 600; }
+        input[type="text"], input[type="date"], input[type="email"], input[type="tel"], input[type="password"], input[type="number"], select, textarea {
+            width: 100%; padding: 8px; border: 1px solid #777; box-sizing: border-box; font-family: var(--font-serif);
+        }
+        button[type="submit"] { 
+            padding: 10px 18px; background-color: var(--accent-color); color: white; border: 2px solid var(--border-color); 
+            font-weight: bold; cursor: pointer; margin-top: 20px; width: 100%; 
+        }
+
+        /* --- TAB SPECIFIC STYLES --- */
+        .tab-bar {
+            display: flex;
+            margin-bottom: 1px;
+            border-bottom: 2px solid var(--primary-color);
+        }
+        
+        .tab-button {
+            background-color: var(--tab-background);
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            transition: 0.3s;
+            font-size: 1.0em;
+            border: 1px solid var(--primary-color);
+            border-bottom: none;
+            margin-right: 5px;
+            border-radius: 5px 5px 0 0;
+            outline: none;
+            color: var(--primary-color);
+            font-family: var(--font-sans);
+        }
+        
+        .tab-button.active {
+            background-color: var(--primary-color);
+            color: var(--tab-active-color);
+            border-color: var(--primary-color);
+        }
+
+        .tab-content {
+            border: 1px solid var(--primary-color);
+            padding: 20px;
+            min-height: 400px; /* Ensure content area exists */
+        }
+
+        /* Hide fieldsets by default, show only the active one */
+        .tab-content fieldset {
+            display: none;
+            border: none; /* Fieldset border removed as tab border is now primary */
+            padding: 0;
+            margin: 0;
+        }
+        
+        .tab-content fieldset.active {
+            display: block;
+        }
+        /* End TAB Styles */
+
+    </style>
+</head>
+<body>
+    <div class="container" id="profileContainer">
+        <header>
+            <h1>✏️ Edit Student Profile</h1>
+        </header>
+        
+        <h2 id="loadingMessage">Loading Student Profile...</h2>
+
+        <form id="editStudentForm"> 
+            
+            <input type="hidden" name="academic_session_id">
+            <input type="hidden" name="branch_id"> 
+            <input type="hidden" name="created_by">
+            <input type="hidden" name="id" readonly> 
+
+            <div class="tab-bar">
+                <button type="button" class="tab-button active" onclick="openTab(event, 'personal')">1. Personal & Address</button>
+                <button type="button" class="tab-button" onclick="openTab(event, 'academics')">2. Academics & Fees</button>
+                <button type="button" class="tab-button" onclick="openTab(event, 'parents')">3. Parent/Guardian</button>
+                <button type="button" class="tab-button" onclick="openTab(event, 'login')">4. Login/Security</button>
+            </div>
+
+            <div class="tab-content">
+                
+                <fieldset id="personal" class="active">
+                    <legend>👤 Student Personal Details (I.D. & Demographics)</legend>
+
+                    <label for="admission_id">Admission ID:</label>
+                    <input type="text" id="admission_id" name="admission_id" required>
+
+                    <label for="admission_date">Admission Date:</label>
+                    <input type="date" id="admission_date" name="admission_date" required>
+
+                    <label for="first_name">First Name:</label>
+                    <input type="text" id="first_name" name="first_name" required>
+
+                    <label for="middle_name">Middle Name (Optional):</label>
+                    <input type="text" id="middle_name" name="middle_name">
+
+                    <label for="last_name">Last Name:</label>
+                    <input type="text" id="last_name" name="last_name" required>
+                    
+                    <label for="roll_number">Roll Number (Internal/Official):</label>
+                    <input type="text" id="roll_number" name="roll_number" placeholder="Leave blank for system generation">
+
+                    <label for="dob">Date of Birth (DOB):</label>
+                    <input type="date" id="dob" name="dob" required>
+
+                    <label for="gender">Gender:</label>
+                    <select id="gender" name="gender">
+                        <option value="">Select Gender</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                    </select>
+                    
+                    <label for="blood_group">Blood Group:</label>
+                    <input type="text" id="blood_group" name="blood_group" maxlength="5" placeholder="e.g., A+, O-">
+                    
+                    <label for="nationality">Nationality:</label>
+                    <input type="text" id="nationality" name="nationality" required>
+                    
+                    <label for="aadhaar_number">Aadhaar / National ID:</label>
+                    <input type="text" id="aadhaar_number" name="aadhaar_number" maxlength="12" placeholder="Mandatory official ID">
+
+                    <label for="religion">Religion:</label>
+                    <input type="text" id="religion" name="religion" placeholder="e.g., Hindu, Muslim, Christian">
+
+                    <label for="caste_category">Caste/Category:</label>
+                    <select id="caste_category" name="caste_category">
+                        <option value="">Select Category</option>
+                        <option value="General">General</option>
+                        <option value="OBC">OBC</option>
+                        <option value="SC">SC</option>
+                        <option value="ST">ST</option>
+                        <option value="Other">Other</option>
+                    </select>
+
+                    <label for="mother_tongue">Mother Tongue:</label>
+                    <input type="text" id="mother_tongue" name="mother_tongue" placeholder="e.g., Hindi, English, Tamil">
+                    
+                    <hr>
+                    <legend>🏠 Permanent Address</legend>
+                    <label for="permanent_address">Street/Line 1:</label>
+                    <textarea id="permanent_address" name="permanent_address" rows="2"></textarea>
+                    
+                    <label for="city">City/Town:</label>
+                    <input type="text" id="city" name="city">
+
+                    <label for="state">State/Province:</label>
+                    <input type="text" id="state" name="state">
+
+                    <label for="zip_code">Zip/Postal Code:</label>
+                    <input type="text" id="zip_code" name="zip_code" maxlength="10">
+
+                    <label for="country">Country:</label>
+                    <input type="text" id="country" name="country" required>
+                </fieldset>
+                
+                <fieldset id="academics">
+                    <legend>🎓 Course/Batch Selection</legend>
+
+                    <label for="course_id">Course:</label>
+                    <select id="course_id" name="course_id" required>
+                        <option value="">Select Course</option>
+                    </select>
+
+                    <label for="batch_id">Batch:</label>
+                    <select id="batch_id" name="batch_id" required>
+                        <option value="">Select Batch</option>
+                    </select>
+                    
+                    <div id="fee-structure-display" style="border: 1px dashed #ccc; padding: 10px; margin-top: 20px; font-size: 0.95em;">
+                        Fee structure details will appear here upon Course and Batch selection.
+                    </div>
+                    
+                    <div id="subjects-display" style="border: 1px dashed #ccc; padding: 10px; margin-top: 20px; font-size: 0.95em;">
+                        <p>Subjects assigned to this Course will appear here.</p>
+                    </div>
+                </fieldset>
+
+                <fieldset id="parents">
+                    <legend>👨‍👩‍👧 Parent/Guardian Details (Official Records)</legend>
+                    <label for="parent_first_name">Parent First Name:</label>
+                    <input type="text" id="parent_first_name" name="parent_first_name">
+                    
+                    <label for="parent_last_name">Parent Last Name:</label>
+                    <input type="text" id="parent_last_name" name="parent_last_name">
+
+                    <label for="parent_phone_number">Parent Phone:</label>
+                    <input type="tel" id="parent_phone_number" name="parent_phone_number">
+                    
+                    <label for="parent_email">Parent Email:</label>
+                    <input type="email" id="parent_email" name="parent_email">
+                    
+                    <label for="parent_occupation">Parent Occupation/Profession:</label>
+                    <input type="text" id="parent_occupation" name="parent_occupation" placeholder="Required for demographic reports">
+
+                    <label for="parent_annual_income">Parent Annual Income (₹):</label>
+                    <input type="number" id="parent_annual_income" name="parent_annual_income" step="0.01" placeholder="For financial aid/scholarship records">
+                    
+                    <label for="guardian_relation">Guardian's Relation to Student (If not Parent):</label>
+                    <input type="text" id="guardian_relation" name="guardian_relation" placeholder="e.g., Uncle, Grandparent, Legal Guardian">
+
+                    <hr>
+                    <legend>🚨 Emergency Contacts</legend>
+                    <label for="emergency_contact_name">Emergency Contact Name:</label>
+                    <input type="text" id="emergency_contact_name" name="emergency_contact_name" placeholder="Secondary contact for emergencies">
+
+                    <label for="emergency_contact_number">Emergency Contact Number:</label>
+                    <input type="tel" id="emergency_contact_number" name="emergency_contact_number" placeholder="Secondary contact number">
+                </fieldset>
+
+                <fieldset id="login">
+                    <legend>🔑 Student Login Credentials (Update Optional)</legend>
+                    <p>Change password/username only if necessary. Current values are hidden.</p>
+
+                    <label for="username">Username:</label>
+                    <input type="text" id="username" name="username" readonly> <label for="email">Email (Login):</label>
+                    <input type="email" id="email" name="email" required>
+
+                    <label for="phone_number">Phone Number:</label>
+                    <input type="tel" id="phone_number" name="phone_number">
+
+                    <label for="password">New Password (Leave blank to keep old):</label>
+                    <input type="password" id="password" name="password">
+
+                    <label for="confirm_password">Confirm New Password:</label>
+                    <input type="password" id="confirm_password" name="confirm_password">
+                </fieldset>
+
+            </div>
+            <button type="submit">Update Student Profile</button>
+        </form>
+    </div>
+    <script>
+        function openTab(evt, tabId) {
+            // Declare all variables
+            var i, tabcontent, tablinks;
+
+            // Get all elements with class="tab-content" and hide them (by hiding fieldsets)
+            tabcontent = document.querySelectorAll('.tab-content fieldset');
+            for (i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].classList.remove('active');
+            }
+
+            // Get all elements with class="tab-button" and remove the active class
+            tablinks = document.querySelectorAll('.tab-button');
+            for (i = 0; i < tablinks.length; i++) {
+                tablinks[i].classList.remove('active');
+            }
+
+            // Show the current tab, and add an "active" class to the button that opened the tab
+            document.getElementById(tabId).classList.add('active');
+            evt.currentTarget.classList.add('active');
+        }
+    </script>
+</body>
+</html>

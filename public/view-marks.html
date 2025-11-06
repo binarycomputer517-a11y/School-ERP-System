@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>My Report Card</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .report-card { margin-top: 30px; }
+        .exam-section { margin-bottom: 40px; }
+        .exam-section h2 { border-bottom: 2px solid #eee; padding-bottom: 10px; }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Student') window.location.href = '/login';
+</script>
+<div class="container">
+    <h1>My Report Card</h1>
+    <div class="nav-links"><a href="/student-dashboard.html">← Back to Dashboard</a></div>
+
+    <div id="report-card-container" class="report-card">
+        </div>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    async function loadMyMarks() {
+        const container = document.getElementById('report-card-container');
+        try {
+            const response = await fetch('/api/marks/my-marks', { headers: authHeaders });
+            const marks = await response.json();
+            
+            if (marks.length === 0) {
+                container.innerHTML = '<p>No marks have been entered for you yet.</p>';
+                return;
+            }
+
+            // Step 1: Group the marks by exam name
+            const groupedByExam = marks.reduce((acc, mark) => {
+                const examName = mark.exam_name;
+                if (!acc[examName]) {
+                    acc[examName] = [];
+                }
+                acc[examName].push(mark);
+                return acc;
+            }, {});
+
+            // Step 2: Build the HTML for each exam group
+            container.innerHTML = ''; // Clear loading text
+            for (const examName in groupedByExam) {
+                const examSection = document.createElement('div');
+                examSection.className = 'exam-section';
+                
+                let tableRows = '';
+                let totalMarks = 0;
+                let maxTotalMarks = 0;
+
+                groupedByExam[examName].forEach(mark => {
+                    const percentage = (mark.marks_obtained / mark.max_marks) * 100;
+                    totalMarks += parseFloat(mark.marks_obtained);
+                    maxTotalMarks += parseFloat(mark.max_marks);
+                    tableRows += `
+                        <tr>
+                            <td>${mark.subject_name}</td>
+                            <td>${mark.marks_obtained}</td>
+                            <td>${mark.max_marks}</td>
+                            <td>${percentage.toFixed(2)}%</td>
+                        </tr>
+                    `;
+                });
+                
+                const totalPercentage = (totalMarks / maxTotalMarks) * 100;
+
+                examSection.innerHTML = `
+                    <h2>${examName}</h2>
+                    <table>
+                        <thead>
+                            <tr><th>Subject</th><th>Marks Obtained</th><th>Max Marks</th><th>Percentage</th></tr>
+                        </thead>
+                        <tbody>${tableRows}</tbody>
+                        <tfoot>
+                            <tr style="font-weight: bold; background-color: #f9f9f9;">
+                                <td>Total</td>
+                                <td>${totalMarks.toFixed(2)}</td>
+                                <td>${maxTotalMarks.toFixed(2)}</td>
+                                <td>${totalPercentage.toFixed(2)}%</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                `;
+                container.appendChild(examSection);
+            }
+
+        } catch (error) {
+            container.innerHTML = '<p>An error occurred while loading your marks.</p>';
+            console.error(error);
+        }
+    }
+
+    window.onload = loadMyMarks;
+</script>
+</body>
+</html>

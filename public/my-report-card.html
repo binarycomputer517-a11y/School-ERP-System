@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Report Card & Academic Records</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f8; font-family: sans-serif; }
+        .container { max-width: 1000px; }
+        h1 { color: #003366; font-weight: bold; }
+        .text-primary { color: #003366 !important; }
+        .text-secondary { color: #5e35b1 !important; }
+        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .table thead th { background-color: #003366; color: white; border-bottom: none; }
+        .table tbody tr:hover { background-color: #f8f9fa; }
+        #report-card-details { display: none; }
+        .grade-badge { font-weight: bold; padding: 5px 10px; border-radius: 5px; }
+        .grade-A { background-color: #d4edda; color: #155724; }
+        .grade-B { background-color: #fff3cd; color: #856404; }
+        .grade-C { background-color: #f8d7da; color: #721c24; }
+        .grade-fail { background-color: #000; color: #fff; }
+        #unauthorized-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(255, 255, 255, 0.95); z-index: 1000;
+            display: flex; justify-content: center; align-items: center;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div id="unauthorized-overlay" style="display: none;">
+        <div class="p-5 border rounded shadow">
+            <h2 class="text-danger">Session Expired or Unauthorized</h2>
+            <p>Please log in again to view your academic records.</p>
+            <a href="/login.html" class="btn btn-primary">Go to Login</a>
+        </div>
+    </div>
+    
+    <div class="container mt-5">
+        <header class="mb-4 d-flex justify-content-between align-items-center">
+            <h1>My Report Card & Records</h1>
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
+        </header>
+
+        <div class="card p-4 mb-4 shadow-sm">
+            <h3 class="text-secondary mb-3">Select Academic Report</h3>
+            <div class="row g-3 align-items-center">
+                <div class="col-md-8">
+                    <select id="report-select" class="form-select" onchange="loadReportCard()">
+                        <option value="">-- Select an Exam Series or Term --</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button id="download-btn" class="btn btn-success w-100" disabled> 
+                        ⬇️ Download PDF
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div id="report-card-details" class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <h4 class="mb-0 text-primary">Report for <span id="report-exam-name">...</span></h4>
+                <span class="text-secondary fw-bold">Overall Grade: <span id="overall-grade" class="grade-badge grade-A">N/A</span></span>
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>Subject</th>
+                            <th>Marks Obtained</th>
+                            <th>Total Marks</th>
+                            <th>Percentage (%)</th>
+                            <th>Grade</th>
+                            <th>Remarks</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-table-body">
+                        </tbody>
+                </table>
+                <div id="report-message" class="p-3 text-center text-muted small" style="display:none;">
+                    No detailed marks found for this report.
+                </div>
+            </div>
+            <div class="card-footer bg-light">
+                <p class="mb-0 small fw-bold">Summary:</p>
+                <p id="teacher-remarks" class="small fst-italic">Loading...</p>
+                <p id="overall-summary" class="small fw-bold mt-2">Overall: N/A</p>
+            </div>
+        </div>
+        
+        <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // --- GLOBAL CONFIG & SECURITY CHECK ---
+        const PROFILE_ID = localStorage.getItem('profile-id'); 
+        const TOKEN = localStorage.getItem('erp-token'); 
+        
+        if (!PROFILE_ID || !TOKEN) {
+             // CRITICAL FIX: Display error overlay and halt execution if credentials are missing
+             document.getElementById('unauthorized-overlay').style.display = 'flex';
+             throw new Error('Authentication tokens missing from localStorage.');
+        }
+
+        // --- Helper function for API calls ---
+        async function handleApi(url) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (!response.ok) {
+                // Handle 401/403 specifically to redirect/show overlay
+                if (response.status === 401 || response.status === 403) {
+                     document.getElementById('unauthorized-overlay').style.display = 'flex';
+                     // Clear potentially bad tokens
+                     localStorage.removeItem('erp-token');
+                     throw new Error('Unauthorized');
+                }
+                // Handle other errors (like 404, 500)
+                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message || response.statusText}`);
+            }
+            return response.json();
+        }
+
+        /**
+         * Utility function to get CSS class for a grade (Mock grading system)
+         */
+        function getGradeClass(grade) {
+            if (!grade) return '';
+            const g = grade.toUpperCase();
+            if (g.startsWith('A')) return 'grade-A';
+            if (g.startsWith('B')) return 'grade-B';
+            if (g.startsWith('C')) return 'grade-C';
+            if (g === 'F' || g === 'FAIL' || g === 'N/A') return 'grade-fail';
+            return '';
+        }
+
+
+        /**
+         * 1. Fetches the list of available report cards (Exam Series) for the student.
+         */
+        async function loadAvailableReports() {
+            const reportSelect = document.getElementById('report-select');
+            const errorMessage = document.getElementById('error-message');
+            errorMessage.style.display = 'none';
+
+            try {
+                // Endpoint: /api/report-card/exams/student/:studentId
+                const reports = await handleApi(`/api/report-card/exams/student/${PROFILE_ID}`);
+                
+                if (reports.length === 0) {
+                    reportSelect.innerHTML = '<option value="">No report cards are finalized yet.</option>';
+                    return;
+                }
+
+                reportSelect.innerHTML = '<option value="">-- Select an Exam Series or Term --</option>';
+                reports.forEach(report => {
+                    // Assuming report object contains exam_id, exam_name, and exam_type
+                    reportSelect.innerHTML += `
+                        <option value="${report.exam_id}" data-name="${report.exam_name}" data-type="${report.exam_type || report.course_name}">
+                            ${report.exam_name} (${report.batch_name || report.course_name})
+                        </option>
+                    `;
+                });
+
+            } catch (error) {
+                console.error('Error loading available reports:', error);
+                errorMessage.textContent = `Error: Failed to load exam list. (${error.message})`;
+                errorMessage.style.display = 'block';
+            }
+        }
+
+        /**
+         * 2. Loads the detailed data for the currently selected report card.
+         */
+        async function loadReportCard() {
+            const reportSelect = document.getElementById('report-select');
+            const reportId = reportSelect.value; // This is the Exam ID
+            const tableBody = document.getElementById('report-table-body');
+            const detailsCard = document.getElementById('report-card-details');
+            const downloadBtn = document.getElementById('download-btn');
+            const errorMessage = document.getElementById('error-message');
+            
+            tableBody.innerHTML = '';
+            detailsCard.style.display = 'none';
+            downloadBtn.disabled = true;
+            errorMessage.style.display = 'none';
+
+            if (!reportId || !PROFILE_ID) {
+                return;
+            }
+            
+            const selectedOption = reportSelect.options[reportSelect.selectedIndex];
+            const reportName = selectedOption.getAttribute('data-name');
+            
+            document.getElementById('report-exam-name').textContent = reportName;
+            detailsCard.style.display = 'block';
+            tableBody.innerHTML = '<tr><td colspan="6" class="text-center">Loading detailed marks...</td></tr>';
+            document.getElementById('overall-grade').textContent = '...';
+            document.getElementById('teacher-remarks').textContent = 'Loading...';
+            document.getElementById('overall-summary').textContent = 'Overall: Calculating...';
+
+
+            try {
+                // Endpoint: /api/report-card/detail/student/:studentId/exam/:examId
+                const API_URL = `/api/report-card/detail/student/${PROFILE_ID}/exam/${reportId}`;
+                const reportData = await handleApi(API_URL);
+                
+                if (!reportData.marks_details || reportData.marks_details.length === 0) {
+                    document.getElementById('report-message').style.display = 'block';
+                    tableBody.innerHTML = '';
+                    document.getElementById('overall-grade').textContent = 'N/A';
+                    document.getElementById('overall-summary').textContent = 'Overall: 0.00%';
+                    return;
+                }
+
+                tableBody.innerHTML = ''; // Clear loading message
+                document.getElementById('report-message').style.display = 'none';
+
+                // Render Summary (Overall Grade and Remarks)
+                const overallPercentage = parseFloat(reportData.summary.overall_percentage);
+                // Mock Grading Logic (Adjust as per actual school standards)
+                const mockOverallGrade = overallPercentage >= 70 ? 'A' : (overallPercentage >= 50 ? 'B' : 'F');
+                
+                document.getElementById('overall-grade').textContent = mockOverallGrade;
+                document.getElementById('overall-grade').className = `grade-badge ${getGradeClass(mockOverallGrade)}`;
+                document.getElementById('teacher-remarks').innerHTML = `
+                    **Exam:** ${reportData.exam_name} (${new Date(reportData.exam_date).toLocaleDateString()}) <br>
+                    **Student:** ${reportData.first_name} ${reportData.last_name}
+                `;
+                document.getElementById('overall-summary').textContent = `
+                    Grand Total: ${reportData.summary.grand_total_obtained} / ${reportData.summary.grand_total_max} 
+                    (${reportData.summary.overall_percentage}%)
+                `;
+                
+                downloadBtn.disabled = false; // Enable download button after successful load
+
+                // Render Subject Details
+                reportData.marks_details.forEach(subject => {
+                    const totalObtained = parseFloat(subject.total_marks_obtained || 0);
+                    const totalPossible = parseFloat(subject.total_max_marks || 0);
+                    
+                    const percentage = totalPossible > 0 
+                        ? ((totalObtained / totalPossible) * 100).toFixed(1)
+                        : 0;
+                    
+                    // Use grade from backend if available, otherwise mock it based on percentage
+                    const subjectGrade = subject.grade || (percentage >= 70 ? 'A' : (percentage >= 50 ? 'B' : 'F'));
+
+                    tableBody.innerHTML += `
+                        <tr>
+                            <td>${subject.subject_name} (${subject.subject_code})</td>
+                            <td>${totalObtained}</td>
+                            <td>${totalPossible}</td>
+                            <td class="${percentage < 40 ? 'text-danger fw-bold' : ''}">${percentage}%</td>
+                            <td class="${getGradeClass(subjectGrade)}">${subjectGrade}</td>
+                            <td>${subject.is_absent ? 'ABSENT' : subject.remarks || '-'}</td>
+                        </tr>
+                    `;
+                });
+
+            } catch (error) {
+                console.error('Error loading report card details:', error);
+                tableBody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Failed to load details.</td></tr>`;
+                errorMessage.textContent = `Error: Failed to load report card. (${error.message})`;
+                errorMessage.style.display = 'block';
+            }
+        }
+        
+        /**
+         * 3. PDF Download Setup (Triggers the new backend /pdf route)
+         */
+        function setupPdfDownload() {
+            const downloadBtn = document.getElementById('download-btn');
+            const reportSelect = document.getElementById('report-select');
+            
+            downloadBtn.addEventListener('click', () => {
+                const examId = reportSelect.value;
+
+                if (!examId || !PROFILE_ID) {
+                    alert('Please select an exam before downloading the PDF.');
+                    return;
+                }
+
+                // CRITICAL FIX: Pass the TOKEN as a query parameter for authentication
+                const downloadURL = `/api/report-card/pdf/student/${PROFILE_ID}/exam/${examId}?token=${TOKEN}`;
+                
+                // Trigger download (window.open requires the backend authMiddleware.js fix)
+                window.open(downloadURL, '_blank');
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAvailableReports();
+            setupPdfDownload(); // Setup the download listener
+        });
+    </script>
+</body>
+</html>

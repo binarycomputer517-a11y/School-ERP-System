@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Payroll | School ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #4a4e69;
+            --secondary-color: #adadb8;
+            --accent-color: #f72585;
+            --background-color: #f4f4f9;
+            --card-background: #ffffff;
+            --text-color: #333333;
+            --shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .header {
+            background: var(--card-background);
+            padding: 25px 30px;
+            margin-bottom: 25px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            color: var(--primary-color);
+            margin: 0;
+            font-weight: 700;
+        }
+        .header .actions button {
+            background-color: var(--accent-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: background-color 0.3s;
+        }
+        .header .actions button:hover {
+            background-color: #d11e6d;
+        }
+        .payroll-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 25px;
+        }
+        .employee-card {
+            background: var(--card-background);
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            border-left: 5px solid var(--primary-color);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .employee-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+        }
+        .employee-card h3 {
+            color: var(--primary-color);
+            margin-top: 0;
+            margin-bottom: 10px;
+            border-bottom: 2px solid var(--secondary-color);
+            padding-bottom: 5px;
+            font-weight: 600;
+        }
+        .employee-card p {
+            margin: 5px 0;
+            font-size: 0.95em;
+        }
+        .employee-card .detail-label {
+            font-weight: 600;
+            color: var(--secondary-color);
+            width: 130px; /* Aligns values */
+            display: inline-block;
+        }
+        .employee-card .pay-info {
+            font-size: 1.2em;
+            font-weight: 700;
+            color: var(--accent-color);
+            margin: 15px 0;
+            padding: 10px 0;
+            border-top: 1px solid #eee;
+        }
+        .employee-card .actions a {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 8px 15px;
+            background-color: var(--primary-color);
+            color: white;
+            text-decoration: none;
+            border-radius: 6px;
+            font-size: 0.9em;
+            transition: background-color 0.3s;
+        }
+        .employee-card .actions a:hover {
+            background-color: #3f4258;
+        }
+        /* Unique Professional Touches */
+        .status-badge {
+            float: right;
+            padding: 4px 8px;
+            border-radius: 50px;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+        .status-active { background-color: #e6ffe6; color: #4CAF50; }
+        .status-inactive { background-color: #ffe6e6; color: #f44336; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>💰 Employee Payroll Management</h1>
+            <div class="actions">
+                <button onclick="generatePayroll()">Generate Payroll Batch</button>
+            </div>
+        </header>
+
+        <section class="payroll-grid" id="employeeList">
+            <div class="employee-card">
+                <span class="status-badge status-active">Active</span>
+                <h3>Jane Doe</h3>
+                <p><span class="detail-label">Username:</span> janedoe</p>
+                <p><span class="detail-label">Email:</span> jane.d@school.edu</p>
+                <p><span class="detail-label">Designation:</span> Senior Teacher</p>
+                <p><span class="detail-label">Department:</span> Academic HR</p>
+                <div class="pay-info">
+                    <span class="detail-label">Base Salary:</span> $5500.00
+                </div>
+                <div class="actions">
+                    <a href="/payslip/2025/10/USER_ID_1" target="_blank">View October Payslip</a>
+                    <a href="/payroll/details/USER_ID_1" style="background-color: var(--accent-color);">Edit Pay Details</a>
+                </div>
+            </div>
+            </section>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', fetchEmployeeData);
+
+        // Placeholder data structure based on the schema join
+        const mockEmployeeData = [
+            { id: 'USER_ID_1', username: 'janedoe', email: 'jane.d@school.edu', is_active: true, 
+              base_salary: '5500.00', designation: 'Senior Teacher', department_name: 'Academic HR', 
+              pay_frequency: 'Monthly', dob: '1985-05-15' },
+            { id: 'USER_ID_2', username: 'jsmith', email: 'j.smith@school.edu', is_active: true, 
+              base_salary: '4200.00', designation: 'Junior Staff', department_name: 'Administration', 
+              pay_frequency: 'Monthly', dob: '1992-11-20' },
+            { id: 'USER_ID_3', username: 'm_ali', email: 'm.ali@school.edu', is_active: false, 
+              base_salary: '6800.00', designation: 'Headmaster', department_name: 'Leadership', 
+              pay_frequency: 'Monthly', dob: '1975-01-01' },
+            // Add more data...
+        ];
+
+        function fetchEmployeeData() {
+            // In a real application, this would make an AJAX call to the /api/payroll/employees route
+            // For this example, we use the mock data.
+            renderEmployeeCards(mockEmployeeData);
+        }
+
+        function renderEmployeeCards(employees) {
+            const container = document.getElementById('employeeList');
+            container.innerHTML = ''; // Clear existing content
+
+            employees.forEach(employee => {
+                const isActive = employee.is_active;
+                const card = document.createElement('div');
+                card.classList.add('employee-card');
+
+                const payslipUrl = `/payroll/payslip/${new Date().getFullYear()}/${new Date().getMonth() + 1}/${employee.id}`;
+                const detailUrl = `/payroll/details/${employee.id}`;
+
+                card.innerHTML = `
+                    <span class="status-badge ${isActive ? 'status-active' : 'status-inactive'}">${isActive ? 'Active' : 'Inactive'}</span>
+                    <h3>${employee.username.charAt(0).toUpperCase() + employee.username.slice(1)}</h3>
+                    <p><span class="detail-label">Email:</span> ${employee.email}</p>
+                    <p><span class="detail-label">Designation:</span> ${employee.designation || 'N/A'}</p>
+                    <p><span class="detail-label">Department:</span> ${employee.department_name || 'N/A'}</p>
+                    <div class="pay-info">
+                        <span class="detail-label">Base Salary:</span> $${employee.base_salary}
+                    </div>
+                    <div class="actions">
+                        <a href="${payslipUrl}" target="_blank">View Payslip</a>
+                        <a href="${detailUrl}" style="background-color: var(--accent-color);">Edit Pay Details</a>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function generatePayroll() {
+            alert('Triggering Payroll Generation for all active employees...');
+            // In a real system, this would call a POST endpoint: /api/payroll/generate
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Maintenance Requests</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') window.location.href = '/login';
+</script>
+<div class="container">
+    <h1>Manage Hostel Maintenance Requests</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">← Back to Dashboard</a></div>
+
+    <table>
+        <thead><tr><th>Student</th><th>Room</th><th>Category</th><th>Description</th><th>Submitted</th><th>Status</th></tr></thead>
+        <tbody id="requests-body"></tbody>
+    </table>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const statuses = ['Pending', 'In Progress', 'Completed', 'Rejected'];
+
+    function loadAllRequests() {
+        const tableBody = document.getElementById('requests-body');
+        fetch('/api/hostel/maintenance', { headers: authHeaders })
+            .then(res => res.json())
+            .then(requests => {
+                tableBody.innerHTML = '';
+                if (requests.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="6">No maintenance requests found.</td></tr>';
+                    return;
+                }
+                requests.forEach(req => {
+                    let optionsHtml = statuses.map(s => `<option value="${s}" ${req.status === s ? 'selected' : ''}>${s}</option>`).join('');
+                    tableBody.innerHTML += `
+                        <tr>
+                            <td>${req.student_name}</td>
+                            <td>${req.hostel_name} - ${req.room_number}</td>
+                            <td>${req.category}</td>
+                            <td>${req.description}</td>
+                            <td>${new Date(req.created_at).toLocaleString()}</td>
+                            <td>
+                                <select onchange="updateStatus(${req.id}, this.value)">
+                                    ${optionsHtml}
+                                </select>
+                            </td>
+                        </tr>`;
+                });
+            });
+    }
+
+    function updateStatus(requestId, newStatus) {
+        fetch(`/api/hostel/maintenance/${requestId}/status`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify({ status: newStatus })
+        }).then(res => {
+            if (!res.ok) {
+                alert('Failed to update status.');
+                loadAllRequests(); // Revert change in UI on failure
+            }
+            // On success, no action needed as the UI is already updated.
+            // You could add a small success notification here.
+        });
+    }
+
+    window.onload = loadAllRequests;
+</script>
+</body>
+</html>

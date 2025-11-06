@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Placement Management</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+        window.location.href = '/login';
+    }
+</script>
+
+<body>
+    <div class="container">
+        <h1>Placement Management</h1>
+        <div class="nav-links">
+            <a href="/admin-dashboard.html">Back to Dashboard</a> | 
+            <a href="/record-placement.html">Record a Placement</a> 
+        </div>
+
+        <hr><h2>Manage Companies</h2>
+        <form id="company-form">
+            <input type="text" name="company_name" placeholder="Company Name" required>
+            <input type="text" name="industry" placeholder="Industry (e.g., IT, Finance)">
+            <input type="text" name="website" placeholder="Website URL">
+            <input type="text" name="contact_person" placeholder="Contact Person">
+            <button type="submit">Add Company</button>
+        </form>
+        <h3 style="margin-top: 20px;">Registered Companies</h3>
+        <table>
+            <thead><tr><th>Company Name</th><th>Industry</th><th>Website</th></tr></thead>
+            <tbody id="company-list-body"></tbody>
+        </table>
+
+        <hr style="margin-top: 30px;"><h2>Manage Job Postings</h2>
+        <form id="job-form">
+            <select name="company_id" id="company-select" required></select>
+            <input type="text" name="job_title" placeholder="Job Title" required>
+            <input type="text" name="salary_package" placeholder="Salary Package (e.g., 12 LPA)">
+            <input type="date" name="drive_date">
+            <textarea name="description" placeholder="Job Description..."></textarea>
+            <button type="submit">Add Job Posting</button>
+        </form>
+        <h3 style="margin-top: 20px;">Open Job Postings</h3>
+        <table>
+            <thead><tr><th>Company</th><th>Job Title</th><th>Package</th><th>Drive Date</th></tr></thead>
+            <tbody id="job-list-body"></tbody>
+        </table>
+    </div>
+
+    <script>
+        const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+        function loadCompanies() {
+            fetch('/api/placements/companies', { headers: authHeaders })
+                .then(res => res.json())
+                .then(companies => {
+                    const companyListBody = document.getElementById('company-list-body');
+                    const companySelect = document.getElementById('company-select');
+                    companyListBody.innerHTML = '';
+                    companySelect.innerHTML = '<option value="">-- Select Company --</option>';
+                    companies.forEach(c => {
+                        companyListBody.innerHTML += `<tr><td>${c.company_name}</td><td>${c.industry || ''}</td><td>${c.website || ''}</td></tr>`;
+                        companySelect.innerHTML += `<option value="${c.id}">${c.company_name}</option>`;
+                    });
+                });
+        }
+        
+        document.getElementById('company-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // FIXED: Used 'this' instead of 'e'
+            const data = Object.fromEntries(new FormData(this).entries());
+            fetch('/api/placements/companies', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(data)
+            }).then(res => {
+                if (res.ok) { alert('Company added!'); this.reset(); loadCompanies(); } 
+                else { alert('Error adding company.'); }
+            });
+        });
+
+        function loadJobs() {
+            fetch('/api/placements/jobs', { headers: authHeaders })
+                .then(res => res.json())
+                .then(jobs => {
+                    const jobListBody = document.getElementById('job-list-body');
+                    jobListBody.innerHTML = '';
+                    jobs.forEach(j => {
+                        const driveDate = j.drive_date ? new Date(j.drive_date).toLocaleDateString() : 'N/A';
+                        jobListBody.innerHTML += `<tr><td>${j.company_name}</td><td>${j.job_title}</td><td>${j.salary_package || ''}</td><td>${driveDate}</td></tr>`;
+                    });
+                });
+        }
+
+        document.getElementById('job-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            // FIXED: Used 'this' instead of 'e'
+            const data = Object.fromEntries(new FormData(this).entries());
+            fetch('/api/placements/jobs', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(data)
+            }).then(res => {
+                if (res.ok) { alert('Job posting added!'); this.reset(); loadJobs(); } 
+                else { alert('Error adding job posting.'); }
+            });
+        });
+
+        window.onload = () => {
+            loadCompanies();
+            loadJobs();
+        };
+    </script>
+</body>
+</html>

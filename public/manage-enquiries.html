@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enquiry Management</title>
+    <link rel="stylesheet" href="/css/style.css">
+    
+    <style>
+        /* --- MODAL STYLES (REQUIRED FOR POP-UP BEHAVIOR) --- */
+        .modal { 
+            display: none; /* Initially Hidden */
+            position: fixed; 
+            z-index: 1000; 
+            left: 0; 
+            top: 0; 
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.7); /* Dim background */
+            align-items: center; 
+            justify-content: center; /* Center the modal content */
+        }
+        .modal-content { 
+            background-color: #FFFFFF; 
+            padding: 30px; 
+            border: 3px solid #333; 
+            width: 90%; 
+            max-width: 600px; 
+            border-radius: 0; 
+            position: relative; 
+            box-shadow: 8px 8px 0 #000;
+        }
+        .close-btn { 
+            color: #000; 
+            position: absolute; 
+            top: 10px; 
+            right: 20px; 
+            font-size: 30px; 
+            font-weight: bold; 
+            cursor: pointer; 
+        }
+        /* Additional style fix for form inputs inside the modal, if needed */
+        .modal-content .form-input, .modal-content .form-select, .modal-content .form-textarea {
+             margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header class="page-header">
+        <h1 class="page-title">Enquiry Management</h1>
+        <div class="nav-links"><a href="/admin-dashboard.html" class="back-link">Back to Dashboard</a></div>
+    </header>
+
+    <main class="content-wrapper">
+        
+        <div class="grid-3-col">
+        
+            <section class="form-area">
+                <h2 class="section-title">Add New Enquiry</h2>
+                <form id="enquiry-form" class="enquiry-form-grid">
+                    <input type="text" name="prospect_name" placeholder="Student Name" required class="form-input">
+                    <input type="text" name="parent_name" placeholder="Parent Name" class="form-input">
+                    <input type="text" name="contact_number" placeholder="Contact Number" required class="form-input">
+                    <input type="email" name="email" placeholder="Email Address" class="form-input">
+                    
+                    <select name="class_applied_for" id="course-applied-for" class="form-select">
+                        <option value="">-- Select Course Applied For --</option>
+                    </select>
+
+                    <select name="source" class="form-select">
+                        <option value="Walk-in">Walk-in</option>
+                        <option value="Phone Call">Phone Call</option>
+                        <option value="Website">Website</option>
+                        <option value="Referral">Referral</option>
+                    </select>
+                    
+                    <textarea name="notes" placeholder="Notes..." class="form-textarea"></textarea>
+                    <button type="submit" class="submit-button">Add Enquiry</button>
+                </form>
+            </section>
+
+            <section class="table-area">
+                <h2 class="section-title">All Enquiries</h2>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr><th>Student Name</th><th>Contact</th><th>Course</th><th>Status</th><th>Notes</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="enquiry-list-body">
+                            </tbody>
+                    </table>
+                </div>
+            </section>
+        
+        </div>
+    </main>
+</div>
+
+<div id="edit-enquiry-modal" class="modal">
+    <div class="modal-content">
+        <span class="close-btn" onclick="closeModal('edit-enquiry-modal')">&times;</span>
+        <h2>Edit Enquiry Details</h2>
+        <form id="edit-enquiry-form">
+            <input type="hidden" id="edit-enquiry-id" name="id">
+            
+            <label for="edit-prospect-name">Student Name:</label>
+            <input type="text" id="edit-prospect-name" name="prospect_name" required class="form-input">
+
+            <label for="edit-parent-name">Parent Name:</label>
+            <input type="text" id="edit-parent-name" name="parent_name" class="form-input">
+
+            <label for="edit-contact-number">Contact Number:</label>
+            <input type="text" id="edit-contact-number" name="contact_number" required class="form-input">
+            
+            <label for="edit-email">Email:</label>
+            <input type="email" id="edit-email" name="email" class="form-input">
+            
+            <label for="edit-class-applied-for">Course Applied For:</label>
+            <select name="class_applied_for" id="edit-class-applied-for" class="form-select">
+                <option value="">-- Select Course Applied For --</option>
+            </select>
+            
+            <label for="edit-source">Source:</label>
+            <select name="source" id="edit-source" class="form-select">
+                <option value="Walk-in">Walk-in</option>
+                <option value="Phone Call">Phone Call</option>
+                <option value="Website">Website</option>
+                <option value="Referral">Referral</option>
+            </select>
+
+            <label for="edit-status">Status:</label>
+            <select name="status" id="edit-status" class="form-select">
+                <option value="New">New</option>
+                <option value="Follow-up">Follow-up</option>
+                <option value="Admitted">Admitted</option>
+                <option value="Closed">Closed</option>
+            </select>
+            
+            <label for="edit-notes">Notes:</label>
+            <textarea name="notes" id="edit-notes" class="form-textarea"></textarea>
+            
+            <button type="submit" class="submit-button">Save Changes</button>
+            <button type="button" class="cancel" onclick="closeModal('edit-enquiry-modal')">Cancel</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // ===============================================
+    // AUTH & HELPERS
+    // ===============================================
+    const API_ENQUIRIES = '/api/enquiries';
+    const API_COURSES = '/api/academicswithfees/courses';
+
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+        window.location.href = '/login';
+    }
+    
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    // Functions to control the modal's display property (CSS ensures flex centers it)
+    function openModal(modalId) { document.getElementById(modalId).style.display = 'flex'; }
+    function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
+
+    let allCourses = []; // Global variable to store courses for dropdowns
+
+
+    // ===============================================
+    // COURSE POPULATION FUNCTIONS
+    // ===============================================
+    
+    function populateCourseDropdown() {
+        const selects = [document.getElementById('course-applied-for'), document.getElementById('edit-class-applied-for')];
+        
+        selects.forEach(s => s.innerHTML = '<option value="">-- Loading Courses... --</option>');
+
+        fetch(API_COURSES, { headers: authHeaders })
+            .then(response => {
+                if (!response.ok) throw new Error('Failed to fetch courses.');
+                return response.json();
+            })
+            .then(courses => {
+                allCourses = courses; // Store globally
+                selects.forEach(courseSelect => {
+                    courseSelect.innerHTML = '<option value="">-- Select Course Applied For --</option>';
+                    allCourses.forEach(c => {
+                        const optionValue = `${c.course_name} (${c.course_code})`;
+                        courseSelect.innerHTML += `<option value="${optionValue}">${optionValue}</option>`;
+                    });
+                });
+            })
+            .catch(error => {
+                console.error('Error populating course dropdown:', error);
+                selects.forEach(s => s.innerHTML = '<option value="">-- Failed to load courses --</option>');
+            });
+    }
+
+    function populateEditCourseDropdown(selectedValue = '') {
+        const courseSelect = document.getElementById('edit-class-applied-for');
+        courseSelect.innerHTML = '<option value="">-- Select Course Applied For --</option>';
+
+        if (allCourses && allCourses.length > 0) {
+            allCourses.forEach(c => {
+                const optionValue = `${c.course_name} (${c.course_code})`;
+                courseSelect.innerHTML += `<option value="${optionValue}">${optionValue}</option>`;
+            });
+            if (selectedValue) {
+                 courseSelect.value = selectedValue;
+            }
+        } else {
+             courseSelect.innerHTML = '<option value="">-- Courses not loaded --</option>';
+        }
+    }
+
+
+    // ===============================================
+    // ENQUIRIES LOADING
+    // ===============================================
+
+    function loadEnquiries() {
+        const tableBody = document.getElementById('enquiry-list-body');
+        
+        fetch(API_ENQUIRIES, { headers: authHeaders })
+            .then(res => {
+                if (!res.ok) {
+                    tableBody.innerHTML = `<tr><td colspan="6">Could not load enquiries. Ensure backend is running.</td></tr>`;
+                    throw new Error('Failed to fetch enquiries.');
+                }
+                return res.json();
+            })
+            .then(enquiries => {
+                tableBody.innerHTML = '';
+                if (enquiries.length === 0) {
+                    tableBody.innerHTML = `<tr><td colspan="6" class="no-data">No enquiries found.</td></tr>`;
+                    return;
+                }
+                enquiries.forEach(enq => {
+                    const statusClass = enq.status ? `status-${enq.status.toLowerCase().replace(/\s/g, '-')}` : 'status-default';
+
+                    tableBody.innerHTML += `
+                        <tr data-id="${enq.id}">
+                            <td>${enq.prospect_name}</td>
+                            <td>${enq.contact_number}</td>
+                            <td>${enq.class_applied_for || 'N/A'}</td> 
+                            <td class="${statusClass}">${enq.status}</td>
+                            <td>${enq.notes || ''}</td>
+                            <td class="actions">
+                                <button class="action-btn edit" onclick="openEditModal('${enq.id}')">Edit</button>
+                                <button class="action-btn view" onclick="setReminder('${enq.id}', '${enq.prospect_name.replace(/'/g, "\\'")}')">Reminder</button>
+                                <button class="action-btn delete" onclick="deleteEnquiry('${enq.id}')">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            })
+            .catch(error => {
+                console.error("Loading enquiries failed:", error);
+                tableBody.innerHTML = `<tr><td colspan="6" style="color:red;">Error fetching data.</td></tr>`;
+            });
+    }
+
+    // ===============================================
+    // ENQUIRY ACTIONS (Edit, Reminder, Delete)
+    // ===============================================
+
+    async function openEditModal(id) {
+        try {
+            const response = await fetch(`${API_ENQUIRIES}/${id}`, { headers: authHeaders });
+            if (!response.ok) {
+                throw new Error('Failed to fetch enquiry data for editing.');
+            }
+            const enq = await response.json();
+            
+            document.getElementById('edit-enquiry-id').value = enq.id;
+            document.getElementById('edit-prospect-name').value = enq.prospect_name;
+            document.getElementById('edit-parent-name').value = enq.parent_name || '';
+            document.getElementById('edit-contact-number').value = enq.contact_number;
+            document.getElementById('edit-email').value = enq.email || '';
+            document.getElementById('edit-notes').value = enq.notes || '';
+            
+            document.getElementById('edit-source').value = enq.source || 'Walk-in';
+            document.getElementById('edit-status').value = enq.status || 'New';
+            
+            // FIX: Populate the course dropdown before setting the value
+            populateEditCourseDropdown(enq.class_applied_for);
+            
+            // Show the modal
+            openModal('edit-enquiry-modal');
+        } catch (error) {
+            alert(error.message);
+            console.error("Edit modal error:", error);
+        }
+    }
+
+    document.getElementById('edit-enquiry-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const id = document.getElementById('edit-enquiry-id').value;
+        const data = Object.fromEntries(new FormData(this).entries());
+
+        try {
+            const response = await fetch(`${API_ENQUIRIES}/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                alert('Enquiry updated successfully!');
+                closeModal('edit-enquiry-modal');
+                loadEnquiries();
+            } else {
+                const text = await response.text();
+                alert('Failed to update enquiry: ' + text);
+            }
+        } catch (err) {
+            alert('A network error occurred during update.');
+        }
+    });
+
+    function setReminder(id, name) {
+        const date = prompt(`Set follow-up date for ${name} (Enquiry ID: ${id}) (YYYY-MM-DD):`);
+        if (date) {
+            alert(`Reminder set for ${date}. (Requires notification/scheduling backend implementation)`);
+        }
+    }
+
+    async function deleteEnquiry(id) {
+        if (!confirm('Are you sure you want to permanently delete this enquiry?')) return;
+        
+        try {
+            const response = await fetch(`${API_ENQUIRIES}/${id}`, {
+                method: 'DELETE',
+                headers: authHeaders
+            });
+
+            if (response.ok) {
+                alert('Enquiry deleted successfully!');
+                loadEnquiries();
+            } else {
+                const text = await response.text();
+                alert('Failed to delete enquiry: ' + text);
+            }
+        } catch (err) {
+            alert('A network error occurred during deletion.');
+        }
+    }
+
+
+    // ===============================================
+    // INITIALIZATION
+    // ===============================================
+    window.onload = () => {
+        populateCourseDropdown(); 
+        loadEnquiries(); 
+    };
+</script>
+</body>
+</html>

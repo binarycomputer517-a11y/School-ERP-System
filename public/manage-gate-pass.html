@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Gate Passes</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') window.location.href = '/login';
+</script>
+<div class="container">
+    <h1>Manage Gate Pass Requests</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">← Back to Dashboard</a></div>
+
+    <h2>Pending Applications</h2>
+    <table>
+        <thead><tr><th>Student Name</th><th>Reason</th><th>Expected Out</th><th>Expected In</th><th>Actions</th></tr></thead>
+        <tbody id="pending-body"></tbody>
+    </table>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    function loadPendingRequests() {
+        const tableBody = document.getElementById('pending-body');
+        fetch('/api/hostel/gatepass/pending', { headers: authHeaders })
+            .then(res => res.json())
+            .then(requests => {
+                tableBody.innerHTML = '';
+                if (requests.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="5">No pending gate pass requests.</td></tr>';
+                    return;
+                }
+                requests.forEach(req => {
+                    tableBody.innerHTML += `
+                        <tr id="pass-${req.id}">
+                            <td>${req.student_name} (${req.class_name})</td>
+                            <td>${req.reason}</td>
+                            <td>${new Date(req.expected_out_time).toLocaleString()}</td>
+                            <td>${new Date(req.expected_in_time).toLocaleString()}</td>
+                            <td>
+                                <button onclick="handleRequest(${req.id}, 'approve')">Approve</button>
+                                <button onclick="handleRequest(${req.id}, 'reject')">Reject</button>
+                            </td>
+                        </tr>`;
+                });
+            });
+    }
+
+    function handleRequest(passId, action) {
+        fetch(`/api/hostel/gatepass/${passId}/${action}`, {
+            method: 'PUT',
+            headers: authHeaders
+        }).then(res => {
+            if (res.ok) {
+                alert(`Pass has been ${action}d successfully.`);
+                document.getElementById(`pass-${passId}`).remove(); // Remove from UI
+            } else { res.text().then(text => alert('Error: ' + text)); }
+        });
+    }
+
+    window.onload = loadPendingRequests;
+</script>
+</body>
+</html>

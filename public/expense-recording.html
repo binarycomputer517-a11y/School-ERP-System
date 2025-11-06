@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Recording & Tracking</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --secondary-color: #797d7f;
+            --error-color: #c0392b;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1100px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .expense-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+            font-size: 0.9em;
+        }
+        .expense-grid input, .expense-grid select, .expense-grid textarea {
+            width: 100%;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid var(--border-color);
+        }
+        .full-width { grid-column: 1 / -1; }
+        .submit-btn {
+            grid-column: 1 / -1;
+            padding: 12px;
+            background-color: var(--error-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #a72d21;
+        }
+        .expense-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .expense-table th, .expense-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.85em;
+        }
+        .expense-table th {
+            background-color: var(--secondary-color);
+            color: #fff;
+            font-weight: 600;
+        }
+        .placeholder-message {
+            text-align: center;
+            padding: 20px 0;
+            color: var(--secondary-color);
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    /**
+     * Records a new expense in the database.
+     */
+    async function recordExpense(formData) {
+        const submitBtn = document.getElementById('submit-expense-btn');
+        submitBtn.disabled = true;
+
+        try {
+            // ❌ ACTUAL API CALL for recording expense ❌
+            const response = await handleApi('/api/finance/expenses/record', {
+                method: 'POST',
+                body: JSON.stringify(formData)
+            });
+            
+            alert('✅ Expense recorded successfully! TXN ID: ' + response.expense_id);
+            document.getElementById('expense-form').reset();
+            fetchAndRenderExpenses({}); // Reload list
+
+        } catch (error) {
+            alert(`❌ Error recording expense: ${error.message}`);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+    /**
+     * Fetches and renders the list of recent expenses.
+     */
+    async function fetchAndRenderExpenses(filters) {
+        const tbody = document.getElementById('expense-tbody');
+        tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">Loading recent expenses...</td></tr>';
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of recent expenses ❌
+            const queryString = new URLSearchParams(filters).toString();
+            const expenses = await handleApi('/api/finance/expenses?' + queryString); 
+            
+            tbody.innerHTML = '';
+            if (expenses.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">No expenses recorded for the current view.</td></tr>';
+                return;
+            }
+
+            expenses.forEach(e => {
+                const row = `<tr>
+                    <td>${e.expense_id}</td>
+                    <td>${new Date(e.date).toLocaleDateString()}</td>
+                    <td>${e.category}</td>
+                    <td>${e.description}</td>
+                    <td>${e.vendor}</td>
+                    <td>₹${(e.amount || 0).toFixed(2)}</td>
+                    <td>${e.payment_mode}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error('Error fetching expenses:', error);
+            tbody.innerHTML = `<tr><td colspan="7" class="placeholder-message" style="color: var(--error-color);">Error loading expenses: ${error.message}</td></tr>`;
+        }
+    }
+
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchAndRenderExpenses({});
+
+        document.getElementById('expense-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = {
+                date: document.getElementById('expense-date').value,
+                category: document.getElementById('expense-category').value,
+                amount: parseFloat(document.getElementById('expense-amount').value),
+                payment_mode: document.getElementById('expense-mode').value,
+                vendor: document.getElementById('expense-vendor').value,
+                description: document.getElementById('expense-description').value,
+            };
+            recordExpense(formData);
+        });
+        
+        // Example filter logic setup
+        document.getElementById('filter-btn').addEventListener('click', () => {
+            const filters = {
+                category: document.getElementById('filter-category').value,
+                // Add date range filters here
+            };
+            fetchAndRenderExpenses(filters);
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Expense Recording & Tracking</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Record New Expense</h2>
+        <form id="expense-form">
+            <div class="expense-grid">
+                <div class="form-group">
+                    <label for="expense-date">Date:</label>
+                    <input type="date" id="expense-date" required>
+                </div>
+                <div class="form-group">
+                    <label for="expense-category">Category:</label>
+                    <select id="expense-category" required>
+                        <option value="Salary">Salary/Staff Costs</option>
+                        <option value="Utilities">Utilities/Rent</option>
+                        <option value="Maintenance">Maintenance/Repairs</option>
+                        <option value="Supplies">Office Supplies/Books</option>
+                        <option value="Marketing">Marketing/Admissions</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="expense-amount">Amount (₹):</label>
+                    <input type="number" step="0.01" id="expense-amount" required min="0">
+                </div>
+                <div class="form-group">
+                    <label for="expense-mode">Payment Mode:</label>
+                    <select id="expense-mode" required>
+                        <option value="Bank">Bank Transfer</option>
+                        <option value="Cash">Cash</option>
+                        <option value="Card">Credit/Debit Card</option>
+                    </select>
+                </div>
+                <div class="form-group full-width">
+                    <label for="expense-vendor">Vendor/Payee:</label>
+                    <input type="text" id="expense-vendor" required>
+                </div>
+                <div class="form-group full-width">
+                    <label for="expense-description">Detailed Description:</label>
+                    <textarea id="expense-description" rows="2" required></textarea>
+                </div>
+            </div>
+            <button type="submit" id="submit-expense-btn" class="submit-btn">Record Expense</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Recent Expenses (Tracking)</h2>
+        <div style="display: flex; gap: 15px; margin-bottom: 15px;">
+            <div class="form-group">
+                <label for="filter-category">Filter by Category:</label>
+                <select id="filter-category">
+                    <option value="">All Categories</option>
+                    </select>
+            </div>
+            <button id="filter-btn" class="submit-btn" style="width: 150px; align-self: end; padding: 8px;">Apply Filter</button>
+        </div>
+        
+        <table class="expense-table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Date</th>
+                    <th>Category</th>
+                    <th>Description</th>
+                    <th>Vendor</th>
+                    <th>Amount (₹)</th>
+                    <th>Mode</th>
+                </tr>
+            </thead>
+            <tbody id="expense-tbody">
+                <tr><td colspan="7" class="placeholder-message">Loading expenses...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

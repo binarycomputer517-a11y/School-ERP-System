@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Set Hostel Room & Meal Rates</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --warning-color: #f39c12;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .rate-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input[type="text"], input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+        }
+        .submit-btn {
+            grid-column: 1 / -1;
+            padding: 12px;
+            background-color: var(--success-color);
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .submit-btn:hover {
+            background-color: #219d55;
+        }
+        .rate-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        .rate-table th, .rate-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9em;
+        }
+        .rate-table th {
+            background-color: var(--primary-color);
+            color: #fff;
+            font-weight: 600;
+        }
+        .placeholder-message {
+            text-align: center;
+            padding: 20px 0;
+            color: var(--dark-gray-color);
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
+        window.location.href = '/login'; 
+    }
+    
+    // --- Helper for API Calls ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+        }
+        return response.json();
+    }
+    
+    /**
+     * Fetches and renders existing hostel rate structures.
+     */
+    async function fetchAndRenderRates() {
+        const tbody = document.getElementById('rates-tbody');
+        tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">Loading existing rates...</td></tr>';
+
+        try {
+            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of defined rates ❌
+            const rates = await handleApi('/api/hostel/rates'); 
+            
+            tbody.innerHTML = '';
+            if (rates.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">No hostel rates defined.</td></tr>';
+                return;
+            }
+
+            rates.forEach(rate => {
+                const row = `<tr>
+                    <td>${rate.rate_name}</td>
+                    <td>${rate.room_type}</td>
+                    <td>₹${(rate.room_fee || 0).toFixed(2)} / Month</td>
+                    <td>₹${(rate.meal_fee || 0).toFixed(2)} / Month</td>
+                    <td><button onclick="editRate(${rate.id})">Edit</button></td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error('Error fetching rates:', error);
+            tbody.innerHTML = `<tr><td colspan="5" class="placeholder-message" style="color: var(--error-color);">Error loading rates: ${error.message}</td></tr>`;
+        }
+    }
+
+    /**
+     * Handles form submission for creating or updating a rate.
+     */
+    async function submitRate(formData) {
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+
+        const rateId = formData.id;
+        const isUpdate = !!rateId;
+        const method = isUpdate ? 'PUT' : 'POST';
+        const url = isUpdate ? `/api/hostel/rates/${rateId}` : '/api/hostel/rates';
+
+        try {
+            // ❌ ACTUAL API CALL for submission ❌
+            await handleApi(url, { method: method, body: JSON.stringify(formData) });
+            
+            alert(`✅ Hostel rate ${isUpdate ? 'updated' : 'created'} successfully!`);
+            document.getElementById('rate-form').reset();
+            fetchAndRenderRates(); // Refresh list
+
+        } catch (error) {
+            alert(`❌ Error saving rate: ${error.message}`);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    }
+
+    // Placeholder for editing a rate (will load form with data)
+    function editRate(rateId) {
+        alert(`Loading Rate ID ${rateId} for editing (requires another API call to fetch single item).`);
+        // In a real app: fetch single rate, populate form inputs, change button text.
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchAndRenderRates();
+
+        document.getElementById('rate-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const formData = {
+                id: document.getElementById('rate-id').value,
+                rate_name: document.getElementById('rate-name').value,
+                room_type: document.getElementById('room-type').value,
+                room_fee: parseFloat(document.getElementById('room-fee').value),
+                meal_fee: parseFloat(document.getElementById('meal-fee').value),
+                notes: document.getElementById('notes').value
+            };
+            submitRate(formData);
+        });
+    });
+</script>
+
+<div class="container">
+    <h1>Set Hostel Room & Meal Rates</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Define New Rate Structure</h2>
+        <form id="rate-form">
+            <input type="hidden" id="rate-id">
+            <div class="form-group">
+                <label for="rate-name">Rate Structure Name (e.g., Standard AC Double)</label>
+                <input type="text" id="rate-name" required>
+            </div>
+            <div class="rate-grid">
+                <div class="form-group">
+                    <label for="room-type">Room Type/Occupancy</label>
+                    <select id="room-type" required>
+                        <option value="">-- Select --</option>
+                        <option value="Single">Single Occupancy</option>
+                        <option value="Double">Double Occupancy</option>
+                        <option value="Quad">Quad Occupancy</option>
+                        <option value="Premium">Premium Single</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="room-fee">Room Fee (Monthly, ₹)</label>
+                    <input type="number" step="0.01" id="room-fee" required min="0">
+                </div>
+                <div class="form-group">
+                    <label for="meal-fee">Meal/Mess Fee (Monthly, ₹)</label>
+                    <input type="number" step="0.01" id="meal-fee" required min="0">
+                </div>
+                <div class="form-group">
+                    <label for="notes">Notes/Included Services (Optional)</label>
+                    <input type="text" id="notes" placeholder="e.g., Includes Wi-Fi">
+                </div>
+            </div>
+            <button type="submit" id="submit-btn" class="submit-btn">Save Rate Structure</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Existing Rates</h2>
+        <table class="rate-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Room Type</th>
+                    <th>Room Fee</th>
+                    <th>Meal Fee</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="rates-tbody">
+                <tr><td colspan="5" class="placeholder-message">Loading existing rates...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+</body>
+</html>

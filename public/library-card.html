@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Library Card</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <style>
+        .card-container {
+            width: 450px;
+            margin: 50px auto;
+            border: 1px solid #ccc;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            background: #fff;
+            text-align: center;
+        }
+        .card-header {
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+        .card-header h2 {
+            margin: 0;
+            color: #007bff;
+        }
+        .profile-photo {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #eee;
+            margin-bottom: 15px;
+        }
+        .student-name {
+            font-size: 1.8em;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+        .student-details {
+            font-size: 1.1em;
+            color: #555;
+            margin-bottom: 25px;
+        }
+        #barcode {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="card-container" id="card-container">
+        <p>Loading library card...</p>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('erp-token');
+        if (!token) window.location.href = '/login';
+
+        async function loadLibraryCard() {
+            const studentId = new URLSearchParams(window.location.search).get('studentId');
+            if (!studentId) {
+                document.getElementById('card-container').innerHTML = '<h2>Error: No Student ID provided.</h2>';
+                return;
+            }
+
+            try {
+                // NOTE: This assumes you have a GET /api/students/:id endpoint
+                const response = await fetch(`/api/students/${studentId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Could not fetch student data.');
+                
+                const student = await response.json();
+                
+                const cardContainer = document.getElementById('card-container');
+                cardContainer.innerHTML = `
+                    <div class="card-header">
+                        <h2>School Library Card</h2>
+                    </div>
+                    <img src="${student.profile_photo_path || '/images/default-avatar.png'}" alt="Profile Photo" class="profile-photo">
+                    <div class="student-name">${student.first_name} ${student.last_name}</div>
+                    <div class="student-details">
+                        Class: ${student.class_name || 'N/A'} | Roll No: ${student.roll_number || 'N/A'}
+                    </div>
+                    <svg id="barcode"></svg>
+                `;
+
+                // Generate the barcode if a card ID exists
+                if (student.library_card_id) {
+                    JsBarcode("#barcode", student.library_card_id, {
+                        format: "CODE128",
+                        displayValue: true,
+                        fontSize: 18,
+                        lineColor: "#000"
+                    });
+                } else {
+                    document.getElementById('barcode').outerHTML = '<p>No library card ID assigned yet. Issue a book to this student to generate one.</p>';
+                }
+
+            } catch (error) {
+                console.error('Failed to load card:', error);
+                document.getElementById('card-container').innerHTML = `<h2>Error: ${error.message}</h2>`;
+            }
+        }
+
+        window.onload = loadLibraryCard;
+    </script>
+
+</body>
+</html>

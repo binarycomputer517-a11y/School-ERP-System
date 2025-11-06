@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bulk Student Import</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="container" style="max-width: 700px;">
+    <h1>Bulk Student Import</h1>
+    <div class="nav-links"><a href="/view-students.html">← Back to All Students</a></div>
+    <div style="background: #eef; padding: 15px; border-radius: 5px; margin-top: 20px;">
+        <h4>Instructions:</h4>
+        <p>Please upload a CSV file with the following columns:</p>
+        <p><code>first_name, last_name, date_of_birth, gender, class_id, contact_number, student_username, student_password, parent_username, parent_password</code></p>
+        <p><strong>Important:</strong> <code>class_id</code> must be the numeric ID from the classes table, not the name.</p>
+    </div>
+    <form id="import-form" style="margin-top: 20px;">
+        <div class="form-group">
+            <label for="csv_file">Select CSV File</label>
+            <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
+        </div>
+        <button type="submit">Import Students</button>
+    </form>
+</div>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+        window.location.href = '/login';
+    }
+
+    document.getElementById('import-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        if (!formData.get('csv_file').name.endsWith('.csv')) {
+            return alert('Please select a valid CSV file.');
+        }
+
+        try {
+            const res = await fetch('/api/students/bulk-import', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+
+            const responseText = await res.text();
+            if (!res.ok) throw new Error(responseText);
+            alert(responseText);
+            window.location.href = '/view-students.html';
+        } catch (err) {
+            alert('Import failed: ' + err.message);
+        }
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic ERP Menu (Role-Based Access)</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --color-admin: #003366; /* Dark Blue */
+            --color-teacher: #28a745; /* Green */
+            --color-student: #ffc107; /* Yellow/Orange */
+            --color-super: #8e44ad; /* Purple */
+        }
+        body { background-color: #f4f7f6; }
+        .container { max-width: 1000px; padding: 40px; }
+        .menu-card { margin-bottom: 25px; border-radius: 12px; }
+        
+        /* Role-specific coloring */
+        .header-admin { background-color: var(--color-admin); }
+        .header-teacher { background-color: var(--color-teacher); }
+        .header-student { background-color: var(--color-student); }
+        .header-super { background-color: var(--color-super); }
+
+        .menu-header { color: white; padding: 15px 20px; border-radius: 12px 12px 0 0; }
+        .list-group-item { border-left: 5px solid transparent; }
+        .list-group-item-action:hover { background-color: #e9ecef; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header class="mb-5">
+        <h1 class="text-center text-primary">ERP Main Menu Portal</h1>
+        <p class="text-center">
+            Welcome, <strong id="user-name-display">Guest</strong>! Your Role: <span class="badge" id="role-badge">Loading...</span>
+        </p>
+    </header>
+
+    <div id="dynamic-menu-container">
+        <p id="loading-message" class="text-center text-muted">Authenticating user role...</p>
+    </div>
+</div>
+
+
+<script>
+    const USER_ROLE = localStorage.getItem('user-role');
+    const USER_NAME = localStorage.getItem('user-name') || 'Guest';
+    const TOKEN = localStorage.getItem('erp-token');
+    const menuContainer = document.getElementById('dynamic-menu-container');
+    const roleBadge = document.getElementById('role-badge');
+    const nameDisplay = document.getElementById('user-name-display');
+
+    nameDisplay.textContent = USER_NAME;
+
+    function logout() {
+        localStorage.clear();
+        window.location.href = '/login.html';
+    }
+
+    // --- Role-Specific Menu Definitions ---
+    const menuItems = {
+        'Super Admin': {
+            header: 'System Administrator Access',
+            color: 'header-super',
+            items: [
+                { icon: 'bi-gear-fill', text: 'System Settings & Config', url: '/admin-system-config.html' },
+                { icon: 'bi-bank', text: 'Branch & Session Management', url: '/admin-branch-session.html' },
+                { icon: 'bi-people-fill', text: 'User/Role Management', url: '/admin-user-roles.html' },
+                { icon: 'bi-server', text: 'Database & Audit Logs', url: '/admin-audit-logs.html' },
+            ]
+        },
+        'Admin': {
+            header: 'Administrative & Financial Control',
+            color: 'header-admin',
+            items: [
+                { icon: 'bi-grid-3x3-gap-fill', text: 'Main Dashboard Overview', url: '/admin-dashboard.html' },
+                { icon: 'bi-person-badge', text: 'Staff Directory & HR', url: '/manage-staff-hr.html' },
+                { icon: 'bi-cash-coin', text: 'Fee & Finance Management', url: '/Academics-with-Fee-Management.html' },
+                { icon: 'bi-book-half', text: 'Academic Setup (Courses/Subjects)', url: '/Academics-with-Fee-Management.html' },
+                { icon: 'bi-calendar-date', text: 'Exam & Marksheet Management', url: '/exam-management.html' },
+                { icon: 'bi-building-up', text: 'Admissions & Student Onboarding', url: '/add-student.html' },
+            ]
+        },
+        'Teacher': {
+            header: 'Academic & Staff Portal',
+            color: 'header-teacher',
+            items: [
+                { icon: 'bi-easel', text: 'Teaching Dashboard', url: '/teacher-dashboard.html' },
+                { icon: 'bi-table', text: 'View Class Timetable', url: '/my-timetable.html' },
+                { icon: 'bi-check2-square', text: 'Attendance Marking', url: '/teacher-attendance.html' },
+                { icon: 'bi-pen', text: 'Marks Entry & Submission', url: '/exam-management.html' },
+                { icon: 'bi-journal-check', text: 'Assign Homework & Modules', url: '/teacher-assignments.html' },
+                { icon: 'bi-chat-dots', text: 'Communication Center', url: '/messages.html' },
+            ]
+        },
+        'Student': {
+            header: 'Student & Learning Portal',
+            color: 'header-student',
+            items: [
+                { icon: 'bi-house-door-fill', text: 'Student Dashboard Home', url: '/student-dashboard.html' },
+                { icon: 'bi-calendar-week', text: 'My Timetable & Schedule', url: '/my-schedule.html' },
+                { icon: 'bi-journals', text: 'Syllabus & Study Material', url: '/my-syllabus.html' },
+                { icon: 'bi-calculator', text: 'My Assignments & Submissions', url: '/my-assignments.html' },
+                { icon: 'bi-cash', text: 'Fee Payment & History', url: '/online-payment.html' },
+                { icon: 'bi-book', text: 'Library Search & Records', url: '/my-library-search.html' },
+                { icon: 'bi-person-vcard', text: 'View/Download ID Card', url: '/my-id-card.html' },
+            ]
+        }
+    };
+    
+    // --- Rendering Logic ---
+
+    if (!TOKEN || !USER_ROLE) {
+        menuContainer.innerHTML = '<div class="alert alert-danger text-center">Authentication Error: Please <a href="/login.html">log in</a> to view the dashboard.</div>';
+        roleBadge.textContent = 'Unauthenticated';
+        roleBadge.className = 'badge bg-secondary';
+    } else {
+        const role = USER_ROLE;
+        const menuData = menuItems[role];
+        
+        if (menuData) {
+            // Set up the header badge
+            roleBadge.textContent = role;
+            roleBadge.className = `badge ${menuData.color.replace('header-', 'bg-')} fs-6`;
+
+            // Build the menu HTML
+            let menuHTML = `
+                <div class="card menu-card">
+                    <div class="menu-header ${menuData.color}">
+                        <h4 class="mb-0">${menuData.header}</h4>
+                    </div>
+                    <ul class="list-group list-group-flush">
+            `;
+            
+            menuData.items.forEach(item => {
+                menuHTML += `
+                    <a href="${item.url}" class="list-group-item list-group-item-action">
+                        <i class="${item.icon} me-3"></i> ${item.text}
+                    </a>
+                `;
+            });
+
+            menuHTML += `
+                    </ul>
+                    <div class="card-footer text-center">
+                        <button class="btn btn-danger btn-sm" onclick="logout()">
+                            <i class="bi-box-arrow-right"></i> Log Out
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            menuContainer.innerHTML = menuHTML;
+            
+        } else {
+             // Role exists but is unknown (e.g., 'HR' or 'Guest')
+             menuContainer.innerHTML = `<div class="alert alert-warning text-center">
+                 Your role (${role}) is recognized but has no predefined menu access. Please contact the Super Admin.
+                 <div class="mt-3"><button class="btn btn-danger btn-sm" onclick="logout()">Log Out</button></div>
+             </div>`;
+             roleBadge.textContent = role;
+             roleBadge.className = 'badge bg-warning text-dark';
+        }
+    }
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

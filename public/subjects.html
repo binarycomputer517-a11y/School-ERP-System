@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Subjects</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || !['Admin', 'Teacher'].includes(localStorage.getItem('user-role'))) {
+        window.location.href = '/login';
+    }
+</script>
+<div class="container">
+    <h1>Manage Subjects</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">Back to Dashboard</a> | <a href="/timetable.html">View Timetable</a></div>
+
+    <h2>Add / Edit Subject</h2>
+    <form id="subject-form">
+        <input type="hidden" id="subject_id" name="subject_id">
+        <label for="subject_name">Subject Name:</label>
+        <input type="text" id="subject_name" name="subject_name" required>
+        <label for="subject_code">Subject Code (Optional):</label>
+        <input type="text" id="subject_code" name="subject_code">
+        <button type="submit">Save Subject</button>
+        <button type="button" id="cancel-edit" onclick="resetForm()" style="display:none;">Cancel Edit</button>
+    </form>
+
+    <h2 style="margin-top: 40px;">All Subjects</h2>
+    <table>
+        <thead><tr><th>Code</th><th>Subject Name</th><th>Actions</th></tr></thead>
+        <tbody id="subject-list-body"></tbody>
+    </table>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const form = document.getElementById('subject-form');
+
+    function loadSubjects() {
+        fetch('/api/academics/subjects', { headers: authHeaders }).then(res => res.json()).then(subjects => {
+            const tableBody = document.getElementById('subject-list-body');
+            tableBody.innerHTML = '';
+            subjects.forEach(subject => {
+                tableBody.innerHTML += `<tr data-subject='${JSON.stringify(subject)}'>
+                    <td>${subject.subject_code || 'N/A'}</td>
+                    <td>${subject.subject_name}</td>
+                    <td>
+                        <button onclick="editSubject(this)">Edit</button>
+                        <button onclick="deleteSubject(${subject.id})">Delete</button>
+                    </td>
+                </tr>`;
+            });
+        });
+    }
+
+    function editSubject(btn) {
+        const subject = JSON.parse(btn.closest('tr').dataset.subject);
+        form.elements['subject_id'].value = subject.id;
+        form.elements['subject_name'].value = subject.subject_name;
+        form.elements['subject_code'].value = subject.subject_code || '';
+        document.getElementById('cancel-edit').style.display = 'inline-block';
+        window.scrollTo(0, 0);
+    }
+
+    function deleteSubject(id) {
+        if (!confirm('Are you sure?')) return;
+        // NOTE: Requires a 'DELETE /api/academics/subjects/:id' route on the backend.
+        fetch(`/api/academics/subjects/${id}`, { method: 'DELETE', headers: authHeaders }).then(res => {
+            if (res.ok) { loadSubjects(); } else { alert('Error deleting subject.'); }
+        });
+    }
+
+    function resetForm() {
+        form.reset();
+        form.elements['subject_id'].value = '';
+        document.getElementById('cancel-edit').style.display = 'none';
+    }
+
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(this));
+        const subjectId = data.subject_id;
+        const method = subjectId ? 'PUT' : 'POST';
+        // NOTE: Requires 'PUT /api/academics/subjects/:id' route on the backend for editing.
+        const url = subjectId ? `/api/academics/subjects/${subjectId}` : '/api/academics/subjects';
+        
+        fetch(url, { method, headers: { 'Content-Type': 'application/json', ...authHeaders }, body: JSON.stringify(data) })
+        .then(res => {
+            if (res.ok) { alert('Subject saved!'); resetForm(); loadSubjects(); } 
+            else { res.text().then(text => alert('Error: ' + text)); }
+        });
+    });
+
+    window.onload = loadSubjects;
+</script>
+</body>
+</html>

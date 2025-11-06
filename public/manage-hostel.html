@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Hostel & Room Management</title>
+    <style>
+        /* --- CLASSIC DESIGN STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 1000px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #C0392B; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; border-bottom: 2px solid #999; 
+            padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px;
+        }
+        h3 {
+            color: #333; font-size: 1.1em; margin-top: 20px;
+        }
+        
+        /* Form & Input Styles */
+        form { margin-bottom: 20px; padding: 15px; border: 1px solid #E0E0E0; background-color: #F8F8F8; }
+        input, select, textarea { 
+            padding: 8px; margin-right: 10px; border: 1px solid #555; border-radius: 0; 
+            width: 90%; margin-bottom: 10px;
+        }
+        /* Specific layouts for forms */
+        .form-row { display: flex; gap: 10px; }
+        .form-row input, .form-row select { flex-grow: 1; width: auto; }
+        
+        button { 
+            background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; 
+            border-radius: 0; cursor: pointer; margin-top: 5px; box-shadow: 2px 2px 0 #000;
+            font-weight: bold;
+        }
+        button:hover { background-color: #003366; box-shadow: 1px 1px 0 #000; }
+
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+        
+        /* Navigation */
+        .nav-links { margin-bottom: 20px; text-align: center; }
+        .nav-links a { text-decoration: none; color: #005A9C; font-weight: bold; }
+        .nav-links a strong { color: #C0392B; }
+
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const HOSTEL_ADMIN_ROLES = ['Admin', 'Super Admin'];
+    
+    // Updated authorization check
+    if (!token || !HOSTEL_ADMIN_ROLES.includes(userRole)) { 
+        window.location.href = '/login'; 
+    }
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    // Helper to fetch data safely
+    async function fetchSafe(url) {
+        try {
+            const res = await fetch(url, { headers: authHeaders });
+            if (!res.ok) {
+                 const errorBody = await res.json().catch(() => ({ message: res.statusText }));
+                 throw new Error(errorBody.message);
+            }
+            const data = await res.json();
+            return Array.isArray(data) ? data : []; 
+        } catch (error) {
+            console.error(`API Error on ${url}:`, error.message);
+            return []; // Always return an empty array on failure
+        }
+    }
+
+
+    function loadHostels() {
+        const hostelSelect = document.getElementById('hostel-select');
+        const roomHostelSelect = document.getElementById('room-hostel-select');
+        const noticeHostelSelect = document.getElementById('notice-hostel-select');
+        
+        fetchSafe('/api/hostel/hostels')
+            .then(hostels => {
+                let optionsHtml = '<option value="">-- Select Hostel --</option>';
+                hostels.forEach(h => {
+                    optionsHtml += `<option value="${h.id}">${h.hostel_name}</option>`;
+                });
+                
+                if (hostelSelect) hostelSelect.innerHTML = optionsHtml;
+                
+                // Update dependent selects
+                if (roomHostelSelect) roomHostelSelect.innerHTML = optionsHtml;
+                if (noticeHostelSelect) noticeHostelSelect.innerHTML = '<option value="">-- For All Hostels --</option>' + optionsHtml;
+            });
+    }
+    
+    function loadRooms() {
+        const roomListBody = document.getElementById('room-list-body');
+        if (!roomListBody) return; 
+
+        fetchSafe('/api/hostel/rooms')
+            .then(rooms => {
+                roomListBody.innerHTML = '';
+                
+                if (rooms.length === 0) {
+                     roomListBody.innerHTML = '<tr><td colspan="4">No rooms defined yet.</td></tr>';
+                     return;
+                }
+
+                rooms.forEach(r => {
+                    // Using data attributes for safe passing of ID, room_number, and capacity
+                    roomListBody.innerHTML += `
+                        <tr>
+                            <td>${r.hostel_name}</td>
+                            <td>${r.room_number}</td>
+                            <td>${r.current_occupancy} / ${r.capacity}</td>
+                            <td>
+                                <button 
+                                    data-id="${r.id}" 
+                                    data-number="${r.room_number}" 
+                                    data-capacity="${r.capacity}" 
+                                    onclick="editRoomFromData(this)">Edit
+                                </button>
+                                <button onclick="deleteRoom('${r.id}')">Delete</button>
+                            </td>
+                        </tr>`;
+                });
+            });
+    }
+
+    /**
+     * Reads data attributes from the button element for robust editing.
+     * @param {HTMLElement} buttonElement - The button clicked.
+     */
+    function editRoomFromData(buttonElement) {
+        const roomId = buttonElement.getAttribute('data-id');
+        const currentNumber = buttonElement.getAttribute('data-number');
+        const currentCapacity = buttonElement.getAttribute('data-capacity');
+
+        const newNumber = prompt("Enter new room number:", currentNumber);
+        if (newNumber === null) return; // User cancelled
+
+        let newCapacity = prompt("Enter new room capacity:", currentCapacity);
+        if (newCapacity === null) return;
+        newCapacity = parseInt(newCapacity, 10);
+        
+        if (isNaN(newCapacity) || newCapacity <= 0) {
+            alert("Invalid capacity entered.");
+            return;
+        }
+
+        fetch(`/api/hostel/rooms/${roomId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify({ room_number: newNumber, capacity: newCapacity })
+        }).then(res => {
+            if (res.ok) {
+                alert('Room updated successfully!');
+                loadRooms(); // Refresh the list
+            } else {
+                res.text().then(text => alert('Error: ' + text));
+            }
+        });
+    }
+    
+    function deleteRoom(roomId) {
+        if (confirm('Are you sure you want to delete this room? This can only be done if the room is empty.')) {
+            fetch(`/api/hostel/rooms/${roomId}`, {
+                method: 'DELETE',
+                headers: authHeaders
+            }).then(res => {
+                if (res.ok) {
+                    alert('Room deleted successfully!');
+                    loadRooms(); // Refresh the list
+                } else {
+                    res.text().then(text => alert('Error: ' + text));
+                }
+            });
+        }
+    }
+
+    
+    window.onload = () => {
+        // Load data for initial view and dropdowns
+        loadHostels();
+        loadRooms();
+
+        // --- SUBMISSION HANDLERS ---
+
+        // 1. Hostel Form Handler
+        document.getElementById('hostel-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(this).entries());
+            fetch('/api/hostel/hostels', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(data)
+            }).then(res => { if(res.ok){ alert('Hostel added!'); this.reset(); loadHostels(); } else { res.text().then(text => alert('Error adding hostel: ' + text)); }});
+        });
+        
+        // 2. Room Form Handler
+        document.getElementById('room-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(this).entries());
+            fetch('/api/hostel/rooms', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(data)
+            }).then(res => { if(res.ok){ alert('Room added!'); this.reset(); loadRooms(); } else { res.text().then(text => alert('Error adding room: ' + text)); }});
+        });
+
+        // 3. Notice Form Handler
+        document.getElementById('notice-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const data = Object.fromEntries(new FormData(this).entries());
+            fetch('/api/hostel/notices', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                body: JSON.stringify(data)
+            }).then(res => {
+                if(res.ok){
+                    alert('Notice posted successfully!');
+                    this.reset();
+                } else {
+                    res.text().then(text => alert('Error posting notice: ' + text));
+                }
+            });
+        });
+    };
+</script>
+
+<div class="container">
+    <h1>Hostel & Room Management</h1>
+    <div class="nav-links">
+        <a href="/admin-dashboard.html">← Back to Dashboard</a> | 
+        <a href="/allocate-hostel-room.html">Allocate Rooms</a> | 
+        <a href="/manage-hostel-fees.html">Manage Hostel Fees</a> |
+        <a href="/hostel-gatepass-review.html">Review Gate Passes</a>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 30px;">
+        <div class="form-container">
+            <h2>Add New Hostel</h2>
+            <form id="hostel-form">
+                <div class="form-row">
+                    <input type="text" name="hostel_name" placeholder="Hostel Name (e.g., Apollo)" required>
+                    <select name="type" required>
+                        <option value="">-- Select Type --</option>
+                        <option value="Boys">Boys</option>
+                        <option value="Girls">Girls</option>
+                    </select>
+                </div>
+                <button type="submit">Create Hostel</button>
+            </form>
+
+            <h2>Add New Room</h2>
+            <form id="room-form">
+                <select name="hostel_id" id="room-hostel-select" required>
+                    <option value="">-- Select Hostel --</option>
+                    </select>
+                <div class="form-row">
+                    <input type="text" name="room_number" placeholder="Room Number (e.g., A-101)" required>
+                    <input type="number" name="capacity" placeholder="Capacity (Beds)" required min="1">
+                </div>
+                <button type="submit">Create Room</button>
+            </form>
+        </div>
+        
+        <div class="form-container">
+            <h2>Post Hostel Notice</h2>
+            <form id="notice-form">
+                <select name="hostel_id" id="notice-hostel-select">
+                    <option value="">-- For All Hostels --</option>
+                    </select>
+                <input type="text" name="title" placeholder="Notice Title" required>
+                <textarea name="content" placeholder="Notice Content" rows="5" required></textarea>
+                <button type="submit">Post Notice</button>
+            </form>
+        </div>
+    </div>
+    
+    <hr style="margin: 30px 0;">
+
+    <h2 style="margin-top: 0;">Existing Rooms & Occupancy</h2>
+    <table>
+        <thead><tr><th>Hostel Name</th><th>Room Number</th><th>Occupancy</th><th>Actions</th></tr></thead>
+        <tbody id="room-list-body">
+            <tr><td colspan="4">Loading rooms...</td></tr>
+        </tbody>
+    </table>
+</div>
+</body>
+</html>

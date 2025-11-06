@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Download Bonafide Certificate</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .certificate-container {
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+        .btn-download {
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+        .btn-download:hover {
+            background-color: #0056b3;
+        }
+        .status-message {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .status-success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .status-error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+<script>
+    // 1. Authentication Check
+    const token = localStorage.getItem('erp-token');
+    const studentName = localStorage.getItem('user-name') || 'Student User'; // Assuming you store user name
+    const studentId = localStorage.getItem('profile-id'); // Assuming you store profile-id
+    
+    if (!token || !studentId) {
+        alert('Authentication error: Please log in again.');
+        window.location.href = '/login';
+    }
+</script>
+
+<div class="container">
+    <div class="certificate-container">
+        <h1>Download Bonafide Certificate</h1>
+        <div class="nav-links"><a href="/admin-dashboard.html">← Back to Dashboard</a></div>
+        
+        <p>This will generate an official Bonafide Certificate for the current student. The document will be downloaded as a PDF file.</p>
+        <p>Please click the button below to proceed with the generation and download.</p>
+
+        <button id="download-btn" class="btn-download" onclick="generateAndDownloadPDF()">
+            Generate & Download Certificate
+        </button>
+
+        <div id="status-message" class="status-message" style="display: none;"></div>
+    </div>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const statusMessageElement = document.getElementById('status-message');
+    const downloadButton = document.getElementById('download-btn');
+
+    /**
+     * Professional approach: Use the /generate endpoint designed for direct PDF output.
+     * This requires sending specific data to trigger the backend PDF generation helper.
+     */
+    async function generateAndDownloadPDF() {
+        // Disable button and show processing message
+        downloadButton.disabled = true;
+        statusMessageElement.style.display = 'block';
+        statusMessageElement.className = 'status-message';
+        statusMessageElement.textContent = 'Processing request... Generating PDF.';
+
+        try {
+            // 2. API Call to Direct Generation Endpoint
+            const apiUrl = '/api/certificates/generate';
+            
+            // NOTE: Certificate template data must be constructed here
+            const certificateData = {
+                // Required by the backend (routes/certificates.js)
+                studentId: studentId,
+                studentName: studentName,
+                courseEvent: 'Pursuing Diploma in Computer Application', // Example dynamic text
+                issueDate: new Date().toISOString().slice(0, 10),
+                templateId: 'BONAFIDE_CLASSIC', // Identifier for the template in the backend
+                
+                // Bonafide Specific Data
+                purpose: 'For bank account opening and verification',
+                enrollmentNo: localStorage.getItem('enrollment-no') || 'N/A' 
+            };
+
+            const res = await fetch(apiUrl, {
+                method: 'POST',
+                headers: { 
+                    ...authHeaders,
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify(certificateData) 
+            });
+
+            if (!res.ok) {
+                // If the PDF fails (500) or validation fails (400)
+                const errorText = await res.json().catch(() => ({ message: res.statusText }));
+                statusMessageElement.className = 'status-message status-error';
+                statusMessageElement.textContent = `Error: Failed to generate certificate. ${errorText.message}`;
+                return;
+            }
+
+            // 3. Handle File Download (Expected PDF as binary data)
+            const contentType = res.headers.get('Content-Type');
+            
+            if (contentType && contentType.includes('application/pdf')) {
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                
+                // Create a temporary link element to trigger the download
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = res.headers.get('Content-Disposition')?.split('filename=')[1].replace(/"/g, '') || 'Bonafide_Certificate.pdf';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+
+                statusMessageElement.className = 'status-message status-success';
+                statusMessageElement.textContent = 'Certificate downloaded successfully! 🎉';
+
+            } else {
+                statusMessageElement.className = 'status-message status-error';
+                statusMessageElement.textContent = 'API returned unexpected format. Download failed.';
+            }
+
+        } catch (error) {
+            console.error('Download failed:', error);
+            statusMessageElement.className = 'status-message status-error';
+            statusMessageElement.textContent = 'A network error occurred. Could not connect to the server.';
+        } finally {
+            downloadButton.disabled = false; // Re-enable button
+        }
+    }
+    
+    /*
+     * NOTE: Renamed the original function to keep the file clean. 
+     * You should delete the old, problematic requestAndDownloadCertificate() function
+     * if it still exists in your working copy.
+     */
+</script>
+</body>
+</html>

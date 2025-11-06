@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent-Teacher Meeting Scheduler & Feedback</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { font-family: sans-serif; padding: 2em; background-color: #f7f7f7; color: #333; }
+        .container { max-width: 1200px; margin: auto; padding: 30px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #e91e63; border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
+        h2 { color: #f06292; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; }
+        
+        .grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #f48fb1; border-radius: 4px; }
+        button { background-color: #e91e63; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; transition: background-color 0.3s; }
+        button:hover { background-color: #c2185b; }
+        
+        .card { padding: 20px; border: 1px solid #f8bbd0; border-radius: 6px; margin-top: 20px; background-color: #fffafa; }
+        .message-box { padding: 15px; border-radius: 4px; margin-top: 10px; font-weight: bold; }
+        .error { background-color: #ffcdd2; color: #c62828; border: 1px solid #ef9a9a; }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+
+        /* Table & Status Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #ddd; font-size: 0.9em; }
+        th { background-color: #fce4ec; color: #e91e63; }
+
+        .status-Scheduled { color: #2196f3; font-weight: bold; }
+        .status-Completed { color: #4caf50; font-weight: bold; }
+        .status-Canceled, .status-Parent_Absent { color: #ff9800; font-weight: bold; }
+
+        .report-score { font-weight: bold; font-size: 1.1em; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Parent-Teacher Meeting Portal</h1>
+        <p>Current Role: <strong id="user-role-display">Loading...</strong></p>
+
+        <div id="staff-view" style="display:none;">
+            <div class="grid-main">
+                <div>
+                    <div class="card">
+                        <h2>Schedule a PTM</h2>
+                        <form id="schedule-form">
+                            <div class="grid-form">
+                                <div>
+                                    <label for="teacher-id">Teacher ID (Your ID):</label>
+                                    <input type="text" id="teacher-id" name="teacher_id" required placeholder="Teacher Name/UUID">
+                                </div>
+                                <div>
+                                    <label for="student-id">Student ID:</label>
+                                    <input type="text" id="student-id" name="student_id" required placeholder="Type Student Name or UUID">
+                                </div>
+                            </div>
+
+                            <div class="grid-form">
+                                <div>
+                                    <label for="meeting-time">Date & Time:</label>
+                                    <input type="datetime-local" id="meeting-time" name="meeting_time" required>
+                                </div>
+                                <div>
+                                    <label for="duration-minutes">Duration (Minutes):</label>
+                                    <input type="number" id="duration-minutes" name="duration_minutes" value="15" min="5" required>
+                                </div>
+                            </div>
+                            
+                            <label for="meeting-type">Meeting Type:</label>
+                            <select id="meeting-type" name="meeting_type">
+                                <option value="In-Person">In-Person (Room 101)</option>
+                                <option value="Virtual">Virtual (Online Link)</option>
+                            </select>
+
+                            <button type="submit">Confirm Schedule</button>
+                            <div id="schedule-message" class="message-box" style="display:none;"></div>
+                        </form>
+                    </div>
+
+                    <div class="card" style="margin-top: 30px;">
+                        <h2>Your Upcoming Meeting Slots</h2>
+                        <table id="teacher-slots-table">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Student</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="slots-tbody">
+                                <tr><td colspan="5">Enter your ID to view slots.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="card">
+                        <h2>Submit Meeting Feedback</h2>
+                        <p style="font-size: 0.9em;">Use this form after the meeting to finalize the record.</p>
+                        <form id="feedback-form">
+                            <label for="schedule-id-feedback">Schedule ID (from slots list):</label>
+                            <input type="text" id="schedule-id-feedback" name="schedule_id" required placeholder="Meeting UUID">
+                            
+                            <label for="meeting-status">Final Meeting Status:</label>
+                            <select id="meeting-status" name="meeting_status" required>
+                                <option value="Completed">Completed</option>
+                                <option value="Parent Absent">Parent Absent</option>
+                                <option value="Canceled">Canceled</option>
+                            </select>
+
+                            <h3 style="margin-top: 20px;">Structured Feedback (1-5 Scale)</h3>
+                            <label for="academic-score">Academic Performance (1=Poor, 5=Excellent):</label>
+                            <input type="number" id="academic-score" name="academic_score" min="1" max="5" required>
+
+                            <label for="behavior-score">Behavior & Engagement (1=Poor, 5=Excellent):</label>
+                            <input type="number" id="behavior-score" name="behavior_score" min="1" max="5" required>
+
+                            <label for="goals-discussed">Goals Discussed (for next term):</label>
+                            <textarea id="goals-discussed" name="goals_discussed" rows="3"></textarea>
+
+                            <label for="parent-comments">Parent Comments/Concerns:</label>
+                            <textarea id="parent-comments" name="parent_comments" rows="2"></textarea>
+
+                            <button type="submit">Finalize & Submit Feedback</button>
+                            <div id="feedback-message" class="message-box" style="display:none;"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="student-view" class="card" style="display:none;">
+            <h2>Student PTM History Report</h2>
+            <form id="report-lookup-form">
+                <input type="text" id="report-student-id" placeholder="Enter Student ID (UUID)" required>
+                <button type="submit">Generate Report</button>
+            </form>
+            <div id="report-results" style="margin-top: 20px;">
+                </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/ptm';
+        const USERS_API = '/api/users/all-staff-students'; 
+        
+        // Get constants from Local Storage globally
+        const TOKEN = localStorage.getItem('erp-token');
+        const USER_ROLE = localStorage.getItem('user-role');
+        const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id'); 
+        
+        if (!TOKEN) { window.location.href = '/login'; }
+
+        // DOM Elements
+        const userRoleDisplay = document.getElementById('user-role-display');
+        const staffView = document.getElementById('staff-view');
+        const studentView = document.getElementById('student-view');
+        const teacherIdInput = document.getElementById('teacher-id');
+        const studentIdInputSchedule = document.getElementById('student-id'); 
+        const studentIdInputReport = document.getElementById('report-student-id'); 
+        const slotsTbody = document.getElementById('slots-tbody');
+        const scheduleForm = document.getElementById('schedule-form');
+        const feedbackForm = document.getElementById('feedback-form');
+        const reportLookupForm = document.getElementById('report-lookup-form');
+        const reportResultsDiv = document.getElementById('report-results');
+
+        let allUsersForLookup = []; 
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+
+        // --- Helper Functions ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                throw new Error('Unauthorized or session expired.');
+            }
+            if (!response.ok) {
+                if (response.status === 404) {
+                    throw new Error('API Endpoint or resource not found. Check the ID.');
+                }
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                throw new Error(errorBody.message || 'API call failed.');
+            }
+            return response.json();
+        }
+        
+        function showMessage(element, text, type) {
+            element.textContent = text;
+            element.className = `message-box ${type}`;
+            element.style.display = 'block';
+        }
+
+        async function loadAllUsersForLookup() {
+            try {
+                const users = await handleApi(USERS_API); 
+                allUsersForLookup = users.map(u => ({
+                    id: u.id, 
+                    username: u.username.toLowerCase(),
+                    fullName: (u.full_name || '').toLowerCase()
+                }));
+            } catch (error) {
+                console.warn("Failed to load user directory for lookup (using dummy data):", error);
+                allUsersForLookup = [
+                    { id: "a0000000-0000-0000-0000-000000000001", username: "dsmith", fullName: "david smith" },
+                    { id: "b0000000-0000-0000-0000-000000000002", username: "sroy", fullName: "souvik roy" }
+                ];
+            }
+        }
+
+        function lookupUserId(inputElement) {
+            const query = inputElement.value.trim().toLowerCase();
+            
+            // Allow name to be typed until 3 characters or it's a UUID
+            if (query.length < 3 && !uuidRegex.test(query)) {
+                 inputElement.placeholder = inputElement.getAttribute('placeholder').includes("Found:") ? inputElement.getAttribute('placeholder') : "Type Name or UUID";
+                 return; 
+            }
+
+            if (uuidRegex.test(query)) {
+                 return;
+            }
+
+            const matchedUser = allUsersForLookup.find(user => 
+                (user.fullName.includes(query)) ||
+                (user.username.includes(query))
+            );
+
+            if (matchedUser) {
+                // ⭐ FIX: Replace the value with the UUID upon a successful lookup
+                inputElement.value = matchedUser.id;
+                inputElement.placeholder = `Found: ${matchedUser.fullName || matchedUser.username}`;
+            } else {
+                 // If no match, keep the current text as the user may still be typing
+                 inputElement.placeholder = `No match found. Enter the full Name or UUID.`;
+            }
+        }
+        
+        // --- 1. Scheduling ---
+        
+        async function loadTeacherSlots(teacherId) {
+            // ⭐ CRITICAL FIX: Ensure Teacher ID is a valid UUID before sending the API request.
+            if (!teacherId || !uuidRegex.test(teacherId)) {
+                slotsTbody.innerHTML = '<tr><td colspan="5" class="error">Error: Invalid Teacher ID format. Please ensure the input field contains a valid UUID.</td></tr>';
+                console.warn("loadTeacherSlots aborted: Invalid Teacher ID format.");
+                return;
+            }
+
+            slotsTbody.innerHTML = '<tr><td colspan="5">Loading your schedule...</td></tr>';
+            try {
+                const slots = await handleApi(`${API_BASE}/teacher/${teacherId}/slots`);
+                
+                if (slots.length === 0) {
+                     slotsTbody.innerHTML = '<tr><td colspan="5">No upcoming meetings scheduled.</td></tr>';
+                     return;
+                }
+
+                slotsTbody.innerHTML = slots.map(s => {
+                    const statusClass = `status-${s.status.replace(/\s/g, '_')}`;
+                    const time = new Date(s.meeting_time).toLocaleString();
+                    
+                    return `
+                        <tr>
+                            <td>${time}</td>
+                            <td><strong>${s.student_name}</strong></td>
+                            <td>${s.duration_minutes} min</td>
+                            <td class="${statusClass}">${s.status}</td>
+                            <td>
+                                ${s.status === 'Scheduled' && new Date(s.meeting_time) < new Date() 
+                                    ? `<button onclick="document.getElementById('schedule-id-feedback').value='${s.id}'" style="background-color: #4caf50;">Finalize</button>`
+                                    : 'N/A'
+                                }
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error("Error loading slots:", error);
+                slotsTbody.innerHTML = `<tr><td colspan="5" class="error">Failed to load schedule: ${error.message}</td></tr>`;
+            }
+        }
+        
+        scheduleForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = Object.fromEntries(new FormData(form));
+            data.duration_minutes = parseInt(data.duration_minutes, 10);
+            
+            // Final UUID check before submission
+            // We check BOTH teacher and student ID here for extra safety
+            if (!uuidRegex.test(data.teacher_id) || !uuidRegex.test(data.student_id)) {
+                showMessage(document.getElementById('schedule-message'), '❌ Scheduling Failed: Both Teacher and Student IDs must be valid UUIDs.', 'error');
+                return;
+            }
+
+            showMessage(document.getElementById('schedule-message'), 'Confirming slot availability...', 'info');
+
+            try {
+                const result = await handleApi(`${API_BASE}/schedule`, { 
+                    method: 'POST', 
+                    body: JSON.stringify(data) 
+                });
+                
+                showMessage(document.getElementById('schedule-message'), `✅ ${result.message}`, 'success');
+                form.reset();
+                loadTeacherSlots(data.teacher_id);
+                
+            } catch (error) {
+                showMessage(document.getElementById('schedule-message'), `❌ Scheduling Failed: ${error.message}`, 'error');
+            }
+        });
+
+        // --- 2. Feedback ---
+        
+        feedbackForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = Object.fromEntries(new FormData(form));
+            
+            showMessage(document.getElementById('feedback-message'), 'Submitting feedback...', 'info');
+
+            try {
+                const scheduleId = data.schedule_id;
+                
+                // Endpoint: POST /api/ptm/feedback/:scheduleId
+                const result = await handleApi(`${API_BASE}/feedback/${scheduleId}`, { 
+                    method: 'POST', 
+                    body: JSON.stringify(data) 
+                });
+                
+                showMessage(document.getElementById('feedback-message'), `✅ ${result.message}`, 'success');
+                form.reset();
+                loadTeacherSlots(teacherIdInput.value); // Refresh teacher's schedule
+                
+            } catch (error) {
+                showMessage(document.getElementById('feedback-message'), `❌ Submission Failed: ${error.message}`, 'error');
+            }
+        });
+
+
+        // --- 3. Report Lookup (Student/Parent View) ---
+
+        reportLookupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const studentId = document.getElementById('report-student-id').value.trim();
+            
+            if (!uuidRegex.test(studentId)) {
+                reportResultsDiv.innerHTML = '<p class="error">Report Failed: Student ID must be a valid UUID.</p>';
+                return;
+            }
+            
+            reportResultsDiv.innerHTML = '<p class="info">Generating report...</p>';
+
+            try {
+                // Endpoint: GET /api/ptm/student/:studentId/report
+                const report = await handleApi(`${API_BASE}/student/${studentId}/report`);
+                
+                if (report.length === 0) {
+                     reportResultsDiv.innerHTML = '<p class="error">No PTM records found for this student.</p>';
+                     return;
+                }
+
+                reportResultsDiv.innerHTML = `<h3>Report for Student ID: ${studentId.slice(0, 8)}...</h3>`;
+                
+                report.forEach(r => {
+                    const statusClass = `status-${r.status.replace(/\s/g, '_')}`;
+                    const time = new Date(r.meeting_time).toLocaleDateString();
+                    
+                    reportResultsDiv.innerHTML += `
+                        <div class="card" style="margin-top: 10px;">
+                            <h4>Meeting on ${time} with ${r.teacher_name}</h4>
+                            <p><strong>Status:</strong> <span class="${statusClass}">${r.status}</span> (${r.meeting_type})</p>
+                            ${r.has_feedback ? `
+                                <p><strong>Academic Score:</strong> <span class="report-score">${r.academic_score || 'N/A'}/5</span> | 
+                                <strong>Behavior Score:</strong> <span class="report-score">${r.behavior_score || 'N/A'}/5</span></p>
+                                <p><strong>Goals:</strong> ${r.goals_discussed || 'None specified.'}</p>
+                                <p><strong>Parent Notes:</strong> ${r.parent_comments || 'N/A'}</p>
+                            ` : '<p class="info">Feedback pending or meeting incomplete.</p>'}
+                        </div>
+                    `;
+                });
+
+            } catch (error) {
+                reportResultsDiv.innerHTML = `<p class="error">Failed to generate report: ${error.message}</p>`;
+            }
+        });
+
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const userIdFromLS = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
+
+            userRoleDisplay.textContent = USER_ROLE;
+            
+            loadAllUsersForLookup(); // ⭐ Load user directory first
+
+            // ⭐ FIX: Event Listeners for Autocomplete/Lookup - Now using 'change' for UUID replacement
+            
+            // 1. Teacher ID Listener
+            teacherIdInput.addEventListener('change', (e) => {
+                lookupUserId(e.target);
+                if (uuidRegex.test(e.target.value)) {
+                    loadTeacherSlots(e.target.value);
+                }
+            });
+
+            // 2. Student ID Listeners
+            studentIdInputSchedule.addEventListener('change', (e) => lookupUserId(e.target));
+            studentIdInputReport.addEventListener('change', (e) => lookupUserId(e.target));
+
+
+            
+            // Set default views based on role
+            if (USER_ROLE === 'Teacher' || USER_ROLE === 'Admin') {
+                staffView.style.display = 'block';
+                
+                if (userIdFromLS && uuidRegex.test(userIdFromLS)) {
+                    teacherIdInput.value = userIdFromLS; // Pre-fill teacher ID with own ID
+                    loadTeacherSlots(userIdFromLS); // Load own schedule automatically
+                } else {
+                    teacherIdInput.value = '';
+                    slotsTbody.innerHTML = '<tr><td colspan="5" class="error">Authentication Error: Your User ID is missing or invalid. Please search for yourself or re-login.</td></tr>';
+                }
+
+            } else if (USER_ROLE === 'Student' || USER_ROLE === 'Parent') {
+                studentView.style.display = 'block';
+                if (USER_ROLE === 'Student' && userIdFromLS && uuidRegex.test(userIdFromLS)) {
+                    document.getElementById('report-student-id').value = userIdFromLS;
+                    reportLookupForm.dispatchEvent(new Event('submit')); // Auto-load report
+                } else if (USER_ROLE === 'Student') {
+                    reportResultsDiv.innerHTML = '<p class="error">Authentication Error: Student ID is missing or invalid. Please search manually or re-login.</p>';
+                }
+            }
+        });
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+</body>
+</html>

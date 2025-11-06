@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Exam</title>
+    <style>
+        body { font-family: 'Arial', sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; }
+        .hidden { display: none !important; }
+
+        /* --- 1. Verification Area --- */
+        #verification-area {
+            display: flex;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background: white;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            border: 3px solid #C0392B; /* Red border */
+        }
+        #verification-left { flex: 1; padding: 10px; }
+        #verification-right { flex: 1; padding: 10px; }
+        #live-camera { width: 100%; height: auto; border: 3px solid #ccc; background-color: #eee; }
+        .verification-header { text-align: center; border-bottom: 2px dashed #C0392B; padding-bottom: 10px; color: #C0392B; }
+        .security-instructions { text-align: left; margin-top: 20px; padding: 15px; border: 1px dashed #777; background-color: #ffebeb; height: 350px; overflow-y: auto; font-size: 0.9em;}
+        .security-instructions h3 { color: #C0392B; margin-top: 0; }
+        .security-instructions li { margin-bottom: 8px; }
+        #verification-controls { text-align: center; margin-top: 20px; }
+        #verification-controls button { font-size: 1.2em; padding: 10px 20px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 5px; transition: background-color 0.2s; }
+        #verification-controls button:hover { background-color: #0056b3; }
+        #verification-controls button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #verification-message { color: red; font-weight: bold; margin-top: 15px; text-align: center; min-height: 1.2em; }
+
+        /* --- 2. Quiz Area (Main Exam UI) --- */
+        #quiz-area {
+            width: 100%;
+            margin: 0 auto;
+            background: white;
+            border: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            height: 100vh; /* Full viewport height */
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        #proctor-camera {
+            position: fixed;
+            bottom: 15px;
+            right: 15px;
+            width: 160px; /* Slightly smaller */
+            height: 120px;
+            border: 2px solid #007bff;
+            border-radius: 5px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            background-color: #000;
+            z-index: 999;
+            object-fit: cover; /* Ensures video fills the element */
+        }
+
+        #quiz-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #007bff;
+            color: white;
+            padding: 10px 20px; /* Slightly less padding */
+            font-size: 1.1em; /* Slightly smaller font */
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #exam-name { font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60%; }
+        #timer { font-weight: bold; background: rgba(0,0,0,0.2); padding: 5px 10px; border-radius: 4px; font-size: 1.1em; }
+
+        #quiz-statusbar {
+            display: flex;
+            justify-content: space-around;
+            padding: 8px 10px; /* Tighter padding */
+            background: #f0f2f5; /* Lighter grey */
+            border-bottom: 1px solid #ddd;
+            font-size: 0.85em; /* Smaller status font */
+            flex-wrap: wrap; /* Allow wrapping on small screens */
+        }
+        .status-box { display: flex; align-items: center; margin: 3px 5px; }
+        .status-box .count {
+            width: 25px; /* Smaller circles */
+            height: 25px;
+            border-radius: 50%;
+            display: grid;
+            place-items: center;
+            font-weight: bold;
+            color: white;
+            margin-right: 5px;
+            font-size: 0.9em;
+        }
+        .status-box .count.attempted { background-color: #ffc107; color: #333; } /* Amber */
+        .status-box .count.not-attempted { background-color: #6c757d; } /* Grey */
+        .status-box .count.reviewed { background-color: #198754; } /* Green */
+        .status-box .count.not-reviewed { background-color: #dc3545; } /* Red */ /* Kept for reference, but hidden in UI */
+
+        #quiz-body { display: flex; flex: 1; overflow: hidden; }
+
+        #quiz-main {
+            flex: 3;
+            padding: 15px 20px; /* Adjusted padding */
+            border-right: 1px solid #ddd;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        #mcq-area {
+            border: 1px solid #eee; /* Lighter border */
+            background-color: #ffffff;
+            padding: 20px;
+            margin-bottom: 15px; /* Space before navigation */
+            flex-grow: 1;
+            border-radius: 5px;
+        }
+        #mcq-area .question-title { font-size: 1.2em; font-weight: bold; margin-bottom: 15px; color: #333; }
+        #mcq-area .options-list { list-style-type: none; padding-left: 0; }
+        #mcq-area .options-list li { margin-bottom: 15px; font-size: 1.05em; } /* More spacing */
+        #mcq-area .options-list label { cursor: pointer; display: flex; align-items: center; padding: 5px; border-radius: 3px; transition: background-color 0.2s;}
+        #mcq-area .options-list label:hover { background-color: #f0f8ff; } /* Light blue hover */
+        #mcq-area .options-list input[type="radio"] { margin-right: 12px; transform: scale(1.1); }
+
+        #quiz-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center; /* Vertically align buttons */
+            margin-top: auto; /* Push to bottom */
+            padding: 15px 0; /* Only top/bottom padding */
+            border-top: 1px solid #eee;
+        }
+        #quiz-navigation button {
+            font-size: 0.95em;
+            padding: 8px 18px; /* Slightly wider */
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background: #e9ecef; /* Light grey */
+            color: #333;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        #quiz-navigation button:hover { background: #dee2e6; }
+        #quiz-navigation .nav-group-left button { margin-right: 8px; }
+        #quiz-navigation .nav-group-right button { margin-left: 8px; }
+        #mark-review-btn { background-color: #ffc107; border-color: #ffc107; color: #333; } /* Amber button */
+        #mark-review-btn:hover { background-color: #e0a800; }
+        #mark-review-btn.active { background-color: #198754; border-color: #198754; color: white; } /* Green when active */
+
+
+        #quiz-sidebar {
+            flex: 1;
+            padding: 15px;
+            background: #f8f9fa; /* Consistent light grey */
+            overflow-y: auto;
+            border-left: 1px solid #ddd;
+        }
+        #quiz-sidebar h3 { margin-top: 5px; text-align: center; border-bottom: 1px solid #ccc; padding-bottom: 10px; font-size: 1.1em; color: #555; }
+        #question-palette {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(38px, 1fr)); /* Slightly smaller buttons */
+            gap: 6px; /* Reduced gap */
+            padding: 5px 0;
+        }
+        .palette-btn {
+            width: 38px;
+            height: 38px;
+            border: 1px solid #ccc; /* Lighter border */
+            background: #fff;
+            cursor: pointer;
+            font-size: 1em;
+            border-radius: 4px;
+            transition: all 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .palette-btn.not-attempted { background: #fff; color: #6c757d; border-color: #ccc; }
+        .palette-btn.attempted { background: #ffc107; color: #333; border-color: #e0a800; }
+        .palette-btn.reviewed { background: #198754; color: white; border-color: #146c43; }
+        /* Combined state: Attempted and Reviewed */
+        .palette-btn.attempted.reviewed {
+             background: #198754; color: white; position: relative;
+        }
+         /* Yellow dot for attempted + reviewed */
+        .palette-btn.attempted.reviewed::after {
+            content: ''; position: absolute; bottom: 3px; right: 3px; width: 8px; height: 8px;
+            background-color: #ffc107; border-radius: 50%; border: 1px solid white;
+        }
+
+        .palette-btn.current { box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.5); z-index: 1; transform: scale(1.08); font-weight: bold; }
+
+        #sidebar-actions { margin-top: 25px; text-align: center; }
+        #sidebar-actions button {
+            width: 100%; padding: 12px; font-size: 1.1em; cursor: pointer; border: none;
+            border-radius: 5px; transition: background-color 0.2s;
+        }
+        #submit-exam-btn { background: #dc3545; color: white; } /* Red submit */
+        #submit-exam-btn:hover { background: #bb2d3b; }
+
+
+        /* --- 3. Alert Modal --- */
+        #alert-modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); justify-content: center; align-items: center;
+        }
+        #alert-box {
+            width: 90%; max-width: 500px; background: white; border: 3px solid #C0392B;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.4); border-radius: 8px; overflow: hidden;
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+
+        #alert-header {
+            background: #C0392B; color: white; padding: 12px 20px; font-size: 1.2em;
+            font-weight: bold; display: flex; justify-content: space-between; align-items: center;
+        }
+        #alert-close-btn {
+            font-size: 1.2em; font-weight: bold; cursor: pointer; background: none; border: none; color: white; padding: 5px;
+        }
+        #alert-content { padding: 20px 25px; line-height: 1.6; font-size: 1.05em; }
+        #alert-content p { margin: 0; }
+
+    </style>
+</head>
+<body>
+
+    <div id="verification-area">
+        <div id="verification-left">
+            <h2 class="verification-header">Live Camera Check</h2>
+            <video id="live-camera" autoplay muted playsinline></video> {/* Added playsinline */}
+            <p style="text-align: center; font-size: 0.9em; color: #555;">Please keep your face clearly visible and centered.</p>
+        </div>
+        <div id="verification-right">
+            <h2 class="verification-header">Security Instructions</h2>
+            <div class="security-instructions">
+                <h3>🔴 Critical Security Instructions 🔴</h3>
+                <ol>
+                    <li><strong>Face Visibility:</strong> Your face must be clearly visible in the webcam frame at all times. Ensure good lighting.</li>
+                    <li><strong>Microphone Access:</strong> Microphone access must be granted. The system monitors for unusual background noise.</li>
+                    <li><strong>Single Window Focus:</strong> Do NOT switch tabs, minimize the browser, or navigate away from this exam window. Exceeding the warning limit will automatically block your exam.</li>
+                    <li><strong>No External Aids:</strong> Use of unauthorized materials (books, notes, phones, other devices, websites) is strictly prohibited.</li>
+                    <li><strong>Individual Attempt:</strong> You must be alone in the room. No communication with others is allowed.</li>
+                    <li><strong>Identity Check:</strong> The system may capture images periodically for identity verification.</li>
+                    <li><strong>Stable Internet:</strong> A stable internet connection is required for continuous proctoring and submission.</li>
+                    <li><strong>Environment Check:</strong> Ensure your desk is clear and you are in a quiet environment before starting.</li>
+                </ol>
+            </div>
+            <div id="verification-controls">
+                <button id="start-verification-btn" onclick="startVerification()">Start Verification & Exam</button>
+                <div id="verification-message"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="quiz-area" class="hidden">
+
+        <video id="proctor-camera" autoplay muted playsinline></video> {/* Added playsinline */}
+
+        <div id="quiz-header">
+            <div id="exam-name">Loading Exam...</div>
+            <div id="timer">Time Remaining: --:--:--</div>
+        </div>
+
+        <div id="quiz-statusbar">
+            <div class="status-box">
+                <span class="count attempted" id="total-attempted">0</span> Attempted
+            </div>
+            <div class="status-box">
+                <span class="count not-attempted" id="total-not-attempted">0</span> Not Attempted
+            </div>
+            <div class="status-box">
+                <span class="count reviewed" id="total-reviewed">0</span> Reviewed
+            </div>
+            {/* Removed 'Not Reviewed' status box for simplicity */}
+        </div>
+
+        <div id="quiz-body">
+            <div id="quiz-main">
+                <div id="mcq-area">
+                    <p style="text-align: center; padding: 30px; color: #777;">Loading question...</p>
+                </div>
+                <div id="quiz-navigation">
+                    <div class="nav-group-left">
+                        <button id="mark-review-btn" onclick="markForReview()">Mark for Review</button>
+                    </div>
+                    <div class="nav-group-right">
+                        <button onclick="firstQuestion()" title="Go to First Question">First</button>
+                        <button onclick="prevQuestion()" title="Go to Previous Question">Previous</button>
+                        <button onclick="nextQuestion()" title="Go to Next Question">Next</button>
+                        <button onclick="lastQuestion()" title="Go to Last Question">Last</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="quiz-sidebar">
+                <h3>Question Palette</h3>
+                <div id="question-palette">
+                    {/* Buttons generated by JS */}
+                 </div>
+                <div id="sidebar-actions">
+                    <button id="submit-exam-btn" onclick="submitQuiz()">Submit Exam</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="alert-modal">
+        <div id="alert-box">
+            <div id="alert-header">
+                <span>⚠️ Warning / Alert</span>
+                <button id="alert-close-btn" onclick="closeAlert()">✖</button>
+            </div>
+            <div id="alert-content">
+                <p id="alert-message-text">...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- API & State ---
+        const QUIZ_API = '/api/online-exam';
+        let attemptId = null;
+        let monitoringInterval = null;
+        let audioMonitorStream = null; // Store the stream to stop it later
+
+        let allQuestions = [];
+        let questionStatus = {}; // { index: { q_id, status ('not-attempted', 'attempted', 'reviewed'), answer } }
+        let currentQuestionIndex = 0;
+        let timerInterval = null;
+        let warningCount = 0;
+        let quizDetails = {}; // Stores title and duration
+
+        // --- DOM Elements (Cache common elements) ---
+        const verificationArea = document.getElementById('verification-area');
+        const quizArea = document.getElementById('quiz-area');
+        // ⭐ --- FIX: Correct variable name used --- ⭐
+        const verificationMessage = document.getElementById('verification-message');
+        const startVerificationBtn = document.getElementById('start-verification-btn');
+        const liveCamera = document.getElementById('live-camera');
+        const proctorCamera = document.getElementById('proctor-camera');
+        const examNameEl = document.getElementById('exam-name');
+        const timerEl = document.getElementById('timer');
+        const mcqArea = document.getElementById('mcq-area');
+        const questionPalette = document.getElementById('question-palette');
+        const markReviewBtn = document.getElementById('mark-review-btn');
+        const alertModal = document.getElementById('alert-modal');
+        const alertMessageText = document.getElementById('alert-message-text');
+
+        // --- Helper Functions ---
+
+        /**
+         * Gets the 'quiz' parameter from the URL. Returns null if invalid.
+         */
+        function getQuizIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const quizId = params.get('quiz');
+            if (!quizId || isNaN(parseInt(quizId, 10))) {
+                console.error("Invalid or missing 'quiz' ID in URL.");
+                // Update UI directly if verificationMessage element is available
+                if (verificationMessage) {
+                    verificationMessage.textContent = "❌ Error: Invalid or missing Exam ID in the URL.";
+                }
+                return null;
+            }
+            return parseInt(quizId, 10);
+        }
+
+        /**
+         * Handles API calls with fetch, includes auth token and error handling.
+         */
+        async function handleApi(url, method = 'GET', body = null) {
+            const token = localStorage.getItem('erp-token');
+            if (!token) {
+                 window.location.href = '/login.html'; // Redirect if no token
+                 throw new Error("Authentication token not found. Please log in.");
+            }
+            const options = {
+                method,
+                headers: { 'Authorization': `Bearer ${token}` },
+            };
+            if (body) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    let errorMsg = `HTTP error ${response.status}`;
+                    try {
+                        const errorBody = await response.json();
+                        errorMsg = errorBody.message || errorMsg;
+                    } catch (e) { /* Ignore if response is not JSON */ }
+                    throw new Error(errorMsg);
+                }
+                if (response.status === 204) return null; // Handle No Content
+                return response.json();
+            } catch (error) {
+                 console.error(`API Error (${method} ${url}):`, error);
+                 if (error.message.includes("Failed to fetch")) {
+                     throw new Error("Network error. Please check your connection.");
+                 }
+                 throw error;
+            }
+        }
+
+        /**
+         * Captures an image from the live camera feed.
+         */
+        function captureImage() {
+            return new Promise((resolve, reject) => {
+                const video = liveCamera;
+                // Check if video stream is active and dimensions are valid
+                if (!video.srcObject || video.readyState < video.HAVE_METADATA || video.videoWidth === 0 || video.videoHeight === 0) {
+                    return reject(new Error("Camera stream not ready or dimensions unavailable."));
+                }
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL('image/jpeg', 0.8)); // Use JPEG with quality
+            });
+        }
+
+        // --- Proctoring Logic ---
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden' && attemptId) {
+                warningCount++;
+                let msg = `You have moved out of the exam window (Warning ${warningCount}). Do not switch tabs or minimize. Further violations will terminate the exam.`;
+                showAlert(msg);
+
+                if (warningCount > 2) {
+                    blockExam(`Application Switch/Focus Lost (Exceeded warning limit)`);
+                }
+            }
+        });
+
+        function showAlert(message) {
+            alertMessageText.innerText = message;
+            alertModal.style.display = 'flex';
+        }
+
+        function closeAlert() {
+            alertModal.style.display = 'none';
+        }
+
+        function setupAudioMonitoring() {
+            navigator.mediaDevices.getUserMedia({ audio: true })
+                .then(stream => {
+                    console.log("Audio monitoring access granted.");
+                    audioMonitorStream = stream; // Store the stream to stop it later
+                })
+                .catch(err => {
+                    console.warn("Audio access denied or unavailable:", err.message);
+                    // Decide if this is critical, maybe just warn
+                    // showAlert("Warning: Microphone access denied. Audio monitoring is inactive.");
+                });
+        }
+
+        function stopMediaStreams() {
+             const streams = [liveCamera.srcObject, proctorCamera.srcObject, audioMonitorStream];
+             streams.forEach(stream => {
+                 if (stream && stream.getTracks) {
+                     stream.getTracks().forEach(track => track.stop());
+                 }
+             });
+             liveCamera.srcObject = null;
+             proctorCamera.srcObject = null;
+             audioMonitorStream = null; // Clear the stored stream
+        }
+
+
+        async function blockExam(reason) {
+            if (!attemptId) return;
+            console.warn("Blocking exam:", reason);
+            const currentAttemptId = attemptId;
+            attemptId = null;
+
+            clearInterval(monitoringInterval);
+            clearInterval(timerInterval);
+            stopMediaStreams(); // Stop camera and audio
+
+            try {
+                await handleApi(`${QUIZ_API}/block-exam/${currentAttemptId}`, 'POST', { reason: reason });
+            } catch (e) {
+                console.error("Failed to report exam block to server:", e.message);
+            }
+
+            document.body.innerHTML = `
+                <div style="text-align: center; padding: 50px; color: #dc3545; background-color: #f8d7da; border: 1px solid #f5c2c7; border-radius: 5px; margin: 50px auto; max-width: 600px;">
+                    <h2 style="margin-bottom: 15px;">Exam Blocked! ❌</h2>
+                    <p style="font-size: 1.1em; margin-bottom: 10px;"><strong>Reason:</strong> ${reason}</p>
+                    <p>Your attempt has been terminated and recorded. Please contact your exam administrator or teacher for assistance.</p>
+                </div>`;
+        }
+
+        function setupMonitoring(currentAttemptId) {
+            monitoringInterval = setInterval(async () => {
+                // Placeholder for real proctoring logic
+                // console.log("Proctoring check running...");
+            }, 30000); // Check every 30 seconds
+        }
+
+        // --- Verification Flow ---
+        async function startVerification() {
+            startVerificationBtn.disabled = true;
+            // ⭐ --- FIX: Use correct variable name 'verificationMessage' --- ⭐
+            verificationMessage.textContent = '🔄 Accessing camera... Please wait.';
+            let stream;
+
+            // 1. Get Camera Access
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                liveCamera.srcObject = stream;
+                liveCamera.setAttribute('playsinline', true); // For iOS compatibility
+                await new Promise((resolve, reject) => {
+                    liveCamera.onloadedmetadata = resolve;
+                    liveCamera.onerror = (e) => reject(new Error(`Camera load error: ${e.message || 'Unknown error'}`));
+                });
+                if (liveCamera.videoWidth === 0 || liveCamera.videoHeight === 0) {
+                     throw new Error("Camera dimensions reported as zero.");
+                }
+            } catch (err) {
+                console.error("Camera Access Error:", err);
+                // ⭐ --- FIX: Use correct variable name 'verificationMessage' --- ⭐
+                verificationMessage.textContent = `❌ Camera Error: ${err.message}. Ensure access is allowed & device works.`;
+                startVerificationBtn.disabled = false;
+                return;
+            }
+
+            // 2. Get Quiz ID from URL
+            const quizId = getQuizIdFromUrl();
+            if (!quizId) {
+                 startVerificationBtn.disabled = false;
+                 if (stream) stopMediaStreams();
+                 return;
+            }
+
+            // ⭐ --- FIX: Use correct variable name 'verificationMessage' --- ⭐
+            verificationMessage.textContent = '⏳ Verifying identity and starting exam setup...';
+
+            try {
+                 // 3. Capture Verification Image
+                 let verificationImageData;
+                 try {
+                     verificationImageData = await captureImage();
+                 } catch (captureError) {
+                      throw new Error(`Failed to capture verification image: ${captureError.message}`);
+                 }
+
+                // 4. Call API to Start Exam Attempt
+                const studentData = {
+                    quiz_id: quizId,
+                    live_image_data: verificationImageData
+                    // Optional room/system IDs can be added here if needed
+                };
+
+                const verificationResult = await handleApi(`${QUIZ_API}/exam/start`, 'POST', studentData);
+                if (!verificationResult || !verificationResult.attempt_id) {
+                     throw new Error("Server did not return a valid attempt ID.");
+                }
+                attemptId = verificationResult.attempt_id;
+                console.log("Exam attempt started successfully, ID:", attemptId);
+
+                // 5. Fetch Quiz Details (Title, Duration) - Mocked
+                 quizDetails = { title: `Exam ID: ${quizId}`, time_limit_minutes: 60 }; // Replace with API call
+                // try {
+                //      // You'll need a backend endpoint like GET /api/online-exam/quizzes/:id/details
+                //      quizDetails = await handleApi(`${QUIZ_API}/quizzes/${quizId}/details`);
+                // } catch (detailsError) { /* ... handle error ... */ }
+                 examNameEl.textContent = quizDetails.title || `Exam ID: ${quizId}`;
+
+
+                // 6. Start Proctoring Services
+                setupMonitoring(attemptId);
+                setupAudioMonitoring();
+
+                // 7. Load Exam Questions
+                // ⭐ --- FIX: Use correct variable name 'verificationMessage' --- ⭐
+                verificationMessage.textContent = '✅ Verification successful! Loading questions...';
+                await loadQuizQuestions(attemptId);
+
+                // 8. Start Exam Timer
+                const duration = quizDetails.time_limit_minutes || (allQuestions.length > 0 ? allQuestions.length * 1.5 : 30); // Use fetched or default
+                startExamTimer(duration);
+
+                // 9. Transfer Camera Stream to Proctor View
+                proctorCamera.srcObject = stream;
+                proctorCamera.setAttribute('playsinline', true); // For iOS
+                liveCamera.srcObject = null; // Release from verification element
+
+                // 10. Switch UI Views
+                verificationArea.classList.add('hidden');
+                quizArea.classList.remove('hidden');
+
+            } catch (error) {
+                console.error("Verification/Start Exam Error:", error);
+                // ⭐ --- FIX: Use correct variable name 'verificationMessage' --- ⭐
+                verificationMessage.textContent = `❌ Error: ${error.message}. Please try again or contact support.`;
+                startVerificationBtn.disabled = false;
+                if (stream) stopMediaStreams();
+                attemptId = null;
+            }
+        }
+
+        // --- Exam UI & State Logic ---
+
+        function startExamTimer(durationInMinutes) {
+            let durationSeconds = Math.max(0, Math.floor(durationInMinutes * 60));
+
+            function updateTimerDisplay() {
+                 if (durationSeconds < 0) return;
+                 let hours = Math.floor(durationSeconds / 3600);
+                 let minutes = Math.floor((durationSeconds % 3600) / 60);
+                 let seconds = durationSeconds % 60;
+                 timerEl.textContent = `Time: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                 // Update style based on remaining time
+                 if (durationSeconds <= 300 && durationSeconds > 60) { // Last 5 mins (but > 1 min)
+                     timerEl.style.color = 'orange'; timerEl.style.fontWeight = 'bold';
+                 } else if (durationSeconds <= 60) { // Last 1 min
+                     timerEl.style.color = 'red'; timerEl.style.fontWeight = 'bold';
+                 } else {
+                     timerEl.style.color = ''; timerEl.style.fontWeight = ''; // Reset style
+                 }
+            }
+
+            updateTimerDisplay(); // Initial display
+
+            timerInterval = setInterval(() => {
+                durationSeconds--;
+                updateTimerDisplay();
+
+                if (durationSeconds < 0) {
+                    clearInterval(timerInterval);
+                    showAlert("Time is up! Your exam will be submitted automatically.");
+                    setTimeout(submitQuiz, 3000); // Give user time to see alert
+                }
+            }, 1000);
+        }
+
+        async function loadQuizQuestions(currentAttemptId) {
+            mcqArea.innerHTML = '<p style="text-align: center; padding: 30px; color: #777;">⏳ Loading questions...</p>';
+            try {
+                const questions = await handleApi(`${QUIZ_API}/attempts/${currentAttemptId}/questions`);
+                if (!Array.isArray(questions)) {
+                     throw new Error("Invalid question data received.");
+                }
+                allQuestions = questions;
+
+                questionStatus = {};
+                allQuestions.forEach((q, index) => {
+                    questionStatus[index] = {
+                        q_id: q.question_id, status: 'not-attempted', answer: null
+                    };
+                });
+
+                populateQuestionPalette();
+                if (allQuestions.length > 0) {
+                     displayQuestion(0);
+                } else {
+                     mcqArea.innerHTML = '<p style="color: orange; text-align: center;">⚠️ No questions found for this exam.</p>';
+                     document.getElementById('submit-exam-btn').disabled = true;
+                }
+                updateStatusBar();
+
+            } catch (error) {
+                console.error("Error loading questions:", error);
+                mcqArea.innerHTML = `<p style="color: red; text-align: center;">❌ Failed to load questions: ${error.message}</p>`;
+            }
+        }
+
+        function displayQuestion(index) {
+            if (index < 0 || index >= allQuestions.length) return;
+
+             updatePaletteButton(currentQuestionIndex); // Update previous button state first
+
+            currentQuestionIndex = index;
+            const q = allQuestions[index];
+            const statusInfo = questionStatus[index];
+
+            let optionsHtml = '<ul class="options-list">';
+            const options = { 'A': q.option_a, 'B': q.option_b, 'C': q.option_c, 'D': q.option_d };
+            const currentAnswer = statusInfo.answer;
+
+            for (const [key, value] of Object.entries(options)) {
+                if (value !== null && value !== undefined) { // Only show non-null options
+                    const checked = (currentAnswer === key) ? 'checked' : '';
+                    const inputName = `q_${q.question_id}`; // Unique name per question
+                    optionsHtml += `
+                        <li>
+                            <label>
+                                <input type="radio" name="${inputName}" value="${key}" ${checked} onchange="handleAnswerSelect(${index}, '${key}')">
+                                ${key}. ${value}
+                            </label>
+                        </li>`;
+                }
+            }
+            optionsHtml += '</ul>';
+
+            mcqArea.innerHTML = `
+                <div class="question-title">Q ${index + 1}: ${q.question_text || '<em>Question text missing.</em>'}</div>
+                <p style="font-size: 0.9em; color: #555;">(Marks: ${q.marks ?? 'N/A'})</p> {/* Use ?? for nullish coalescing */}
+                ${optionsHtml}
+            `;
+
+            updatePaletteButton(index, 'current');
+            updateMarkReviewButtonState();
+        }
+
+        function handleAnswerSelect(index, selectedValue) {
+            const statusInfo = questionStatus[index];
+            statusInfo.answer = selectedValue;
+
+            if (statusInfo.status === 'not-attempted') {
+                 statusInfo.status = 'attempted';
+            }
+            // If it was 'reviewed' without an answer, it remains 'reviewed' but now has an answer
+
+            updatePaletteButton(index, 'current');
+            updateStatusBar();
+        }
+
+        function populateQuestionPalette() {
+            questionPalette.innerHTML = '';
+            allQuestions.forEach((q, index) => {
+                const status = questionStatus[index]?.status || 'not-attempted';
+                const button = document.createElement('button');
+                button.className = `palette-btn ${status}`;
+                button.id = `palette-btn-${index}`;
+                button.textContent = index + 1;
+                button.onclick = () => jumpToQuestion(index);
+                questionPalette.appendChild(button);
+            });
+        }
+
+        function updatePaletteButton(index, specialClass = null) {
+            const btn = document.getElementById(`palette-btn-${index}`);
+            if (!btn) return;
+            const statusInfo = questionStatus[index];
+            if (!statusInfo) return;
+
+            let statusClass = 'not-attempted';
+            if (statusInfo.status === 'reviewed') {
+                statusClass = 'reviewed';
+                if (statusInfo.answer) statusClass += ' attempted'; // Add attempted for combined style
+            } else if (statusInfo.answer) {
+                statusClass = 'attempted';
+            }
+
+            btn.className = 'palette-btn'; // Reset base class
+            statusClass.split(' ').forEach(cls => btn.classList.add(cls)); // Add status classes
+
+            // Handle 'current' separately
+            if (specialClass === 'current') {
+                // Remove 'current' from any other button first
+                const currentBtn = questionPalette.querySelector('.palette-btn.current');
+                if (currentBtn) currentBtn.classList.remove('current');
+                btn.classList.add('current');
+            } else {
+                 // Ensure 'current' is removed if this button is no longer current
+                 btn.classList.remove('current');
+            }
+        }
+
+
+        function updateStatusBar() {
+            let attemptedCount = 0;
+            let notAttemptedCount = 0;
+            let reviewedCount = 0;
+
+            Object.values(questionStatus).forEach(item => {
+                 if (item.answer) attemptedCount++;
+                 if (item.status === 'reviewed') reviewedCount++;
+            });
+            notAttemptedCount = allQuestions.length - attemptedCount - Object.values(questionStatus).filter(i => !i.answer && i.status === 'reviewed').length;
+             // Ensure notAttempted isn't negative if reviewed > not answered
+             notAttemptedCount = Math.max(0, allQuestions.length - attemptedCount - reviewedCount + Object.values(questionStatus).filter(i => i.answer && i.status === 'reviewed').length);
+
+
+            document.getElementById('total-attempted').textContent = attemptedCount;
+            document.getElementById('total-not-attempted').textContent = notAttemptedCount;
+            document.getElementById('total-reviewed').textContent = reviewedCount;
+        }
+
+        // --- Navigation Functions ---
+        function jumpToQuestion(index) { if (index >= 0 && index < allQuestions.length) displayQuestion(index); }
+        function nextQuestion() { jumpToQuestion(currentQuestionIndex + 1); }
+        function prevQuestion() { jumpToQuestion(currentQuestionIndex - 1); }
+        function firstQuestion() { jumpToQuestion(0); }
+        function lastQuestion() { jumpToQuestion(allQuestions.length - 1); }
+
+        function markForReview() {
+            const index = currentQuestionIndex;
+            const statusInfo = questionStatus[index];
+
+            statusInfo.status = (statusInfo.status === 'reviewed')
+                ? (statusInfo.answer ? 'attempted' : 'not-attempted') // Toggle off review
+                : 'reviewed'; // Toggle on review
+
+            updatePaletteButton(index, 'current');
+            updateStatusBar();
+            updateMarkReviewButtonState();
+        }
+
+        function updateMarkReviewButtonState() {
+            const isReviewed = questionStatus[currentQuestionIndex]?.status === 'reviewed';
+            markReviewBtn.textContent = isReviewed ? 'Unmark Review' : 'Mark for Review';
+            markReviewBtn.classList.toggle('active', isReviewed);
+        }
+
+        // --- Submit ---
+        async function submitQuiz() {
+             const unanswered = Object.values(questionStatus).filter(s => !s.answer).length;
+             let confirmationMessage = "Are you sure you want to submit the exam?";
+             if (unanswered > 0) confirmationMessage += `\n\nYou have ${unanswered} unanswered question(s).`;
+
+            if (!confirm(confirmationMessage)) return;
+
+            const submitBtn = document.getElementById('submit-exam-btn');
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+
+            clearInterval(monitoringInterval);
+            clearInterval(timerInterval);
+            stopMediaStreams(); // Stop camera/audio
+
+            const formAnswers = Object.entries(questionStatus)
+                .filter(([_, item]) => item.answer)
+                .map(([_, item]) => ({ question_id: item.q_id, answer: item.answer }));
+
+            try {
+                console.log(`Submitting ${formAnswers.length} answers for attempt ID: ${attemptId}`);
+                await handleApi(`${QUIZ_API}/submit-attempt/${attemptId}`, 'POST', { answers: formAnswers });
+
+                alert("✅ Exam submitted successfully! Redirecting to results...");
+                window.location.href = `/quiz-result.html?attempt=${attemptId}`;
+
+            } catch (error) {
+                console.error("Submission Error:", error);
+                alert(`❌ Submission failed: ${error.message}. Please check connection or contact support.`);
+                submitBtn.disabled = false; // Re-enable on failure
+                submitBtn.textContent = 'Submit Exam';
+                // Consider if monitoring/timer should restart
+            }
+        }
+
+    </script>
+</body>
+</html>

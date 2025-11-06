@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Promote Students</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="container">
+    <h1>Promote Students</h1>
+    <div class="nav-links"><a href="/view-students.html">← Back to All Students</a></div>
+    
+    <div class="form-grid" style="grid-template-columns: 1fr 1fr; align-items: end; margin-bottom: 20px;">
+        <div class="form-group">
+            <label for="from-class">Promote From Class:</label>
+            <select id="from-class"></select>
+        </div>
+        <div class="form-group">
+            <label for="to-class">Promote To Class:</label>
+            <select id="to-class"></select>
+        </div>
+    </div>
+    
+    <form id="promotion-form">
+        <h3>Select Students to Promote</h3>
+        <table id="student-selection-table">
+            <thead>
+                <tr>
+                    <th><input type="checkbox" id="select-all"></th>
+                    <th>ID</th>
+                    <th>Full Name</th>
+                    <th>Roll Number</th>
+                </tr>
+            </thead>
+            <tbody>
+                </tbody>
+        </table>
+        <button type="submit" style="margin-top: 20px;">Promote Selected Students</button>
+    </form>
+</div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+        window.location.href = '/login';
+    }
+
+    const fromClassSelect = document.getElementById('from-class');
+    const toClassSelect = document.getElementById('to-class');
+    const studentTableBody = document.querySelector('#student-selection-table tbody');
+    let allStudents = [];
+
+    async function initialize() {
+        // Load classes
+        const res = await fetch('/api/academics/classes', { headers: { 'Authorization': `Bearer ${token}` } });
+        const classes = await res.json();
+        let options = '<option value="">-- Select Class --</option>';
+        classes.forEach(c => options += `<option value="${c.id}">${c.class_name}</option>`);
+        fromClassSelect.innerHTML = options;
+        toClassSelect.innerHTML = options;
+        
+        // Load all students
+        const studentRes = await fetch('/api/students', { headers: { 'Authorization': `Bearer ${token}` } });
+        allStudents = await studentRes.json();
+    }
+
+    fromClassSelect.addEventListener('change', () => {
+        const classId = fromClassSelect.value;
+        studentTableBody.innerHTML = '';
+        if (!classId) return;
+        
+        const studentsInClass = allStudents.filter(s => s.class_id == classId);
+        studentsInClass.forEach(s => {
+            studentTableBody.innerHTML += `
+                <tr>
+                    <td><input type="checkbox" name="student_ids" value="${s.id}"></td>
+                    <td>${s.id}</td>
+                    <td>${s.first_name} ${s.last_name || ''}</td>
+                    <td>${s.roll_number || 'N/A'}</td>
+                </tr>
+            `;
+        });
+    });
+
+    document.getElementById('select-all').addEventListener('change', (e) => {
+        document.querySelectorAll('input[name="student_ids"]').forEach(checkbox => {
+            checkbox.checked = e.target.checked;
+        });
+    });
+
+    document.getElementById('promotion-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const to_class_id = toClassSelect.value;
+        const selectedCheckboxes = document.querySelectorAll('input[name="student_ids"]:checked');
+        const studentIds = Array.from(selectedCheckboxes).map(cb => cb.value);
+
+        if (!to_class_id || studentIds.length === 0) {
+            return alert('Please select a target class and at least one student.');
+        }
+
+        if (!confirm(`Are you sure you want to promote ${studentIds.length} students?`)) return;
+
+        try {
+            const res = await fetch('/api/students/promote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ studentIds, to_class_id })
+            });
+            const responseText = await res.text();
+            if (!res.ok) throw new Error(responseText);
+            alert(responseText);
+            window.location.reload();
+        } catch (err) {
+            alert('Promotion failed: ' + err.message);
+        }
+    });
+
+    window.onload = initialize;
+</script>
+</body>
+</html>

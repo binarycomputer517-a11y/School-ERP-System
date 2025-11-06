@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Management System</title>
+    <style>
+        /* Classic Styles */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #EFEFEF; color: #111; }
+        .container { 
+            max-width: 1200px; margin: auto; padding: 40px; background-color: #FFFFFF; 
+            border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; border-radius: 0; 
+        }
+        h1 { 
+            color: #000; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2, h3 { 
+            color: #005A9C; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #555;
+            padding-bottom: 8px; margin-top: 20px; font-size: 1.5em;
+        }
+        
+        /* Tabs */
+        .tabs { display: flex; border-bottom: 3px solid #005A9C; margin-bottom: 30px; }
+        .tab-button { 
+            padding: 10px 15px; cursor: pointer; border: none; background-color: #DDD; 
+            border-radius: 0; margin-right: 5px; font-weight: bold; color: #333;
+            border-left: 1px solid #AAA; border-top: 1px solid #AAA;
+        }
+        .tab-button.active { background-color: #005A9C; color: white; border-color: #005A9C; border-bottom: none; }
+        .tab-content { padding: 15px 0; }
+        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; }
+        
+        /* Forms & Inputs */
+        .card { padding: 20px; border: 1px solid #333; border-radius: 0; margin-bottom: 20px; background-color: #f8f8f8; }
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; color: #333; }
+        input, select, textarea { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #555; border-radius: 0; }
+        button { 
+            background-color: #C0392B; color: white; padding: 10px 15px; border: 2px solid #000; border-radius: 0; 
+            cursor: pointer; margin-top: 15px; box-shadow: 2px 2px 0 #000; font-weight: bold;
+        }
+        .btn-red { background-color: #777; }
+        .btn-red:hover { background-color: #555; }
+        .error-message { color: #C0392B; margin-top: 10px; font-weight: bold; }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #333; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: #FFFFFF; }
+        .status-available { color: green; font-weight: bold; }
+        .status-issued { color: #005A9C; font-weight: bold; }
+        .status-overdue { color: red; font-weight: bold; }
+        .fine { color: #C0392B; }
+        
+        /* History Specifics */
+        #history-search-form { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 20px; }
+        #history-search-form > div { flex: 1; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Library Management System</h1>
+
+        <div class="tabs">
+            <button class="tab-button active" onclick="showTab('catalog')">Book Catalog</button>
+            <button class="tab-button" onclick="showTab('issue-return')">Circulation</button>
+            <button class="tab-button" onclick="showTab('history')">History</button>
+            <button class="tab-button" onclick="showTab('config')">Configuration</button>
+        </div>
+
+        <div id="catalog" class="tab-content">
+            <div class="grid-3">
+                <div class="card">
+                    <h2>Add/Edit Book</h2>
+                    <form id="add-catalog-form">
+                        <input type="hidden" id="book-id" name="id">
+                        <label for="isbn">ISBN *</label>
+                        <input type="text" id="isbn" name="isbn" required>
+                        <label for="title">Title *</label>
+                        <input type="text" id="title" name="title" required>
+                        <label for="author">Author *</label>
+                        <input type="text" id="author" name="author" required>
+                        <label for="publisher">Publisher</label>
+                        <input type="text" id="publisher" name="publisher">
+                        <label for="subject_area">Subject Area</label>
+                        <input type="text" id="subject_area" name="subject_area">
+                        <button type="submit" id="catalog-submit-btn">Save Book</button>
+                    </form>
+                </div>
+                <div class="card" style="grid-column: 2 / span 2;">
+                    <h2>Master Catalog List</h2>
+                    <table id="catalog-table">
+                        <thead>
+                            <tr>
+                                <th>Title / Author</th>
+                                <th>ISBN</th>
+                                <th>Total Copies</th>
+                                <th>Available</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="catalog-tbody">
+                            <tr><td colspan="5">Loading catalog...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="issue-return" class="tab-content" style="display: none;">
+            <div class="grid-3">
+                <div class="card">
+                    <h3>Issue Book</h3>
+                    <form id="issue-form">
+                        <label for="student_id_issue">Student ID (UUID) *</label>
+                        <input type="text" id="student_id_issue" name="student_id" required placeholder="e.g., student-uuid">
+                        <label for="accession_number_issue">Accession Number *</label>
+                        <input type="text" id="accession_number_issue" name="accession_number" required placeholder="Scan or Type Copy ID">
+                        <button type="submit">Issue Book</button>
+                        <p id="issue-error-message" class="error-message"></p>
+                    </form>
+                </div>
+                <div class="card">
+                    <h3>Return Book</h3>
+                    <form id="return-form">
+                        <label for="accession_number_return">Accession Number *</label>
+                        <input type="text" id="accession_number_return" name="accession_number" required placeholder="Scan or Type Copy ID">
+                        <button type="submit" class="btn-red">Process Return</button>
+                        <p id="return-error-message" class="error-message"></p>
+                    </form>
+                </div>
+                <div class="card">
+                    <h3>Inventory Management</h3>
+                    <form id="add-copy-form">
+                        <label for="book_id_copy">Book ID (Catalog) *</label>
+                        <input type="text" id="book_id_copy" name="book_id" required placeholder="Paste Book Catalog ID">
+                        <label for="accession_number_copy">New Accession Number *</label>
+                        <input type="text" id="accession_number_copy" name="accession_number" required placeholder="e.g., 2025-001-A">
+                        <button type="submit">Add Copy</button>
+                        <p id="copy-error-message" class="error-message"></p>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div id="history" class="tab-content" style="display: none;">
+            <h2>Circulation History</h2>
+            <form id="history-search-form">
+                <div>
+                    <label for="history-student-id">Search by Student ID (UUID):</label>
+                    <input type="text" id="history-student-id" placeholder="Student UUID">
+                </div>
+                <div>
+                    <label for="history-accession-no">Search by Accession Number:</label>
+                    <input type="text" id="history-accession-no" placeholder="Book Copy ID">
+                </div>
+                <div>
+                    <button type="submit" id="history-search-btn">Search History</button>
+                </div>
+            </form>
+            
+            <table id="history-table">
+                <thead>
+                    <tr>
+                        <th>Book Title (Accession No.)</th>
+                        <th>Student ID</th>
+                        <th>Issued</th>
+                        <th>Due Date</th>
+                        <th>Returned</th>
+                        <th>Fine</th>
+                    </tr>
+                </thead>
+                <tbody id="history-tbody">
+                    <tr><td colspan="6">Enter a Student ID or Accession Number above to search.</td></tr>
+                </tbody>
+            </table>
+            <p id="history-error-message" class="error-message"></p>
+        </div>
+
+
+        <div id="config" class="tab-content" style="display: none;">
+            <h2>Library Configuration</h2>
+            <form id="config-form">
+                <label for="max_books_student">Max Books per Student</label>
+                <input type="number" id="max_books_student" name="max_books_student" min="1" required>
+                
+                <label for="max_issue_days">Max Issue Days</label>
+                <input type="number" id="max_issue_days" name="max_issue_days" min="7" required>
+                
+                <label for="daily_fine_rate">Daily Fine Rate (₹)</label>
+                <input type="number" step="0.01" id="daily_fine_rate" name="daily_fine_rate" required>
+
+                <button type="submit">Save Configuration</button>
+                <p id="config-error-message" class="error-message"></p>
+            </form>
+            <p style="margin-top: 20px;">*Changes apply globally to circulation rules.</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/library';
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        
+        // Client-Side Role Guard Check
+        if (!token || (userRole !== 'Super Admin' && userRole !== 'Admin' && userRole !== 'Teacher')) { 
+            // window.location.href = '/login'; 
+            console.error("Access Denied: Must be Super Admin, Admin, or Teacher.");
+        }
+
+        // --- Helper Functions ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                window.location.href = '/login';
+                throw new Error('Unauthorized or session expired.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                throw new Error(errorBody.message);
+            }
+            return response.json();
+        }
+
+        function showTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(div => div.style.display = 'none');
+            document.getElementById(tabId).style.display = 'block';
+            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+            document.querySelector(`.tab-button[onclick*='${tabId}']`).classList.add('active');
+            
+            // Clear all error messages when switching tabs
+            document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
+
+            if (tabId === 'catalog') fetchCatalog();
+            if (tabId === 'config') fetchConfig();
+            // Automatically fetch history when switching to the history tab (can be adjusted for performance)
+            if (tabId === 'history') fetchCirculationHistory();
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return 'N/A';
+            return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+
+
+        // ===================================
+        // 1. CATALOG & INVENTORY FUNCTIONS
+        // ===================================
+
+        async function fetchCatalog() {
+            const tbody = document.getElementById('catalog-tbody');
+            tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+            try {
+                const data = await handleApi(`${API_BASE}/catalog`);
+                tbody.innerHTML = data.map(book => `
+                    <tr>
+                        <td><strong>${book.title}</strong><br><small>by ${book.author}</small></td>
+                        <td>${book.isbn}</td>
+                        <td>${book.total_copies}</td>
+                        <td class="${book.available_copies > 0 ? 'status-available' : 'status-issued'}">
+                            ${book.available_copies}
+                        </td>
+                        <td>
+                            <button onclick="copyToClipboard('${book.id}')">Copy ID</button>
+                            <button onclick="manageInventory('${book.id}', '${book.title.replace(/'/g, "\\'")}')">Inventory</button>
+                        </td>
+                    </tr>
+                `).join('') || '<tr><td colspan="5">No books in catalog.</td></tr>';
+            } catch (error) {
+                alert(`Error loading catalog: ${error.message}`);
+                tbody.innerHTML = '<tr><td colspan="5" style="color:red;">Failed to load catalog.</td></tr>';
+            }
+        }
+        
+        async function copyToClipboard(bookId) {
+             await navigator.clipboard.writeText(bookId);
+             alert(`Book ID copied to clipboard: ${bookId}`);
+        }
+
+        function manageInventory(bookId, title) {
+            document.getElementById('book_id_copy').value = bookId;
+            showTab('issue-return'); 
+        }
+
+        // Catalog Form Submission
+        document.getElementById('add-catalog-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const bookId = document.getElementById('book-id').value;
+            
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            const method = bookId ? 'PUT' : 'POST';
+            const url = bookId ? `${API_BASE}/catalog/${bookId}` : `${API_BASE}/catalog`;
+
+            try {
+                await handleApi(url, { method: method, body: JSON.stringify(data) });
+                alert(`Book ${bookId ? 'updated' : 'added'} successfully.`);
+                form.reset();
+                fetchCatalog();
+            } catch (error) {
+                alert(`Failed to save book: ${error.message}`);
+            }
+        });
+
+
+        // Inventory (Add Copy) Form Submission
+        document.getElementById('add-copy-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const errorDiv = document.getElementById('copy-error-message');
+            errorDiv.textContent = '';
+
+
+            if (!data.book_id) {
+                errorDiv.textContent = 'Please paste a Book Catalog ID first.';
+                return;
+            }
+            
+            try {
+                // Links to the POST /api/library/inventory route
+                await handleApi(`${API_BASE}/inventory`, { method: 'POST', body: JSON.stringify(data) });
+                alert(`Copy ${data.accession_number} added successfully.`);
+                form.reset();
+                fetchCatalog(); 
+            } catch (error) {
+                errorDiv.textContent = `❌ Failed to add copy: ${error.message}`;
+            }
+        });
+
+
+        // ===================================
+        // 2. CIRCULATION FUNCTIONS
+        // ===================================
+
+        // Issue Book Form Submission
+        document.getElementById('issue-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const errorDiv = document.getElementById('issue-error-message');
+            errorDiv.textContent = '';
+
+
+            try {
+                const result = await handleApi(`${API_BASE}/issue`, { method: 'POST', body: JSON.stringify(data) });
+                alert(`✅ Issued to student ID ${data.student_id}. Due Date: ${new Date(result.due_date).toLocaleDateString()}.`);
+                form.reset();
+                fetchCatalog();
+                fetchCirculationHistory(); // Refresh history
+            } catch (error) {
+                errorDiv.textContent = `❌ Issue Failed: ${error.message}`;
+            }
+        });
+
+        // Return Book Form Submission
+        document.getElementById('return-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const errorDiv = document.getElementById('return-error-message');
+            errorDiv.textContent = '';
+
+            try {
+                const result = await handleApi(`${API_BASE}/return`, { method: 'POST', body: JSON.stringify(data) });
+                alert(`✅ Return Processed. Fine Calculated: ₹${parseFloat(result.fine_calculated).toFixed(2)}.`);
+                form.reset();
+                fetchCatalog();
+                fetchCirculationHistory(); // Refresh history
+            } catch (error) {
+                errorDiv.textContent = `❌ Return Failed: ${error.message}`;
+            }
+        });
+
+        // ===================================
+        // 3. HISTORY FUNCTIONS
+        // ===================================
+        
+        // History Search Submission
+        document.getElementById('history-search-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const studentId = document.getElementById('history-student-id').value.trim();
+            const accessionNo = document.getElementById('history-accession-no').value.trim();
+            
+            // Only search if at least one field is filled
+            if (!studentId && !accessionNo) {
+                 document.getElementById('history-error-message').textContent = 'Please enter a Student ID or Accession Number to search.';
+                 return;
+            }
+
+            fetchCirculationHistory(studentId, accessionNo);
+        });
+
+
+        async function fetchCirculationHistory(studentId = null, accessionNo = null) {
+            const tbody = document.getElementById('history-tbody');
+            const errorDiv = document.getElementById('history-error-message');
+            errorDiv.textContent = '';
+            tbody.innerHTML = '<tr><td colspan="6">Searching...</td></tr>';
+            
+            let url = `${API_BASE}/history`;
+            const params = new URLSearchParams();
+            if (studentId) params.append('studentId', studentId);
+            if (accessionNo) params.append('accessionNo', accessionNo);
+            
+            if (params.toString()) {
+                url += `?${params.toString()}`;
+            }
+
+            try {
+                // NOTE: This assumes a new route GET /api/library/history exists on the backend
+                const data = await handleApi(url); 
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6">No history records found matching your criteria.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(record => `
+                    <tr>
+                        <td><strong>${record.title}</strong> (${record.accession_number})</td>
+                        <td>${record.student_id}</td>
+                        <td>${formatDate(record.issue_date)}</td>
+                        <td>${formatDate(record.due_date)}</td>
+                        <td>${record.return_date ? formatDate(record.return_date) : '— Active —'}</td>
+                        <td class="${record.fine_amount > 0 ? 'fine' : ''}">
+                            ₹${parseFloat(record.fine_amount || 0).toFixed(2)}
+                        </td>
+                    </tr>
+                `).join('');
+
+            } catch (error) {
+                errorDiv.textContent = `❌ History Search Failed: ${error.message}`;
+                tbody.innerHTML = '<tr><td colspan="6" style="color:red;">Error fetching history.</td></tr>';
+            }
+        }
+
+
+        // ===================================
+        // 4. CONFIGURATION FUNCTIONS
+        // ===================================
+
+        async function fetchConfig() {
+            try {
+                const config = await handleApi(`${API_BASE}/config`);
+                document.getElementById('max_books_student').value = config.max_books_student || 3;
+                document.getElementById('max_issue_days').value = config.max_issue_days || 14;
+                document.getElementById('daily_fine_rate').value = config.daily_fine_rate || 5.00;
+            } catch (error) {
+                alert(`Error loading config: ${error.message}`);
+            }
+        }
+        
+        document.getElementById('config-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const errorDiv = document.getElementById('config-error-message');
+            errorDiv.textContent = '';
+            
+            try {
+                // Links to the PUT /api/library/config route
+                await handleApi(`${API_BASE}/config`, { method: 'PUT', body: JSON.stringify(data) });
+                alert('Configuration saved successfully!');
+                fetchConfig(); // Reload to confirm state
+            } catch (error) {
+                errorDiv.textContent = `❌ Failed to save config: ${error.message}`;
+            }
+        });
+
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Default load on page start
+            showTab('catalog'); 
+        });
+    </script>
+</body>
+</html>

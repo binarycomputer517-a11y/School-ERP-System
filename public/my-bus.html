@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Track My Child's Bus</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        #map { height: 500px; border-radius: 8px; margin-top: 15px; }
+        .bus-details { padding: 15px; background-color: #f8f9fa; border-radius: 8px; margin-bottom: 15px; }
+        .error-message { color: white; background-color: #dc3545; padding: 15px; border-radius: 8px; text-align: center; }
+        .last-updated { font-size: 0.8em; color: #6c757d; margin-top: 10px; }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token) window.location.href = '/login';
+</script>
+
+<div class="container">
+    <h1>Track My Child's Bus</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">← Back to Dashboard</a></div>
+
+    <div id="error-box" style="display: none;"></div>
+
+    <div id="tracking-info">
+        <div class="bus-details" id="bus-details-box">
+            <p><strong>Route Name:</strong> <span id="route-name">Loading...</span></p>
+            <p><strong>Vehicle Number:</strong> <span id="vehicle-number">Loading...</span></p>
+            <p><strong>Driver Name:</strong> <span id="driver-name">Loading...</span></p>
+            <div class="last-updated">Last Updated: <span id="last-updated-time">...</span></div>
+        </div>
+        <div id="map"></div>
+    </div>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const map = L.map('map').setView([26.72, 88.43], 13); // Default initial view
+    let busMarker = null;
+    let routeLayer = null;
+    let initialLoadComplete = false; // Flag to control map centering behavior
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // Placeholder for the icon function defined in track-bus.html (required here too)
+    function createBusIcon() {
+        return L.divIcon({
+            html: `
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #2563EB;">
+                    <path d="M18.922 17.552C18.43 18.342 17.518 19 16.5 19H7.5C6.482 19 5.57 18.342 5.078 17.552L3 14V8C3 6.896 3.896 6 5 6H19C20.104 6 21 6.896 21 8V14L18.922 17.552Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="7.5" cy="17.5" r="1.5" fill="currentColor"/>
+                    <circle cx="16.5" cy="17.5" r="1.5" fill="currentColor"/>
+                    <path d="M3 12H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `,
+            className: 'bg-transparent',
+            iconSize: [28, 28], // Increased size slightly
+            iconAnchor: [14, 28]
+        });
+    }
+
+    async function loadMyBusDetails() {
+        const errorBox = document.getElementById('error-box');
+        const trackingInfo = document.getElementById('tracking-info');
+        
+        try {
+            const res = await fetch('/api/transport/my-bus', { headers: authHeaders });
+
+            if (!res.ok) {
+                const errorText = await res.text();
+                trackingInfo.style.display = 'none';
+                errorBox.style.display = 'block';
+                errorBox.innerHTML = `<p class="error-message">Server Error: ${errorText || 'Could not fetch data.'}</p>`;
+                return;
+            }
+
+            const data = await res.json();
+            
+            // If successful, ensure error box is hidden and info is visible
+            trackingInfo.style.display = 'block';
+            errorBox.style.display = 'none';
+
+            // --- Update Text Details ---
+            document.getElementById('route-name').textContent = data.route_name || 'N/A';
+            document.getElementById('vehicle-number').textContent = data.vehicle_number || 'N/A';
+            document.getElementById('driver-name').textContent = data.driver_name || 'N/A';
+            document.getElementById('last-updated-time').textContent = new Date().toLocaleTimeString();
+
+
+            // --- Update Map Location ---
+            const latLng = [parseFloat(data.last_lat), parseFloat(data.last_lng)]; 
+
+            if (isNaN(latLng[0]) || isNaN(latLng[1])) {
+                console.warn('Invalid coordinates received from API.');
+                // Optionally show a message to the user here
+                return; 
+            }
+
+            if (!busMarker) {
+                // Initial marker creation
+                busMarker = L.marker(latLng, { icon: createBusIcon() }).addTo(map);
+                busMarker.bindPopup(`<b>${data.vehicle_number}</b><br>Last seen: ${new Date().toLocaleTimeString()}`).openPopup();
+            } else {
+                // Update marker position
+                busMarker.setLatLng(latLng);
+                busMarker.getPopup().setContent(`<b>${data.vehicle_number}</b><br>Last seen: ${new Date().toLocaleTimeString()}`);
+            }
+            
+            // --- Draw Route Path (Only on initial load) ---
+            if (!routeLayer && data.routePath && data.routePath.path && data.routePath.path.length > 0) {
+                const routePolyline = L.polyline(data.routePath.path, { color: '#007BFF', weight: 4 });
+                
+                // Route Path Markers (assuming routePath.start and routePath.end are [lat, lng])
+                const startMarker = L.marker(data.routePath.start, { icon: L.icon({ iconUrl: 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%2328a745"><circle cx="12" cy="12" r="10"/></svg>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).bindPopup('Route Start');
+                const endMarker = L.marker(data.routePath.end, { icon: L.icon({ iconUrl: 'data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23dc3545"><circle cx="12" cy="12" r="10"/></svg>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).bindPopup('Route End');
+                
+                routeLayer = L.layerGroup([routePolyline, startMarker, endMarker]).addTo(map);
+                map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] }); // Fit map to the whole route with padding
+            }
+
+            // --- Map Centering Logic ---
+            if (!initialLoadComplete) {
+                // On initial load, fit to bounds (if route exists) or center on the bus
+                if (!routeLayer) {
+                     map.setView(latLng, 15); // Zoom in on bus if no route to fit to
+                }
+                initialLoadComplete = true; 
+            } else {
+                // On subsequent updates, pan smoothly to the bus location
+                map.panTo(latLng);
+            }
+
+        } catch (error) {
+            console.error('Failed to load bus details:', error);
+            trackingInfo.style.display = 'none';
+            errorBox.style.display = 'block';
+            errorBox.innerHTML = `<p class="error-message">Could not connect to the server or network error occurred.</p>`;
+        }
+    }
+
+    window.onload = () => {
+        loadMyBusDetails(); // Load once immediately
+        setInterval(loadMyBusDetails, 15000); // Refresh every 15 seconds
+    };
+</script>
+</body>
+</html>

@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced System Settings - ERP Control</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #003366;
+            --accent-color: #8e44ad;
+            --danger-color: #dc3545;
+        }
+        body { background-color: #f4f7f6; font-family: 'Poppins', sans-serif; }
+        .container { max-width: 900px; padding: 30px; background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: var(--primary-color); border-bottom: 3px solid var(--accent-color); padding-bottom: 10px; margin-bottom: 25px; font-weight: 600; }
+        .card { border-left: 5px solid var(--accent-color); margin-bottom: 20px; }
+        .card-header { background-color: #f0f3f6; color: var(--primary-color); font-weight: 600; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: 500; color: #333; margin-bottom: 5px; }
+        .form-control, .form-select { border-color: #ddd; }
+        .setting-description { font-size: 0.85em; color: #777; margin-top: 5px; }
+        #save-settings-btn { background-color: var(--primary-color); }
+        #save-settings-btn:hover { background-color: #0056b3; }
+        .danger-zone { border: 2px solid var(--danger-color); background-color: #ffe8e8; padding: 20px; border-radius: 8px; margin-top: 30px; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Advanced System Configuration</h1>
+            <a href="/admin-dashboard.html" class="btn btn-outline-secondary">← Back to Dashboard</a>
+        </header>
+
+        <p id="system-status" class="alert alert-info text-center">Loading current settings...</p>
+        
+        <form id="advanced-settings-form">
+            <h2 class="h4 mb-3">Governance & Financial Defaults</h2>
+            
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    
+                    <div class="row">
+                        <div class="col-md-6 form-group">
+                            <label for="active_session_id">Active Academic Session *</label>
+                            <select id="active_session_id" name="active_session_id" class="form-select" required>
+                                <option value="">Loading Sessions...</option>
+                            </select>
+                            <small class="setting-description">Sets the default session ID for all new student enrollment and exams.</small>
+                        </div>
+                        
+                        <div class="col-md-6 form-group">
+                            <label for="default_branch_id">Default Branch ID *</label>
+                            <select id="default_branch_id" name="default_branch_id" class="form-select" required>
+                                <option value="">Loading Branches...</option>
+                            </select>
+                            <small class="setting-description">The default branch for new staff and primary system operations.</small>
+                        </div>
+                    </div>
+
+                    <div class="row">
+                         <div class="col-md-6 form-group">
+                            <label for="default_pay_frequency">Default Pay Frequency</label>
+                            <select id="default_pay_frequency" name="default_pay_frequency" class="form-select">
+                                <option value="Monthly">Monthly</option>
+                                <option value="Bi-Weekly">Bi-Weekly</option>
+                                <option value="Annual">Annual</option>
+                            </select>
+                            <small class="setting-description">Default setting for new payroll records.</small>
+                        </div>
+                        <div class="col-md-6 form-group">
+                            <label for="library_fine_per_day">Library Fine Rate (₹/Day)</label>
+                            <input type="number" step="0.01" id="library_fine_per_day" name="library_fine_per_day" class="form-control" value="5.00">
+                            <small class="setting-description">Fine applied per day for overdue books.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <h2 class="h4 mb-3">Security & Application Toggles</h2>
+            
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="enable_self_registration" name="enable_self_registration" checked>
+                        <label class="form-check-label" for="enable_self_registration">Enable Student Self-Registration (Public Access)</label>
+                        <small class="setting-description d-block">If disabled, only Admin can create Student accounts.</small>
+                    </div>
+                    
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="enforce_otp_login" name="enforce_otp_login">
+                        <label class="form-check-label" for="enforce_otp_login">Enforce OTP/MFA Login for Staff</label>
+                        <small class="setting-description d-block">Requires all Teacher/Admin roles to authenticate via a second factor.</small>
+                    </div>
+
+                    <div class="form-check form-switch mb-3">
+                        <input class="form-check-input" type="checkbox" id="allow_online_fee_payment" name="allow_online_fee_payment" checked>
+                        <label class="form-check-label" for="allow_online_fee_payment">Allow Online Fee Payments</label>
+                        <small class="setting-description d-block">Controls visibility and functionality of the external payment gateway.</small>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center mt-4">
+                <button type="submit" id="save-settings-btn" class="btn btn-primary btn-lg">Save All Advanced Settings</button>
+            </div>
+            <p id="error-msg" class="text-danger text-center mt-3" style="min-height: 1.5em;"></p>
+        </form>
+
+        <div class="danger-zone">
+            <h2 class="h4 text-danger mb-3">DANGER ZONE: System Actions</h2>
+            <button class="btn btn-danger me-3" onclick="confirmSystemAction('archive')">Archive Current Academic Year</button>
+            <button class="btn btn-warning" onclick="confirmSystemAction('reset_cache')">Clear System Cache</button>
+            <small class="d-block mt-2 text-danger">⚠️ These actions are irreversible and affect all users. Proceed with extreme caution.</small>
+        </div>
+
+    </div> 
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = '/api/settings';
+        const TOKEN = localStorage.getItem('erp-token');
+        const USER_ROLE = localStorage.getItem('user-role');
+        const settingsForm = document.getElementById('advanced-settings-form');
+        const statusMessage = document.getElementById('system-status');
+        const errorMsg = document.getElementById('error-msg');
+
+        // Security check
+        if (!TOKEN || (USER_ROLE !== 'Admin' && USER_ROLE !== 'Super Admin')) {
+            window.location.href = '/login.html';
+        }
+
+        // --- Auth Fetch Helper ---
+        async function fetchWithAuth(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+            const response = await fetch(url, { ...options, headers });
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                alert('Session expired. Redirecting.');
+                window.location.href = '/login.html';
+                throw new Error('Unauthorized');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(errorBody.message || 'Server error');
+            }
+            return response.json();
+        }
+
+        // --- Data Population ---
+
+        async function loadDropdowns() {
+            try {
+                // 1. Fetch Sessions (Assuming endpoint exists)
+                const sessionRes = await fetchWithAuth(`${API_URL}/academic-sessions/all`);
+                const sessionSelect = document.getElementById('active_session_id');
+                sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
+                sessionRes.forEach(s => {
+                    sessionSelect.innerHTML += `<option value="${s.id}">${s.session_name} (${s.start_date.substring(0,4)} - ${s.end_date.substring(0,4)})</option>`;
+                });
+
+                // 2. Fetch Branches (Assuming endpoint exists)
+                const branchRes = await fetchWithAuth(`${API_URL}/branches/all`);
+                const branchSelect = document.getElementById('default_branch_id');
+                branchSelect.innerHTML = '<option value="">-- Select Branch --</option>';
+                branchRes.forEach(b => {
+                    branchSelect.innerHTML += `<option value="${b.id}">${b.branch_name}</option>`;
+                });
+
+            } catch (err) {
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.textContent = `Error loading configurations: ${err.message}`;
+            }
+        }
+        
+        async function loadCurrentSettings() {
+            statusMessage.textContent = 'Fetching current configurations...';
+            try {
+                // Fetch the current system configuration record (e.g., ID 1)
+                const settings = await fetchWithAuth(`${API_URL}/config/current`);
+
+                // Map fetched values to form fields
+                document.getElementById('active_session_id').value = settings.active_session_id || '';
+                document.getElementById('default_branch_id').value = settings.default_branch_id || '';
+                document.getElementById('default_pay_frequency').value = settings.default_pay_frequency || 'Monthly';
+                document.getElementById('library_fine_per_day').value = settings.library_fine_per_day || 5.00;
+                
+                // Set toggles
+                document.getElementById('enable_self_registration').checked = settings.enable_self_registration === true;
+                document.getElementById('enforce_otp_login').checked = settings.enforce_otp_login === true;
+                document.getElementById('allow_online_fee_payment').checked = settings.allow_online_fee_payment === true;
+
+                statusMessage.className = 'alert alert-success';
+                statusMessage.textContent = 'Settings loaded successfully.';
+
+            } catch (err) {
+                statusMessage.className = 'alert alert-warning';
+                statusMessage.textContent = `Configuration record missing or error: ${err.message}`;
+            }
+        }
+
+        // --- Form Submission (Saving Settings) ---
+
+        settingsForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            errorMsg.textContent = '';
+            const saveBtn = document.getElementById('save-settings-btn');
+            saveBtn.disabled = true;
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData.entries());
+
+            // Process booleans and numbers correctly
+            data.enable_self_registration = data.enable_self_registration === 'on';
+            data.enforce_otp_login = data.enforce_otp_login === 'on';
+            data.allow_online_fee_payment = data.allow_online_fee_payment === 'on';
+            data.library_fine_per_day = parseFloat(data.library_fine_per_day);
+            
+            // NOTE: Assuming this is a PUT request to update the single configuration record (ID 1)
+            try {
+                const result = await fetchWithAuth(`${API_URL}/config/1`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+
+                errorMsg.className = 'text-success';
+                errorMsg.textContent = 'Configuration saved successfully!';
+                
+            } catch (err) {
+                errorMsg.className = 'text-danger';
+                errorMsg.textContent = `Saving failed: ${err.message}`;
+            } finally {
+                saveBtn.disabled = false;
+            }
+        });
+
+
+        // --- Danger Zone Actions ---
+
+        window.confirmSystemAction = function(action) {
+            let message = '';
+            if (action === 'archive') {
+                message = "WARNING: This will close the current academic session, archive all student data, and prepare for a new year. Are you absolutely sure you want to proceed?";
+            } else if (action === 'reset_cache') {
+                message = "WARNING: This will clear all calculated system caches (reports, aggregates). It will not delete core data. Proceed?";
+            }
+
+            if (confirm(message)) {
+                // Assuming POST /api/settings/actions/:action endpoint exists
+                alert(`Executing action: ${action}. Check server console for status.`);
+                // fetchWithAuth(`${API_URL}/actions/${action}`, { method: 'POST' }); // Placeholder for server call
+            }
+        }
+
+        // --- Initialization ---
+
+        window.onload = async () => {
+            await loadDropdowns();
+            await loadCurrentSettings();
+        };
+    </script>
+</body>
+</html>

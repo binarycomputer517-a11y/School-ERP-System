@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Record Student Placement</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+        window.location.href = '/login';
+    }
+</script>
+<div class="container">
+    <h1>Record Student Placement</h1>
+    <div class="nav-links">
+        <a href="/manage-placements.html">← Back to Placements</a> 
+    </div>
+
+    <form id="placement-form">
+        <label for="student-select">Select Student:</label>
+        <select id="student-select" name="student_id" required></select>
+
+        <label for="job-select">Select Job Posting:</label>
+        <select id="job-select" name="job_id" required></select>
+        
+        <label for="offer_status">Status:</label>
+        <select id="offer_status" name="offer_status">
+            <option value="Offered">Offered</option>
+            <option value="Accepted">Accepted</option>
+            <option value="Declined">Declined</option>
+        </select>
+        
+        <button type="submit">Record Placement</button>
+    </form>
+
+    <h2 style="margin-top: 40px;">Placement Records</h2>
+    <table>
+        <thead><tr><th>Student Name</th><th>Company</th><th>Job Title</th><th>Status</th></tr></thead>
+        <tbody id="placement-list-body"></tbody>
+    </table>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    async function loadInitialData() {
+        try {
+            const studentSelect = document.getElementById('student-select');
+            const students = await fetch('/api/students', { headers: authHeaders }).then(res => res.json());
+            studentSelect.innerHTML = '<option value="">-- Select Student --</option>' + students.map(s => `<option value="${s.id}">${s.student_name}</option>`).join('');
+            
+            const jobSelect = document.getElementById('job-select');
+            const jobs = await fetch('/api/placements/jobs', { headers: authHeaders }).then(res => res.json());
+            jobSelect.innerHTML = '<option value="">-- Select Job --</option>' + jobs.map(j => `<option value="${j.id}">${j.job_title} at ${j.company_name}</option>`).join('');
+
+            loadPlacements();
+        } catch (err) {
+            console.error("Error loading initial data:", err);
+            alert("Could not load necessary data.");
+        }
+    }
+
+    function loadPlacements() {
+        // This will now work because of the new backend route
+        fetch('/api/placements/records', { headers: authHeaders })
+            .then(res => res.json())
+            .then(placements => {
+                const tableBody = document.getElementById('placement-list-body');
+                tableBody.innerHTML = '';
+                if(placements.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="4">No placement records found.</td></tr>';
+                    return;
+                }
+                placements.forEach(p => {
+                    tableBody.innerHTML += `
+                        <tr>
+                            <td>${p.student_name}</td>
+                            <td>${p.company_name}</td>
+                            <td>${p.job_title}</td>
+                            <td>${p.offer_status}</td>
+                        </tr>
+                    `;
+                });
+            });
+    }
+
+    document.getElementById('placement-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        
+        fetch('/api/placements/record', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            body: JSON.stringify(data)
+        })
+        .then(res => {
+            if (res.ok) {
+                alert('Placement recorded successfully!');
+                this.reset();
+                loadPlacements(); // Refresh the list
+            } else {
+                return res.text().then(text => Promise.reject(text));
+            }
+        })
+        .catch(err => {
+            alert('Error recording placement: ' + err);
+        });
+    });
+
+    window.onload = loadInitialData;
+</script>
+</body>
+</html>

@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Attendance Record</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <style>
+        /* Reusing core styles for consistency */
+        body { font-family: Arial, Helvetica, sans-serif; margin: 0; background-color: #eef1f5; color: #333; font-size: 14px; padding: 2em; }
+        .container { max-width: 900px; margin: 25px auto; padding: 20px; background-color: #ffffff; border: 1px solid #ccc; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        h1 { font-family: Georgia, "Times New Roman", Times, serif; color: #003366; text-align: center; border-bottom: 1px solid #b0c4de; padding-bottom: 15px; font-size: 28px; margin-bottom: 20px; }
+        .filter-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; padding: 15px; background-color: #f8f9fa; border: 1px solid #d0d7de; margin-bottom: 20px; }
+        .filter-section label { font-weight: bold; margin-bottom: 5px; color: #333; display: block; }
+        .filter-section select, .filter-section input[type="date"] { padding: 8px; border: 1px solid #aaa; width: 100%; box-sizing: border-box; }
+        button.primary { padding: 9px 15px; color: white; border: 1px solid #0056b3; cursor: pointer; font-weight: bold; background: linear-gradient(to bottom, #007bff, #0056b3); width: 100%; }
+        button.primary:hover { background: linear-gradient(to bottom, #0069d9, #0050a2); }
+        table { width: 100%; border-collapse: collapse; background-color: #fff; margin-top: 15px; }
+        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; }
+        th { background-color: #e2e5e8; color: #333; font-weight: bold; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+        .status-badge { padding: 3px 8px; border: 1px solid; font-weight: bold; font-size: 0.9em; text-transform: capitalize; }
+        .status-P { background-color: #c8e6c9; border-color: #81c784; color: #1e7e34; }
+        .status-A { background-color: #ffcdd2; border-color: #e57373; color: #c62828; }
+        .status-L { background-color: #fff9c4; border-color: #ffd54f; color: #8a6d3b; }
+        .status-H { background-color: #e1bee7; border-color: #ba68c8; color: #512da8; }
+        .status-U { background-color: #f5f5f5; border-color: #bdbdbd; color: #616161; }
+        .dashboard-link { display: inline-block; margin-bottom: 20px; color: #005a9c; text-decoration: none; font-weight: bold; }
+        #loading-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        #loading-modal.active { display: flex; }
+        .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #005a9c; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <a href="/student-dashboard.html" class="dashboard-link">← Back to Dashboard</a>
+        <h1>My Detailed Attendance Record</h1>
+
+        <div class="filter-section">
+            <div>
+                <label for="subjectSelect">Subject (Optional):</label>
+                <select id="subjectSelect">
+                    <option value="">All Subjects</option>
+                </select>
+            </div>
+            <div>
+                <label for="startDate">Start Date:</label>
+                <input type="date" id="startDate">
+            </div>
+            <div>
+                <label for="endDate">End Date:</label>
+                <input type="date" id="endDate">
+            </div>
+            <div style="display: flex; align-items: flex-end;">
+                <button class="primary" onclick="loadUserAttendance()">View Attendance</button>
+            </div>
+        </div>
+
+        <h3 id="reportStatus">Initializing... Please log in.</h3>
+        
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Subject</th>
+                        <th>Status</th>
+                        <th>Remarks</th>
+                    </tr>
+                </thead>
+                <tbody id="attendanceTbody">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="loading-modal">
+        <div class="modal-content"><div class="spinner"></div></div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3005/api';
+        const token = localStorage.getItem('erp-token');
+        let currentUserId = ''; 
+
+        // Helper function to decode JWT payload safely
+        function decodeJwtPayload(jwtToken) {
+            if (!jwtToken) return null;
+            try {
+                const parts = jwtToken.split('.');
+                if (parts.length !== 3) return null;
+                const base64Url = parts[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                // Use built-in atob and decodeURIComponent for payload
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                console.error("Failed to decode JWT:", e);
+                return null;
+            }
+        }
+
+        // --- Utility Functions ---
+        function showLoading() { document.getElementById('loading-modal').classList.add('active'); }
+        function hideLoading() { document.getElementById('loading-modal').classList.remove('active'); }
+
+        async function handleApi(endpoint) {
+            showLoading();
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.status === 403 || response.status === 401) {
+                    // Specific error handling for Authentication/Authorization
+                    const errorDetails = await response.json().catch(() => ({ message: 'No message provided' }));
+                    throw new Error(`Authentication/Authorization Failed. Status ${response.status}. Please check your token validity. ${errorDetails.message}`);
+                }
+                
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.message || `Error ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error(`API Error (${endpoint}):`, error);
+                alert(`Error: ${error.message}`);
+                return null;
+            } finally {
+                hideLoading();
+            }
+        }
+
+        // --- Main Attendance Function ---
+        async function loadUserAttendance() {
+            if (!currentUserId) {
+                alert("Authentication required. User ID is missing. Please refresh the page or log in again.");
+                return;
+            }
+
+            const subject_id = document.getElementById('subjectSelect').value;
+            const start_date = document.getElementById('startDate').value;
+            const end_date = document.getElementById('endDate').value;
+            const tbody = document.getElementById('attendanceTbody');
+            const statusH3 = document.getElementById('reportStatus');
+            
+            let queryParams = new URLSearchParams();
+            if (subject_id) queryParams.append('subject_id', subject_id);
+            if (start_date) queryParams.append('start_date', start_date);
+            if (end_date) queryParams.append('end_date', end_date);
+            
+            const queryString = queryParams.toString();
+            
+            // Endpoint: /api/attendance/report/user/:userId
+            const endpoint = `/attendance/report/user/${currentUserId}${queryString ? '?' + queryString : ''}`;
+
+            const records = await handleApi(endpoint); 
+
+            tbody.innerHTML = ''; 
+            
+            if (!records || records.length === 0) {
+                statusH3.textContent = `No attendance records found for the selected criteria (User ID: ${currentUserId}).`;
+                return;
+            }
+            
+            statusH3.textContent = `Displaying ${records.length} records for User ID: ${currentUserId}`;
+
+            records.forEach(record => {
+                const date = new Date(record.attendance_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
+                const statusValue = record.status || 'unmarked';
+                const statusInitial = statusValue.charAt(0).toUpperCase();
+                
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${date}</td>
+                    <td>${record.subject_name || 'N/A'}</td>
+                    <td><span class="status-badge status-${statusInitial}">${statusValue}</span></td>
+                    <td>${record.remarks || '-'}</td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            const payload = decodeJwtPayload(token);
+            if (payload && payload.userId) {
+                currentUserId = payload.userId;
+                document.getElementById('reportStatus').textContent = `Ready to view records for User ID: ${currentUserId}`;
+            } else {
+                 document.getElementById('reportStatus').textContent = "Error: Authentication token is missing or invalid. Please log in again.";
+            }
+
+            // Set default date range (last 30 days)
+            const today = new Date();
+            const lastMonth = new Date();
+            lastMonth.setDate(today.getDate() - 30);
+            
+            const formatDate = (date) => date.toISOString().split('T')[0];
+            
+            document.getElementById('endDate').value = formatDate(today);
+            document.getElementById('startDate').value = formatDate(lastMonth);
+            
+            hideLoading();
+        });
+    </script>
+</body>
+</html>

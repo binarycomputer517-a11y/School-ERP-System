@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Bus Tracking</title>
+    <link rel="stylesheet" href="/css/style.css">
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <style>
+        #map { height: 600px; border-radius: 8px; }
+        .vehicle-list { max-height: 600px; overflow-y: auto; }
+        .vehicle-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; }
+        .vehicle-item:hover, .vehicle-item.active { background-color: #f0f8ff; }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    if (!token) window.location.href = '/login';
+</script>
+
+<div class="container" style="max-width: 1200px;">
+    <h1>Live School Bus Tracking</h1>
+    <div class="nav-links"><a href="/manage-transport.html">← Back to Transport Management</a></div>
+
+    <div style="display: grid; grid-template-columns: 300px 1fr; gap: 20px; margin-top: 20px;">
+        <div class="vehicle-list">
+            <h2>All Vehicles</h2>
+            <div id="vehicle-list-container">
+                <p>Loading vehicles...</p>
+            </div>
+        </div>
+        <div id="map"></div>
+    </div>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const map = L.map('map').setView([26.72, 88.43], 13); // Default view (Siliguri, India)
+    const vehicleMarkers = {};
+    let currentRouteLayer = null; // To hold the route line and markers
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    function createBusIcon() {
+        return L.divIcon({
+            html: `
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: #2563EB;">
+                    <path d="M18.922 17.552C18.43 18.342 17.518 19 16.5 19H7.5C6.482 19 5.57 18.342 5.078 17.552L3 14V8C3 6.896 3.896 6 5 6H19C20.104 6 21 6.896 21 8V14L18.922 17.552Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    <circle cx="7.5" cy="17.5" r="1.5" fill="currentColor"/>
+                    <circle cx="16.5" cy="17.5" r="1.5" fill="currentColor"/>
+                    <path d="M3 12H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+            `,
+            className: 'bg-transparent',
+            iconSize: [24, 24],
+            iconAnchor: [12, 24]
+        });
+    }
+    
+    async function displayRouteOnMap(routeId) {
+        if (currentRouteLayer) {
+            map.removeLayer(currentRouteLayer);
+        }
+        try {
+            const response = await fetch(`/api/transport/routes/${routeId}/details`, { headers: authHeaders });
+            if (!response.ok) return;
+            const routeDetails = await response.json();
+            
+            // From Location to To Location Path
+            const routePolyline = L.polyline(routeDetails.path, { color: '#007BFF', weight: 5, opacity: 0.8 });
+            
+            // From Location Marker
+            const startMarker = L.marker(routeDetails.start).bindPopup('<b>Route Start (From Location)</b>');
+            
+            // To Location Marker
+            const endMarker = L.marker(routeDetails.end).bindPopup('<b>Route End (To Location)</b>');
+            
+            currentRouteLayer = L.layerGroup([routePolyline, startMarker, endMarker]).addTo(map);
+            map.fitBounds(routePolyline.getBounds());
+        } catch (error) {
+            console.error('Failed to display route:', error);
+        }
+    }
+
+    async function fetchVehicleLocations() {
+        try {
+            const response = await fetch('/api/transport/vehicles/locations', { headers: authHeaders });
+            if (!response.ok) throw new Error('Failed to fetch locations');
+            const vehicles = await response.json();
+
+            const vehicleListContainer = document.getElementById('vehicle-list-container');
+            vehicleListContainer.innerHTML = '';
+
+            vehicles.forEach(vehicle => {
+                const { id, vehicle_number, model, last_lat, last_lng, last_updated_at, driver_name, driver_photo_url, route_id } = vehicle;
+                const latLng = [parseFloat(last_lat), parseFloat(last_lng)];
+                
+                if (vehicleMarkers[id]) {
+                    vehicleMarkers[id].setLatLng(latLng);
+                } else {
+                    vehicleMarkers[id] = L.marker(latLng, { icon: createBusIcon() }).addTo(map);
+                }
+
+                let popupContent = `<div style="text-align:center;"><b>${vehicle_number}</b><br><small>${model || ''}</small></div>`;
+                if (driver_name) {
+                    popupContent += `<hr style="margin: 5px 0;">`;
+                    if (driver_photo_url) {
+                        popupContent += `<img src="${driver_photo_url}" alt="${driver_name}" style="width:120px; max-height: 100px; object-fit: cover; border-radius:4px; margin-top:5px; margin-bottom:5px;">`;
+                    }
+                    popupContent += `<div style="text-align:center;"><b>Driver:</b> ${driver_name}</div>`;
+                } else {
+                    popupContent += `<hr style="margin: 5px 0;"><div style="text-align:center;"><i>No driver assigned</i></div>`;
+                }
+                popupContent += `<div style="text-align:center; margin-top: 5px;"><small>Updated: ${new Date(last_updated_at).toLocaleTimeString()}</small></div>`;
+                vehicleMarkers[id].bindPopup(popupContent);
+                
+                const vehicleDiv = document.createElement('div');
+                vehicleDiv.className = 'vehicle-item';
+                let driverInfo = driver_name ? `Driver: ${driver_name}` : 'No driver assigned';
+                vehicleDiv.innerHTML = `<strong>${vehicle_number}</strong><br><small>${model}<br><i>${driverInfo}</i></small>`;
+                
+                vehicleDiv.onclick = () => {
+                    map.setView(latLng, 16);
+                    vehicleMarkers[id].openPopup();
+                    if (route_id) {
+                        displayRouteOnMap(route_id);
+                    } else if (currentRouteLayer) {
+                        map.removeLayer(currentRouteLayer);
+                        map.setView([26.72, 88.43], 13); // Reset view if no route
+                    }
+                };
+                vehicleListContainer.appendChild(vehicleDiv);
+            });
+        } catch (error) {
+            console.error('Error fetching vehicle locations:', error);
+            document.getElementById('vehicle-list-container').innerHTML = `<p style="color: red;">Could not load vehicle data.</p>`;
+        }
+    }
+
+    window.onload = () => {
+        fetchVehicleLocations();
+        setInterval(fetchVehicleLocations, 10000);
+    };
+</script>
+</body>
+</html>

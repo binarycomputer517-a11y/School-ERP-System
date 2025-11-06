@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Upload Media</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .upload-form-group {
+            margin-bottom: 15px;
+        }
+        .upload-form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    
+    // Auth check: Only Admin or Teacher roles should access the upload page
+    if (!token || (userRole !== 'Admin' && userRole !== 'Teacher')) {
+        window.location.href = '/login';
+    }
+</script>
+
+<div class="container">
+    <h1>Upload New Media Item</h1>
+    <div class="nav-links">
+        <a href="/media-gallery.html">Back to Gallery</a> |
+        <a href="/dashboard.html">Back to Dashboard</a>
+    </div>
+
+    <form id="media-upload-form" enctype="multipart/form-data">
+        
+        <div class="upload-form-group">
+            <label for="title">Title (required):</label>
+            <input type="text" id="title" name="title" required>
+        </div>
+
+        <div class="upload-form-group">
+            <label for="description">Description:</label>
+            <textarea id="description" name="description" rows="3"></textarea>
+        </div>
+        
+        <div class="upload-form-group">
+            <label for="media_type">Media Type:</label>
+            <select id="media_type" name="media_type" required>
+                <option value="Image">Image</option>
+                <option value="Video">Video</option>
+            </select>
+        </div>
+        
+        <div class="upload-form-group">
+            <label for="file">Select File (Max size 50MB):</label>
+            <input type="file" id="file" name="file" accept="image/*,video/*" required>
+        </div>
+
+        <div class="upload-form-group">
+            <label for="access_level">Access Level:</label>
+            <select id="access_level" name="access_level">
+                <option value="Public">Public (All Users)</option>
+                <option value="Students Only">Students Only</option>
+                <option value="Private">Private (Admins Only)</option>
+            </select>
+        </div>
+
+        <button type="submit" id="submit-button">Upload Media</button>
+        <p id="upload-status" style="margin-top: 10px; color: blue;"></p>
+    </form>
+</div>
+
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const uploadForm = document.getElementById('media-upload-form');
+    const uploadStatus = document.getElementById('upload-status');
+    const submitButton = document.getElementById('submit-button');
+
+    uploadForm.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData(uploadForm);
+        
+        uploadStatus.textContent = 'Uploading... Please wait.';
+        submitButton.disabled = true;
+
+        try {
+            // Note: The backend route '/api/media/upload' must be configured with Multer
+            const response = await fetch('/api/media/upload', {
+                method: 'POST',
+                headers: { 
+                    // DO NOT manually set Content-Type for FormData, 
+                    // the browser handles it automatically with the boundary parameter
+                    'Authorization': authHeaders.Authorization 
+                },
+                body: formData
+            });
+
+            const responseData = await response.json().catch(() => ({}));
+            
+            if (response.ok) {
+                uploadStatus.textContent = 'Upload successful! Redirecting to gallery...';
+                uploadStatus.style.color = 'green';
+                setTimeout(() => {
+                    window.location.href = '/media-gallery.html';
+                }, 1500);
+            } else {
+                const errorMessage = responseData.error || responseData.details || 'Unknown server error.';
+                throw new Error(errorMessage);
+            }
+
+        } catch (err) {
+            uploadStatus.textContent = `Upload Failed: ${err.message}`;
+            uploadStatus.style.color = 'red';
+            console.error('Upload error:', err);
+        } finally {
+            submitButton.disabled = false;
+        }
+    });
+</script>
+</body>
+</html>

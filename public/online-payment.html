@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Online Fee Payment</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+</head>
+<body>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const studentId = localStorage.getItem('user-reference-id');
+    if (!token || (userRole !== 'Student' && userRole !== 'Parent')) { 
+        // Allow Admins too for testing, but ideally this is a student/parent page
+        if (userRole !== 'Admin') window.location.href = '/login'; 
+    }
+</script>
+<div class="container" style="max-width: 500px;">
+    <h1>Online Fee Payment</h1>
+    <div class="nav-links"><a href="/admin-dashboard.html">Back to Dashboard</a></div>
+    <form id="payment-form">
+        <p>You are paying for your own account.</p>
+        <label for="amount">Amount to Pay (INR):</label>
+        <input type="number" id="amount" required min="1">
+        <button type="submit" style="margin-top: 20px;">Pay Now</button>
+    </form>
+</div>
+<script>
+    const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    const form = document.getElementById('payment-form');
+
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const amount = document.getElementById('amount').value;
+        const studentIdForPayment = localStorage.getItem('user-reference-id');
+
+        if (!studentIdForPayment) {
+            alert('Your user account is not linked to a student profile. Please contact administration.');
+            return;
+        }
+        if (!amount || amount < 1) {
+            alert('Please enter a valid amount.');
+            return;
+        }
+        try {
+            const response = await fetch('/api/finance/create-cashfree-order', {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify({ amount, studentId: studentIdForPayment })
+            });
+            if (!response.ok) throw new Error('Failed to create payment order.');
+            const orderData = await response.json();
+            const cashfree = new cashfree.Cashfree({ mode: "sandbox" }); // Use "production" for live
+            cashfree.checkout({
+                paymentSessionId: orderData.payment_session_id,
+                redirectTarget: "_self"
+            });
+        } catch (error) {
+            console.error(error);
+            alert(error.message);
+        }
+    });
+</script>
+</body>
+</html>

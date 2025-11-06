@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Departments</title>
+    <link href="https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap" rel="stylesheet">
+    <style>
+        /* --- CLASSIC STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; 
+            padding: 2em; 
+            background-color: #f8f8f8; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 900px; 
+            margin: auto; 
+            padding: 40px; 
+            background-color: #ffffff; 
+            border: 2px solid #333; 
+            box-shadow: 4px 4px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #000; 
+            font-weight: bold; 
+            text-transform: uppercase;
+            border-bottom: 4px double #000; 
+            padding-bottom: 10px; 
+            margin-bottom: 30px; 
+            font-size: 2em;
+        }
+        
+        /* Form & Input Styles */
+        input[type="text"], textarea, input[type="number"], select { 
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #555;
+            border-radius: 0;
+            box-sizing: border-box;
+            margin-bottom: 15px;
+        }
+        
+        /* Button Styles */
+        button, a.btn { 
+            padding: 10px 15px; 
+            border: 1px solid #000; 
+            border-radius: 0; 
+            cursor: pointer; 
+            box-shadow: 2px 2px 0 #000; 
+            transition: none;
+            text-decoration: none;
+            display: inline-block;
+            margin-right: 10px;
+            margin-bottom: 5px; 
+        }
+        button.btn-primary, a.btn-primary { 
+            background-color: #005A9C; 
+            color: white; 
+        }
+        button.btn-secondary, a.btn-secondary {
+            background-color: #777;
+            color: white;
+        }
+        button:hover, a.btn:hover { 
+            opacity: 0.9;
+            transform: translate(1px, 1px); 
+            box-shadow: 1px 1px 0 #000;
+        }
+
+        /* NEW: Icon Button Styles */
+        .actions-cell {
+            text-align: center;
+            white-space: nowrap;
+        }
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 5px 8px;
+            font-size: 1.4em;
+            border-radius: 4px;
+            margin: 0 2px;
+            transition: background-color 0.2s;
+        }
+        .icon-btn:hover:not(:disabled) {
+            background-color: #e0e0e0;
+        }
+        .icon-btn.delete:hover:not(:disabled) {
+            background-color: #ffdddd;
+            color: #C0392B;
+        }
+        .icon-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        /* Table Styles */
+        .dept-table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin-top: 20px;
+        }
+        .dept-table th, .dept-table td { 
+            border: 1px solid #ccc; 
+            padding: 12px; 
+            text-align: left; 
+            vertical-align: top; 
+        }
+        .dept-table th { 
+            background-color: #333; 
+            color: #FFFFFF; 
+            font-weight: bold; 
+            cursor: pointer; 
+        }
+        .dept-table th.sort-asc::after { content: ' ▲'; }
+        .dept-table th.sort-desc::after { content: ' ▼'; }
+
+        /* Description Styles (For inputs in modals/forms) */
+        .description-main {
+            display: block;
+            margin-bottom: 4px;
+            white-space: normal; 
+        }
+        .description-meta {
+            display: block;
+            font-size: 0.9em;
+            color: #555;
+            font-style: italic;
+            white-space: normal; 
+        }
+
+        /* Modal Styles (Simple) */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            overflow: auto;
+            background-color: rgba(0,0,0,0.4);
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 10% auto;
+            padding: 30px;
+            border: 2px solid #000;
+            width: 80%;
+            max-width: 500px;
+            border-radius: 0;
+            box-shadow: 4px 4px 0 #AAA; 
+        }
+        .close-btn {
+            color: #aaa;
+            float: right;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .close-btn:hover, .close-btn:focus {
+            color: #000;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* STYLES FOR PAYROLL STRUCTURE FORMS/VIEWS */
+        .payroll-form, .payroll-view { 
+            display: grid; 
+            grid-template-columns: 1fr 1fr; 
+            gap: 20px; 
+        }
+        .payroll-form .section-header, .payroll-view .section-header { 
+            grid-column: 1 / -1; 
+            color: #005A9C; 
+            font-weight: bold; 
+            margin-top: 20px; 
+            border-bottom: 2px solid #005A9C; 
+            padding-bottom: 5px; 
+        }
+        .payroll-form .form-group {
+            margin-bottom: 0; 
+        }
+        .payroll-form label {
+            text-decoration: none;
+        }
+        .payroll-view dl {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px 20px;
+        }
+        .payroll-view dt {
+            font-weight: bold;
+            color: #555;
+        }
+        .payroll-view dd {
+            margin: 0;
+            padding: 5px;
+            background-color: #f0f0f0;
+            border-left: 3px solid #005A9C;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Department Management</h1>
+        <div class="nav-links" style="margin-bottom: 30px;">
+            <a href="/view-teachers.html" class="btn btn-secondary">← Back to Staff List</a>
+        </div>
+
+        <h2>➕ Create New Department</h2>
+        <form id="create-dept-form" style="margin-bottom: 40px;">
+            <input type="text" id="dept-name" placeholder="Department Name (e.g., Science)" required>
+            <textarea id="dept-description" placeholder="Brief Description (Optional)"></textarea> 
+            <button type="submit" class="btn-primary">Create Department</button>
+            <p id="create-error-msg" style="color: red; margin-top: 10px;"></p>
+        </form>
+
+        <hr style="border-top: 2px dashed #ccc;">
+
+        <h2>🏢 Existing Departments</h2>
+        <div class="table-responsive">
+            <table class="dept-table" id="department-table">
+                <thead>
+                    <tr>
+                        <th data-sort-key="name">Name</th>
+                        <th data-sort-key="staff_count">Staff Count</th>
+                        <th data-sort-key="created_at">Created Date</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="departments-list">
+                    <tr><td colspan="4" style="text-align: center;">Loading departments...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>Edit Department</h2>
+            <form id="edit-dept-form">
+                <input type="hidden" id="edit-id" name="id">
+                <label>Department Name:</label>
+                <input type="text" id="edit-name" name="name" required>
+                <label>Description (Basic):</label>
+                <textarea id="edit-description" name="description"></textarea>
+                <button type="submit" class="btn-primary" style="margin-top: 10px;">Save Changes</button>
+                <p id="edit-error-msg" style="color: red; margin-top: 10px;"></p>
+            </form>
+        </div>
+    </div>
+    
+    <div id="payroll-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close-btn" id="payroll-modal-close">&times;</span>
+            <h2>Define Payroll Structure for <span id="payroll-dept-name" style="color: #005A9C;"></span></h2>
+            <form class="payroll-form" id="edit-payroll-form">
+                <input type="hidden" id="edit-payroll-dept-id" name="id">
+                
+                <h4 class="section-header">Salary & Payment Details</h4>
+                <div class="form-group">
+                    <label for="edit_p_base_salary">Base Salary</label>
+                    <input type="number" id="edit_p_base_salary" name="base_salary" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="edit_p_pay_frequency">Pay Frequency</label>
+                    <select id="edit_p_pay_frequency" name="pay_frequency">
+                        <option value="Monthly">Monthly</option>
+                        <option value="Bi-Weekly">Bi-Weekly</option>
+                        <option value="Weekly">Weekly</option>
+                        <option value="Fortnightly">Fortnightly</option>
+                    </select>
+                </div>
+
+                <h4 class="section-header">Fixed Allowances</h4>
+                <div class="form-group">
+                    <label for="edit_p_allowance_hra">HRA (House Rent Allowance)</label>
+                    <input type="number" id="edit_p_allowance_hra" name="allowance_hra" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="edit_p_allowance_da">DA (Dearness Allowance)</label>
+                    <input type="number" id="edit_p_allowance_da" name="allowance_da" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="edit_p_allowance_other">Other Fixed Allowance</label>
+                    <input type="number" id="edit_p_allowance_other" name="allowance_other" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="edit_p_bonus_target">Annual Bonus Target</label>
+                    <input type="number" id="edit_p_bonus_target" name="bonus_target" step="0.01">
+                </div>
+                
+                <h4 class="section-header">Deductions & Taxes</h4>
+                <div class="form-group">
+                    <label for="edit_p_fixed_deductions">Fixed Deductions (e.g., Insurance)</label>
+                    <input type="number" id="edit_p_fixed_deductions" name="fixed_deductions" step="0.01">
+                </div>
+                <div class="form-group">
+                    <label for="edit_p_deduction_percentage">Percentage Deduction (PF/EPF %)</label>
+                    <input type="number" id="edit_p_deduction_percentage" name="deduction_percentage" min="0" max="100" step="0.01">
+                </div>
+                <div class="form-group full-width">
+                    <label for="edit_p_tax_deduction_rate">Tax Deduction Rate (%)</label>
+                    <input type="number" id="edit_p_tax_deduction_rate" name="tax_deduction_rate" min="0" max="100" step="0.01">
+                </div>
+                
+                <h4 class="section-header">Banking Information</h4>
+                <div class="form-group">
+                    <label for="edit_p_bank_account_number">Bank Account Number</label>
+                    <input type="text" id="edit_p_bank_account_number" name="bank_account_number">
+                </div>
+                <div class="form-group">
+                    <label for="edit_p_bank_ifsc_code">Bank IFSC/SWIFT Code</label>
+                    <input type="text" id="edit_p_bank_ifsc_code" name="bank_ifsc_code">
+                </div>
+                
+                <button type="submit" class="btn-primary full-width" style="margin-top: 30px;">Save Payroll Structure</button>
+                <p id="edit-payroll-error-msg" style="color: red; margin-top: 10px; grid-column: 1 / -1;"></p>
+            </form>
+        </div>
+    </div>
+
+    <div id="view-payroll-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <span class="close-btn" id="view-payroll-modal-close">&times;</span>
+            <h2>Viewing Payroll Structure for <span id="view-payroll-dept-name" style="color: #005A9C;"></span></h2>
+            <div class="payroll-view">
+                <h4 class="section-header">Salary & Payment Details</h4>
+                <dl>
+                    <div><dt>Base Salary</dt><dd id="view_p_base_salary"></dd></div>
+                    <div><dt>Pay Frequency</dt><dd id="view_p_pay_frequency"></dd></div>
+                </dl>
+                
+                <h4 class="section-header">Fixed Allowances</h4>
+                <dl>
+                    <div><dt>HRA (House Rent Allowance)</dt><dd id="view_p_allowance_hra"></dd></div>
+                    <div><dt>DA (Dearness Allowance)</dt><dd id="view_p_allowance_da"></dd></div>
+                    <div><dt>Other Fixed Allowance</dt><dd id="view_p_allowance_other"></dd></div>
+                    <div><dt>Annual Bonus Target</dt><dd id="view_p_bonus_target"></dd></div>
+                </dl>
+
+                <h4 class="section-header">Deductions & Taxes</h4>
+                <dl>
+                    <div><dt>Fixed Deductions</dt><dd id="view_p_fixed_deductions"></dd></div>
+                    <div><dt>Percentage Deduction (PF/EPF)</dt><dd id="view_p_deduction_percentage"></dd></div>
+                    <div><dt>Tax Deduction Rate</dt><dd id="view_p_tax_deduction_rate"></dd></div>
+                </dl>
+
+                <h4 class="section-header">Banking Information</h4>
+                <dl>
+                    <div><dt>Bank Account Number</dt><dd id="view_p_bank_account_number"></dd></div>
+                    <div><dt>Bank IFSC/SWIFT Code</dt><dd id="view_p_bank_ifsc_code"></dd></div>
+                </dl>
+
+                <button type="button" class="btn-secondary" onclick="document.getElementById('view-payroll-modal').style.display='none'" style="margin-top: 20px; grid-column: 1 / -1;">Close</button>
+            </div>
+        </div>
+    </div>
+
+  <script>
+        const API_URL = '/api/hr/departments';
+        const TOKEN = localStorage.getItem('erp-token');
+        let allDepartments = [];
+        let currentSortKey = 'name';
+        let isAscending = true;
+        
+        async function handleApi(url, options = {}) {
+            options.headers = { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${TOKEN}`,
+                ...options.headers 
+            };
+            const response = await fetch(url, options);
+            if (response.status === 401 || response.status === 403) {
+                alert('Session expired or unauthorized. Please log in again.');
+                localStorage.clear();
+                window.location.href = '/login';
+                throw new Error('Unauthorized');
+            }
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(error.message || `API Endpoint not found. (Status: ${response.status})`);
+            }
+            return response;
+        }
+
+        async function fetchDepartments() {
+            const tbody = document.getElementById('departments-list');
+            try {
+                const response = await handleApi(API_URL, { method: 'GET' });
+                allDepartments = await response.json();
+                if (!Array.isArray(allDepartments)) allDepartments = []; 
+                sortAndRender(allDepartments, currentSortKey, isAscending);
+            } catch(e) { 
+                console.error('Error fetching departments:', e);
+                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Error fetching departments: ${e.message}</td></tr>`;
+            }
+        }
+        
+        function renderDepartmentsTable(departments) {
+            const tbody = document.getElementById('departments-list');
+            if (!departments || departments.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No departments found.</td></tr>';
+                 return;
+            }
+            
+            tbody.innerHTML = departments.map(d => {
+                const deptName = d.name.replace(/'/g, "\\'");
+                let isPayrollDefined = false;
+                try {
+                    const payload = typeof d.description === 'string' ? JSON.parse(d.description) : d.description;
+                    const payroll = payload && payload.payroll_template;
+                    if (payroll && parseFloat(payroll.base_salary) > 0) {
+                        isPayrollDefined = true;
+                    }
+                } catch(e) {
+                    console.warn("Could not parse description for department", d.id, e);
+                }
+                
+                return `
+                    <tr>
+                        <td>${d.name}</td>
+                        <td>${d.staff_count || 0}</td>
+                        <td>${d.created_at ? new Date(d.created_at).toLocaleDateString() : 'N/A'}</td>
+                        <td class="actions-cell">
+                            <button class="icon-btn" title="Define/Edit Salary Structure" onclick="openPayrollModal('${d.id}')">💵</button>
+                            <button class="icon-btn" title="View Salary Structure" onclick="openViewPayrollModal('${d.id}')" ${!isPayrollDefined ? 'disabled' : ''}>👁️</button>
+                            <button class="icon-btn" title="Edit Department Info" onclick="openEditModal('${d.id}')">✏️</button>
+                            <button class="icon-btn delete" title="Delete Department" onclick="deleteDepartment('${d.id}', '${deptName}')">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function getSortValue(dept, key) {
+            const value = dept[key];
+            if (key === 'created_at' && value) return new Date(value).getTime();
+            if (key === 'staff_count') return Number(value) || 0;
+            return String(value || '').toLowerCase();
+        }
+
+        function sortAndRender(departments, key, asc) {
+            departments.sort((a, b) => {
+                const valA = getSortValue(a, key);
+                const valB = getSortValue(b, key);
+                if (valA < valB) return asc ? -1 : 1;
+                if (valA > valB) return asc ? 1 : -1;
+                return 0;
+            });
+            document.querySelectorAll('.dept-table th').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
+            const header = document.querySelector(`th[data-sort-key="${key}"]`);
+            if (header) header.classList.add(asc ? 'sort-asc' : 'sort-desc');
+            renderDepartmentsTable(departments);
+        }
+
+        document.getElementById('department-table').addEventListener('click', (e) => {
+            const th = e.target.closest('th');
+            if (th && th.dataset.sortKey) {
+                const newKey = th.dataset.sortKey;
+                isAscending = (newKey === currentSortKey) ? !isAscending : true;
+                currentSortKey = newKey;
+                sortAndRender(allDepartments, currentSortKey, isAscending);
+            }
+        });
+
+        document.getElementById('create-dept-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const name = document.getElementById('dept-name').value.trim();
+            const description = document.getElementById('dept-description').value.trim();
+            const errorMsg = document.getElementById('create-error-msg');
+            errorMsg.textContent = '';
+            
+            const initialPayrollData = {
+                base_salary: 0.00, pay_frequency: "Monthly", allowance_hra: 0.00,
+                allowance_da: 0.00, allowance_other: 0.00, bonus_target: 0.00,
+                fixed_deductions: 0.00, deduction_percentage: 0.00, tax_deduction_rate: 0.00,
+                bank_account_number: "", bank_ifsc_code: ""
+            };
+            
+            const data = { name, description, ...initialPayrollData };
+            
+            try {
+                await handleApi(API_URL, { method: 'POST', body: JSON.stringify(data) });
+                alert(`Department "${name}" created successfully.`);
+                event.target.reset(); 
+                fetchDepartments(); 
+            } catch (e) {
+                errorMsg.textContent = 'Creation failed: ' + e.message;
+            }
+        });
+
+        async function deleteDepartment(id, name) {
+            if (!confirm(`WARNING: Are you sure you want to delete the department: ${name}?`)) return;
+            try {
+                await handleApi(`${API_URL}/${id}`, { method: 'DELETE' });
+                alert(`Department "${name}" deleted successfully.`);
+                fetchDepartments(); 
+            } catch (e) {
+                alert(`Deletion failed: ${e.message}`);
+            }
+        }
+        window.deleteDepartment = deleteDepartment;
+
+        const editModal = document.getElementById('edit-modal');
+        const payrollModal = document.getElementById('payroll-modal');
+        const viewPayrollModal = document.getElementById('view-payroll-modal');
+
+        document.querySelector('#edit-modal .close-btn').onclick = () => editModal.style.display = 'none';
+        document.getElementById('payroll-modal-close').onclick = () => payrollModal.style.display = 'none';
+        document.getElementById('view-payroll-modal-close').onclick = () => viewPayrollModal.style.display = 'none';
+        
+        window.onclick = (event) => {
+            if (event.target === editModal) editModal.style.display = 'none';
+            if (event.target === payrollModal) payrollModal.style.display = 'none';
+            if (event.target === viewPayrollModal) viewPayrollModal.style.display = 'none';
+        };
+
+        function openEditModal(id) { 
+            const dept = allDepartments.find(d => String(d.id) === String(id));
+            if (!dept) return alert('Department not found.');
+            
+            const payload = typeof dept.description === 'string' ? JSON.parse(dept.description) : dept.description;
+            
+            document.getElementById('edit-id').value = dept.id;
+            document.getElementById('edit-name').value = dept.name;
+            document.getElementById('edit-description').value = (payload && payload.basic_description) || ''; 
+            
+            editModal.style.display = 'block';
+        }
+        window.openEditModal = openEditModal;
+
+        document.getElementById('edit-dept-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const id = document.getElementById('edit-id').value;
+            const name = document.getElementById('edit-name').value.trim();
+            const description = document.getElementById('edit-description').value.trim();
+            const errorMsg = document.getElementById('edit-error-msg');
+            errorMsg.textContent = '';
+            
+            const originalDept = allDepartments.find(d => String(d.id) === String(id));
+            const originalPayload = typeof originalDept.description === 'string' ? JSON.parse(originalDept.description) : originalDept.description;
+            
+            const data = {
+                name,
+                description,
+                ...(originalPayload.payroll_template || {})
+            };
+
+            try {
+                await handleApi(`${API_URL}/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                alert(`Department "${name}" updated successfully!`);
+                editModal.style.display = 'none';
+                fetchDepartments(); 
+            } catch (e) {
+                errorMsg.textContent = 'Update failed: ' + e.message;
+            }
+        });
+
+        function openPayrollModal(id) {
+            const dept = allDepartments.find(d => String(d.id) === String(id));
+            if (!dept) return alert('Department not found.');
+            
+            const payload = typeof dept.description === 'string' ? JSON.parse(dept.description) : dept.description;
+            const payrollData = (payload && payload.payroll_template) || {};
+            
+            document.getElementById('payroll-dept-name').textContent = dept.name;
+            document.getElementById('edit-payroll-dept-id').value = dept.id;
+
+            const form = document.getElementById('edit-payroll-form');
+            Array.from(form.elements).forEach(el => {
+                if (el.name && el.name !== 'id') {
+                    const value = payrollData[el.name];
+                    if (el.type === 'number') {
+                        el.value = (value !== undefined && !isNaN(parseFloat(value))) ? parseFloat(value).toFixed(2) : '0.00';
+                    } else {
+                        el.value = value || (el.tagName === 'SELECT' ? el.options[0].value : '');
+                    }
+                }
+            });
+            payrollModal.style.display = 'block';
+        }
+        window.openPayrollModal = openPayrollModal;
+        
+        document.getElementById('edit-payroll-form').addEventListener('submit', async function(event) {
+            event.preventDefault();
+            const id = document.getElementById('edit-payroll-dept-id').value;
+            const errorMsg = document.getElementById('edit-payroll-error-msg');
+            errorMsg.textContent = '';
+            
+            const originalDept = allDepartments.find(d => String(d.id) === String(id));
+            const originalPayload = typeof originalDept.description === 'string' ? JSON.parse(originalDept.description) : originalDept.description;
+
+            const newPayrollData = {};
+            Array.from(event.target.elements).forEach(input => {
+                if (input.name && input.name !== 'id') {
+                    newPayrollData[input.name] = (input.type === 'number') ? (parseFloat(input.value) || 0.00) : input.value.trim();
+                }
+            });
+
+            const data = {
+                name: originalDept.name,
+                description: (originalPayload && originalPayload.basic_description) || '',
+                ...newPayrollData
+            };
+            
+            try {
+                await handleApi(`${API_URL}/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+                alert(`Payroll structure for "${originalDept.name}" updated successfully!`);
+                payrollModal.style.display = 'none';
+                fetchDepartments();
+            } catch(e) {
+                errorMsg.textContent = 'Payroll Update failed: ' + e.message;
+            }
+        });
+        
+        function openViewPayrollModal(id) {
+            const dept = allDepartments.find(d => String(d.id) === String(id));
+            if (!dept) return alert('Department not found.');
+            
+            const payload = typeof dept.description === 'string' ? JSON.parse(dept.description) : dept.description;
+            const payrollData = (payload && payload.payroll_template) || {};
+            
+            document.getElementById('view-payroll-dept-name').textContent = dept.name;
+
+            const formatCurrency = val => (parseFloat(val) || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+            const formatPercentage = val => `${parseFloat(val) || 0}%`;
+            const safeData = (key, def = 'N/A') => payrollData[key] !== undefined ? payrollData[key] : def;
+
+            document.getElementById('view_p_base_salary').textContent = formatCurrency(safeData('base_salary', 0));
+            document.getElementById('view_p_pay_frequency').textContent = safeData('pay_frequency');
+            document.getElementById('view_p_allowance_hra').textContent = formatCurrency(safeData('allowance_hra', 0));
+            document.getElementById('view_p_allowance_da').textContent = formatCurrency(safeData('allowance_da', 0));
+            document.getElementById('view_p_allowance_other').textContent = formatCurrency(safeData('allowance_other', 0));
+            document.getElementById('view_p_bonus_target').textContent = formatCurrency(safeData('bonus_target', 0));
+            document.getElementById('view_p_fixed_deductions').textContent = formatCurrency(safeData('fixed_deductions', 0));
+            document.getElementById('view_p_deduction_percentage').textContent = formatPercentage(safeData('deduction_percentage', 0));
+            document.getElementById('view_p_tax_deduction_rate').textContent = formatPercentage(safeData('tax_deduction_rate', 0));
+            document.getElementById('view_p_bank_account_number').textContent = safeData('bank_account_number');
+            document.getElementById('view_p_bank_ifsc_code').textContent = safeData('bank_ifsc_code');
+
+            viewPayrollModal.style.display = 'block';
+        }
+        window.openViewPayrollModal = openViewPayrollModal;
+
+        document.addEventListener('DOMContentLoaded', fetchDepartments);
+  </script>
+</body>
+</html>
