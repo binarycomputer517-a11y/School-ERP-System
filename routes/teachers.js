@@ -3,7 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 const { authenticateToken, authorize } = require('../authMiddleware');
 
