@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid');
 
 // Constants (Define roles that can manage students)
