@@ -1,5 +1,3 @@
-// routes/hr/departments.js - (FINAL FIX: Maximized roles for viewing)
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../../database');
@@ -42,7 +40,8 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
                 hd.description, 
                 hd.created_at, 
                 hd.updated_at,
-                COALESCE(COUNT(t.id) FILTER (WHERE t.is_active = TRUE), 0) AS staff_count
+                -- FIX: Changed COUNT(t.id) to COUNT(t.*) to fix the "column t.id does not exist" error.
+                COALESCE(COUNT(t.*) FILTER (WHERE t.is_active = TRUE), 0) AS staff_count
             FROM ${DEPARTMENTS_TABLE} hd
             LEFT JOIN ${TEACHERS_TABLE} t ON hd.id = t.department_id
             GROUP BY hd.id
@@ -81,10 +80,12 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         const department_description_json = JSON.stringify(department_description_payload);
         
         const query = `
-            INSERT INTO ${DEPARTMENTS_TABLE} (name, description)
-            VALUES ($1, $2)
+            -- FIX: Added department_name to satisfy NOT NULL constraint on the table.
+            INSERT INTO ${DEPARTMENTS_TABLE} (name, department_name, description)
+            VALUES ($1, $1, $2)
             RETURNING id, name;
         `;
+        // Pass name twice for $1 and $2 for description payload
         const result = await client.query(query, [name.trim(), department_description_json]);
 
         await client.query('COMMIT');
@@ -127,6 +128,8 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         const query = `
             UPDATE ${DEPARTMENTS_TABLE} SET
                 name = $1, 
+                -- FIX: Added department_name update to maintain consistency with the table schema.
+                department_name = $1,
                 description = $2,
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $3
