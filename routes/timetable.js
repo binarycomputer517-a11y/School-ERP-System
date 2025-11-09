@@ -9,13 +9,8 @@ const TIMETABLE_TABLE = 'class_timetable';
 
 // --- Day Mapping for Database Insertion/Sorting ---
 const daysMap = {
-    'Monday': 1,
-    'Tuesday': 2,
-    'Wednesday': 3,
-    'Thursday': 4,
-    'Friday': 5,
-    'Saturday': 6,
-    'Sunday': 7
+    'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4,
+    'Friday': 5, 'Saturday': 6, 'Sunday': 7
 };
 
 // --- Role Definitions ---
@@ -24,20 +19,25 @@ const VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Student', 'Parent'];
 
 
 // =========================================================
-// Helper: Get Day as Number
+// Helpers
 // =========================================================
 
 function getDayAsNumber(dayStringOrNumber) {
     if (typeof dayStringOrNumber === 'number' && dayStringOrNumber >= 1 && dayStringOrNumber <= 7) {
         return dayStringOrNumber;
     }
-    // Convert string day name to integer (CRITICAL FIX)
     return daysMap[dayStringOrNumber] || null;
+}
+
+// Basic UUID/ID Validation
+function isValidId(id) {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return uuidRegex.test(id) || (!isNaN(parseInt(id)) && isFinite(id));
 }
 
 
 // =========================================================
-// 2. Student View Endpoint (Simplified)
+// 2. Student View Endpoint
 // =========================================================
 
 /**
@@ -46,14 +46,14 @@ function getDayAsNumber(dayStringOrNumber) {
  * @access  Private (Student, Admin, Parent)
  */
 router.get('/student/me', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
-    const studentUserId = req.user.id; 
+    const studentUserId = req.user.id; // User's UUID from the JWT
 
     try {
-        // 1. Get student's course and batch using the UUID from the JWT
+        // SECURITY FIX: Only use user_id to find the associated student profile
         const studentInfoQuery = `
             SELECT course_id, batch_id 
             FROM students 
-            WHERE user_id = $1 OR id = $1
+            WHERE user_id = $1
             LIMIT 1
         `;
         const studentInfoResult = await pool.query(studentInfoQuery, [studentUserId]);
@@ -63,23 +63,21 @@ router.get('/student/me', authenticateToken, authorize(VIEW_ROLES), async (req, 
         }
         const { course_id, batch_id } = studentInfoResult.rows[0];
         
-        // 2. Fetch timetable using the corrected JOIN logic
         const detailedQuery = `
             SELECT 
                 ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
                 s.subject_name, s.subject_code,
                 COALESCE(t.full_name, u.username) AS teacher_name,
-                t.teacher_id AS teacher_reference_id -- Use teacher_id as reference
+                t.id AS teacher_reference_id  -- FIXED: Changed t.teacher_id to t.id in SELECT
             FROM ${TIMETABLE_TABLE} ct
             JOIN subjects s ON ct.subject_id = s.id
-            LEFT JOIN teachers t ON ct.teacher_id = t.teacher_id  -- CRITICAL FIX: Join on teacher_id
-            LEFT JOIN users u ON t.user_id = u.id                 -- Fallback for username/user_id
+            LEFT JOIN teachers t ON ct.teacher_id = t.id  -- FIXED: t.teacher_id changed to t.id in JOIN
+            LEFT JOIN users u ON t.user_id = u.id
             WHERE ct.course_id = $1 AND ct.batch_id = $2 AND ct.is_active = TRUE
-            ORDER BY ct.day_of_week, ct.start_time ASC; -- Order by number, assuming DB fix applied
+            ORDER BY ct.day_of_week, ct.start_time ASC;
         `;
         const result = await pool.query(detailedQuery, [course_id, batch_id]);
         
-        // Return the rows array directly
         res.status(200).json(result.rows);
 
     } catch (error) {
@@ -88,9 +86,8 @@ router.get('/student/me', authenticateToken, authorize(VIEW_ROLES), async (req, 
     }
 });
 
-
 // =========================================================
-// 1. CRUD Routes (Admin/Teacher) - Remaining Routes
+// 1. CRUD Routes (Admin/Teacher)
 // =========================================================
 
 /**
@@ -107,11 +104,15 @@ router.post('/', authenticateToken, authorize(MANAGER_ROLES), async (req, res) =
     if (!course_id || !batch_id || !subject_id || !day_of_week || !start_time || !end_time) {
         return res.status(400).json({ message: 'Missing required schedule fields.' });
     }
+    
+    // Validate IDs and Day
+    if (!isValidId(course_id) || !isValidId(batch_id) || !isValidId(subject_id)) {
+        return res.status(400).json({ message: 'Invalid ID format provided for Course, Batch, or Subject.' });
+    }
 
-    // CRITICAL FIX: Convert day_of_week string (e.g., "Tuesday") to integer (2)
     const dayAsNumber = getDayAsNumber(day_of_week);
     if (dayAsNumber === null) {
-        return res.status(400).json({ message: 'Invalid day_of_week value. Must be a valid day name (e.g., "Monday") or number (1-7).' });
+        return res.status(400).json({ message: 'Invalid day_of_week value.' });
     }
 
     try {
@@ -124,7 +125,7 @@ router.post('/', authenticateToken, authorize(MANAGER_ROLES), async (req, res) =
             RETURNING id;
         `;
         const values = [
-            course_id, batch_id, subject_id, teacher_id || null, dayAsNumber, // <--- CHANGED: Use dayAsNumber
+            course_id, batch_id, subject_id, teacher_id || null, dayAsNumber,
             start_time, end_time, room_number || null
         ];
         
@@ -134,12 +135,8 @@ router.post('/', authenticateToken, authorize(MANAGER_ROLES), async (req, res) =
     } catch (error) {
         console.error('Timetable Creation Error:', error);
         
-        if (error.code === '23505') {
-            return res.status(409).json({ message: 'Schedule conflict: This subject is already scheduled at this time for this batch, or the time slot is already taken.' });
-        }
-        // Handle the data type error if it somehow persists
-        if (error.code === '22P02') { 
-            return res.status(400).json({ message: 'Data format error. Check day of week value.' });
+        if (error.code === '23505') { 
+            return res.status(409).json({ message: 'Schedule conflict: An entry for this batch, day, and time already exists.' });
         }
         res.status(500).json({ message: 'Failed to create timetable slot due to server error.' });
     }
@@ -151,26 +148,31 @@ router.post('/', authenticateToken, authorize(MANAGER_ROLES), async (req, res) =
  * @desc    Get the full weekly timetable for a specific Course and Batch.
  * @access  Private (Super Admin, Admin, Teacher, Student)
  */
-router.get('/:courseId/:batchId', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher', 'Student']), async (req, res) => {
+router.get('/:courseId/:batchId', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const { courseId, batchId } = req.params;
+
+    // SECURITY FIX: Input validation for URL parameters
+    if (!isValidId(courseId) || !isValidId(batchId)) {
+        return res.status(400).json({ message: 'Invalid Course or Batch ID format.' });
+    }
 
     try {
         const query = `
             SELECT 
                 ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
                 s.subject_name, s.subject_code,
-                COALESCE(t.full_name, u.username) AS teacher_name,  -- COALESCE সহ
-                t.teacher_id AS teacher_reference_id                 -- Use teacher_id as reference
+                COALESCE(t.full_name, u.username) AS teacher_name,
+                t.id AS teacher_reference_id  -- FIXED: Changed t.teacher_id to t.id in SELECT
             FROM ${TIMETABLE_TABLE} ct
             JOIN subjects s ON ct.subject_id = s.id
-            LEFT JOIN teachers t ON ct.teacher_id = t.teacher_id  -- CRITICAL FIX: Join on teacher_id
-            LEFT JOIN users u ON t.user_id = u.id                -- Fallback for username/user_id
+            LEFT JOIN teachers t ON ct.teacher_id = t.id  -- FIXED: t.teacher_id changed to t.id in JOIN
+            LEFT JOIN users u ON t.user_id = u.id
             WHERE ct.course_id = $1 AND ct.batch_id = $2 AND ct.is_active = TRUE
             ORDER BY ct.day_of_week, ct.start_time ASC;
         `;
         const result = await pool.query(query, [courseId, batchId]);
         
-        // Group the results by day for cleaner client processing
+        // Group the results by day
         const timetable = result.rows.reduce((acc, slot) => {
             const day = slot.day_of_week;
             if (!acc[day]) {
@@ -199,21 +201,27 @@ router.delete('/:id', authenticateToken, authorize(MANAGER_ROLES), async (req, r
     const currentUserId = req.user.id;
     const currentUserRole = req.user.role;
 
+    // SECURITY FIX: Input validation for ID format
+     if (!isValidId(id)) {
+        return res.status(400).json({ message: 'Invalid Timetable ID format.' });
+    }
+
     try {
-        // Add security check for Teachers before deletion
+        // SECURITY FIX: Enhanced check for Teachers to prevent IDOR
         if (currentUserRole === 'Teacher') {
-            const checkQuery = `SELECT teacher_id FROM ${TIMETABLE_TABLE} WHERE id = $1;`;
-            const checkResult = await pool.query(checkQuery, [id]);
+            const checkQuery = `
+                SELECT ct.teacher_id 
+                FROM ${TIMETABLE_TABLE} ct
+                -- Join uses t.id, assuming it's the FK linked to ct.teacher_id
+                JOIN teachers t ON ct.teacher_id = t.id 
+                WHERE ct.id = $1 AND t.user_id = $2; 
+            `;
+            // Check if the slot exists AND belongs to the authenticated teacher (by user_id)
+            const checkResult = await pool.query(checkQuery, [id, currentUserId]);
 
             if (checkResult.rowCount === 0) {
-                return res.status(404).json({ message: 'Timetable slot not found.' });
-            }
-
-            const slotTeacherId = checkResult.rows[0].teacher_id;
-            
-            // Only allow deletion if the teacher scheduled the slot (Admin/Super Admin bypasses this)
-            if (slotTeacherId !== currentUserId) {
-                return res.status(403).json({ message: 'Forbidden: You can only delete your own scheduled slots.' });
+                // Return 403 if the slot doesn't exist OR the teacher doesn't own it
+                return res.status(403).json({ message: 'Forbidden: You can only delete your own scheduled slots, or the slot was not found.' });
             }
         }
 
