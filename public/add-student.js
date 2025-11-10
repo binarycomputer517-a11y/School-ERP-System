@@ -9,7 +9,7 @@ const ACADEMICS_API = '/api/academicswithfees';
 
 // --- CORE API HANDLER ---
 /**
- * Helper function for authenticated API calls.
+ * Helper function for authenticated API calls. Handles token inclusion and error redirection.
  */
 async function handleApi(url, options = {}) {
     // Ensure body is stringified for POST/PUT requests if it's an object
@@ -26,6 +26,7 @@ async function handleApi(url, options = {}) {
 
     const response = await fetch(url, options);
     
+    // Authorization check (401 Unauthorized, 403 Forbidden)
     if (response.status === 401 || response.status === 403) {
         alert('Session expired or unauthorized. Please log in again.');
         window.location.href = '/login.html';
@@ -38,7 +39,7 @@ async function handleApi(url, options = {}) {
 // --- VALIDATION LOGIC ---
 
 /**
- * Validates required fields in the current active fieldset.
+ * Validates required fields in the current active fieldset. Used for forward navigation.
  * @returns {boolean} True if all required fields are filled, false otherwise.
  */
 function validateCurrentStep() {
@@ -64,8 +65,38 @@ function validateCurrentStep() {
     return isValid;
 }
 
+/**
+ * NEW HELPER FUNCTION: Iterates over the ENTIRE form's required fields to find the first error.
+ * Used upon submission.
+ * @param {HTMLFormElement} form 
+ * @returns {HTMLElement | null} The first element with a validation error, or null.
+ */
+function validateFullFormAndFindFirstError(form) {
+    let firstInvalidInput = null;
+    let isValid = true;
+
+    // Select ALL required inputs across all visible fieldsets (excluding the hidden system IDs)
+    const requiredInputs = form.querySelectorAll('fieldset:not([style*="none"]) [required]:not([type="hidden"])');
+
+    requiredInputs.forEach(input => {
+        // Reset border first
+        input.style.border = '';
+
+        if (!input.value || (input.tagName === 'SELECT' && input.value === '')) {
+            input.style.border = '2px solid var(--accent-color)';
+            if (isValid) {
+                isValid = false;
+                firstInvalidInput = input;
+            }
+        }
+    });
+
+    return firstInvalidInput;
+}
+
 
 // --- TAB & PROGRESS BAR LOGIC ---
+
 /**
  * Updates the visual progress bar.
  */
@@ -112,9 +143,7 @@ function openTab(evt, tabId) {
 
 
 // --- INITIALIZATION ---
-/**
- * Initializes the student addition form: attaches listeners and loads initial data.
- */
+
 function initializeAddForm() {
     const form = document.getElementById('addStudentForm'); 
     
@@ -132,12 +161,11 @@ function initializeAddForm() {
     loadInitialDropdowns();
 }
 
-// --- Dynamic Data Loading ---
+// --- Dynamic Data Loading Functions (Unchanged Logic) ---
 
 async function loadInitialDropdowns() {
     const courseSelect = document.getElementById('course_id');
     const batchSelect = document.getElementById('batch_id');
-    
     if (!courseSelect || !batchSelect) return;
 
     courseSelect.innerHTML = '<option value="">Loading Courses...</option>';
@@ -147,12 +175,7 @@ async function loadInitialDropdowns() {
     try {
         const response = await handleApi(`${ACADEMICS_API}/courses`); 
         const courses = await response.json();
-
-        if (!Array.isArray(courses)) {
-            courseSelect.innerHTML = '<option value="">Error: Server failed to return course list.</option>';
-            console.error("Server error when fetching courses:", courses);
-            return;
-        }
+        if (!Array.isArray(courses)) return;
 
         courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
         courses.forEach(c => {
@@ -170,12 +193,8 @@ async function handleCourseChange(event) {
     const subjectsDisplayEl = document.getElementById('subjects-display');
     
     clearFeeAndSubjectDisplay(feeDisplayEl, subjectsDisplayEl);
-    
     await populateBatchDropdown(courseId);
-    
-    if (courseId) {
-        loadSubjects(courseId, subjectsDisplayEl); 
-    }
+    if (courseId) loadSubjects(courseId, subjectsDisplayEl); 
 }
 
 async function populateBatchDropdown(courseId) {
@@ -227,27 +246,17 @@ async function handleBatchChange() {
 }
 
 async function loadSubjects(courseId, subjectsDisplayEl) {
-    if (!subjectsDisplayEl) return;
+    if (!subjectsDisplayEl || !courseId) return;
 
     subjectsDisplayEl.innerHTML = 'Fetching assigned subjects...';
     
-    if (!courseId) {
-        subjectsDisplayEl.innerHTML = '<p>Subjects assigned to this Course will appear here.</p>';
-        return;
-    }
-
     try {
         const response = await handleApi(`${ACADEMICS_API}/courses/${courseId}/subjects`);
-        
         if (response.ok) {
             const subjects = await response.json();
-            
             if (Array.isArray(subjects) && subjects.length > 0) {
                 const listHtml = subjects.map(s => `<li>${s.subject_name} (${s.subject_code})</li>`).join('');
-                subjectsDisplayEl.innerHTML = `
-                    <h4>📚 Assigned Subjects (${subjects.length})</h4>
-                    <ul style="margin-top: 5px; padding-left: 20px;">${listHtml}</ul>
-                `;
+                subjectsDisplayEl.innerHTML = `<h4>📚 Assigned Subjects (${subjects.length})</h4><ul style="margin-top: 5px; padding-left: 20px;">${listHtml}</ul>`;
             } else {
                 subjectsDisplayEl.innerHTML = '<p>⚠️ No subjects are currently assigned to this course.</p>';
             }
@@ -262,7 +271,7 @@ async function loadSubjects(courseId, subjectsDisplayEl) {
 }
 
 async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
-    if (!feeDisplayEl) return; 
+    if (!feeDisplayEl || !courseId || !batchId) return; 
 
     feeDisplayEl.innerHTML = 'Fetching fee structure...';
     try {
@@ -272,7 +281,6 @@ async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
             const structure = await response.json();
             const totalFee = calculateTotalFee(structure);
 
-            // Ensure numeric conversions for display
             const admissionFee = parseFloat(structure.admission_fee) || 0;
             const registrationFee = parseFloat(structure.registration_fee) || 0;
             const examinationFee = parseFloat(structure.examination_fee) || 0;
@@ -304,7 +312,6 @@ async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
     }
 }
 
-// Helper function to calculate total fee
 function calculateTotalFee(structure) {
     const admission = parseFloat(structure.admission_fee) || 0;
     const registration = parseFloat(structure.registration_fee) || 0;
@@ -314,72 +321,75 @@ function calculateTotalFee(structure) {
     const transport = structure.has_transport ? (parseFloat(structure.transport_fee) || 0) * duration : 0;
     const hostel = structure.has_hostel ? (parseFloat(structure.hostel_fee) || 0) * duration : 0;
     
-    const total = admission + registration + examination + transport + hostel;
-    return total.toFixed(2);
+    return (admission + registration + examination + transport + hostel).toFixed(2);
 }
 
-// Function to clear both the fee and subject display areas
 function clearFeeAndSubjectDisplay(feeDisplayEl, subjectsDisplayEl) { 
-    if (feeDisplayEl) {
-        feeDisplayEl.innerHTML = 'Fee structure details will appear here upon Course and Batch selection.';
-    }
-    if (subjectsDisplayEl) {
-         subjectsDisplayEl.innerHTML = '<p>Subjects assigned to this Course will appear here.</p>';
-    }
+    if (feeDisplayEl) feeDisplayEl.innerHTML = 'Fee structure details will appear here upon Course and Batch selection.';
+    if (subjectsDisplayEl) subjectsDisplayEl.innerHTML = '<p>Subjects assigned to this Course will appear here.</p>';
 }
 
-// Function to clear only the fee display
 function clearFeeDisplay(feeDisplayEl) { 
-    if (feeDisplayEl) {
-        feeDisplayEl.innerHTML = 'Fee structure details will appear here upon Course and Batch selection.';
-    }
+    if (feeDisplayEl) feeDisplayEl.innerHTML = 'Fee structure details will appear here upon Course and Batch selection.';
 }
 
 
-// --- Form Submission ---
+// --- Form Submission (CRITICAL FIXES HERE) ---
 
 async function handleAddStudentSubmit(event) {
     event.preventDefault(); 
     const form = event.target;
-    
-    // 1. Final Step Validation
-    if (!validateCurrentStep()) {
-        openTab({currentTarget: document.querySelector('.tab-bar button[data-step="4"]')}, 'login');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    // 1. FULL FORM VALIDATION & REDIRECTION
+    const firstInvalidInput = validateFullFormAndFindFirstError(form);
+
+    if (firstInvalidInput) {
+        // Find the correct step number (1 to 4) for the fieldset containing the error
+        const fieldsetWithError = firstInvalidInput.closest('fieldset');
+        const stepMap = { personal: 1, academics: 2, parents: 3, login: 4 };
+        const stepNumber = stepMap[fieldsetWithError.id];
+        
+        const tabButton = document.querySelector(`.tab-button[data-step="${stepNumber}"]`);
+        
+        if (tabButton) {
+            // Switch to the erroring tab so the field is visible and focusable
+            openTab({currentTarget: tabButton}, fieldsetWithError.id);
+        }
+        
+        // This will now focus the visible field, resolving the "Not Focusable" error
+        firstInvalidInput.focus();
         return; 
     }
     
     // 2. Password Match Check
     const passwordInput = form.querySelector('#password');
     const confirmPasswordInput = form.querySelector('#confirm_password');
-    const password = passwordInput.value;
-    const confirmPassword = confirmPasswordInput.value;
-
-    passwordInput.style.border = '';
-    confirmPasswordInput.style.border = '';
     
-    if (password !== confirmPassword) {
+    if (passwordInput.value !== confirmPasswordInput.value) {
         alert("Error: Passwords do not match!");
         passwordInput.style.border = '2px solid var(--accent-color)';
         confirmPasswordInput.style.border = '2px solid var(--accent-color)';
+        // Ensure the user is on the login tab to correct the password
+        openTab({currentTarget: document.querySelector('.tab-bar button[data-step="4"]')}, 'login');
         return; 
+    } else {
+        passwordInput.style.border = '';
+        confirmPasswordInput.style.border = '';
     }
 
-    // 3. Prepare Data
+    // 3. Prepare Data & Disable Button
     const formData = new FormData(form);
     const studentData = Object.fromEntries(formData.entries());
-
     delete studentData.confirm_password; 
 
     const API_ENDPOINT = '/api/students'; 
-    const submitButton = form.querySelector('button[type="submit"]');
-
     submitButton.textContent = 'Submitting...';
     submitButton.disabled = true;
 
     try {
         // 4. API Submission
         const response = await handleApi(API_ENDPOINT, { method: 'POST', body: studentData }); 
-        
         const result = await response.json();
         
         if (response.ok) {
