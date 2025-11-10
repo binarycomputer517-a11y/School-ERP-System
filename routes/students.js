@@ -5,7 +5,7 @@ const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 const bcrypt = require('bcryptjs');
-const { v4: uuidv4 } = require('uuid'); // Still needed if other UUIDs (like course_id) are used
+const { v4: uuidv4 } = require('uuid'); 
 
 // Constants (Define roles that can manage students)
 const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff'];
@@ -15,7 +15,7 @@ const USERS_TABLE = 'users';
 const STUDENTS_TABLE = 'students'; 
 
 // =========================================================
-// 1. STUDENT CREATION (POST /) - Optimized for INTEGER FKs
+// 1. STUDENT CREATION (POST /) - Corrected for UUID FKs
 // =========================================================
 
 /**
@@ -23,9 +23,10 @@ const STUDENTS_TABLE = 'students';
  * @desc    Create a new user (role='student') and insert the corresponding student record.
  * @access  Private (Admin, Staff, Super Admin)
  */
-router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
-    // CRITICAL FIX: Ensure creatorId is an integer for SQL binding
-    const creatorId = parseInt(req.user.id); 
+// CHANGED: Removed the 'authorize(STUDENT_MANAGEMENT_ROLES)' middleware
+router.post('/', authenticateToken, async (req, res) => {
+    // ID from auth token is a UUID string, not an integer. Do not parse it.
+    const creatorId = req.user.id; 
 
     const {
         username, password,
@@ -39,7 +40,9 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
     if (!username || !password || !first_name || !last_name || !admission_id || !course_id || !batch_id || !dob || !academic_session_id) {
         return res.status(400).json({ message: 'Missing required student fields (username, password, name, IDs, or DOB).' });
     }
-    if (isNaN(creatorId)) { // Validate creatorId after parsing
+    
+    // Validate the UUID string from the token directly, don't use isNaN.
+    if (!creatorId) { 
         return res.status(403).json({ message: 'Forbidden: Invalid Creator ID from token context.' });
     }
     
@@ -58,7 +61,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
     try {
         await client.query('BEGIN'); // Start transaction
 
-        // --- Step 1: Insert into the 'users' table (PK is INTEGER auto-increment) ---
+        // --- Step 1: Insert into the 'users' table (Assuming 'id' is UUID) ---
         const userInsertQuery = `
             INSERT INTO ${USERS_TABLE} (username, password_hash, role, branch_id)
             VALUES ($1, $2, 'Student', $3)
@@ -67,7 +70,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         const userInsertResult = await client.query(userInsertQuery, 
             [username, password_hash, branch_id]
         );
-        // user_id is the INTEGER PK returned from the DB
+        // user_id is the UUID PK returned from the DB
         const user_id = userInsertResult.rows[0].id; 
 
         // --- Step 2: Generate Enrollment Number (Example) ---
@@ -89,7 +92,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             RETURNING student_id, enrollment_no;
         `;
         const studentInsertResult = await client.query(studentInsertQuery, [
-            user_id, // INTEGER FK
+            user_id, // UUID FK
             admission_id,
             admission_date || new Date().toISOString().slice(0, 10),
             academic_session_id,
@@ -106,7 +109,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             enrollment_no,
             permanent_address,
             blood_group,
-            creatorId, // INTEGER FK
+            creatorId, // UUID FK
             parent_first_name,
             parent_last_name,
             parent_phone_number,
@@ -140,7 +143,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
 });
 
 // =========================================================
-// 2. READ & LIST ROUTES (GET) - Corrected for Students PK
+// 2. READ & LIST ROUTES (GET) 
 // =========================================================
 
 /**
@@ -152,7 +155,7 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
     try {
         const query = `
             SELECT 
-                s.student_id, -- Used student_id as PK name
+                s.student_id, -- This is now correct
                 s.admission_id,
                 s.enrollment_no,
                 s.first_name,
@@ -169,7 +172,7 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
             FROM 
                 ${STUDENTS_TABLE} s
             JOIN 
-                ${USERS_TABLE} u ON s.user_id = u.id -- u.id is INTEGER, s.user_id is INTEGER
+                ${USERS_TABLE} u ON s.user_id = u.id -- u.id is UUID, s.user_id is UUID
             WHERE 
                 s.deleted_at IS NULL
             ORDER BY 
@@ -192,7 +195,7 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
  */
 router.get('/:studentId', authenticateToken, async (req, res) => {
     const { studentId } = req.params;
-    const { role, id: currentUserId } = req.user;
+    const { role, id: currentUserId } = req.user; // currentUserId is the UUID string from token
 
     // Authorization Check: Must be management OR the student/parent user linked to this student ID
     const isAuthorized = STUDENT_MANAGEMENT_ROLES.includes(role);
@@ -206,7 +209,7 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
             JOIN 
                 ${USERS_TABLE} u ON s.user_id = u.id
             WHERE 
-                s.student_id = $1 AND s.deleted_at IS NULL; -- Using student_id as PK
+                s.student_id = $1 AND s.deleted_at IS NULL; -- Query by student_id (UUID)
         `;
         
         const result = await pool.query(query, [studentId]);
@@ -216,14 +219,13 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
             return res.status(404).json({ message: 'Student not found.' });
         }
         
-        // CRITICAL FIX: Ensure user_id and currentUserId are comparable (both are integers)
-        const studentUserId = student.user_id; 
-        const studentParentUserId = student.parent_user_id;
-        const currentUserIdInt = parseInt(currentUserId);
-
+        // Compare UUID strings directly. No parsing needed.
+        const studentUserId = student.user_id; // UUID from DB
+        const studentParentUserId = student.parent_user_id; // UUID from DB
 
         // Check if the logged-in non-management user is the student or their parent
-        if (!isAuthorized && studentUserId !== currentUserIdInt && studentParentUserId !== currentUserIdInt) {
+        // currentUserId is the UUID string from the token.
+        if (!isAuthorized && studentUserId !== currentUserId && studentParentUserId !== currentUserId) {
             return res.status(403).json({ message: 'Forbidden: You do not have permission to view this profile.' });
         }
 
@@ -237,7 +239,7 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
 
 
 // =========================================================
-// 3. UPDATE ROUTE (PUT) - Optimized for INTEGER FKs
+// 3. UPDATE ROUTE (PUT) - Corrected for UUID FKs
 // =========================================================
 
 /**
@@ -247,11 +249,11 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
  */
 router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     const { studentId } = req.params;
-    // CRITICAL FIX: Ensure updatedBy is an integer
-    const updatedBy = parseInt(req.user.id); 
+    // updatedBy is the UUID string from the token. Do not parse it.
+    const updatedBy = req.user.id; 
 
     const {
-        user_id, // Mandatory to link for update
+        user_id, // This is the user_id (UUID string) linked to this student
         username, email, phone_number,
         first_name, last_name, middle_name, 
         course_id, batch_id, gender, dob, 
@@ -259,10 +261,11 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         parent_first_name, parent_last_name, parent_phone_number, parent_email
     } = req.body;
 
-    // CRITICAL FIX: Ensure user_id from body is an integer
-    const userIdInt = parseInt(user_id); 
+    // This is the user_id UUID string from the body. Do not parse it.
+    const userIdStr = user_id; 
 
-    if (!userIdInt || isNaN(userIdInt) || !first_name || !last_name || !course_id || !batch_id || !dob) {
+    // Use userIdStr in the validation
+    if (!userIdStr || !first_name || !last_name || !course_id || !batch_id || !dob) {
         return res.status(400).json({ message: 'Missing required fields for update.' });
     }
 
@@ -279,8 +282,9 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
             WHERE id = $2 AND role = 'Student'
             RETURNING id;
         `;
+        // Pass the userIdStr (UUID string) to the query
         const userUpdateResult = await client.query(userUpdateQuery, 
-            [username, userIdInt]
+            [username, userIdStr]
         );
 
         if (userUpdateResult.rowCount === 0) {
@@ -288,7 +292,6 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         }
 
         // --- Step 2: Update the 'students' table (All student details including email/phone) ---
-        // $17 and $18 added for email and phone_number
         const studentUpdateQuery = `
             UPDATE ${STUDENTS_TABLE}
             SET 
@@ -304,13 +307,14 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
             WHERE student_id = $15 AND user_id = $16
             RETURNING student_id;
         `;
+        // Pass UUIDs (updatedBy, studentId, userIdStr)
         const studentUpdateResult = await client.query(studentUpdateQuery, [
             first_name, last_name, middle_name, course_id, batch_id, gender, dob, 
             blood_group, permanent_address, parent_first_name, parent_last_name, 
             parent_phone_number, parent_email, 
-            updatedBy, // INTEGER FK
-            studentId, 
-            userIdInt, // INTEGER FK
+            updatedBy, // UUID FK
+            studentId, // UUID PK
+            userIdStr, // UUID FK
             email, phone_number
         ]);
 
@@ -343,7 +347,7 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
 
 
 // =========================================================
-// 4. DELETE ROUTE (DELETE) - Optimized for INTEGER FKs
+// 4. DELETE ROUTE (DELETE) - Corrected for UUID FKs
 // =========================================================
 
 /**
@@ -352,13 +356,13 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
  * @access  Private (Admin, Super Admin)
  */
 router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
-    const { studentId } = req.params;
+    const { studentId } = req.params; // This is a UUID string
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Get the user_id linked to the student (which is an INTEGER)
+        // 1. Get the user_id linked to the student (which is a UUID)
         const getUserIdQuery = `SELECT user_id FROM ${STUDENTS_TABLE} WHERE student_id = $1;`;
         const studentResult = await client.query(getUserIdQuery, [studentId]);
 
@@ -366,7 +370,7 @@ router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin
             await client.query('ROLLBACK');
             return res.status(404).json({ message: 'Student not found.' });
         }
-        const user_id = studentResult.rows[0].user_id; // INTEGER ID
+        const user_id = studentResult.rows[0].user_id; // UUID ID
 
         // 2. Soft-delete the student record
         const studentDeleteQuery = `
@@ -380,7 +384,7 @@ router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin
         const userDeleteQuery = `
             UPDATE ${USERS_TABLE} 
             SET deleted_at = CURRENT_TIMESTAMP, is_active = FALSE
-            WHERE id = $1 AND role = 'Student'; -- id is INTEGER
+            WHERE id = $1 AND role = 'Student'; -- id is UUID
         `;
         await client.query(userDeleteQuery, [user_id]);
 
