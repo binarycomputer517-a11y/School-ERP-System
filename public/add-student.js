@@ -2,18 +2,30 @@
 
 document.addEventListener('DOMContentLoaded', initializeAddForm);
 
-// Retrieve the token from localStorage set during login
+// --- Global Constants ---
 const AUTH_TOKEN = localStorage.getItem('erp-token');
 const ACADEMICS_API = '/api/academicswithfees';
 
 
-// --- CORE API HANDLER (Must be global/accessible) ---
+// --- CORE API HANDLER ---
 /**
  * Helper function for authenticated API calls.
  */
 async function handleApi(url, options = {}) {
-    options.headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AUTH_TOKEN}` };
+    // Ensure body is stringified for POST/PUT requests if it's an object
+    if (options.body && typeof options.body === 'object' && !options.headers?.['Content-Type']) {
+        options.body = JSON.stringify(options.body);
+    }
+    
+    // Set authentication and content type headers
+    options.headers = { 
+        ...options.headers,
+        'Content-Type': 'application/json', 
+        'Authorization': `Bearer ${AUTH_TOKEN}` 
+    };
+
     const response = await fetch(url, options);
+    
     if (response.status === 401 || response.status === 403) {
         alert('Session expired or unauthorized. Please log in again.');
         window.location.href = '/login.html';
@@ -23,10 +35,39 @@ async function handleApi(url, options = {}) {
 }
 
 
+// --- VALIDATION LOGIC ---
+
+/**
+ * Validates required fields in the current active fieldset.
+ * @returns {boolean} True if all required fields are filled, false otherwise.
+ */
+function validateCurrentStep() {
+    const activeFieldset = document.querySelector('.tab-content fieldset.active');
+    if (!activeFieldset) return true; 
+
+    const requiredInputs = activeFieldset.querySelectorAll('[required]:not([type="hidden"])');
+    let isValid = true;
+    
+    requiredInputs.forEach(input => {
+        if (!input.value || (input.tagName === 'SELECT' && input.value === '')) {
+            input.style.border = '2px solid var(--accent-color)'; 
+            isValid = false;
+        } else {
+            input.style.border = ''; 
+        }
+    });
+
+    if (!isValid) {
+        alert('🛑 Please complete all required fields in the current step before proceeding.');
+    }
+
+    return isValid;
+}
+
+
 // --- TAB & PROGRESS BAR LOGIC ---
 /**
- * Updates the visual progress bar based on the currently active tab/step.
- * @param {number} currentStep The index of the current step (1 to 4).
+ * Updates the visual progress bar.
  */
 function updateProgressBar(currentStep) {
     const progressBar = document.getElementById('progressBar');
@@ -40,32 +81,33 @@ function updateProgressBar(currentStep) {
 }
 
 /**
- * Handles the logic for switching between form tabs.
- * This function is called directly from the HTML onclick attribute.
- * @param {Event} evt The click event from the tab button.
- * @param {string} tabId The ID of the fieldset to display.
+ * Handles the logic for switching between form tabs, including validation check.
  */
 function openTab(evt, tabId) {
-    const currentStep = parseInt(evt.currentTarget.getAttribute('data-step'), 10);
+    const clickedButton = evt.currentTarget;
+    const newStep = parseInt(clickedButton.getAttribute('data-step'), 10);
+    const currentActiveStep = parseInt(document.querySelector('.tab-button.active')?.getAttribute('data-step') || '1', 10);
+    
+    // Check validation ONLY if moving FORWARD
+    if (newStep > currentActiveStep) {
+        if (!validateCurrentStep()) {
+            return; 
+        }
+    }
+    
+    // UI Update: Remove active states
+    document.querySelectorAll('.tab-content fieldset').forEach(el => el.classList.remove('active'));
+    document.querySelectorAll('.tab-button').forEach(el => el.classList.remove('active'));
 
-    // Hide all tab content fieldsets
-    document.querySelectorAll('.tab-content fieldset').forEach(el => {
-        el.classList.remove('active'); 
-    });
-
-    // Remove active class from all tab buttons
-    document.querySelectorAll('.tab-button').forEach(el => {
-        el.classList.remove('active');
-    });
-
-    // Show the current tab content, and add an "active" class to the button
+    // UI Update: Set new active state
     const targetFieldset = document.getElementById(tabId);
     if (targetFieldset) {
         targetFieldset.classList.add('active');
     }
-    evt.currentTarget.classList.add('active');
+    clickedButton.classList.add('active');
     
-    updateProgressBar(currentStep);
+    updateProgressBar(newStep);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 
@@ -86,10 +128,7 @@ function initializeAddForm() {
     const courseSelect = document.getElementById('course_id');
     if (courseSelect) courseSelect.addEventListener('change', handleCourseChange);
 
-    // Initialization: Ensure the progress bar starts at Step 1.
     updateProgressBar(1);
-    
-    // Load initial data (This is where the original error occurred)
     loadInitialDropdowns();
 }
 
@@ -106,7 +145,6 @@ async function loadInitialDropdowns() {
     batchSelect.disabled = true;
 
     try {
-        // ERROR OCCURRED HERE: handleApi must be in scope!
         const response = await handleApi(`${ACADEMICS_API}/courses`); 
         const courses = await response.json();
 
@@ -131,21 +169,23 @@ async function handleCourseChange(event) {
     const feeDisplayEl = document.getElementById('fee-structure-display'); 
     const subjectsDisplayEl = document.getElementById('subjects-display');
     
-    await populateBatchDropdown(courseId);
     clearFeeAndSubjectDisplay(feeDisplayEl, subjectsDisplayEl);
     
-    loadSubjects(courseId, subjectsDisplayEl); 
+    await populateBatchDropdown(courseId);
+    
+    if (courseId) {
+        loadSubjects(courseId, subjectsDisplayEl); 
+    }
 }
 
 async function populateBatchDropdown(courseId) {
     const batchSelect = document.getElementById('batch_id');
     if (!batchSelect) return;
 
+    batchSelect.removeEventListener('change', handleBatchChange); 
     batchSelect.innerHTML = '<option value="">Loading batches...</option>';
     batchSelect.disabled = true;
     
-    batchSelect.removeEventListener('change', handleBatchChange); 
-
     if (!courseId) {
         batchSelect.innerHTML = '<option value="">-- Waiting for Course --</option>';
         return;
@@ -212,8 +252,8 @@ async function loadSubjects(courseId, subjectsDisplayEl) {
                 subjectsDisplayEl.innerHTML = '<p>⚠️ No subjects are currently assigned to this course.</p>';
             }
         } else {
-            const error = await response.json();
-            subjectsDisplayEl.innerHTML = `<p style="color:red;">Error fetching subjects: ${error.message || response.statusText}</p>`;
+            const error = await response.json().catch(() => ({ message: response.statusText }));
+            subjectsDisplayEl.innerHTML = `<p style="color:red;">Error fetching subjects: ${error.message}</p>`;
         }
     } catch (err) {
         console.error('Subject Fetch Error:', err);
@@ -232,21 +272,31 @@ async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
             const structure = await response.json();
             const totalFee = calculateTotalFee(structure);
 
+            // Ensure numeric conversions for display
+            const admissionFee = parseFloat(structure.admission_fee) || 0;
+            const registrationFee = parseFloat(structure.registration_fee) || 0;
+            const examinationFee = parseFloat(structure.examination_fee) || 0;
+            const duration = parseInt(structure.course_duration_months) || 0;
+            const transportFeeMonthly = parseFloat(structure.transport_fee) || 0;
+            const hostelFeeMonthly = parseFloat(structure.hostel_fee) || 0;
+            const transportTotal = structure.has_transport ? (transportFeeMonthly * duration) : 0;
+            const hostelTotal = structure.has_hostel ? (hostelFeeMonthly * duration) : 0;
+            
             feeDisplayEl.innerHTML = `
                 <h4>💰 Fee Structure Details</h4>
-                <p><strong>Admission Fee:</strong> ₹${(structure.admission_fee || 0).toFixed(2)}</p>
-                <p><strong>Registration Fee:</strong> ₹${(structure.registration_fee || 0).toFixed(2)}</p>
-                <p><strong>Examination Fee:</strong> ₹${(structure.examination_fee || 0).toFixed(2)}</p>
-                ${structure.has_transport ? `<p><strong>Transport Fee (x${structure.course_duration_months} mos):</strong> ₹${(structure.transport_fee * structure.course_duration_months).toFixed(2)}</p>` : ''}
-                ${structure.has_hostel ? `<p><strong>Hostel Fee (x${structure.course_duration_months} mos):</strong> ₹${(structure.hostel_fee * structure.course_duration_months).toFixed(2)}</p>` : ''}
+                <p><strong>Admission Fee:</strong> ₹${admissionFee.toFixed(2)}</p>
+                <p><strong>Registration Fee:</strong> ₹${registrationFee.toFixed(2)}</p>
+                <p><strong>Examination Fee:</strong> ₹${examinationFee.toFixed(2)}</p>
+                ${structure.has_transport ? `<p><strong>Transport Fee (x${duration} mos):</strong> ₹${transportTotal.toFixed(2)}</p>` : ''}
+                ${structure.has_hostel ? `<p><strong>Hostel Fee (x${duration} mos):</strong> ₹${hostelTotal.toFixed(2)}</p>` : ''}
                 <hr>
                 <p style="font-weight: bold;">TOTAL ESTIMATED FEE: ₹${totalFee}</p>
             `;
         } else if (response.status === 404) {
             feeDisplayEl.innerHTML = '<p style="color:red;">⚠️ No Fee Structure found for this Course/Batch combination.</p>';
         } else {
-             const error = await response.json();
-             feeDisplayEl.innerHTML = `<p style="color:red;">Error fetching fee: ${error.message || response.statusText}</p>`;
+             const error = await response.json().catch(() => ({ message: response.statusText }));
+             feeDisplayEl.innerHTML = `<p style="color:red;">Error fetching fee: ${error.message}</p>`;
         }
     } catch (err) {
         console.error('Fee Fetch Error:', err);
@@ -259,7 +309,7 @@ function calculateTotalFee(structure) {
     const admission = parseFloat(structure.admission_fee) || 0;
     const registration = parseFloat(structure.registration_fee) || 0;
     const examination = parseFloat(structure.examination_fee) || 0;
-    const duration = parseInt(structure.course_duration_months) || 1;
+    const duration = parseInt(structure.course_duration_months) || 0;
     
     const transport = structure.has_transport ? (parseFloat(structure.transport_fee) || 0) * duration : 0;
     const hostel = structure.has_hostel ? (parseFloat(structure.hostel_fee) || 0) * duration : 0;
@@ -292,50 +342,68 @@ async function handleAddStudentSubmit(event) {
     event.preventDefault(); 
     const form = event.target;
     
-    const password = form.querySelector('#password').value;
-    const confirmPassword = form.querySelector('#confirm_password').value;
+    // 1. Final Step Validation
+    if (!validateCurrentStep()) {
+        openTab({currentTarget: document.querySelector('.tab-bar button[data-step="4"]')}, 'login');
+        return; 
+    }
+    
+    // 2. Password Match Check
+    const passwordInput = form.querySelector('#password');
+    const confirmPasswordInput = form.querySelector('#confirm_password');
+    const password = passwordInput.value;
+    const confirmPassword = confirmPasswordInput.value;
 
+    passwordInput.style.border = '';
+    confirmPasswordInput.style.border = '';
+    
     if (password !== confirmPassword) {
         alert("Error: Passwords do not match!");
+        passwordInput.style.border = '2px solid var(--accent-color)';
+        confirmPasswordInput.style.border = '2px solid var(--accent-color)';
         return; 
     }
 
+    // 3. Prepare Data
     const formData = new FormData(form);
     const studentData = Object.fromEntries(formData.entries());
 
     delete studentData.confirm_password; 
 
     const API_ENDPOINT = '/api/students'; 
-    const feeDisplayEl = document.getElementById('fee-structure-display'); 
-    const subjectsDisplayEl = document.getElementById('subjects-display');
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    submitButton.textContent = 'Submitting...';
+    submitButton.disabled = true;
 
     try {
-        const response = await handleApi(API_ENDPOINT, { method: 'POST', body: JSON.stringify(studentData) });
+        // 4. API Submission
+        const response = await handleApi(API_ENDPOINT, { method: 'POST', body: studentData }); 
         
         const result = await response.json();
+        
         if (response.ok) {
-            alert(`Student successfully enrolled! Enrollment No: ${result.enrollment_no}`);
+            alert(`✅ Student successfully enrolled! Enrollment No: ${result.enrollment_no || 'N/A'}`);
             form.reset(); 
-            clearFeeAndSubjectDisplay(feeDisplayEl, subjectsDisplayEl); // Clear display on success
             
-            // Reset to the first tab and progress bar upon successful submission
+            // 5. UI Reset on Success
+            clearFeeAndSubjectDisplay(document.getElementById('fee-structure-display'), document.getElementById('subjects-display'));
+            
             const firstTabButton = document.querySelector('.tab-bar button[data-step="1"]');
-            const firstFieldset = document.getElementById('personal');
-
-            // Safely remove active class from potentially missing elements
-            document.querySelector('.tab-button.active')?.classList.remove('active');
-            document.querySelector('.tab-content fieldset.active')?.classList.remove('active');
-
-            if (firstFieldset) firstFieldset.classList.add('active');
-            if (firstTabButton) firstTabButton.classList.add('active');
-            
-            updateProgressBar(1);
+            if (firstTabButton) {
+                openTab({currentTarget: firstTabButton}, 'personal');
+            }
             
         } else {
-            alert(`Enrollment Failed: ${result.message || response.statusText}`);
+            alert(`❌ Enrollment Failed: ${result.message || response.statusText}`);
         }
     } catch (error) {
-        console.error('Network Error:', error);
-        alert('A network error occurred. Could not connect to the API.');
+        if (error.message !== 'Unauthorized') {
+             console.error('Network Error:', error);
+             alert('🚨 A network error occurred. Could not connect to the API.');
+        }
+    } finally {
+        submitButton.textContent = 'Add Student';
+        submitButton.disabled = false;
     }
 }
