@@ -1,5 +1,3 @@
-// public/add-student.js
-
 document.addEventListener('DOMContentLoaded', initializeAddForm);
 
 // --- Global Constants ---
@@ -26,12 +24,17 @@ async function handleApi(url, options = {}) {
 
     const response = await fetch(url, options);
     
-    // Authorization check (401 Unauthorized, 403 Forbidden)
+    // CHANGED: Removed the automatic redirect for 401/403.
+    // This allows the submit handler to process the error message instead of redirecting.
+    /*
     if (response.status === 401 || response.status === 403) {
         alert('Session expired or unauthorized. Please log in again.');
         window.location.href = '/login.html';
         throw new Error('Unauthorized');
     }
+    */
+   
+    // The raw response (even a 403) will now be returned to the function that called it.
     return response;
 }
 
@@ -405,13 +408,13 @@ async function handleAddStudentSubmit(event) {
             }
             
         } else {
+            // This 'else' block will now catch the 403 error
             alert(`❌ Enrollment Failed: ${result.message || response.statusText}`);
         }
     } catch (error) {
-        if (error.message !== 'Unauthorized') {
-             console.error('Network Error:', error);
-             alert('🚨 A network error occurred. Could not connect to the API.');
-        }
+         // This 'catch' block will now only catch network errors, not 403s
+         console.error('Network Error:', error);
+         alert('🚨 A network error occurred. Could not connect to the API.');
     } finally {
         submitButton.textContent = 'Add Student';
         submitButton.disabled = false;
