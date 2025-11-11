@@ -11,12 +11,12 @@ const { v4: uuidv4 } = require('uuid');
 const USERS_TABLE = 'users'; 
 const STUDENTS_TABLE = 'students'; 
 
-// CRITICAL FIX: Define ALL non-Student roles that can manage records.
+// Define ALL non-Student roles that can manage records.
 const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'HR'];
 
 
 // =========================================================
-// 1. STUDENT CREATION (POST /) 
+// 1. STUDENT CREATION (POST /) - FIX: Creator ID context
 // =========================================================
 
 /**
@@ -26,11 +26,8 @@ const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'H
  */
 router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     
-    // NOTE: Assuming Multer or other middleware runs before this route to process and store files.
-    // File paths are expected to be available in req.files or req.body, which must be handled 
-    // by the application layer that calls this route. For now, we assume paths are in the body.
-    
-    const creatorId = req.user.id; 
+    // ⭐ FIX: Correctly retrieve the integer ID from the authenticated user object.
+    const creatorId = req.user.userId; 
 
     const {
         username, password,
@@ -38,8 +35,8 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         first_name, last_name, middle_name, course_id, batch_id,
         gender, dob, blood_group, permanent_address, email, phone_number,
         parent_first_name, parent_last_name, parent_phone_number, parent_email,
-        profile_image_path, // Assuming file path is passed here if file uploaded
-        signature_path // Assuming file path is passed here if file uploaded
+        profile_image_path,
+        signature_path
     } = req.body;
 
     // Basic Input Validation
@@ -47,6 +44,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         return res.status(400).json({ message: 'Missing required student fields (username, password, name, IDs, or DOB).' });
     }
     
+    // This check should now succeed.
     if (!creatorId) { 
         return res.status(403).json({ message: 'Forbidden: Invalid Creator ID from token context.' });
     }
@@ -118,7 +116,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             parent_last_name,
             parent_phone_number,
             parent_email,
-            profile_image_path || null, // Handle optional file paths
+            profile_image_path || null, 
             signature_path || null
         ]);
 
@@ -200,7 +198,7 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
  */
 router.get('/:studentId', authenticateToken, async (req, res) => {
     const { studentId } = req.params;
-    const { role, id: currentUserId } = req.user; 
+    const { role, userId: currentUserId } = req.user; // Use userId
 
     const isAuthorized = STUDENT_MANAGEMENT_ROLES.includes(role);
 
@@ -238,9 +236,8 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
     }
 });
 
-
 // =========================================================
-// 3. UPDATE ROUTE (PUT) - REVISED FOR DYNAMIC FIELDS
+// 3. UPDATE ROUTE (PUT) 
 // =========================================================
 
 /**
@@ -250,7 +247,7 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
  */
 router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     const { studentId } = req.params;
-    const updatedBy = req.user.id; 
+    const updatedBy = req.user.userId; // Use userId
 
     const { user_id, username } = req.body;
     const userIdStr = user_id; 
@@ -259,10 +256,8 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         return res.status(400).json({ message: 'Missing user ID or student ID for update.' });
     }
 
-    // --- Handling File Paths (Assuming paths are determined by prior middleware) ---
-    // NOTE: req.body here will contain all the form fields, including new file paths (if set by Multer)
-    const newProfileImagePath = req.body.profile_image; // Check the actual field name used in FormData
-    const newSignaturePath = req.body.signature; // Check the actual field name used in FormData
+    const newProfileImagePath = req.body.profile_image;
+    const newSignaturePath = req.body.signature;
 
     const client = await pool.connect();
     try {
@@ -288,29 +283,21 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         const updateValues = [];
         let paramIndex = 1;
 
-        // Helper function to add fields, converting empty strings to null for the DB
         const addField = (fieldName, value) => {
-            // Only update if the field value is present (not undefined, ensuring we don't overwrite if client didn't send it)
             if (value !== undefined) {
                 updateFields.push(`${fieldName} = $${paramIndex++}`);
                 updateValues.push(value === '' ? null : value);
             }
         };
 
-        // Get all other potential fields from req.body (omitting user_id, username, studentId which are handled separately)
         const studentBodyFields = req.body;
         
-        // Loop through all possible fields in the request body
         for (const key in studentBodyFields) {
-            // Exclude keys already handled (user_id, student_id, username)
             if (['user_id', 'student_id', 'username', 'profile_image', 'signature'].includes(key)) continue;
-
-            // This dynamically builds the SET clause for every field passed in the form data
             addField(key, studentBodyFields[key]);
         }
 
         // --- File Path Updates (Conditional) ---
-        // If a new path was supplied in the form data (meaning a new file was uploaded), update it.
         if (newProfileImagePath !== undefined) {
             addField('profile_image_path', newProfileImagePath);
         }
@@ -318,13 +305,12 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
             addField('signature_path', newSignaturePath);
         }
         
-        // Ensure control fields are appended
+        // Control fields
         updateFields.push(`updated_by = $${paramIndex++}`);
         updateValues.push(updatedBy);
         updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
 
-        // Final Query Construction
         const studentUpdateQuery = `
             UPDATE ${STUDENTS_TABLE}
             SET ${updateFields.join(', ')}
