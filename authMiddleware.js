@@ -22,18 +22,33 @@ function authenticateToken(req, res, next) {
             return res.sendStatus(403); 
         }
 
-        // CRITICAL FIX: Ensure we prioritize the primary ID key used by the server (user.id or user.reference_id)
-        const userIdFromToken = user.id || user.reference_id; 
+        // --- CRITICAL FIXES FOR INTEGER ID DATABASE ---
+        
+        // 1. Safely retrieve the ID from the token payload.
+        const rawUserId = user.id || user.reference_id;
+        
+        // 2. Convert ID to an integer if it's a small number, as indicated by your DB schema (ID 1, 2, 5).
+        // This ensures compatibility if your database columns (like created_by, user_id) are integers.
+        let userIdFromToken;
+        if (rawUserId && !isNaN(rawUserId)) {
+            // Use parseInt to convert string '1' to number 1
+            userIdFromToken = parseInt(rawUserId, 10); 
+        } else {
+            // Keep it as a string (UUID) if it looks like one.
+            userIdFromToken = rawUserId; 
+        }
+        
+        // --- END CRITICAL FIXES ---
 
         req.user = {
-            // ⭐ FIXED: Assigning to 'userId' to match the routes/messaging.js requirement.
+            // Assigning the processed ID to 'userId'
             userId: userIdFromToken, 
             role: user.role,     
             branch_id: user.branch_id 
         };
 
         // Safety check: Ensure an ID was actually found in the token payload
-        if (!req.user.userId) { // Checking req.user.userId now
+        if (!req.user.userId) {
             console.error('JWT token payload is missing a valid ID.');
             return res.status(403).json({ message: 'Forbidden: Invalid token payload structure.' });
         }
@@ -51,8 +66,7 @@ function authorize(roles = []) {
     }
 
     return (req, res, next) => {
-        // req.user is available because authenticateToken runs first.
-        // NOTE: The role is read from req.user.role, which is correctly assigned above.
+        // req.user.role is correctly set to 'Admin' or 'Teacher' (string) by authenticateToken.
         if (!roles.length || roles.includes(req.user.role)) {
             // User has the required role, proceed.
             next();
