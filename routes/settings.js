@@ -13,10 +13,11 @@ const SETTINGS_TABLE = 'erp_settings';
 // =========================================================
 const handleSettingsError = (error, res, action) => {
     console.error(`Settings API Error (${action}):`, error);
-    if (error.code === '42P01') { // undefined_table
+    // If the error code is '42703' (undefined_column), this suggests the column name in the query is wrong.
+    if (error.code === '42P01') { 
         return res.status(500).json({ message: `Configuration table (${SETTINGS_TABLE}) missing or inaccessible.` });
     }
-    res.status(500).json({ message: `Failed to ${action} settings due to a server error.` });
+    res.status(500).json({ message: `Failed to ${action} settings due to a server error. Error Code: ${error.code || 'UNKNOWN'}` });
 };
 
 
@@ -31,9 +32,10 @@ const handleSettingsError = (error, res, action) => {
  */
 router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        // FIX 1: Changed 'session_name' to 'name' to resolve the 'column does not exist' error.
+        // FIX: Aliasing 'session_name' AS 'name' to resolve the 'column does not exist' error
+        // while ensuring the frontend receives the required 'name' property.
         const query = `
-            SELECT id, name, start_date, end_date
+            SELECT id, session_name AS name, start_date, end_date
             FROM academic_sessions 
             ORDER BY start_date DESC;
         `;
@@ -51,11 +53,12 @@ router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Sup
  */
 router.get('/branches/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        // FIX 2: Changed 'branch_name' to 'name' to proactively fix potential column name mismatch.
+        // FIX: Aliasing 'branch_name' AS 'name' to ensure consistency with the backend fix
+        // and match the 'b.name' expected by the client.
         const query = `
-            SELECT id, name 
+            SELECT id, branch_name AS name
             FROM branches 
-            ORDER BY name;
+            ORDER BY branch_name;
         `;
         const result = await pool.query(query);
         res.status(200).json(result.rows);
