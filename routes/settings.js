@@ -5,7 +5,6 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Configuration ---
 // The ID used for the single row of system settings. 
-// NOTE: You MUST ensure this row exists in the erp_settings table with this ID.
 const CONFIG_ID = '00000000-0000-0000-0000-000000000001'; 
 const SETTINGS_TABLE = 'erp_settings'; 
 
@@ -32,10 +31,9 @@ const handleSettingsError = (error, res, action) => {
  */
 router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        // FIX: Simplified the SELECT list to id, session_name, start_date, end_date 
-        // to isolate the persistent 500 error, as table name was confirmed correct.
+        // FIX 1: Changed 'session_name' to 'name' to resolve the 'column does not exist' error.
         const query = `
-            SELECT id, session_name, start_date, end_date
+            SELECT id, name, start_date, end_date
             FROM academic_sessions 
             ORDER BY start_date DESC;
         `;
@@ -53,10 +51,11 @@ router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Sup
  */
 router.get('/branches/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
+        // FIX 2: Changed 'branch_name' to 'name' to proactively fix potential column name mismatch.
         const query = `
-            SELECT id, branch_name 
+            SELECT id, name 
             FROM branches 
-            ORDER BY branch_name;
+            ORDER BY name;
         `;
         const result = await pool.query(query);
         res.status(200).json(result.rows);
