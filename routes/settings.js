@@ -20,7 +20,8 @@ const handleSettingsError = (error, res, action) => {
     if (error.code === '42P01') { 
         errorMessage = `Configuration table (${SETTINGS_TABLE}) missing or inaccessible.`;
     } else if (error.code === '42703') { 
-        errorMessage = `Column name mismatch in database query.`;
+        // This is the "column does not exist" error
+        errorMessage = `Column name mismatch in database query. Please check your table schema.`;
     }
     
     res.status(500).json({ message: errorMessage });
@@ -38,10 +39,10 @@ const handleSettingsError = (error, res, action) => {
  */
 router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        // FINAL FIX: Directly selecting 'name'. The database is confirmed to use 'name' 
-        // and not 'session_name' or 'session_name AS name'.
+        // Fix for academic sessions: Assuming the actual column is 'session_name' 
+        // and aliasing it to 'name' for the frontend.
         const query = `
-            SELECT id, name, start_date, end_date
+            SELECT id, session_name AS name, start_date, end_date
             FROM academic_sessions 
             ORDER BY start_date DESC;
         `;
@@ -59,11 +60,12 @@ router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Sup
  */
 router.get('/branches/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        // FINAL FIX: Directly selecting 'name' to resolve expected column mismatch.
+        // FIX: Reverted to 'branch_name' and aliasing it AS 'name'. 
+        // This resolves the error: column "name" does not exist.
         const query = `
-            SELECT id, name
+            SELECT id, branch_name AS name 
             FROM branches 
-            ORDER BY name;
+            ORDER BY branch_name;
         `;
         const result = await pool.query(query);
         res.status(200).json(result.rows);
