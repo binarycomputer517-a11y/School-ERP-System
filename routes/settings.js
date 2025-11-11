@@ -13,11 +13,17 @@ const SETTINGS_TABLE = 'erp_settings';
 // =========================================================
 const handleSettingsError = (error, res, action) => {
     console.error(`Settings API Error (${action}):`, error);
-    // If the error code is '42703' (undefined_column), this suggests the column name in the query is wrong.
+    // Include error code in response for better debugging
+    let errorMessage = `Failed to ${action} settings due to a server error. Error Code: ${error.code || 'UNKNOWN'}`;
+    
+    // Check for undefined table or column errors
     if (error.code === '42P01') { 
-        return res.status(500).json({ message: `Configuration table (${SETTINGS_TABLE}) missing or inaccessible.` });
+        errorMessage = `Configuration table (${SETTINGS_TABLE}) missing or inaccessible.`;
+    } else if (error.code === '42703') { 
+        errorMessage = `Column name mismatch in database query.`;
     }
-    res.status(500).json({ message: `Failed to ${action} settings due to a server error. Error Code: ${error.code || 'UNKNOWN'}` });
+    
+    res.status(500).json({ message: errorMessage });
 };
 
 
@@ -32,10 +38,10 @@ const handleSettingsError = (error, res, action) => {
  */
 router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        // FIX: Aliasing 'session_name' AS 'name' to resolve the 'column does not exist' error
-        // while ensuring the frontend receives the required 'name' property.
+        // FINAL FIX: Directly selecting 'name'. The database is confirmed to use 'name' 
+        // and not 'session_name' or 'session_name AS name'.
         const query = `
-            SELECT id, session_name AS name, start_date, end_date
+            SELECT id, name, start_date, end_date
             FROM academic_sessions 
             ORDER BY start_date DESC;
         `;
@@ -53,12 +59,11 @@ router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Sup
  */
 router.get('/branches/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        // FIX: Aliasing 'branch_name' AS 'name' to ensure consistency with the backend fix
-        // and match the 'b.name' expected by the client.
+        // FINAL FIX: Directly selecting 'name' to resolve expected column mismatch.
         const query = `
-            SELECT id, branch_name AS name
+            SELECT id, name
             FROM branches 
-            ORDER BY branch_name;
+            ORDER BY name;
         `;
         const result = await pool.query(query);
         res.status(200).json(result.rows);
