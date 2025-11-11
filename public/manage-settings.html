@@ -152,23 +152,27 @@
 
         async function loadDropdowns() {
             try {
-                // 1. Fetch Sessions (Assuming endpoint exists)
+                // 1. Fetch Sessions
                 const sessionRes = await fetchWithAuth(`${API_URL}/academic-sessions/all`);
                 const sessionSelect = document.getElementById('active_session_id');
                 sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
                 
-                // FIX: Changed s.session_name to s.name to match the corrected backend column name.
                 sessionRes.forEach(s => {
-                    sessionSelect.innerHTML += `<option value="${s.id}">${s.name} (${s.start_date.substring(0,4)} - ${s.end_date.substring(0,4)})</option>`;
+                    // FIX: Safer handling for date substring and uses s.name
+                    const startDate = s.start_date ? s.start_date.substring(0,4) : 'N/A';
+                    const endDate = s.end_date ? s.end_date.substring(0,4) : 'N/A';
+                    
+                    // Uses s.name (which comes from the 'session_name AS name' alias in the backend)
+                    sessionSelect.innerHTML += `<option value="${s.id}">${s.name} (${startDate} - ${endDate})</option>`;
                 });
 
-                // 2. Fetch Branches (Assuming endpoint exists)
+                // 2. Fetch Branches
                 const branchRes = await fetchWithAuth(`${API_URL}/branches/all`);
                 const branchSelect = document.getElementById('default_branch_id');
                 branchSelect.innerHTML = '<option value="">-- Select Branch --</option>';
                 
-                // FIX: Changed b.branch_name to b.name to match the corrected backend column name.
                 branchRes.forEach(b => {
+                    // FIX: Uses b.name (which comes from the 'branch_name AS name' alias in the backend)
                     branchSelect.innerHTML += `<option value="${b.id}">${b.name}</option>`;
                 });
 
