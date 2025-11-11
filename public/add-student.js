@@ -23,16 +23,6 @@ async function handleApi(url, options = {}) {
     };
 
     const response = await fetch(url, options);
-    
-    // CHANGED: Removed the automatic redirect for 401/403.
-    // This allows the submit handler to process the error message instead of redirecting.
-    /*
-    if (response.status === 401 || response.status === 403) {
-        alert('Session expired or unauthorized. Please log in again.');
-        window.location.href = '/login.html';
-        throw new Error('Unauthorized');
-    }
-    */
    
     // The raw response (even a 403) will now be returned to the function that called it.
     return response;
@@ -164,20 +154,37 @@ function initializeAddForm() {
     loadInitialDropdowns();
 }
 
-// --- Dynamic Data Loading Functions (Unchanged Logic) ---
+// --- Dynamic Data Loading Functions ---
 
 async function loadInitialDropdowns() {
     const courseSelect = document.getElementById('course_id');
     const batchSelect = document.getElementById('batch_id');
-    if (!courseSelect || !batchSelect) return;
+    const sessionSelect = document.getElementById('academic_session_id'); // Get the session select element
+    
+    if (!courseSelect || !batchSelect || !sessionSelect) return;
 
     courseSelect.innerHTML = '<option value="">Loading Courses...</option>';
+    sessionSelect.innerHTML = '<option value="">Loading Sessions...</option>';
     batchSelect.innerHTML = '<option value="">-- Waiting for Course --</option>';
     batchSelect.disabled = true;
 
     try {
-        const response = await handleApi(`${ACADEMICS_API}/courses`); 
-        const courses = await response.json();
+        // --- FIX 1: Load Academic Sessions ---
+        const sessionResponse = await handleApi(`${ACADEMICS_API}/sessions`); 
+        const sessions = await sessionResponse.json();
+        
+        sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
+        if (Array.isArray(sessions)) {
+            sessions.forEach(s => {
+                // Assuming sessions API returns 'id' and 'name'
+                sessionSelect.innerHTML += `<option value="${s.id || s.academic_session_id}">${s.name || s.session_name}</option>`;
+            });
+        }
+        
+        // --- FIX 2: Load Courses ---
+        const courseResponse = await handleApi(`${ACADEMICS_API}/courses`); 
+        const courses = await courseResponse.json();
+        
         if (!Array.isArray(courses)) return;
 
         courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
@@ -185,7 +192,8 @@ async function loadInitialDropdowns() {
             courseSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name} (${c.course_code})</option>`;
         });
     } catch (err) {
-        console.error('Failed to load courses:', err);
+        console.error('Failed to load initial data:', err);
+        sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
         courseSelect.innerHTML = '<option value="">Error loading courses</option>';
     }
 }
@@ -350,7 +358,8 @@ async function handleAddStudentSubmit(event) {
     if (firstInvalidInput) {
         // Find the correct step number (1 to 4) for the fieldset containing the error
         const fieldsetWithError = firstInvalidInput.closest('fieldset');
-        const stepMap = { personal: 1, academics: 2, parents: 3, login: 4 };
+        // NOTE: This stepMap assumes your fieldset IDs are correct (e.g., id="personal")
+        const stepMap = { personal: 1, academics: 2, parents: 3, login: 4 }; 
         const stepNumber = stepMap[fieldsetWithError.id];
         
         const tabButton = document.querySelector(`.tab-button[data-step="${stepNumber}"]`);
@@ -360,7 +369,7 @@ async function handleAddStudentSubmit(event) {
             openTab({currentTarget: tabButton}, fieldsetWithError.id);
         }
         
-        // This will now focus the visible field, resolving the "Not Focusable" error
+        // This will now focus the visible field
         firstInvalidInput.focus();
         return; 
     }
@@ -373,7 +382,6 @@ async function handleAddStudentSubmit(event) {
         alert("Error: Passwords do not match!");
         passwordInput.style.border = '2px solid var(--accent-color)';
         confirmPasswordInput.style.border = '2px solid var(--accent-color)';
-        // Ensure the user is on the login tab to correct the password
         openTab({currentTarget: document.querySelector('.tab-bar button[data-step="4"]')}, 'login');
         return; 
     } else {
@@ -385,6 +393,13 @@ async function handleAddStudentSubmit(event) {
     const formData = new FormData(form);
     const studentData = Object.fromEntries(formData.entries());
     delete studentData.confirm_password; 
+
+    // Handle empty optional IDs (Crucial for DB insertion where empty string is rejected)
+    for (const key of ['academic_session_id', 'branch_id']) {
+        if (studentData[key] === '') {
+            studentData[key] = null;
+        }
+    }
 
     const API_ENDPOINT = '/api/students'; 
     submitButton.textContent = 'Submitting...';
@@ -408,11 +423,10 @@ async function handleAddStudentSubmit(event) {
             }
             
         } else {
-            // This 'else' block will now catch the 403 error
-            alert(`❌ Enrollment Failed: ${result.message || response.statusText}`);
+            // Error Handling: Catches 400, 403, 409, 500 errors from API
+             alert(`❌ Enrollment Failed: ${result.message || response.statusText}`);
         }
     } catch (error) {
-         // This 'catch' block will now only catch network errors, not 403s
          console.error('Network Error:', error);
          alert('🚨 A network error occurred. Could not connect to the API.');
     } finally {
