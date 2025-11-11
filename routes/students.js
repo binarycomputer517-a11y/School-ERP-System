@@ -7,25 +7,29 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 const bcrypt = require('bcryptjs');
 const { v4: uuidv4 } = require('uuid'); 
 
-// Constants (Define roles that can manage students)
-const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff'];
-
 // Database Table Constants
 const USERS_TABLE = 'users'; 
 const STUDENTS_TABLE = 'students'; 
 
+// CRITICAL FIX: Define ALL non-Student roles that can manage records.
+const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'HR'];
+
+
 // =========================================================
-// 1. STUDENT CREATION (POST /) - Corrected for UUID FKs
+// 1. STUDENT CREATION (POST /) 
 // =========================================================
 
 /**
  * @route   POST /api/students
  * @desc    Create a new user (role='student') and insert the corresponding student record.
- * @access  Private (Admin, Staff, Super Admin)
+ * @access  Private (Admin, Staff, Super Admin, Teacher, HR)
  */
-// CHANGED: Removed the 'authorize(STUDENT_MANAGEMENT_ROLES)' middleware
-router.post('/', authenticateToken, async (req, res) => {
-    // ID from auth token is a UUID string, not an integer. Do not parse it.
+router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
+    
+    // NOTE: Assuming Multer or other middleware runs before this route to process and store files.
+    // File paths are expected to be available in req.files or req.body, which must be handled 
+    // by the application layer that calls this route. For now, we assume paths are in the body.
+    
     const creatorId = req.user.id; 
 
     const {
@@ -33,7 +37,9 @@ router.post('/', authenticateToken, async (req, res) => {
         admission_id, admission_date, academic_session_id, branch_id,
         first_name, last_name, middle_name, course_id, batch_id,
         gender, dob, blood_group, permanent_address, email, phone_number,
-        parent_first_name, parent_last_name, parent_phone_number, parent_email
+        parent_first_name, parent_last_name, parent_phone_number, parent_email,
+        profile_image_path, // Assuming file path is passed here if file uploaded
+        signature_path // Assuming file path is passed here if file uploaded
     } = req.body;
 
     // Basic Input Validation
@@ -41,7 +47,6 @@ router.post('/', authenticateToken, async (req, res) => {
         return res.status(400).json({ message: 'Missing required student fields (username, password, name, IDs, or DOB).' });
     }
     
-    // Validate the UUID string from the token directly, don't use isNaN.
     if (!creatorId) { 
         return res.status(403).json({ message: 'Forbidden: Invalid Creator ID from token context.' });
     }
@@ -59,9 +64,9 @@ router.post('/', authenticateToken, async (req, res) => {
     const client = await pool.connect();
 
     try {
-        await client.query('BEGIN'); // Start transaction
+        await client.query('BEGIN');
 
-        // --- Step 1: Insert into the 'users' table (Assuming 'id' is UUID) ---
+        // --- Step 1: Insert into the 'users' table ---
         const userInsertQuery = `
             INSERT INTO ${USERS_TABLE} (username, password_hash, role, branch_id)
             VALUES ($1, $2, 'Student', $3)
@@ -70,10 +75,9 @@ router.post('/', authenticateToken, async (req, res) => {
         const userInsertResult = await client.query(userInsertQuery, 
             [username, password_hash, branch_id]
         );
-        // user_id is the UUID PK returned from the DB
         const user_id = userInsertResult.rows[0].id; 
 
-        // --- Step 2: Generate Enrollment Number (Example) ---
+        // --- Step 2: Generate Enrollment Number ---
         const datePart = new Date(admission_date || Date.now()).toISOString().slice(0, 10).replace(/-/g, '');
         const timePart = new Date().getTime().toString().slice(-6);
         const enrollment_no = `${datePart}-${timePart}-${admission_id}`;
@@ -86,13 +90,13 @@ router.post('/', authenticateToken, async (req, res) => {
                 first_name, last_name, middle_name, course_id, batch_id, 
                 gender, dob, email, phone_number, enrollment_no, permanent_address, 
                 blood_group, created_by, parent_first_name, parent_last_name, 
-                parent_phone_number, parent_email
+                parent_phone_number, parent_email, profile_image_path, signature_path
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
             RETURNING student_id, enrollment_no;
         `;
         const studentInsertResult = await client.query(studentInsertQuery, [
-            user_id, // UUID FK
+            user_id, 
             admission_id,
             admission_date || new Date().toISOString().slice(0, 10),
             academic_session_id,
@@ -109,16 +113,17 @@ router.post('/', authenticateToken, async (req, res) => {
             enrollment_no,
             permanent_address,
             blood_group,
-            creatorId, // UUID FK
+            creatorId, 
             parent_first_name,
             parent_last_name,
             parent_phone_number,
-            parent_email
+            parent_email,
+            profile_image_path || null, // Handle optional file paths
+            signature_path || null
         ]);
 
-        await client.query('COMMIT'); // Commit both operations if successful
+        await client.query('COMMIT'); 
 
-        // --- Step 4: Send Success Response ---
         res.status(201).json({ 
             message: 'Student successfully enrolled.', 
             student_id: studentInsertResult.rows[0].student_id,
@@ -126,7 +131,7 @@ router.post('/', authenticateToken, async (req, res) => {
         });
 
     } catch (error) {
-        await client.query('ROLLBACK'); // Roll back changes if any step failed
+        await client.query('ROLLBACK');
         console.error('Student Enrollment Transaction Failed:', error.message);
         
         let message = 'Failed to enroll student due to a server error.';
@@ -149,13 +154,13 @@ router.post('/', authenticateToken, async (req, res) => {
 /**
  * @route   GET /api/students
  * @desc    Get a list of all enrolled students for the management dashboard.
- * @access  Private (Admin, Staff, Super Admin)
+ * @access  Private (Admin, Staff, Super Admin, Teacher, HR)
  */
 router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
-                s.student_id, -- This is now correct
+                s.student_id, 
                 s.admission_id,
                 s.enrollment_no,
                 s.first_name,
@@ -172,7 +177,7 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
             FROM 
                 ${STUDENTS_TABLE} s
             JOIN 
-                ${USERS_TABLE} u ON s.user_id = u.id -- u.id is UUID, s.user_id is UUID
+                ${USERS_TABLE} u ON s.user_id = u.id 
             WHERE 
                 s.deleted_at IS NULL
             ORDER BY 
@@ -191,13 +196,12 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
 /**
  * @route   GET /api/students/:studentId
  * @desc    Get detailed profile information for a single student.
- * @access  Private (Admin, Staff, Student himself/Parent)
+ * @access  Private (Management Roles, Student himself, or Parent)
  */
 router.get('/:studentId', authenticateToken, async (req, res) => {
     const { studentId } = req.params;
-    const { role, id: currentUserId } = req.user; // currentUserId is the UUID string from token
+    const { role, id: currentUserId } = req.user; 
 
-    // Authorization Check: Must be management OR the student/parent user linked to this student ID
     const isAuthorized = STUDENT_MANAGEMENT_ROLES.includes(role);
 
     try {
@@ -209,7 +213,7 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
             JOIN 
                 ${USERS_TABLE} u ON s.user_id = u.id
             WHERE 
-                s.student_id = $1 AND s.deleted_at IS NULL; -- Query by student_id (UUID)
+                s.student_id = $1 AND s.deleted_at IS NULL; 
         `;
         
         const result = await pool.query(query, [studentId]);
@@ -219,12 +223,9 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
             return res.status(404).json({ message: 'Student not found.' });
         }
         
-        // Compare UUID strings directly. No parsing needed.
-        const studentUserId = student.user_id; // UUID from DB
-        const studentParentUserId = student.parent_user_id; // UUID from DB
+        const studentUserId = student.user_id; 
+        const studentParentUserId = student.parent_user_id; 
 
-        // Check if the logged-in non-management user is the student or their parent
-        // currentUserId is the UUID string from the token.
         if (!isAuthorized && studentUserId !== currentUserId && studentParentUserId !== currentUserId) {
             return res.status(403).json({ message: 'Forbidden: You do not have permission to view this profile.' });
         }
@@ -239,41 +240,35 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
 
 
 // =========================================================
-// 3. UPDATE ROUTE (PUT) - Corrected for UUID FKs
+// 3. UPDATE ROUTE (PUT) - REVISED FOR DYNAMIC FIELDS
 // =========================================================
 
 /**
  * @route   PUT /api/students/:studentId
  * @desc    Update an existing student's profile details.
- * @access  Private (Admin, Staff, Super Admin)
+ * @access  Private (Admin, Staff, Super Admin, Teacher, HR)
  */
 router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     const { studentId } = req.params;
-    // updatedBy is the UUID string from the token. Do not parse it.
     const updatedBy = req.user.id; 
 
-    const {
-        user_id, // This is the user_id (UUID string) linked to this student
-        username, email, phone_number,
-        first_name, last_name, middle_name, 
-        course_id, batch_id, gender, dob, 
-        blood_group, permanent_address, 
-        parent_first_name, parent_last_name, parent_phone_number, parent_email
-    } = req.body;
-
-    // This is the user_id UUID string from the body. Do not parse it.
+    const { user_id, username } = req.body;
     const userIdStr = user_id; 
 
-    // Use userIdStr in the validation
-    if (!userIdStr || !first_name || !last_name || !course_id || !batch_id || !dob) {
-        return res.status(400).json({ message: 'Missing required fields for update.' });
+    if (!userIdStr || !studentId) {
+        return res.status(400).json({ message: 'Missing user ID or student ID for update.' });
     }
+
+    // --- Handling File Paths (Assuming paths are determined by prior middleware) ---
+    // NOTE: req.body here will contain all the form fields, including new file paths (if set by Multer)
+    const newProfileImagePath = req.body.profile_image; // Check the actual field name used in FormData
+    const newSignaturePath = req.body.signature; // Check the actual field name used in FormData
 
     const client = await pool.connect();
     try {
-        await client.query('BEGIN'); // Start transaction
+        await client.query('BEGIN'); 
 
-        // --- Step 1: Update the 'users' table (Only update username) ---
+        // 1. Update the 'users' table (Only update username)
         const userUpdateQuery = `
             UPDATE ${USERS_TABLE}
             SET 
@@ -282,41 +277,65 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
             WHERE id = $2 AND role = 'Student'
             RETURNING id;
         `;
-        // Pass the userIdStr (UUID string) to the query
-        const userUpdateResult = await client.query(userUpdateQuery, 
-            [username, userIdStr]
-        );
+        const userUpdateResult = await client.query(userUpdateQuery, [username, userIdStr]);
 
         if (userUpdateResult.rowCount === 0) {
             throw new Error('User record not found or not a student.');
         }
 
-        // --- Step 2: Update the 'students' table (All student details including email/phone) ---
+        // 2. Dynamically build the Student Update Query
+        const updateFields = [];
+        const updateValues = [];
+        let paramIndex = 1;
+
+        // Helper function to add fields, converting empty strings to null for the DB
+        const addField = (fieldName, value) => {
+            // Only update if the field value is present (not undefined, ensuring we don't overwrite if client didn't send it)
+            if (value !== undefined) {
+                updateFields.push(`${fieldName} = $${paramIndex++}`);
+                updateValues.push(value === '' ? null : value);
+            }
+        };
+
+        // Get all other potential fields from req.body (omitting user_id, username, studentId which are handled separately)
+        const studentBodyFields = req.body;
+        
+        // Loop through all possible fields in the request body
+        for (const key in studentBodyFields) {
+            // Exclude keys already handled (user_id, student_id, username)
+            if (['user_id', 'student_id', 'username', 'profile_image', 'signature'].includes(key)) continue;
+
+            // This dynamically builds the SET clause for every field passed in the form data
+            addField(key, studentBodyFields[key]);
+        }
+
+        // --- File Path Updates (Conditional) ---
+        // If a new path was supplied in the form data (meaning a new file was uploaded), update it.
+        if (newProfileImagePath !== undefined) {
+            addField('profile_image_path', newProfileImagePath);
+        }
+        if (newSignaturePath !== undefined) {
+            addField('signature_path', newSignaturePath);
+        }
+        
+        // Ensure control fields are appended
+        updateFields.push(`updated_by = $${paramIndex++}`);
+        updateValues.push(updatedBy);
+        updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+
+        // Final Query Construction
         const studentUpdateQuery = `
             UPDATE ${STUDENTS_TABLE}
-            SET 
-                first_name = $1, last_name = $2, middle_name = $3, 
-                course_id = $4, batch_id = $5, gender = $6, dob = $7, 
-                blood_group = $8, permanent_address = $9, 
-                parent_first_name = $10, parent_last_name = $11, 
-                parent_phone_number = $12, parent_email = $13,
-                updated_by = $14,
-                email = $17,
-                phone_number = $18,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE student_id = $15 AND user_id = $16
+            SET ${updateFields.join(', ')}
+            WHERE student_id = $${paramIndex++} AND user_id = $${paramIndex++}
             RETURNING student_id;
         `;
-        // Pass UUIDs (updatedBy, studentId, userIdStr)
-        const studentUpdateResult = await client.query(studentUpdateQuery, [
-            first_name, last_name, middle_name, course_id, batch_id, gender, dob, 
-            blood_group, permanent_address, parent_first_name, parent_last_name, 
-            parent_phone_number, parent_email, 
-            updatedBy, // UUID FK
-            studentId, // UUID PK
-            userIdStr, // UUID FK
-            email, phone_number
-        ]);
+        
+        updateValues.push(studentId); 
+        updateValues.push(userIdStr);
+
+        const studentUpdateResult = await client.query(studentUpdateQuery, updateValues);
 
         if (studentUpdateResult.rowCount === 0) {
             throw new Error('Student profile not found for update.');
@@ -324,7 +343,7 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
 
         await client.query('COMMIT'); 
 
-        // --- Step 3: Send Success Response ---
+        // 3. Send Success Response
         res.status(200).json({ 
             message: 'Student profile successfully updated.', 
             student_id: studentId
@@ -347,7 +366,7 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
 
 
 // =========================================================
-// 4. DELETE ROUTE (DELETE) - Corrected for UUID FKs
+// 4. DELETE ROUTE (DELETE) 
 // =========================================================
 
 /**
@@ -356,13 +375,13 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
  * @access  Private (Admin, Super Admin)
  */
 router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
-    const { studentId } = req.params; // This is a UUID string
+    const { studentId } = req.params; 
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        // 1. Get the user_id linked to the student (which is a UUID)
+        // 1. Get the user_id linked to the student 
         const getUserIdQuery = `SELECT user_id FROM ${STUDENTS_TABLE} WHERE student_id = $1;`;
         const studentResult = await client.query(getUserIdQuery, [studentId]);
 
@@ -370,7 +389,7 @@ router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin
             await client.query('ROLLBACK');
             return res.status(404).json({ message: 'Student not found.' });
         }
-        const user_id = studentResult.rows[0].user_id; // UUID ID
+        const user_id = studentResult.rows[0].user_id; 
 
         // 2. Soft-delete the student record
         const studentDeleteQuery = `
@@ -384,7 +403,7 @@ router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin
         const userDeleteQuery = `
             UPDATE ${USERS_TABLE} 
             SET deleted_at = CURRENT_TIMESTAMP, is_active = FALSE
-            WHERE id = $1 AND role = 'Student'; -- id is UUID
+            WHERE id = $1 AND role = 'Student'; 
         `;
         await client.query(userDeleteQuery, [user_id]);
 
