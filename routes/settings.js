@@ -1,13 +1,11 @@
-// routes/settings.js
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Configuration ---
-// Assuming settings are stored in a single row with ID '1'
-// ⭐ CRITICAL FIX: Use the full UUID string to avoid SQL syntax errors.
+// The ID used for the single row of system settings. 
+// NOTE: You MUST ensure this row exists in the erp_settings table with this ID.
 const CONFIG_ID = '00000000-0000-0000-0000-000000000001'; 
 const SETTINGS_TABLE = 'erp_settings'; 
 
@@ -34,8 +32,10 @@ const handleSettingsError = (error, res, action) => {
  */
 router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
+        // FIX: Simplified the SELECT list to id, session_name, start_date, end_date 
+        // to isolate the persistent 500 error, as table name was confirmed correct.
         const query = `
-            SELECT id, session_name, start_date, end_date, is_active
+            SELECT id, session_name, start_date, end_date
             FROM academic_sessions 
             ORDER BY start_date DESC;
         `;
@@ -81,7 +81,7 @@ router.get('/config/current', authenticateToken, authorize(['Admin', 'Super Admi
         const result = await pool.query(query, [CONFIG_ID]);
 
         if (result.rowCount === 0) {
-            // If the row doesn't exist, return a default/empty structure
+            // Return default structure if the mandatory config row is missing.
             return res.status(200).json({ 
                 id: CONFIG_ID, 
                 active_session_id: null,
@@ -102,8 +102,7 @@ router.get('/config/current', authenticateToken, authorize(['Admin', 'Super Admi
  * @access  Private (Super Admin)
  */
 router.put('/config/:id', authenticateToken, authorize(['Super Admin']), async (req, res) => {
-    // Note: The front-end is hardcoded to PUT to /config/1
-    // CRITICAL FIX: Ensure the ID matches the correct UUID
+    // Enforce the use of the known CONFIG_ID UUID
     if (req.params.id !== '1' && req.params.id !== CONFIG_ID) { 
         return res.status(400).json({ message: 'Configuration record ID mismatch.' });
     }
@@ -115,7 +114,9 @@ router.put('/config/:id', authenticateToken, authorize(['Super Admin']), async (
 
     const client = await pool.connect();
     try {
-        // Attempt to update the existing record (ID 1)
+        await client.query('BEGIN'); // Start transaction for the upsert operation
+
+        // 1. Attempt to update the existing record
         const updateQuery = `
             UPDATE ${SETTINGS_TABLE} SET
                 active_session_id = $1, default_branch_id = $2, default_pay_frequency = $3, 
@@ -132,7 +133,7 @@ router.put('/config/:id', authenticateToken, authorize(['Super Admin']), async (
 
         let result = await client.query(updateQuery, updateValues);
 
-        // If no rows were updated, INSERT the record (Upsert logic for ID 1)
+        // 2. If no rows were updated, INSERT the record (Upsert logic)
         if (result.rowCount === 0) {
             const insertQuery = `
                 INSERT INTO ${SETTINGS_TABLE} (
@@ -143,11 +144,16 @@ router.put('/config/:id', authenticateToken, authorize(['Super Admin']), async (
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 RETURNING *;
             `;
+            // $1 is CONFIG_ID, $2-$8 are the first 7 values from updateValues
             result = await client.query(insertQuery, [CONFIG_ID, ...updateValues.slice(0, 7)]);
         }
+        
+        await client.query('COMMIT'); // Commit the transaction
 
         res.status(200).json(result.rows[0]);
     } catch (error) {
+        // Rollback on any error during transaction
+        await client.query('ROLLBACK');
         handleSettingsError(error, res, 'update settings');
     } finally {
         client.release();
