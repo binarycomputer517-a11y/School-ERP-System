@@ -16,7 +16,7 @@ const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'H
 
 
 // =========================================================
-// 1. STUDENT CREATION (POST /) - FIX: Creator ID context
+// 1. STUDENT CREATION (POST /) 
 // =========================================================
 
 /**
@@ -44,7 +44,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         return res.status(400).json({ message: 'Missing required student fields (username, password, name, IDs, or DOB).' });
     }
     
-    // This check should now succeed.
+    // This check should succeed with the authMiddleware fix.
     if (!creatorId) { 
         return res.status(403).json({ message: 'Forbidden: Invalid Creator ID from token context.' });
     }
@@ -111,7 +111,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             enrollment_no,
             permanent_address,
             blood_group,
-            creatorId, 
+            creatorId, // INTEGER ID
             parent_first_name,
             parent_last_name,
             parent_phone_number,
@@ -145,9 +145,9 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
     }
 });
 
-// =========================================================
+// -------------------------------------------------------------------------
 // 2. READ & LIST ROUTES (GET) 
-// =========================================================
+// -------------------------------------------------------------------------
 
 /**
  * @route   GET /api/students
@@ -198,7 +198,7 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
  */
 router.get('/:studentId', authenticateToken, async (req, res) => {
     const { studentId } = req.params;
-    const { role, userId: currentUserId } = req.user; // Use userId
+    const { role, userId: currentUserId } = req.user; 
 
     const isAuthorized = STUDENT_MANAGEMENT_ROLES.includes(role);
 
@@ -236,9 +236,9 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
     }
 });
 
-// =========================================================
+// -------------------------------------------------------------------------
 // 3. UPDATE ROUTE (PUT) 
-// =========================================================
+// -------------------------------------------------------------------------
 
 /**
  * @route   PUT /api/students/:studentId
@@ -247,7 +247,7 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
  */
 router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     const { studentId } = req.params;
-    const updatedBy = req.user.userId; // Use userId
+    const updatedBy = req.user.userId; // Integer ID
 
     const { user_id, username } = req.body;
     const userIdStr = user_id; 
@@ -263,19 +263,21 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
     try {
         await client.query('BEGIN'); 
 
-        // 1. Update the 'users' table (Only update username)
-        const userUpdateQuery = `
-            UPDATE ${USERS_TABLE}
-            SET 
-                username = $1, 
-                updated_at = CURRENT_TIMESTAMP
-            WHERE id = $2 AND role = 'Student'
-            RETURNING id;
-        `;
-        const userUpdateResult = await client.query(userUpdateQuery, [username, userIdStr]);
+        // 1. Update the 'users' table (Update username if provided)
+        if (username) {
+            const userUpdateQuery = `
+                UPDATE ${USERS_TABLE}
+                SET 
+                    username = $1, 
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE id = $2 AND role = 'Student'
+                RETURNING id;
+            `;
+            const userUpdateResult = await client.query(userUpdateQuery, [username, userIdStr]);
 
-        if (userUpdateResult.rowCount === 0) {
-            throw new Error('User record not found or not a student.');
+            if (userUpdateResult.rowCount === 0) {
+                throw new Error('User record not found or not a student.');
+            }
         }
 
         // 2. Dynamically build the Student Update Query
@@ -292,10 +294,21 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
 
         const studentBodyFields = req.body;
         
-        for (const key in studentBodyFields) {
-            if (['user_id', 'student_id', 'username', 'profile_image', 'signature'].includes(key)) continue;
+        // List of all updatable keys (for clarity and security)
+        const studentUpdatableKeys = [
+            'admission_id', 'admission_date', 'academic_session_id', 'branch_id', 'first_name', 
+            'last_name', 'middle_name', 'course_id', 'batch_id', 'gender', 'dob', 'permanent_address', 
+            'email', 'phone_number', 'roll_number', 'enrollment_no', 'city', 'state', 'zip_code', 
+            'country', 'nationality', 'caste_category', 'mother_tongue', 'aadhaar_number', 
+            'parent_first_name', 'parent_last_name', 'parent_phone_number', 'parent_email', 
+            'parent_occupation', 'parent_annual_income', 'guardian_relation', 'emergency_contact_name', 
+            'emergency_contact_number', 'blood_group', 'religion'
+        ];
+
+        studentUpdatableKeys.forEach(key => {
             addField(key, studentBodyFields[key]);
-        }
+        });
+
 
         // --- File Path Updates (Conditional) ---
         if (newProfileImagePath !== undefined) {
@@ -305,12 +318,13 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
             addField('signature_path', newSignaturePath);
         }
         
-        // Control fields
+        // Ensure control fields are appended
         updateFields.push(`updated_by = $${paramIndex++}`);
         updateValues.push(updatedBy);
         updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
 
+        // Final Query Construction
         const studentUpdateQuery = `
             UPDATE ${STUDENTS_TABLE}
             SET ${updateFields.join(', ')}
@@ -341,7 +355,9 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         
         let message = 'Failed to update student profile due to a server error.';
         if (error.code === '23505') { 
-            message = 'Error: Username already exists for another user.';
+            message = 'Error: Username already exists for another user or admission ID already exists.';
+        } else if (error.code === '23503') { 
+            message = 'Error: Academic Session, Course, or Batch ID is invalid.';
         }
         res.status(500).json({ message: message, error: error.message });
 
@@ -351,9 +367,9 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
 });
 
 
-// =========================================================
+// -------------------------------------------------------------------------
 // 4. DELETE ROUTE (DELETE) 
-// =========================================================
+// -------------------------------------------------------------------------
 
 /**
  * @route   DELETE /api/students/:studentId
