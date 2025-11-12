@@ -279,6 +279,31 @@ router.get('/marksheet/roll/:rollNumber', authenticateToken, authorize(MARK_VIEW
         res.status(500).json({ message: 'Internal server error while retrieving marksheet.' });
     }
 });
+// routes/exams.js (Add this route)
 
+/**
+ * @route   GET /api/exams/list
+ * @desc    Get a simplified list of all active exams (for dropdowns/filters).
+ * @access  Private (Management Roles)
+ */
+router.get('/list', authenticateToken, authorize(EXAM_MANAGEMENT_ROLES), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                id, 
+                exam_name, 
+                exam_date
+            FROM exams
+            ORDER BY exam_date DESC;
+        `;
+        
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Error fetching exam list:', error);
+        res.status(500).json({ message: 'Failed to retrieve exam list.' });
+    }
+});
 
 module.exports = router;
