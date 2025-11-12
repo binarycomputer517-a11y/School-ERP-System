@@ -20,6 +20,7 @@ const PAYROLL_RECORDS_TABLE = 'payroll_records';
 const USERS_TABLE = 'users';
 const TEACHERS_TABLE = 'teachers';
 const DEPARTMENTS_TABLE = 'hr_departments';
+const PAYROLL_RUNS_TABLE = 'payroll_runs'; // <--- ADDED MISSING CONSTANT (Assumed name)
 
 // Use authenticateToken as the base middleware for all payroll routes
 router.use(authenticateToken);
@@ -35,10 +36,10 @@ router.use(authenticateToken);
  */
 router.get('/run-history-list', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
     try {
-        // FIX APPLIED: Using dbQuery()
         const result = await dbQuery(
+            // FIX 1: Using the defined constant
             `SELECT run_id, pay_period_start, pay_period_end, status, run_date 
-             FROM payroll_runs 
+             FROM ${PAYROLL_RUNS_TABLE} 
              ORDER BY pay_period_start DESC`
         );
         res.json(result.rows);
@@ -56,13 +57,12 @@ router.get('/run-history-list', authorize(PAYROLL_MANAGER_ROLES), async (req, re
 router.get('/run-details/:run_id', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
     const { run_id } = req.params;
     try {
-        // FIX APPLIED: Using dbQuery()
-        const runResult = await dbQuery('SELECT * FROM payroll_runs WHERE run_id = $1', [run_id]);
+        const runResult = await dbQuery(`SELECT * FROM ${PAYROLL_RUNS_TABLE} WHERE run_id = $1`, [run_id]);
         if (runResult.rows.length === 0) {
             return res.status(404).json({ message: 'Payroll run not found' });
         }
         
-        // FIX APPLIED: Using dbQuery()
+        // Assuming 'payroll_run_details' constant is either defined or used correctly below:
         const detailsResult = await dbQuery('SELECT * FROM payroll_run_details WHERE run_id = $1', [run_id]);
         
         res.json({
@@ -98,19 +98,17 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
     const run_by_user_id = req.user.id;
     
     if (!run_by_user_id) {
-        // This 401 check is now redundant since authorize() handles it, but kept for legacy/safety.
         return res.status(401).json({ message: 'User not authenticated.' });
     }
 
     let client;
     try {
-        // CRITICAL FIX: Using dbConnect()
         client = await dbConnect(); 
-        await client.query('BEGIN'); // Start transaction on the client
+        await client.query('BEGIN'); 
 
         // 1. Save data to the main 'payroll_runs' table
         const runInsertQuery = `
-            INSERT INTO payroll_runs 
+            INSERT INTO ${PAYROLL_RUNS_TABLE} 
                 (pay_period_start, pay_period_end, status, total_employees, 
                  total_gross_pay, total_deductions, total_net_pay, run_by_user_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -122,7 +120,6 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
             total_gross_pay, total_deductions, total_net_pay, run_by_user_id
         ];
 
-        // Use client.query()
         const runResult = await client.query(runInsertQuery, runValues);
         const newRunId = runResult.rows[0].run_id;
 
@@ -146,11 +143,10 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
                 JSON.stringify(detail.payslip_snapshot)
             ];
             
-            // Use client.query()
             await client.query(detailInsertQuery, detailValues);
         }
 
-        await client.query('COMMIT'); // Commit on the client
+        await client.query('COMMIT'); 
         
         res.status(201).json({
             message: 'Payroll run saved successfully',
@@ -158,14 +154,12 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
         });
 
     } catch (error) {
-        // Ensure ROLLBACK is called on the client and the error is logged/handled.
         if (client) {
             await client.query('ROLLBACK');
         }
         console.error('Error in /api/payroll/save-run:', error);
         res.status(500).json({ message: 'Failed to save payroll run', error: error.message });
     } finally {
-        // CRITICAL FIX: Always release the client back to the pool
         if (client) {
             client.release();
         }
@@ -195,9 +189,8 @@ router.post('/generate/:periodId', authorize(PAYROLL_ADMIN_ROLES), async (req, r
     let client;
 
     try {
-        // CRITICAL FIX: Using dbConnect()
         client = await dbConnect();
-        await client.query('BEGIN'); // Start transaction on the client
+        await client.query('BEGIN'); 
 
         // 1. Fetch Pay Period Details
         const periodRes = await client.query(
@@ -299,8 +292,8 @@ router.get('/employees/details', authorize(PAYROLL_MANAGER_ROLES), async (req, r
                 u.id AS user_id,
                 t.employee_id,
                 t.full_name, 
-                hd.name AS department,
-                hd.id AS department_id, -- Added for front-end filter logic
+                hd.department_name AS department, /* <--- FIX 2: Corrected column to department_name */
+                hd.id AS department_id, 
                 pd.base_salary AS pay_grade,
                 pd.fixed_deductions,
                 pd.tax_deduction_rate,
@@ -317,8 +310,7 @@ router.get('/employees/details', authorize(PAYROLL_MANAGER_ROLES), async (req, r
             WHERE u.role != 'Student' 
             ORDER BY t.full_name;
         `;
-        // FIX APPLIED: Using dbQuery()
-        const result = await dbQuery(query); // Direct query
+        const result = await dbQuery(query);
 
         // Map database fields to the structure expected by the frontend
         const mappedResults = result.rows.map(row => ({
@@ -326,7 +318,7 @@ router.get('/employees/details', authorize(PAYROLL_MANAGER_ROLES), async (req, r
             employee_id: row.employee_id || row.user_id,
             full_name: row.full_name,
             department: row.department || 'N/A',
-            department_id: row.department_id, // Passed through to support front-end logic
+            department_id: row.department_id, 
             pay_grade: parseFloat(row.pay_grade),
             account_number: row.bank_account_number || 'N/A',
             fixed_deductions: parseFloat(row.fixed_deductions),
@@ -368,8 +360,7 @@ router.get('/payslip/:recordId', authorize(PAYROLL_MANAGER_ROLES), async (req, r
             JOIN ${USERS_TABLE} u ON pr.user_id = u.id
             WHERE pr.id = $1 AND (pr.user_id = $2 OR $3 = ANY(ARRAY['Admin', 'Super Admin', 'HR_STAFF', 'SENIOR_MGNT']));
         `;
-        // FIX APPLIED: Using dbQuery()
-        const result = await dbQuery(query, [recordId, userId, userRole]); // Direct query
+        const result = await dbQuery(query, [recordId, userId, userRole]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Payslip record not found or access denied.' });
@@ -401,8 +392,7 @@ router.get('/my-history', async (req, res) => {
             WHERE pr.user_id = $1
             ORDER BY pp.end_date DESC;
         `;
-        // FIX APPLIED: Using dbQuery()
-        const result = await dbQuery(query, [userId]); // Direct query
+        const result = await dbQuery(query, [userId]);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('Payroll History Fetch Error:', error);
