@@ -10,6 +10,9 @@ const STUDENTS_API = '/api/students';
 // Get the student ID from the URL (e.g., /edit-student.html?id=...)
 const STUDENT_ID = new URLSearchParams(window.location.search).get('id');
 
+// Variable to store the student's integer User ID retrieved from the database
+let STUDENT_USER_ID = null; // <--- ADDED GLOBAL VARIABLE
+
 
 /**
  * Helper function for authenticated API calls.
@@ -95,6 +98,9 @@ async function loadStudentData(studentId, form) {
             throw new Error(`Failed to fetch student profile: ${response.statusText}`);
         }
         const student = await response.json();
+        
+        // --- CRITICAL FIX: Store the retrieved user_id globally ---
+        STUDENT_USER_ID = student.user_id; 
         
         // 1. Pre-fill basic form data
         for (const key in student) {
@@ -320,6 +326,14 @@ async function handleEditStudentSubmit(event) {
     // If password fields are empty, remove them entirely so the API doesn't hash an empty string
     if (studentData.password === "") {
         delete studentData.password;
+    }
+    
+    // *** CRITICAL FIX: Explicitly include the stored user_id for server validation ***
+    if (STUDENT_USER_ID !== null) {
+        studentData.user_id = STUDENT_USER_ID; 
+    } else {
+        alert("CRITICAL Error: Student's User ID is missing. Cannot update.");
+        return;
     }
 
     const API_ENDPOINT = `${STUDENTS_API}/${STUDENT_ID}`; 

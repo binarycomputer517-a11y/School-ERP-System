@@ -1,31 +1,63 @@
+// public/add-student.js
+
 document.addEventListener('DOMContentLoaded', initializeAddForm);
 
 // --- Global Constants ---
-const AUTH_TOKEN = localStorage.getItem('erp-token');
+const AUTH_TOKEN = localStorage.getItem('erp-token'); // (Note: Not used directly by new handleApi)
 const ACADEMICS_API = '/api/academicswithfees';
 
 
-// --- CORE API HANDLER ---
+// --- CORE API HANDLER (Updated) ---
 /**
- * Helper function for authenticated API calls. Handles token inclusion and error redirection.
+ * Helper function for authenticated API calls. 
+ * Handles token, branch, and session headers.
  */
 async function handleApi(url, options = {}) {
-    // Ensure body is stringified for POST/PUT requests if it's an object
+    // 1. Get all required items from localStorage
+    const AUTH_TOKEN = localStorage.getItem('erp-token');
+    const ACTIVE_BRANCH_ID = localStorage.getItem('active_branch_id');
+    const ACTIVE_SESSION_ID = localStorage.getItem('active_session_id');
+
+    // 2. Set default options
+    options.method = options.method || 'GET';
+    
     if (options.body && typeof options.body === 'object' && !options.headers?.['Content-Type']) {
         options.body = JSON.stringify(options.body);
     }
+
+    // 3. Add Authentication and Custom Headers
     
-    // Set authentication and content type headers
     options.headers = { 
         ...options.headers,
         'Content-Type': 'application/json', 
-        'Authorization': `Bearer ${AUTH_TOKEN}` 
+        'Authorization': `Bearer ${AUTH_TOKEN}`,
+        
+        // --- These two lines are the solution ---
+        'active-branch-id': ACTIVE_BRANCH_ID,
+        'active-session-id': ACTIVE_SESSION_ID
     };
+    
+    // Delete 'Content-Type' for GET requests
+    if (options.method === 'GET' || options.method === 'HEAD') {
+        delete options.headers['Content-Type'];
+    }
 
+    // 4. Make the API call
     const response = await fetch(url, options);
-   
-    // The raw response (even a 403) will now be returned to the function that called it.
-    return response;
+
+    // 5. Handle Errors
+    if (response.status === 401 || response.status === 403) {
+        console.error('API Unauthorized or Forbidden:', url);
+        throw new Error('Unauthorized or Forbidden access. Please check server logs or re-login.');
+    }
+    
+    if (!response.ok) {
+        const errorText = await response.text().catch(() => 'Unknown server error');
+        console.error(`API Error ${response.status}:`, errorText);
+        throw new Error(`Server error: ${response.status}. ${errorText.substring(0, 100)}...`);
+    }
+    
+    return response; // Return the successful response
 }
 
 
@@ -139,9 +171,10 @@ function openTab(evt, tabId) {
 
 function initializeAddForm() {
     const form = document.getElementById('addStudentForm'); 
+    const token = localStorage.getItem('erp-token'); // Check token at initialization
     
-    if (!form || !AUTH_TOKEN) {
-        if (!AUTH_TOKEN) alert('Authentication token missing. Please log in.');
+    if (!form || !token) {
+        if (!token) alert('Authentication token missing. Please log in.');
         return;
     }
     
@@ -169,23 +202,25 @@ async function loadInitialDropdowns() {
     batchSelect.disabled = true;
 
     try {
-        // --- FIX 1: Load Academic Sessions ---
+        // --- Load Academic Sessions ---
         const sessionResponse = await handleApi(`${ACADEMICS_API}/sessions`); 
         const sessions = await sessionResponse.json();
         
         sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
         if (Array.isArray(sessions)) {
             sessions.forEach(s => {
-                // Assuming sessions API returns 'id' and 'name'
                 sessionSelect.innerHTML += `<option value="${s.id || s.academic_session_id}">${s.name || s.session_name}</option>`;
             });
         }
         
-        // --- FIX 2: Load Courses ---
+        // --- Load Courses ---
         const courseResponse = await handleApi(`${ACADEMICS_API}/courses`); 
         const courses = await courseResponse.json();
         
-        if (!Array.isArray(courses)) return;
+        if (!Array.isArray(courses)) {
+             courseSelect.innerHTML = '<option value="">No courses found</option>';
+             return;
+        }
 
         courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
         courses.forEach(c => {
@@ -263,18 +298,15 @@ async function loadSubjects(courseId, subjectsDisplayEl) {
     
     try {
         const response = await handleApi(`${ACADEMICS_API}/courses/${courseId}/subjects`);
-        if (response.ok) {
-            const subjects = await response.json();
-            if (Array.isArray(subjects) && subjects.length > 0) {
-                const listHtml = subjects.map(s => `<li>${s.subject_name} (${s.subject_code})</li>`).join('');
-                subjectsDisplayEl.innerHTML = `<h4>📚 Assigned Subjects (${subjects.length})</h4><ul style="margin-top: 5px; padding-left: 20px;">${listHtml}</ul>`;
-            } else {
-                subjectsDisplayEl.innerHTML = '<p>⚠️ No subjects are currently assigned to this course.</p>';
-            }
+        const subjects = await response.json();
+
+        if (Array.isArray(subjects) && subjects.length > 0) {
+            const listHtml = subjects.map(s => `<li>${s.subject_name} (${s.subject_code})</li>`).join('');
+            subjectsDisplayEl.innerHTML = `<h4>📚 Assigned Subjects (${subjects.length})</h4><ul style="margin-top: 5px; padding-left: 20px;">${listHtml}</ul>`;
         } else {
-            const error = await response.json().catch(() => ({ message: response.statusText }));
-            subjectsDisplayEl.innerHTML = `<p style="color:red;">Error fetching subjects: ${error.message}</p>`;
+            subjectsDisplayEl.innerHTML = '<p>⚠️ No subjects are currently assigned to this course.</p>';
         }
+
     } catch (err) {
         console.error('Subject Fetch Error:', err);
         subjectsDisplayEl.innerHTML = '<p style="color:red;">A network error occurred while retrieving subjects.</p>';
@@ -286,40 +318,39 @@ async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
 
     feeDisplayEl.innerHTML = 'Fetching fee structure...';
     try {
+        // **REQUIRED BACKEND ENDPOINT**
         const response = await handleApi(`${ACADEMICS_API}/fees/structures/find?course_id=${courseId}&batch_id=${batchId}`);
-        
-        if (response.ok) {
-            const structure = await response.json();
-            const totalFee = calculateTotalFee(structure);
+        const structure = await response.json();
+        const totalFee = calculateTotalFee(structure);
 
-            const admissionFee = parseFloat(structure.admission_fee) || 0;
-            const registrationFee = parseFloat(structure.registration_fee) || 0;
-            const examinationFee = parseFloat(structure.examination_fee) || 0;
-            const duration = parseInt(structure.course_duration_months) || 0;
-            const transportFeeMonthly = parseFloat(structure.transport_fee) || 0;
-            const hostelFeeMonthly = parseFloat(structure.hostel_fee) || 0;
-            const transportTotal = structure.has_transport ? (transportFeeMonthly * duration) : 0;
-            const hostelTotal = structure.has_hostel ? (hostelFeeMonthly * duration) : 0;
-            
-            feeDisplayEl.innerHTML = `
-                <h4>💰 Fee Structure Details</h4>
-                <p><strong>Admission Fee:</strong> ₹${admissionFee.toFixed(2)}</p>
-                <p><strong>Registration Fee:</strong> ₹${registrationFee.toFixed(2)}</p>
-                <p><strong>Examination Fee:</strong> ₹${examinationFee.toFixed(2)}</p>
-                ${structure.has_transport ? `<p><strong>Transport Fee (x${duration} mos):</strong> ₹${transportTotal.toFixed(2)}</p>` : ''}
-                ${structure.has_hostel ? `<p><strong>Hostel Fee (x${duration} mos):</strong> ₹${hostelTotal.toFixed(2)}</p>` : ''}
-                <hr>
-                <p style="font-weight: bold;">TOTAL ESTIMATED FEE: ₹${totalFee}</p>
-            `;
-        } else if (response.status === 404) {
+        const admissionFee = parseFloat(structure.admission_fee) || 0;
+        const registrationFee = parseFloat(structure.registration_fee) || 0;
+        const examinationFee = parseFloat(structure.examination_fee) || 0;
+        const duration = parseInt(structure.course_duration_months) || 0;
+        const transportFeeMonthly = parseFloat(structure.transport_fee) || 0;
+        const hostelFeeMonthly = parseFloat(structure.hostel_fee) || 0;
+        const transportTotal = structure.has_transport ? (transportFeeMonthly * duration) : 0;
+        const hostelTotal = structure.has_hostel ? (hostelFeeMonthly * duration) : 0;
+        
+        feeDisplayEl.innerHTML = `
+            <h4>💰 Fee Structure Details</h4>
+            <p><strong>Admission Fee:</strong> ₹${admissionFee.toFixed(2)}</p>
+            <p><strong>Registration Fee:</strong> ₹${registrationFee.toFixed(2)}</p>
+            <p><strong>Examination Fee:</strong> ₹${examinationFee.toFixed(2)}</p>
+            ${structure.has_transport ? `<p><strong>Transport Fee (x${duration} mos):</strong> ₹${transportTotal.toFixed(2)}</p>` : ''}
+            ${structure.has_hostel ? `<p><strong>Hostel Fee (x${duration} mos):</strong> ₹${hostelTotal.toFixed(2)}</p>` : ''}
+            <hr>
+            <p style="font-weight: bold;">TOTAL ESTIMATED FEE: ₹${totalFee}</p>
+        `;
+        
+    } catch (err) {
+        // Check if the error message is from a 404 response
+        if (err.message.includes('Server error: 404')) {
             feeDisplayEl.innerHTML = '<p style="color:red;">⚠️ No Fee Structure found for this Course/Batch combination.</p>';
         } else {
-             const error = await response.json().catch(() => ({ message: response.statusText }));
-             feeDisplayEl.innerHTML = `<p style="color:red;">Error fetching fee: ${error.message}</p>`;
+            console.error('Fee Fetch Error:', err);
+            feeDisplayEl.innerHTML = '<p style="color:red;">A server error occurred while retrieving fees.</p>';
         }
-    } catch (err) {
-        console.error('Fee Fetch Error:', err);
-        feeDisplayEl.innerHTML = '<p style="color:red;">A server error occurred while retrieving fees.</p>';
     }
 }
 
@@ -345,7 +376,7 @@ function clearFeeDisplay(feeDisplayEl) {
 }
 
 
-// --- Form Submission (CRITICAL FIXES HERE) ---
+// --- Form Submission ---
 
 async function handleAddStudentSubmit(event) {
     event.preventDefault(); 
@@ -356,20 +387,16 @@ async function handleAddStudentSubmit(event) {
     const firstInvalidInput = validateFullFormAndFindFirstError(form);
 
     if (firstInvalidInput) {
-        // Find the correct step number (1 to 4) for the fieldset containing the error
         const fieldsetWithError = firstInvalidInput.closest('fieldset');
-        // NOTE: This stepMap assumes your fieldset IDs are correct (e.g., id="personal")
         const stepMap = { personal: 1, academics: 2, parents: 3, login: 4 }; 
         const stepNumber = stepMap[fieldsetWithError.id];
         
         const tabButton = document.querySelector(`.tab-button[data-step="${stepNumber}"]`);
         
         if (tabButton) {
-            // Switch to the erroring tab so the field is visible and focusable
             openTab({currentTarget: tabButton}, fieldsetWithError.id);
         }
         
-        // This will now focus the visible field
         firstInvalidInput.focus();
         return; 
     }
@@ -394,7 +421,7 @@ async function handleAddStudentSubmit(event) {
     const studentData = Object.fromEntries(formData.entries());
     delete studentData.confirm_password; 
 
-    // Handle empty optional IDs (Crucial for DB insertion where empty string is rejected)
+    // Handle empty optional IDs
     for (const key of ['academic_session_id', 'branch_id']) {
         if (studentData[key] === '') {
             studentData[key] = null;
@@ -410,25 +437,21 @@ async function handleAddStudentSubmit(event) {
         const response = await handleApi(API_ENDPOINT, { method: 'POST', body: studentData }); 
         const result = await response.json();
         
-        if (response.ok) {
-            alert(`✅ Student successfully enrolled! Enrollment No: ${result.enrollment_no || 'N/A'}`);
-            form.reset(); 
-            
-            // 5. UI Reset on Success
-            clearFeeAndSubjectDisplay(document.getElementById('fee-structure-display'), document.getElementById('subjects-display'));
-            
-            const firstTabButton = document.querySelector('.tab-bar button[data-step="1"]');
-            if (firstTabButton) {
-                openTab({currentTarget: firstTabButton}, 'personal');
-            }
-            
-        } else {
-            // Error Handling: Catches 400, 403, 409, 500 errors from API
-             alert(`❌ Enrollment Failed: ${result.message || response.statusText}`);
+        alert(`✅ Student successfully enrolled! Enrollment No: ${result.enrollment_no || 'N/A'}`);
+        form.reset(); 
+        
+        // 5. UI Reset on Success
+        clearFeeAndSubjectDisplay(document.getElementById('fee-structure-display'), document.getElementById('subjects-display'));
+        
+        const firstTabButton = document.querySelector('.tab-bar button[data-step="1"]');
+        if (firstTabButton) {
+            openTab({currentTarget: firstTabButton}, 'personal');
         }
+        
     } catch (error) {
-         console.error('Network Error:', error);
-         alert('🚨 A network error occurred. Could not connect to the API.');
+         // This now catches 400, 403, 409, 500 errors from handleApi
+         console.error('Submission Error:', error);
+         alert(`❌ Enrollment Failed: ${error.message || 'Unknown error'}`);
     } finally {
         submitButton.textContent = 'Add Student';
         submitButton.disabled = false;

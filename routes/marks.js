@@ -47,7 +47,8 @@ router.get('/status', authenticateToken, authorize(MARK_MANAGER_ROLES), async (r
                 c.course_name,
                 -- Simplistic check: If any marks exist for the student, assume marksheet is 'Generated'
                 CASE WHEN EXISTS (
-                    SELECT 1 FROM marks m WHERE m.student_id = s.id
+                    -- FIX APPLIED: Changed s.id to s.student_id 
+                    SELECT 1 FROM marks m WHERE m.student_id = s.student_id 
                 ) THEN 'Generated' ELSE 'Pending' END AS marksheet_status,
                 'Pending' AS certificate_status 
             FROM students s
@@ -62,6 +63,7 @@ router.get('/status', authenticateToken, authorize(MARK_MANAGER_ROLES), async (r
 
     } catch (error) {
         console.error('Error fetching marksheet status overview:', error);
+        // Ensure the error response is sent back to the client.
         res.status(500).json({ message: 'Server error fetching marksheet status.' });
     }
 });

@@ -44,7 +44,6 @@ router.post('/courses', authenticateToken, authorize(['Admin']), async (req, res
     const { course_name, course_code } = req.body;
     try {
         const newCourse = await pool.query(
-            // FIX: Use 'id' and alias it for the client
             "INSERT INTO courses (course_name, course_code) VALUES ($1, $2) RETURNING id AS course_id, course_name, course_code", 
             [course_name, course_code]
         );
@@ -60,9 +59,8 @@ router.post('/courses', authenticateToken, authorize(['Admin']), async (req, res
  * @desc    Get all courses
  * @access  Private (Admin, Teacher, Coordinator, Student)
  */
-router.get('/courses', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin','Student']), async (req, res) => {
+router.get('/courses', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
     try {
-        // FIX: Select 'id' and alias it as 'course_id'
         const result = await pool.query('SELECT id AS course_id, course_name, course_code FROM courses ORDER BY course_name'); 
         res.json(result.rows);
     } catch (err) {
@@ -80,7 +78,6 @@ router.put('/courses/:id', authenticateToken, authorize(['Admin']), async (req, 
     const { id } = req.params;
     const { course_name, course_code } = req.body;
     try {
-        // FIX: Update uses 'id' column, returns 'id' aliased
         const result = await pool.query(
             "UPDATE courses SET course_name = $1, course_code = $2 WHERE id = $3 RETURNING id AS course_id, course_name, course_code",
             [course_name, course_code, id]
@@ -102,7 +99,6 @@ router.put('/courses/:id', authenticateToken, authorize(['Admin']), async (req, 
  */
 router.delete('/courses/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
-        // FIX: Delete uses 'id' column
         const result = await pool.query("DELETE FROM courses WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Course not found.' });
@@ -133,7 +129,6 @@ router.post('/batches', authenticateToken, authorize(['Admin']), async (req, res
         return res.status(400).json({ message: 'Batch name and course ID are required.' });
     }
     try {
-        // FIX: Return 'id' aliased as 'batch_id'
         const newBatch = await pool.query(
             "INSERT INTO batches (batch_name, batch_code, course_id) VALUES ($1, $2, $3) RETURNING id AS batch_id, batch_name, batch_code, course_id",
             [batch_name.trim(), batch_code ? batch_code.trim() : null, course_id]
@@ -155,7 +150,6 @@ router.post('/batches', authenticateToken, authorize(['Admin']), async (req, res
  */
 router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     try {
-        // FIX: Select 'id' aliased as 'batch_id'
         const result = await pool.query('SELECT id AS batch_id, batch_name, batch_code, course_id FROM batches ORDER BY batch_name');
         res.json(result.rows);
     } catch (err) {
@@ -171,7 +165,6 @@ router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordi
  */
 router.get('/courses/:courseId/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
-        // FIX: Select 'id' aliased as 'batch_id'
         const result = await pool.query(
             'SELECT id AS batch_id, batch_name, batch_code FROM batches WHERE course_id = $1 ORDER BY batch_name',
             [req.params.courseId]
@@ -192,7 +185,6 @@ router.put('/batches/:id', authenticateToken, authorize(['Admin']), async (req, 
     const { id } = req.params;
     const { batch_name, batch_code } = req.body;
     try {
-        // FIX: Update uses 'id' column, returns 'id' aliased as 'batch_id'
         const result = await pool.query(
             "UPDATE batches SET batch_name = $1, batch_code = $2 WHERE id = $3 RETURNING id AS batch_id, batch_name, batch_code, course_id",
             [batch_name, batch_code, id]
@@ -214,7 +206,6 @@ router.put('/batches/:id', authenticateToken, authorize(['Admin']), async (req, 
  */
 router.delete('/batches/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
-        // FIX: Delete uses 'id' column
         const result = await pool.query("DELETE FROM batches WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Batch not found.' });
@@ -241,7 +232,6 @@ router.delete('/batches/:id', authenticateToken, authorize(['Admin']), async (re
 router.post('/subjects', authenticateToken, authorize(['Admin']), async (req, res) => {
     const { subject_name, subject_code } = req.body;
     try {
-        // FIX: Return 'id' aliased as 'subject_id'
         const newSubject = await pool.query(
             "INSERT INTO subjects (subject_name, subject_code) VALUES ($1, $2) RETURNING id AS subject_id, subject_name, subject_code",
             [subject_name, subject_code]
@@ -260,7 +250,6 @@ router.post('/subjects', authenticateToken, authorize(['Admin']), async (req, re
  */
 router.get('/subjects', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     try {
-        // FIX: Select 'id' aliased as 'subject_id'
         const result = await pool.query('SELECT id AS subject_id, subject_name, subject_code FROM subjects ORDER BY subject_name');
         res.json(result.rows);
     } catch (err) {
@@ -278,7 +267,6 @@ router.put('/subjects/:id', authenticateToken, authorize(['Admin']), async (req,
     const { id } = req.params;
     const { subject_name, subject_code } = req.body;
     try {
-        // FIX: Update uses 'id' column, returns 'id' aliased as 'subject_id'
         const result = await pool.query(
             "UPDATE subjects SET subject_name = $1, subject_code = $2 WHERE id = $3 RETURNING id AS subject_id, subject_name, subject_code",
             [subject_name, subject_code, id]
@@ -300,7 +288,6 @@ router.put('/subjects/:id', authenticateToken, authorize(['Admin']), async (req,
  */
 router.delete('/subjects/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
-        // FIX: Delete uses 'id' column
         const result = await pool.query("DELETE FROM subjects WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Subject not found.' });
@@ -324,9 +311,8 @@ router.delete('/subjects/:id', authenticateToken, authorize(['Admin']), async (r
  * @desc    Get all subjects linked to a specific course
  * @access  Private (Admin, Teacher, Coordinator, Student)
  */
-router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
-        // FIX: Select 's.id' aliased as 'subject_id', join on 's.id'
         const result = await pool.query(`
             SELECT s.id AS subject_id, s.subject_name, s.subject_code FROM subjects s
             JOIN course_subjects cs ON s.id = cs.subject_id
@@ -388,20 +374,20 @@ router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', '
     try {
         const { courseId } = req.params;
 
-        // 1. Fetch Course Details (FIX: Select 'id' aliased as 'course_id')
+        // 1. Fetch Course Details
         const courseResult = await pool.query('SELECT id AS course_id, course_name, course_code FROM courses WHERE id = $1', [courseId]);
         if (courseResult.rowCount === 0) {
             return res.status(404).json({ message: 'Course not found.' });
         }
         const course = courseResult.rows[0];
 
-        // 2. Fetch Batches for the Course (FIX: Select 'id' aliased as 'batch_id')
+        // 2. Fetch Batches for the Course
         const batchesResult = await pool.query(
             'SELECT id AS batch_id, batch_name, batch_code FROM batches WHERE course_id = $1 ORDER BY batch_name',
             [courseId]
         );
 
-        // 3. Fetch Subjects linked to the Course (FIX: Select 's.id' aliased as 'subject_id')
+        // 3. Fetch Subjects linked to the Course
         const subjectsResult = await pool.query(`
             SELECT s.id AS subject_id, s.subject_name, s.subject_code FROM subjects s
             JOIN course_subjects cs ON s.id = cs.subject_id
@@ -424,6 +410,89 @@ router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', '
 });
 
 // =================================================================
+// --- ACADEMIC SESSION MANAGEMENT (NEWLY ADDED) ---
+// =================================================================
+
+/**
+ * @route   POST /api/academicswithfees/sessions
+ * @desc    Create a new academic session
+ * @access  Private (Admin)
+ */
+router.post('/sessions', authenticateToken, authorize(['Admin']), async (req, res) => {
+    const { session_name, start_date, end_date } = req.body;
+    try {
+        const newSession = await pool.query(
+            "INSERT INTO academic_sessions (session_name, start_date, end_date) VALUES ($1, $2, $3) RETURNING *", 
+            [session_name, start_date, end_date]
+        );
+        res.status(201).json(newSession.rows[0]);
+    } catch (err) {
+        console.error('Error creating academic session:', err);
+        res.status(500).json({ message: 'Error creating session', error: err.message });
+    }
+});
+
+/**
+ * @route   GET /api/academicswithfees/sessions
+ * @desc    Get all academic sessions
+ * @access  Private (Admin, Teacher, Coordinator, Student)
+ */
+router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
+    try {
+        const result = await pool.query('SELECT *, id AS academic_session_id, session_name AS name FROM academic_sessions ORDER BY start_date DESC'); 
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching academic sessions:', err);
+        res.status(500).json({ message: 'Server error while fetching sessions', error: err.message });
+    }
+});
+
+/**
+ * @route   PUT /api/academicswithfees/sessions/:id
+ * @desc    Update an academic session
+ * @access  Private (Admin)
+ */
+router.put('/sessions/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+    const { id } = req.params;
+    const { session_name, start_date, end_date } = req.body;
+    try {
+        const result = await pool.query(
+            "UPDATE academic_sessions SET session_name = $1, start_date = $2, end_date = $3 WHERE id = $4 RETURNING *",
+            [session_name, start_date, end_date, id]
+        );
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Academic session not found' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error updating session:', err);
+        res.status(500).json({ message: 'Error updating session', error: err.message });
+    }
+});
+
+/**
+ * @route   DELETE /api/academicswithfees/sessions/:id
+ * @desc    Delete an academic session
+ * @access  Private (Admin)
+ */
+router.delete('/sessions/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+    try {
+        const result = await pool.query("DELETE FROM academic_sessions WHERE id = $1 RETURNING id", [req.params.id]);
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Academic session not found.' });
+        }
+        res.status(200).json({ message: 'Academic session deleted successfully.' });
+    } catch (err) {
+        if (err.code === '23503') {
+            return res.status(409).json({ message: 'Cannot delete session. It is referenced by other records.' });
+        }
+        console.error('Error deleting session:', err);
+        res.status(500).json({ message: 'Error deleting session', error: err.message });
+    }
+});
+
+
+// =================================================================
 // --- FEE MANAGEMENT ---
 // =================================================================
 
@@ -440,7 +509,7 @@ router.post('/fees/structures', authenticateToken, authorize(['Admin']), async (
     } = req.body;
 
     try {
-        // Fetch course and batch names to create a descriptive structure name (FIX: Use 'id')
+        // Fetch course and batch names to create a descriptive structure name
         const courseRes = await pool.query('SELECT course_name FROM courses WHERE id = $1', [course_id]);
         const batchRes = await pool.query('SELECT batch_name FROM batches WHERE id = $1', [batch_id]);
 
@@ -526,7 +595,6 @@ router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teac
  */
 router.get('/fees/structures', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
-        // FIX: Select fs.id, join uses course.id and batches.id
         const result = await pool.query(`
             SELECT fs.id, fs.structure_name, fs.course_id, fs.batch_id, 
                    fs.admission_fee, fs.registration_fee, fs.examination_fee,
@@ -552,7 +620,6 @@ router.get('/fees/structures', authenticateToken, authorize(['Admin']), async (r
 router.get('/fees/structures/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
         const { id } = req.params;
-        // Use the primary key 'id' as per schema
         const result = await pool.query('SELECT * FROM fee_structures WHERE id = $1', [id]); 
 
         if (result.rowCount === 0) {

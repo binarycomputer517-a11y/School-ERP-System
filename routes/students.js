@@ -236,6 +236,46 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
     }
 });
 
+/**
+ * @route   GET /api/students/course/:courseId/batch/:batchId
+ * @desc    Get a list of students filtered by specific course and batch IDs (Needed for Marks Entry).
+ * @access  Private (Management Roles, Teachers)
+ */
+router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
+    const { courseId, batchId } = req.params;
+
+    if (!courseId || !batchId) {
+        return res.status(400).json({ message: 'Course ID and Batch ID are required parameters.' });
+    }
+
+    try {
+        const query = `
+            SELECT 
+                s.student_id, 
+                s.enrollment_no,
+                s.first_name,
+                s.last_name,
+                s.email,
+                s.course_id,
+                s.batch_id
+            FROM 
+                ${STUDENTS_TABLE} s
+            WHERE 
+                s.course_id = $1 AND s.batch_id = $2 AND s.deleted_at IS NULL
+            ORDER BY 
+                s.enrollment_no;
+        `;
+        
+        const result = await pool.query(query, [courseId, batchId]);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Fetch Students by Course/Batch Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve filtered student list.' });
+    }
+});
+
+
 // -------------------------------------------------------------------------
 // 3. UPDATE ROUTE (PUT) 
 // -------------------------------------------------------------------------
@@ -249,9 +289,11 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
     const { studentId } = req.params;
     const updatedBy = req.user.userId; // Integer ID
 
-    const { user_id, username } = req.body;
+    // CRITICAL FIX: Destructure first_name and last_name here so we can return them later.
+    const { user_id, username, first_name, last_name } = req.body;
     const userIdStr = user_id; 
 
+    // CRITICAL FIX: Missing user ID/student ID check (400 Bad Request)
     if (!userIdStr || !studentId) {
         return res.status(400).json({ message: 'Missing user ID or student ID for update.' });
     }
@@ -344,9 +386,12 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         await client.query('COMMIT'); 
 
         // 3. Send Success Response
+        // FIX: Include the first_name and last_name from req.body in the success response.
         res.status(200).json({ 
             message: 'Student profile successfully updated.', 
-            student_id: studentId
+            student_id: studentId,
+            first_name: first_name, // <-- FIX APPLIED
+            last_name: last_name    // <-- FIX APPLIED
         });
 
     } catch (error) {

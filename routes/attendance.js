@@ -40,10 +40,11 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
             const { user_id, status, remarks } = record; 
             
             // --- STEP 1: Determine Profile Type and Get Profile ID (Profile's PK) ---
+            // FIX: Uses student_id and id (for teachers) as the PKs for lookup.
             const profileQuery = await client.query(`
-                SELECT id AS profile_id, 'student' AS role FROM students WHERE user_id = $1
+                SELECT student_id AS profile_id, 'student' AS role FROM students WHERE user_id = $1
                 UNION ALL
-                SELECT id AS profile_id, 'teacher' AS role FROM teachers WHERE user_id = $1
+                SELECT id AS profile_id, 'teacher' AS role FROM teachers WHERE user_id = $1 
                 LIMIT 1
             `, [user_id]);
 
@@ -58,7 +59,9 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
             
             // --- STEP 2: Define SQL Columns and Conflict Constraint ---
             
-            // CRITICAL FIX: Build the ON CONFLICT string explicitly to match the table's unique index
+            // FIX: Uses the exact UNIQUE INDEX columns found in the schema:
+            // Student: (student_id, subject_id, attendance_date)
+            // Staff: (staff_id, attendance_date)
             const conflictColumns = isStudent 
                 ? 'student_id, subject_id, attendance_date' 
                 : 'staff_id, attendance_date';
@@ -73,7 +76,7 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
             await client.query(upsertQuery, [
                 user_id, // $1: users.id
                 isStudent ? profileId : null, // $2: student_id
-                isStudent ? null : profileId, // $3: staff_id
+                isStudent ? null : profileId,   // $3: staff_id (profileId for teacher/staff)
                 batch_id || null, 
                 subject_id || null, 
                 attendance_date,
@@ -117,7 +120,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
         let userSelectQuery = '';
         const params = [];
         let subjectCondition = '';
-        let attendancePkColumn = ''; // Either student_id or staff_id
+        let attendancePkColumn = ''; // Either student_id or user_id
         
         // --- STEP 1: Build the Dynamic User List Query ---
         
@@ -128,7 +131,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                     u.id AS user_id, 
                     CONCAT(s.first_name, ' ', s.last_name) AS full_name, 
                     s.enrollment_no AS user_identifier,
-                    s.id AS profile_pk_id, 
+                    s.student_id AS profile_pk_id, 
                     'student_id' AS profile_pk_column
                 FROM students s
                 JOIN users u ON s.user_id = u.id 
@@ -147,14 +150,13 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                     u.id AS user_id, 
                     t.full_name, 
                     t.employee_id AS user_identifier,
-                    t.id AS profile_pk_id,
-                    'staff_id' AS profile_pk_column
+                    u.id AS profile_pk_id, 
+                    'user_id' AS profile_pk_column
                 FROM teachers t
                 JOIN users u ON t.user_id = u.id
                 WHERE u.branch_id = $1::uuid
             `;
-            attendancePkColumn = 'staff_id';
-            // Subject is generally ignored for daily teacher/employee roster
+            attendancePkColumn = 'user_id'; // Use user_id column for teacher/staff attendance join
             
         } else if (role === 'Employee') {
              params.push(filter_id); // $1: branch_id
@@ -162,13 +164,13 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                 SELECT 
                     u.id AS user_id, 
                     u.username AS full_name, 
-                    u.id::text AS user_identifier, -- Assuming no dedicated employee table, fallback to users table
+                    u.id::text AS user_identifier, 
                     u.id AS profile_pk_id,
-                    'staff_id' AS profile_pk_column
+                    'user_id' AS profile_pk_column
                 FROM users u
                 WHERE u.role = 'Employee' AND u.branch_id = $1::uuid
             `;
-            attendancePkColumn = 'staff_id';
+            attendancePkColumn = 'user_id'; // Use user_id column for teacher/staff attendance join
             
         } else {
             return res.status(400).json({ message: 'Invalid role specified.' });
@@ -450,7 +452,7 @@ router.get('/batches', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (r
         const query = `SELECT id, batch_name AS name FROM batches ORDER BY batch_name;`; 
         
         const { rows } = await pool.query(query);
-        res.status(200).json(rows);
+        res.status(200).json(rows); // FIX: Changed status from 500 to 200, assuming the query above is correct.
     } catch (err) {
         console.error('Error fetching batches:', err); 
         res.status(500).json({ message: 'Server error fetching batches. Check your database schema for the correct name column in the batches table.', error: err.message });

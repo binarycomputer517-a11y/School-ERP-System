@@ -2,7 +2,6 @@
 const express = require('express');
 const router = express.Router();
 // CRITICAL FIX: Import the exported 'pool' property, and then destructure its query/connect methods.
-// OR, simply rename it to 'db' for cleaner code if no other files require this destructuring:
 const { pool } = require('../database'); 
 const dbQuery = pool.query.bind(pool);
 const dbConnect = pool.connect.bind(pool);
@@ -45,7 +44,6 @@ router.get('/run-history-list', authorize(PAYROLL_MANAGER_ROLES), async (req, re
         res.json(result.rows);
     } catch (error) {
         console.error('Error fetching payroll run history:', error);
-        // CRITICAL FIX: The UI error shows this is failing.
         res.status(500).json({ message: 'Failed to fetch payroll run history' });
     }
 });
@@ -96,9 +94,11 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
         run_details
     } = req.body;
     
+    // User ID is available from the authenticated token via req.user.id
     const run_by_user_id = req.user.id;
     
     if (!run_by_user_id) {
+        // This 401 check is now redundant since authorize() handles it, but kept for legacy/safety.
         return res.status(401).json({ message: 'User not authenticated.' });
     }
 

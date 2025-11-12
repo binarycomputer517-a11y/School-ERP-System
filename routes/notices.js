@@ -10,6 +10,8 @@ const moment = require('moment'); // (Keep moment if used elsewhere, otherwise i
 const NOTICES_TABLE = 'notices'; 
 const USERS_TABLE = 'users'; 
 const DELIVERY_LOG_TABLE = 'notice_delivery_log'; 
+const STUDENTS_TABLE = 'students';
+const TEACHERS_TABLE = 'teachers';
 
 // Constants
 const TARGET_ROLES = ['All', 'Student', 'Teacher', 'Parent', 'Admin', 'Staff'];
@@ -47,7 +49,6 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
         await client.query('BEGIN');
 
         // 1. Insert Notice (Content)
-        // FIX: The original SQL query is now correct assuming 'expiry_date' column was added via migration.
         const noticeQuery = `
             INSERT INTO ${NOTICES_TABLE} (title, content, posted_by, target_role, expiry_date, is_active)
             VALUES ($1, $2, $3, $4, $5, TRUE)
@@ -91,8 +92,6 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Notice Creation Error:', error);
-        // Note: The original error was 'column "expiry_date" does not exist'.
-        // After DB migration, this catch block should handle other potential errors.
         res.status(500).json({ message: 'Failed to create notice.' });
     } finally {
         client.release();
@@ -114,7 +113,6 @@ router.get('/my-feed', authenticateToken, async (req, res) => {
     const userId = req.user.id;
 
     try {
-        // FIX: The original query is now correct assuming 'expiry_date' column was added via migration.
         const query = `
             SELECT 
                 n.id, n.title, n.content, n.created_at, n.expiry_date,
@@ -222,37 +220,37 @@ router.get('/log/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLE
  */
 router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
     try {
-        // FIX: The original query using quoted identifiers ("dob") and UNION ALL is correct
-        // for combining results from 'students' and 'users' tables.
+        // FIX APPLIED: Correctly joins users (u) and teachers (t) to find staff DOB,
+        // and uses EXTRACT(MONTH/DAY) to ignore the year.
         const query = `
-            -- 1. Get STUDENT Birthdays (from students table, which has names)
+            -- 1. Get STUDENT Birthdays (from students table)
             SELECT 
-                s.id AS entity_id, 
+                s.student_id AS entity_id, 
                 s.first_name || ' ' || s.last_name AS full_name, 
                 'Student' AS role, 
-                s."dob" AS dob_date
-            FROM students s
+                s.dob AS dob_date
+            FROM ${STUDENTS_TABLE} s
             WHERE 
-                s.deleted_at IS NULL AND
-                s."dob" IS NOT NULL AND
-                EXTRACT(MONTH FROM s."dob") = EXTRACT(MONTH FROM CURRENT_DATE) AND
-                EXTRACT(DAY FROM s."dob") = EXTRACT(DAY FROM CURRENT_DATE)
+                s.deleted_at IS NULL AND s.dob IS NOT NULL AND
+                EXTRACT(MONTH FROM s.dob) = EXTRACT(MONTH FROM CURRENT_DATE) AND
+                EXTRACT(DAY FROM s.dob) = EXTRACT(DAY FROM CURRENT_DATE)
 
             UNION ALL
 
-            -- 2. Get STAFF/ADMIN Birthdays (from users table)
+            -- 2. Get STAFF/ADMIN Birthdays (Joining users and teachers table for DOB and Name)
             SELECT 
                 u.id AS entity_id, 
-                u.username AS full_name, -- Use username as the name for non-students
+                t.full_name,                        
                 u.role, 
-                u."dob" AS dob_date
-            FROM users u
+                t.date_of_birth AS dob_date         
+            FROM ${USERS_TABLE} u
+            JOIN ${TEACHERS_TABLE} t ON u.id = t.user_id     
             WHERE 
                 u.deleted_at IS NULL AND
-                u."dob" IS NOT NULL AND
-                u.role NOT IN ('Student', 'Parent') AND -- Only include staff/admin/teachers here
-                EXTRACT(MONTH FROM u."dob") = EXTRACT(MONTH FROM CURRENT_DATE) AND
-                EXTRACT(DAY FROM u."dob") = EXTRACT(DAY FROM CURRENT_DATE)
+                t.date_of_birth IS NOT NULL AND
+                u.role NOT IN ('Student', 'Parent') AND
+                EXTRACT(MONTH FROM t.date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE) AND
+                EXTRACT(DAY FROM t.date_of_birth) = EXTRACT(DAY FROM CURRENT_DATE)
             
             ORDER BY role, full_name;
         `;
