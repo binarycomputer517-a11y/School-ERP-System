@@ -613,18 +613,29 @@ document.addEventListener('DOMContentLoaded', () => {
             marksExamSelect.innerHTML = '<option value="">-- Select Exam --</option>';
             
             exams.forEach(exam => {
-                // *** 🛑 বাগ ফিক্স ১: 🛑 ***
-                // খারাপ ডেটা ফিল্টার করুন
-                if (!exam || !exam.exam_id) {
+                // *** 🛑 নতুন বাগ ফিক্স (সংস্করণ ২): 🛑 ***
+                // সার্ভার থেকে 'id' বা 'exam_id' আসতে পারে। আমরা 'exam_id'-কে স্ট্যান্ডার্ড করবো।
+                
+                // 1. আইডি ভেরিয়েবলটি পান (এটি 'exam.id' বা 'exam.exam_id' হতে পারে)
+                const examId = exam.exam_id || exam.id; 
+
+                // 2. এখন চেক করুন যে আইডিটি সত্যিই আছে কিনা
+                if (!exam || !examId) {
                     console.warn('Skipping exam with null or undefined ID:', exam);
                     return; // এই exam-এর জন্য option তৈরি করবেন না
                 }
+
+                // 3. অবজেক্টটিকে স্ট্যান্ডার্ড করুন (যদি প্রয়োজন হয়)
+                // এটি নিশ্চিত করে যে ক্যাশে এবং <option> ডেটাসেটে 'exam_id' সর্বদা থাকে
+                if (!exam.exam_id) {
+                    exam.exam_id = examId; 
+                }
                 // *** ফিক্স শেষ ***
 
-                examCache[exam.exam_id] = exam; // Cache the full exam object
+                examCache[exam.exam_id] = exam; // এখন এটি কাজ করবে
 
                 const option = document.createElement('option');
-                option.value = exam.exam_id;
+                option.value = exam.exam_id; // এখন এটি কাজ করবে
                 option.textContent = `${exam.exam_name || 'N/A'} (${exam.course_name || 'N/A'} - ${exam.batch_name || 'N/A'})`;
                 
                 // CRITICAL: Store necessary FKs and Max Marks on the option element
@@ -662,9 +673,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${exam.total_marks || 'N/A'}</td> 
                 <td>${exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-IN') : 'N/A'}</td>
                 <td class="actions">
-                    <button class="edit-exam-btn" data-exam-id="${exam.exam_id}">Edit</button>
-                    <button class="delete-exam-btn delete-btn" data-exam-id="${exam.exam_id}">Delete</button>
-                    <button class="view-schedule-btn" data-exam-id="${exam.exam_id}">Schedule</button>
+                    <button class="edit-exam-btn" data-exam-id="${exam.exam_id || exam.id}">Edit</button>
+                    <button class="delete-exam-btn delete-btn" data-exam-id="${exam.exam_id || exam.id}">Delete</button>
+                    <button class="view-schedule-btn" data-exam-id="${exam.exam_id || exam.id}">Schedule</button>
                 </td>
             `;
             examsTableBody.appendChild(row);
