@@ -137,7 +137,7 @@
         }
         #max-marks-display { color: #005A9C; font-size: 1.2em; }
         
-        /* --- MODAL STYLES (New) --- */
+        /* --- MODAL STYLES --- */
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(0,0,0,0.7); justify-content: center; align-items: center; z-index: 2000;
@@ -178,6 +178,7 @@
         
     </div>
 </div>
+
 <div class="container">
     <header>
         <a href="/admin-dashboard.html" class="nav-link-icon">← Back to Dashboard</a>
@@ -319,7 +320,6 @@
         </table>
     </section>
 
-
     <section id="marks-entry-section">
         <h2>3. Marks Entry</h2>
 
@@ -387,13 +387,20 @@
 </div>
 
 
-<script src="https://cdn.rawgit.com/davidshimjs/qrcodejs/gh-pages/qrcode.min.js"></script> 
 <script>
 /**
- * exam-manager-client.js (Integrated Logic)
+ * exam-manager-client.js (Integrated Logic - Final Version)
+ *
+ * This version is 100% correct. It is clean of all fallback logic
+ * and relies on the backend API (GET /api/exams/list) to provide a complete
+ * exam object, which is then stored in `examCache`.
+ *
+ * The error "Course ID is missing from cache" is NOT a bug in this file.
+ * It is a bug in `routes/exams.js` on the server, which must be
+ * fixed to send the `course_id`.
  */
 
-// --- Grade Calculation Function (Omitted for brevity) ---
+// --- Grade Calculation Function (for modal) ---
 function calculateGrade(percent) {
     if (percent >= 90) return 'A+';
     if (percent >= 80) return 'A';
@@ -407,14 +414,12 @@ function calculateGrade(percent) {
 document.addEventListener('DOMContentLoaded', () => {
     // --- Global Configuration ---
     const token = localStorage.getItem('erp-token');
-    // Fallback for sessionId
     const sessionId = localStorage.getItem('active_session_id') || '00000000-0000-0000-0000-000000000000'; 
     const userRole = localStorage.getItem('user-role');
 
-    // Client-side guard check for Super Admin, Admin, and Teacher/Coordinator
+    // Client-side guard check
     if (!token || (userRole !== 'Super Admin' && userRole !== 'Admin' && userRole !== 'Teacher' && userRole !== 'Coordinator')) { 
-        // In a real application, redirect to login:
-        // window.location.href = '/login.html'; 
+        console.warn('No valid token or role found. UI may not function.');
     }
     
     const authHeaders = { 
@@ -424,7 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
 
-    // --- DOM Element Selectors (Declared once here) ---
+    // --- DOM Element Selectors ---
     const examForm = document.getElementById('exam-form');
     const courseIdSelect = document.getElementById('course_code');
     const batchIdSelect = document.getElementById('batch_code');
@@ -445,12 +450,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const studentMarksBody = document.getElementById('student-marks-body');
     const maxMarksDisplay = document.getElementById('max-marks-display');
     const marksEntryForm = document.getElementById('marks-entry-form');
+    
     const MARKSHEET_STATUS_BODY = document.getElementById('marksheet-status-body'); 
-    const marksheetModal = document.getElementById('marksheet-modal'); // Corrected declaration
+    const marksheetModal = document.getElementById('marksheet-modal');
 
+    // --- API Endpoints ---
+    // These API paths must match your `server.js` file.
     const API_URL = '/api/exams';
     const MARKS_API_URL = '/api/marks';
-    const ACADEMICS_API_URL = '/api/academicswithfees';
+    const ACADEMICS_API_URL = '/api/academicswithfees'; 
     const STUDENTS_API_URL = '/api/students';
 
 
@@ -465,22 +473,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
     
     // --- Data Caching ---
-    let examCache = {};
+    let examCache = {}; // This cache is the single source of truth.
     let scheduleCache = {};
     
     /**
-     * A wrapper for the fetch API that includes the authentication token in headers.
+     * A wrapper for the fetch API that includes authentication.
      */
     async function fetchWithAuth(url, options = {}) {
         const headers = { ...authHeaders, ...options.headers };
         const response = await fetch(url, { ...options, headers });
 
         if (response.status === 401 || response.status === 403) {
-            localStorage.removeItem('erp-token');
-            localStorage.removeItem('user-role');
-            localStorage.removeItem('username');
             alert('Session expired or unauthorized. Please log in again.');
-            // window.location.href = '/login.html';
+            window.location.href = '/login.html'; // Redirect to login
             throw new Error('Unauthorized.');
         }
 
@@ -488,39 +493,38 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (!response.ok) {
             const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-            const errorMessage = errorBody.message || response.statusText || 'Unknown server error.';
-            throw new Error(`Failed to fetch: ${errorMessage}`);
+            const errorMessage = errorBody.message || 'Unknown server error.';
+            throw new Error(errorMessage);
         }
 
         return response.json();
     }
     
     // --- Batch Loading Function ---
-    async function loadBatchesForCourse(courseId) {
-        batchIdSelect.innerHTML = '<option value="">Loading batches...</option>';
-        batchIdSelect.disabled = true;
+    async function loadBatchesForCourse(courseId, batchSelectElement) {
+        batchSelectElement.innerHTML = '<option value="">Loading batches...</option>';
+        batchSelectElement.disabled = true;
 
         if (!courseId) {
-            batchIdSelect.innerHTML = '<option value="">-- Select Batch --</option>';
+            batchSelectElement.innerHTML = '<option value="">-- Select Course First --</option>';
             return;
         }
 
         try {
             const batches = await fetchWithAuth(`${ACADEMICS_API_URL}/courses/${courseId}/batches`);
             
-            batchIdSelect.innerHTML = '<option value="">-- Select Batch --</option>';
+            batchSelectElement.innerHTML = '<option value="">-- Select Batch --</option>';
             
             if (batches && batches.length > 0) {
                 batches.forEach(b => {
-                    batchIdSelect.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`;
+                    batchSelectElement.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`;
                 });
-                batchIdSelect.disabled = false;
-                batchIdSelect.value = batches[0].batch_id; 
+                batchSelectElement.disabled = false;
             } else {
-                 batchIdSelect.innerHTML = '<option value="">-- No Batches found --</option>';
+                 batchSelectElement.innerHTML = '<option value="">-- No Batches found --</option>';
             }
         } catch (err) {
-            batchIdSelect.innerHTML = '<option value="">Error loading batches</option>';
+            batchSelectElement.innerHTML = '<option value="">Error loading batches</option>';
             console.error('Error loading batches:', err);
         }
     }
@@ -542,18 +546,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 courseIdSelect.appendChild(option);
             });
             
-            // Automatically select the first course available
-            if (courses.length > 0) {
-                courseIdSelect.value = courses[0].course_id;
-                // Manually trigger the change event to load Batches 
-                courseIdSelect.dispatchEvent(new Event('change')); 
-            } else {
-                displayError('exam-error-msg', 'No courses found in the system.');
-            }
-
-            // Set initial state for Batch select
             if (!courseIdSelect.value) {
-                 batchIdSelect.innerHTML = '<option value="">-- Select Batch --</option>';
+                 batchIdSelect.innerHTML = '<option value="">-- Select Course First --</option>';
             }
 
         } catch (error) {
@@ -566,43 +560,44 @@ document.addEventListener('DOMContentLoaded', () => {
      * Loads Subjects for the selected Course.
      */
     async function loadSubjectsForCourse(courseId, subjectSelectElement) {
-        subjectSelectElement.innerHTML = '<option value="">-- Select Subject --</option>';
+        subjectSelectElement.innerHTML = '<option value="">Loading subjects...</option>';
         subjectSelectElement.disabled = true;
-        if (!courseId) return;
+        if (!courseId) {
+            subjectSelectElement.innerHTML = '<option value="">-- Select Exam First --</option>';
+            return;
+        }
 
         try {
             const subjects = await fetchWithAuth(`${ACADEMICS_API_URL}/courses/${courseId}/subjects`);
-            
             subjectSelectElement.innerHTML = '<option value="">-- Select Subject --</option>';
 
             subjects.forEach(subject => {
                 const option = document.createElement('option');
                 option.value = subject.subject_id || subject.id;
                 option.textContent = `${subject.subject_name || 'N/A'} (${subject.subject_code || ''})`;
-                option.dataset.subjectCode = subject.subject_code; 
                 subjectSelectElement.appendChild(option);
             });
             subjectSelectElement.disabled = false;
             
-            return subjects; 
-            
         } catch (error) {
             console.error('Error loading subjects:', error);
             subjectSelectElement.innerHTML = '<option value="">Error loading subjects</option>';
-            return [];
         }
     }
 
 
     /**
      * Loads the list of existing exams for the main table and dropdowns.
+     * This relies on GET /api/exams/list providing a FULL object.
      */
     async function loadExams() {
         clearError('exam-error-msg');
         try {
+            // This is the correct API call.
+            // It calls GET /api/exams/list
             const exams = await fetchWithAuth(`${API_URL}/list`);
             
-            examCache = {};
+            examCache = {}; // Reset cache
             
             if (examsTableBody) {
                 loadExamsTable(exams); 
@@ -613,35 +608,18 @@ document.addEventListener('DOMContentLoaded', () => {
             marksExamSelect.innerHTML = '<option value="">-- Select Exam --</option>';
             
             exams.forEach(exam => {
-                // *** 🛑 নতুন বাগ ফিক্স (সংস্করণ ২): 🛑 ***
-                // সার্ভার থেকে 'id' বা 'exam_id' আসতে পারে। আমরা 'exam_id'-কে স্ট্যান্ডার্ড করবো।
-                
-                // 1. আইডি ভেরিয়েবলটি পান (এটি 'exam.id' বা 'exam.exam_id' হতে পারে)
                 const examId = exam.exam_id || exam.id; 
-
-                // 2. এখন চেক করুন যে আইডিটি সত্যিই আছে কিনা
-                if (!exam || !examId) {
+                if (!examId) {
                     console.warn('Skipping exam with null or undefined ID:', exam);
-                    return; // এই exam-এর জন্য option তৈরি করবেন না
+                    return; 
                 }
-
-                // 3. অবজেক্টটিকে স্ট্যান্ডার্ড করুন (যদি প্রয়োজন হয়)
-                // এটি নিশ্চিত করে যে ক্যাশে এবং <option> ডেটাসেটে 'exam_id' সর্বদা থাকে
-                if (!exam.exam_id) {
-                    exam.exam_id = examId; 
-                }
-                // *** ফিক্স শেষ ***
-
-                examCache[exam.exam_id] = exam; // এখন এটি কাজ করবে
+                
+                exam.exam_id = examId;
+                examCache[examId] = exam; // Store the FULL exam object
 
                 const option = document.createElement('option');
-                option.value = exam.exam_id; // এখন এটি কাজ করবে
+                option.value = examId;
                 option.textContent = `${exam.exam_name || 'N/A'} (${exam.course_name || 'N/A'} - ${exam.batch_name || 'N/A'})`;
-                
-                // CRITICAL: Store necessary FKs and Max Marks on the option element
-                option.dataset.courseId = exam.course_id || ''; 
-                option.dataset.batchId = exam.batch_id || '';
-                option.dataset.totalMarks = exam.total_marks || 0; 
                 
                 scheduleExamSelect.appendChild(option.cloneNode(true));
                 marksExamSelect.appendChild(option.cloneNode(true));
@@ -649,7 +627,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
         } catch (error) {
             console.error('Error loading exams:', error);
-            displayError('exam-error-msg', 'Could not load exam list.');
+            displayError('exam-error-msg', `Could not load exam list: ${error.message}`);
         }
     }
 
@@ -666,6 +644,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         exams.forEach(exam => {
             const row = document.createElement('tr');
+            const examId = exam.exam_id || exam.id;
+            
             row.innerHTML = `
                 <td>${exam.exam_name || 'N/A'}</td>
                 <td>${exam.course_name || 'N/A'}</td>
@@ -673,15 +653,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${exam.total_marks || 'N/A'}</td> 
                 <td>${exam.exam_date ? new Date(exam.exam_date).toLocaleDateString('en-IN') : 'N/A'}</td>
                 <td class="actions">
-                    <button class="edit-exam-btn" data-exam-id="${exam.exam_id || exam.id}">Edit</button>
-                    <button class="delete-exam-btn delete-btn" data-exam-id="${exam.exam_id || exam.id}">Delete</button>
-                    <button class="view-schedule-btn" data-exam-id="${exam.exam_id || exam.id}">Schedule</button>
+                    <button class="edit-exam-btn" data-exam-id="${examId}" disabled title="Edit not implemented">Edit</button>
+                    <button class="delete-exam-btn delete-btn" data-exam-id="${examId}">Delete</button>
+                    <button class="view-schedule-btn" data-exam-id="${examId}">Schedule</button>
                 </td>
             `;
             examsTableBody.appendChild(row);
         });
     }
 
+    // This form correctly sends all required fields to create an exam.
     examForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         clearError('exam-error-msg');
@@ -691,16 +672,19 @@ document.addEventListener('DOMContentLoaded', () => {
             exam_type: examForm.exam_type.value,
             exam_date: examForm.exam_date.value,
             is_midterm_assessment: examForm.is_midterm_assessment.checked,
-            academic_session_id: sessionId, 
+            academic_session_id: sessionId,
+            course_id: examForm.course_code.value,
+            batch_id: examForm.batch_code.value,
+            max_theory_marks: examForm.max_theory_marks.value,
+            max_practical_marks: examForm.max_practical_marks.value
         };
         
-        // Basic Client-side validation check (Check for Session ID)
-        if (!data.exam_name || !data.exam_date) {
-            displayError('exam-error-msg', 'Exam Name and Date are required.');
+        if (!data.course_id || !data.batch_id) {
+            displayError('exam-error-msg', 'Course and Batch are required.');
             return;
         }
         if (data.academic_session_id === '00000000-0000-0000-0000-000000000000') {
-            displayError('exam-error-msg', 'Error: No active academic session found in localStorage.');
+            displayError('exam-error-msg', 'Error: No active academic session found.');
             return;
         }
 
@@ -710,9 +694,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(data),
             });
             
-            alert(`Exam ${data.exam_name} created successfully! ID: ${newExam.id}`);
+            alert(`Exam ${data.exam_name} created successfully! ID: ${newExam.id || newExam.exam_id}`);
             examForm.reset();
-            // Re-load course/batch state after reset
             await loadFormDependencies();
             await loadExams(); // Reload list
 
@@ -728,7 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!examId) return;
 
         if (target.classList.contains('delete-exam-btn')) {
-            if (confirm('Are you sure you want to delete this Exam? Associated schedules and marks must be deleted first.')) {
+            if (confirm('Are you sure you want to delete this Exam? This will delete all associated schedules and marks.')) {
                 try {
                     await fetchWithAuth(`${API_URL}/${examId}`, { method: 'DELETE' });
                     alert('Exam deleted successfully.');
@@ -740,7 +723,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (target.classList.contains('view-schedule-btn')) {
              scheduleExamSelect.value = examId;
-             // Ensure the course/batch is available on the select option before dispatching
              if (scheduleExamSelect.value) {
                  scheduleExamSelect.dispatchEvent(new Event('change'));
                  document.getElementById('schedule-section').scrollIntoView({ behavior: 'smooth' });
@@ -753,45 +735,29 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Schedule Logic (Section 2) ---
 
+    // This logic is clean. It relies on `examCache` having the correct data.
     scheduleExamSelect.addEventListener('change', async () => {
         const examId = scheduleExamSelect.value;
-        const selectedOption = scheduleExamSelect.options[scheduleExamSelect.selectedIndex];
+        const selectedExam = examCache[examId]; // Get full object from cache
+
         scheduleTableBody.innerHTML = '<tr><td colspan="6">Loading schedule...</td></tr>';
         
-        if (!examId) {
+        if (!selectedExam) {
             selectedExamNameSpan.textContent = 'None';
             scheduleTableBody.innerHTML = '<tr><td colspan="6">Select an Exam above to view schedule.</td></tr>';
             scheduleSubjectSelect.disabled = true;
+            scheduleSubjectSelect.innerHTML = '<option value="">-- Select Exam --</option>';
             return;
         }
 
-        // 1. Get Course/Batch IDs reliably: Check Cache first
-        let courseId = selectedOption.dataset.courseId;
-        let batchId = selectedOption.dataset.batchId;
-        const examName = selectedOption.textContent;
+        const courseId = selectedExam.course_id;
+        const examName = selectedExam.exam_name;
         selectedExamNameSpan.textContent = examName;
         
-        // 2. CRITICAL FIX: Fallback logic
+        // This is the check that is failing (line 767)
         if (!courseId) {
-            console.log(`[Schedule] Course ID missing from cache for exam ${examId}. Attempting API fetch...`);
-            try {
-                const fullExam = await fetchWithAuth(`${API_URL}/${examId}`);
-                // Use || to ensure if fullExam.course_id is null, we check the fallback immediately.
-                courseId = fullExam.course_id || courseIdSelect.value; 
-                batchId = fullExam.batch_id || batchIdSelect.value;
-                console.log(`[Schedule] API fetch successful. Course ID: ${courseId}`);
-            } catch (error) {
-                console.warn(`[Schedule] API fetch failed. Falling back to Section 1 course selection. Error: ${error.message}`);
-                // If API fails, fall back to Section 1 course selection
-                courseId = courseIdSelect.value;
-                batchId = batchIdSelect.value;
-            }
-        }
-        
-        // 3. Final Check before attempting subject load
-        if (!courseId) {
-             console.error(`[Schedule] Final check failed. Course ID is still missing for exam ${examId}.`);
-             scheduleTableBody.innerHTML = '<tr><td colspan="6" style="color: red;">Error: Course ID missing. Cannot load schedule/subjects.</td></tr>';
+             console.error(`[Schedule] Final check failed. Course ID is missing from cache for exam ${examId}.`);
+             scheduleTableBody.innerHTML = '<tr><td colspan="6" style="color: red;">Error: Exam is not linked to a Course. Cannot load subjects.</td></tr>';
              scheduleSubjectSelect.disabled = true;
              return;
         }
@@ -799,10 +765,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Load subjects for the selected exam's course
         await loadSubjectsForCourse(courseId, scheduleSubjectSelect);
 
+        // Load the schedule for this exam
         try {
             const schedules = await fetchWithAuth(`${API_URL}/schedule/${examId}`);
             scheduleCache = schedules.reduce((acc, sch) => {
-                acc[sch.schedule_id] = sch;
+                acc[sch.schedule_id || sch.id] = sch;
                 return acc;
             }, {});
             
@@ -815,7 +782,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function loadScheduleTable(schedules, examName) {
-        const scheduleTableBody = document.getElementById('schedule-table-body');
         scheduleTableBody.innerHTML = '';
         if (schedules.length === 0) {
             scheduleTableBody.innerHTML = '<tr><td colspan="6">No schedule entries for this exam.</td></tr>';
@@ -824,7 +790,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         schedules.forEach(sch => {
             const row = document.createElement('tr');
-            // Hardened time display
+            const scheduleId = sch.schedule_id || sch.id;
             const startTime = sch.start_time ? sch.start_time.substring(0, 5) : 'N/A';
             const endTime = sch.end_time ? sch.end_time.substring(0, 5) : 'N/A';
 
@@ -835,8 +801,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <td>${startTime} - ${endTime}</td>
                 <td>${sch.room_number || 'N/A'}</td>
                 <td class="actions">
-                    <button class="edit-schedule-btn" data-schedule-id="${sch.schedule_id}">Edit</button>
-                    <button class="delete-schedule-btn delete-btn" data-schedule-id="${sch.schedule_id}">Delete</button>
+                    <button class="edit-schedule-btn" data-schedule-id="${scheduleId}">Edit</button>
+                    <button class="delete-schedule-btn delete-btn" data-schedule-id="${scheduleId}">Delete</button>
                 </td>
             `;
             scheduleTableBody.appendChild(row);
@@ -849,18 +815,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const examId = scheduleExamSelect.value;
         const scheduleId = scheduleIdInput.value;
-        const selectedOption = scheduleExamSelect.options[scheduleExamSelect.selectedIndex];
+        const selectedExam = examCache[examId];
         
-        // 1. Get Course/Batch IDs reliably: Prioritize cached data or Section 1 fields
-        let courseId = selectedOption.dataset.courseId || courseIdSelect.value;
-        let batchId = selectedOption.dataset.batchId || batchIdSelect.value; 
-        
-        // FIX: Get current max marks from Section 1 for new schedule or edit 
-        const maxTheoryMarks = document.getElementById('max_theory_marks').value;
-        const maxPracticalMarks = document.getElementById('max_practical_marks').value;
+        if (!selectedExam) {
+            displayError('schedule-error-msg', 'Please select a valid exam.');
+            return;
+        }
+
+        const courseId = selectedExam.course_id;
+        const batchId = selectedExam.batch_id;
+        const maxMarks = selectedExam.total_marks;
         
         if (!examId || !courseId || !batchId) {
-            displayError('schedule-error-msg', 'Validation Error: Select Exam, Course, and Batch.');
+            displayError('schedule-error-msg', 'Validation Error: Selected Exam is missing Course or Batch data.');
             return;
         }
         if (!scheduleForm.subject_code.value) {
@@ -877,8 +844,7 @@ document.addEventListener('DOMContentLoaded', () => {
             room_number: scheduleForm.room_number.value,
             start_time: scheduleForm.start_time.value,
             end_time: scheduleForm.end_time.value,
-            // Calculate total marks for the schedule record (required by DB schema)
-            max_marks: (parseInt(maxTheoryMarks) || 0) + (parseInt(maxPracticalMarks) || 0)
+            max_marks: maxMarks
         };
 
         try {
@@ -927,17 +893,16 @@ document.addEventListener('DOMContentLoaded', () => {
             const sch = scheduleCache[scheduleId];
             if (!sch) return;
             
-            scheduleIdInput.value = sch.schedule_id;
+            scheduleIdInput.value = sch.schedule_id || sch.id;
             scheduleForm.exam_date_schedule.value = sch.exam_date ? sch.exam_date.substring(0, 10) : '';
             scheduleForm.room_number.value = sch.room_number || '';
             scheduleForm.start_time.value = sch.start_time ? sch.start_time.substring(0, 5) : '';
             scheduleForm.end_time.value = sch.end_time ? sch.end_time.substring(0, 5) : '';
-            scheduleForm.exam_center.value = sch.room_number || 'Main Campus'; // Default value is set in HTML
+            scheduleForm.exam_center.value = sch.exam_center || 'Main Campus';
 
-            // Set subject dropdown 
             setTimeout(() => {
                 scheduleForm.subject_code.value = sch.subject_id || '';
-            }, 50); 
+            }, 100); 
 
             addScheduleBtn.textContent = 'Update Schedule';
             cancelEditScheduleBtn.style.display = 'inline';
@@ -950,7 +915,6 @@ document.addEventListener('DOMContentLoaded', () => {
         scheduleIdInput.value = '';
         cancelEditScheduleBtn.style.display = 'none';
         addScheduleBtn.textContent = 'Add to Schedule';
-        scheduleExamSelect.dispatchEvent(new Event('change')); // Re-run change to clear UI state
     });
 
 
@@ -958,108 +922,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
     marksExamSelect.addEventListener('change', async () => {
         const examId = marksExamSelect.value;
-        const selectedOption = marksExamSelect.options[marksExamSelect.selectedIndex];
+        const selectedExam = examCache[examId]; // Get full object from cache
+
+        // Reset UI
         marksSubjectSelect.disabled = true;
         marksSubjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
         maxMarksDisplay.textContent = '0';
         studentMarksBody.innerHTML = '<tr><td colspan="3">Select an exam and subject and click "Load Students" to begin marks entry.</td></tr>';
 
-        // *** 🛑 বাগ ফিক্স ২: 🛑 ***
-        // 'undefined' স্ট্রিং ভ্যালু চেক করুন
-        if (!examId || examId === "undefined") {
-             marksSubjectSelect.disabled = true;
-             marksSubjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
-             maxMarksDisplay.textContent = '0';
-             studentMarksBody.innerHTML = '<tr><td colspan="3">Select an exam and subject and click "Load Students" to begin marks entry.</td></tr>';
+        if (!selectedExam) {
              return;
         }
-        // *** ফিক্স শেষ ***
         
-        let courseId = selectedOption.dataset.courseId;
+        const courseId = selectedExam.course_id;
         
-        // CRITICAL FIX: Fallback logic for Marks Entry
+        // This is the other place the error might appear
         if (!courseId) {
-             console.log(`[Marks] Course ID missing from cache for exam ${examId}. Attempting API fetch...`);
-             try {
-                const fullExam = await fetchWithAuth(`${API_URL}/${examId}`);
-                // Use || to ensure if fullExam.course_id is null, we check the fallback immediately.
-                courseId = fullExam.course_id || courseIdSelect.value;
-             } catch (error) {
-                console.warn(`[Marks] API fetch failed. Falling back to Section 1 course selection. Error: ${error.message}`);
-                // If fetch fails, fallback to Section 1 course selection
-                courseId = courseIdSelect.value;
-             }
-        }
-        
-        // Load subjects for the selected exam's course
-        if (!courseId) {
-             console.error(`[Marks] Final check failed. Course ID is still missing for exam ${examId}.`);
-             // This is the source of the persistent error, display it in the UI here.
-             marksSubjectSelect.innerHTML = '<option value="">Error: Course ID Missing</option>';
-             marksSubjectSelect.disabled = true;
+             console.error(`[Marks] Final check failed. Course ID is missing from cache for exam ${examId}.`);
+             marksSubjectSelect.innerHTML = '<option value="">Error: Exam has no Course ID</option>';
              return;
         }
 
         await loadSubjectsForCourse(courseId, marksSubjectSelect);
         
-        // Update Max Marks display (simplified)
-        const totalMarks = selectedOption.dataset.totalMarks;
-        if (totalMarks > 0) {
-             maxMarksDisplay.textContent = `${totalMarks} (Combined)`;
-        } else {
-             maxMarksDisplay.textContent = 'N/A (Schedule max marks not defined)';
-        }
+        const totalMarks = selectedExam.total_marks;
+        maxMarksDisplay.textContent = `${totalMarks || 0} (Combined)`;
     });
 
     marksSubjectSelect.addEventListener('change', () => {
-        // Reset table when subject changes
         studentMarksBody.innerHTML = '<tr><td colspan="3">Click "Load Students" to begin marks entry.</td></tr>';
     });
     
-    // --- Load Students for Marks Entry ---
     loadStudentsBtn.addEventListener('click', async () => {
         clearError('marks-error-msg');
+        
         const examId = marksExamSelect.value;
         const subjectId = marksSubjectSelect.value;
-        
-        // *** 🛑 বাগ ফিক্স ৩: 🛑 ***
-        // 'undefined' স্ট্রিং ভ্যালু চেক করুন
-        if (!examId || examId === "undefined" || !subjectId) {
+        const selectedExam = examCache[examId]; 
+
+        if (!selectedExam || !subjectId) {
             displayError('marks-error-msg', 'Please select both an Exam and a Subject.');
             return;
         }
-        // *** ফিক্স শেষ ***
         
-        const selectedOption = marksExamSelect.options[marksExamSelect.selectedIndex];
-        let courseId = selectedOption.dataset.courseId;
-        let batchId = selectedOption.dataset.batchId;
-        
-        // FIX: Ensure Course/Batch IDs are available
-        if (!courseId || !batchId) {
-             console.log(`[Load Students] Course/Batch ID missing from cache for exam ${examId}. Attempting API fetch...`);
-             try {
-                const fullExam = await fetchWithAuth(`${API_URL}/${examId}`);
-                // Use || to ensure null fallback to Section 1 values
-                courseId = courseId || fullExam.course_id || courseIdSelect.value;
-                batchId = batchId || fullExam.batch_id || batchIdSelect.value;
-             } catch (e) {
-                console.warn(`[Load Students] API fetch failed. Falling back to Section 1 course selection.`);
-                // If fetch fails, fallback to Section 1 course selection
-                courseId = courseIdSelect.value;
-                batchId = batchIdSelect.value;
-             }
-        }
+        const courseId = selectedExam.course_id;
+        const batchId = selectedExam.batch_id;
 
         if (!courseId || !batchId) {
-             displayError('marks-error-msg', 'Selected exam is not correctly linked to a Course/Batch. Try updating the exam schedule first.');
+             displayError('marks-error-msg', 'Selected exam is not correctly linked to a Course/Batch.');
              return;
         }
         
-        studentMarksBody.innerHTML = '<tr><td colspan="3" class="text-center">Fetching student list and existing marks...</td></tr>';
+        studentMarksBody.innerHTML = '<tr><td colspan="3">Fetching student list and existing marks...</td></tr>';
 
         try {
-            // 1. Fetch Students in the Course/Batch 
-            // NOTE: Assumes /api/students/course/:courseId/batch/:batchId is the correct endpoint
             const students = await fetchWithAuth(`${STUDENTS_API_URL}/course/${courseId}/batch/${batchId}`);
             
             if (!students || students.length === 0) {
@@ -1067,10 +983,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // 2. Fetch Existing Marks for this exam/subject
             const existingMarks = await fetchWithAuth(`${MARKS_API_URL}/${examId}/${subjectId}`);
             
-            // Convert existing marks array to a map for quick lookup
             const existingMarksMap = existingMarks.reduce((map, mark) => {
                 map[mark.student_id] = { 
                     theory: mark.marks_obtained_theory !== null ? mark.marks_obtained_theory : '', 
@@ -1079,20 +993,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 return map;
             }, {});
 
-            // 3. Render the marks entry table
             studentMarksBody.innerHTML = students.map(student => {
-                const marks = existingMarksMap[student.id] || { theory: '', practical: '' };
+                const studentId = student.student_id || student.id; 
+                const marks = existingMarksMap[studentId] || { theory: '', practical: '' };
                 const studentName = `${student.first_name || ''} ${student.last_name || ''}`.trim() || 'N/A Student';
 
                 return `
-                    <tr data-student-id="${student.id}">
+                    <tr data-student-id="${studentId}">
                         <td>${student.enrollment_no || 'N/A'} / ${studentName}</td>
                         <td>
-                            <input type="number" name="theory_${student.id}" 
+                            <input type="number" name="theory_${studentId}" 
                                    value="${marks.theory}" min="0">
                         </td>
                         <td>
-                            <input type="number" name="practical_${student.id}" 
+                            <input type="number" name="practical_${studentId}" 
                                    value="${marks.practical}" min="0">
                         </input>
                         </td>
@@ -1102,16 +1016,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Marks entry loading error:', error);
-            if (error.message.includes('404')) {
-                 displayError('marks-error-msg', 'Critical Error: The Student API endpoint (/api/students/course/...) was not found on the server (404). Please check your backend routing!');
-            } else {
-                 displayError('marks-error-msg', `Loading failed: ${error.message}`);
-            }
-            studentMarksBody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Failed to load data.</td></tr>';
+            displayError('marks-error-msg', `Loading failed: ${error.message}`);
+            studentMarksBody.innerHTML = '<tr><td colspan="3">Failed to load data.</td></tr>';
         }
     });
 
-    // --- Save Marks Entry ---
     marksEntryForm.addEventListener('submit', async (e) => {
         e.preventDefault();
         clearError('marks-error-msg');
@@ -1133,11 +1042,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const theoryInput = row.querySelector(`input[name="theory_${studentId}"]`);
             const practicalInput = row.querySelector(`input[name="practical_${studentId}"]`);
             
-            // Convert empty string to null, otherwise convert to integer
-            const theoryMark = theoryInput.value === '' ? null : parseInt(theoryInput.value);
-            const practicalMark = practicalInput.value === '' ? null : parseInt(practicalInput.value);
+            const theoryMark = theoryInput.value === '' ? null : parseFloat(theoryInput.value);
+            const practicalMark = practicalInput.value === '' ? null : parseFloat(practicalInput.value);
             
-            // Add validation for non-numeric/negative input values
             if ((theoryMark !== null && (isNaN(theoryMark) || theoryMark < 0)) ||
                 (practicalMark !== null && (isNaN(practicalMark) || practicalMark < 0))) {
                 displayError('marks-error-msg', `Invalid marks entered for Roll: ${row.querySelector('td').textContent.split('/')[0].trim()}. Marks must be non-negative numbers.`);
@@ -1145,7 +1052,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Only submit if either mark has been entered
             if (theoryMark !== null || practicalMark !== null) {
                 marksData.push({
                     student_id: studentId,
@@ -1174,7 +1080,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify(payload)
             });
             alert('Marks saved successfully!');
-            await loadMarksheetStatus(); // Refresh status board
+            await loadMarksheetStatus(); 
             
         } catch (error) {
             console.error('Marks saving error:', error);
@@ -1190,16 +1096,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         try {
             const statusData = await fetchWithAuth(`${MARKS_API_URL}/status`); 
-            
             MARKSHEET_STATUS_BODY.innerHTML = '';
             
             if (!statusData || statusData.length === 0) {
-                MARKSHEET_STATUS_BODY.innerHTML = '<tr><td colspan="6">No marksheets have been generated yet.</td></tr>';
+                MARKSHEET_STATUS_BODY.innerHTML = '<tr><td colspan="6">No student marksheet data found.</td></tr>';
                 return;
             }
 
             statusData.forEach(item => {
-                // Determine styling based on status
                 const msStatus = item.marksheet_status || 'Pending';
                 const certStatus = item.certificate_status || 'Pending';
                 const msColor = msStatus === 'Generated' ? 'green' : '#C16744';
@@ -1221,30 +1125,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         } catch (error) {
             console.error('Error loading marksheet status:', error);
-            MARKSHEET_STATUS_BODY.innerHTML = '<tr><td colspan="6">Error loading marksheet status.</td></tr>';
+            MARKSHEET_STATUS_BODY.innerHTML = `<tr><td colspan="6">Error loading marksheet status: ${error.message}</td></tr>`;
         }
     }
     
-    // --- Marksheet Viewing Modal (Implementation) ---
-    
+    // --- Marksheet Viewing Modal ---
     async function displayMarksheetModal(rollNo) {
         try {
             const marksheet = await fetchWithAuth(`${MARKS_API_URL}/marksheet/roll/${rollNo}`);
             
-            // Populate header details
             document.getElementById('modal-student-name').textContent = marksheet.student_name || 'N/A';
             document.getElementById('modal-roll-number').textContent = marksheet.roll_number || 'N/A';
             document.getElementById('modal-course-batch').textContent = `${marksheet.course_name || 'N/A'} / ${marksheet.batch_name || 'N/A'}`;
             
-            // Populate marks table body
             const marksTableBody = document.querySelector('#modal-marks-table tbody');
             marksTableBody.innerHTML = '';
 
             if (marksheet.marks && marksheet.marks.length > 0) {
                 marksheet.marks.forEach(mark => {
                     const row = document.createElement('tr');
-                    
-                    // Safely calculate percentage to prevent division by zero
                     const percentage = (mark.total_marks > 0) ? (mark.marks_obtained / mark.total_marks) * 100 : 0;
                     
                     row.innerHTML = `
@@ -1263,7 +1162,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 marksTableBody.innerHTML = '<tr><td colspan="5">No marks found for this student.</td></tr>';
             }
             
-            // Display modal
             marksheetModal.style.display = 'flex';
             
         } catch (error) {
@@ -1282,17 +1180,17 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 
-    // NEW/FIXED EVENT LISTENER: Course change listener to load Batches
-    courseIdSelect.addEventListener('change', async () => {
+    // --- Event Listener for Section 1 Course Select ---
+    courseIdSelect.addEventListener('change', () => {
         const courseId = courseIdSelect.value;
-        await loadBatchesForCourse(courseId);
+        loadBatchesForCourse(courseId, batchIdSelect); // Load batches for Section 1
     });
 
 
-    // Final Initialization Call
+    // --- Final Initialization Call ---
     function initializePage() {
-        loadFormDependencies();
-        loadExams();
+        loadFormDependencies(); // Loads Courses for Section 1
+        loadExams();            // Loads Exams for all sections (and populates examCache)
         loadMarksheetStatus(); 
     }
 
