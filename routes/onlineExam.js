@@ -1,5 +1,3 @@
-// routes/onlineExam.js 
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -13,7 +11,7 @@ const QUESTIONS_TABLE = 'quiz_questions';
 const QUIZ_QUESTION_LINKS_TABLE = 'quiz_question_links';
 const RESULTS_TABLE = 'student_quiz_results'; 
 
-// --- UTILITY FUNCTIONS FOR SECURITY (omitted for brevity) ---
+// --- UTILITY FUNCTIONS FOR SECURITY ---
 async function checkAttemptOwnership(attemptId, studentId) {
     const result = await pool.query(
         `SELECT student_id, quiz_id FROM ${ATTEMPT_TABLE} WHERE attempt_id = $1;`,
@@ -22,14 +20,13 @@ async function checkAttemptOwnership(attemptId, studentId) {
 
     if (result.rowCount === 0) {
         console.error(`Attempt ownership check failed: Attempt ID ${attemptId} not found.`);
-        // Note: Using a generic message to prevent information leakage
         throw new Error('Attempt not found or unauthorized.', 404);
     }
     if (String(result.rows[0].student_id) !== String(studentId)) {
         console.error(`Attempt ownership check failed: Attempt ID ${attemptId} belongs to student ${result.rows[0].student_id}, but accessed by student ${studentId}.`);
         throw new Error('Unauthorized access to this attempt.', 403);
     }
-    return result.rows[0]; 
+    return result.rows[0]; // Returns { student_id, quiz_id }
 }
 
 
@@ -165,7 +162,7 @@ router.delete('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admi
 
 
 // =================================================================
-// --- QUESTION BANK IMPORT ROUTE (FIX FOR 404) ---
+// --- QUESTION BANK IMPORT ROUTE ---
 // =================================================================
 
 /**
@@ -180,7 +177,6 @@ router.post('/question-bank/import', authenticateToken, authorize(['Super Admin'
         return res.status(400).json({ message: 'Invalid data format. Expected non-empty array of questions.' });
     }
     
-    // Validate required fields exist in each question object
     const validationError = questions.find(q => !q.Question_Text || !q.Subject_ID || !q.Correct_Option || !q.Option_A || !q.Option_B);
     if (validationError) {
         console.error("Bulk Import Validation Failed on question:", validationError);
@@ -205,7 +201,7 @@ router.post('/question-bank/import', authenticateToken, authorize(['Super Admin'
         for (const q of questions) {
             const result = await client.query(insertQuery, [
                 q.Question_Text, 
-                q.Subject_ID, // <-- Requires UUID string from import data
+                q.Subject_ID, 
                 q.Correct_Option, 
                 parseInt(q.Marks) || 1, 
                 q.Topic || null, 
@@ -213,10 +209,9 @@ router.post('/question-bank/import', authenticateToken, authorize(['Super Admin'
                 q.Option_B, 
                 q.Option_C || null, 
                 q.Option_D || null,
-                'MCQ' // Default type
+                'MCQ'
             ]);
             
-            // Check if a row was actually inserted (not just ignored due to conflict)
             if (result.rowCount > 0) {
                 importedCount++;
             }
@@ -230,10 +225,9 @@ router.post('/question-bank/import', authenticateToken, authorize(['Super Admin'
         await client.query('ROLLBACK');
         console.error('Bulk Import Error:', error);
         
-        if (error.code === '23503') { // Foreign Key Violation (Invalid Subject_ID)
+        if (error.code === '23503') {
              return res.status(409).json({ message: 'Import failed: Invalid Subject ID used in the data.' });
         }
-        // This is where the UUID syntax error is caught (Error code 22P02)
         res.status(500).json({ message: `Internal error during import: ${error.message}` });
     } finally {
         client.release();
@@ -242,12 +236,107 @@ router.post('/question-bank/import', authenticateToken, authorize(['Super Admin'
 
 
 // =================================================================
-// --- SECURE EXAM FLOW ROUTES (STUDENT) ---
+// --- (NEW) QUESTION MANAGEMENT ROUTES (For question-management.html) ---
+// =================================================================
+
+/**
+ * @route   GET /api/online-exam/question-bank
+ * @desc    Get all questions from the central question bank.
+ * @access  Private (Super Admin, Admin, Teacher)
+ */
+router.get('/question-bank', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
+    try {
+        const { rows } = await pool.query(`SELECT * FROM ${QUESTIONS_TABLE} ORDER BY question_id ASC`);
+        res.status(200).json(rows);
+    } catch (err) {
+        console.error('Error fetching question bank:', err.message);
+        res.status(500).json({ message: 'Failed to fetch question bank' });
+    }
+});
+
+/**
+ * @route   GET /api/online-exam/quizzes/:id/links
+ * @desc    Get all questions *linked* to a specific quiz.
+ * @access  Private (Super Admin, Admin, Teacher)
+ */
+router.get('/quizzes/:id/links', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
+    const { id } = req.params; // This is the quiz UUID
+    try {
+        const queryText = `
+            SELECT 
+                qq.*, 
+                qql.question_order
+            FROM 
+                ${QUESTIONS_TABLE} AS qq
+            JOIN 
+                ${QUIZ_QUESTION_LINKS_TABLE} AS qql ON qq.question_id = qql.question_id
+            WHERE 
+                qql.quiz_id = $1
+            ORDER BY
+                qql.question_order ASC;
+        `;
+        const { rows } = await pool.query(queryText, [id]);
+        res.json(rows); 
+    } catch (err) {
+        console.error('Error fetching linked questions:', err.message);
+        res.status(500).json({ message: 'Failed to fetch linked questions' });
+    }
+});
+
+/**
+ * @route   PUT /api/online-exam/quizzes/:id/link-questions
+ * @desc    (Re)sets the full list of questions linked to a quiz.
+ * @access  Private (Super Admin, Admin, Teacher)
+ */
+router.put('/quizzes/:id/link-questions', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
+    const { id: quiz_id } = req.params; // The quiz UUID
+    const { links } = req.body; // The array: [{ question_id, question_order }, ...]
+
+    if (!Array.isArray(links)) {
+        return res.status(400).json({ message: 'Invalid data format. "links" array is required.' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN'); // Start transaction
+
+        // Step 1: Delete all *old* links for this quiz
+        await client.query(`DELETE FROM ${QUIZ_QUESTION_LINKS_TABLE} WHERE quiz_id = $1`, [quiz_id]);
+
+        // Step 2: Insert all *new* links from the array
+        for (const link of links) {
+            const { question_id, question_order } = link;
+            if (question_id === undefined || question_order === undefined) {
+                 throw new Error('Invalid link data: question_id and question_order are required.');
+            }
+            const insertQuery = `
+                INSERT INTO ${QUIZ_QUESTION_LINKS_TABLE} (quiz_id, question_id, question_order)
+                VALUES ($1, $2, $3)
+            `;
+            // Your schema uses INTEGER for question_id, so we parse it
+            await client.query(insertQuery, [quiz_id, parseInt(question_id), parseInt(question_order)]);
+        }
+
+        await client.query('COMMIT'); // Commit transaction
+        res.status(200).json({ message: 'Quiz links updated successfully.' });
+
+    } catch (err) {
+        await client.query('ROLLBACK'); // Rollback on error
+        console.error('Error saving quiz links:', err.message);
+        res.status(500).json({ message: 'Failed to save quiz links', error: err.message });
+    } finally {
+        client.release(); // Release client back to pool
+    }
+});
+
+
+// =================================================================
+// --- (FIXED) SECURE EXAM FLOW ROUTES (STUDENT) ---
 // =================================================================
 
 /**
  * @route   POST /api/online-exam/exam/start
- * @desc    VERIFIES student eligibility and INITIATES a new exam attempt.
+ * @desc    VERIFIES student and INITIATES attempt. NOW RETURNS QUIZ DETAILS.
  * @access  Private (Student)
  */
 router.post('/exam/start', authenticateToken, authorize(['Student']), async (req, res) => {
@@ -255,24 +344,37 @@ router.post('/exam/start', authenticateToken, authorize(['Student']), async (req
     const { quiz_id, live_image_data, room_number, system_id } = req.body;
 
     if (!student_id || !quiz_id) { 
-        console.error(`Exam start validation failed: student_id=${student_id}, quiz_id=${quiz_id}`);
         return res.status(400).json({ message: 'Missing Student ID or Quiz ID.' });
     }
 
-    // Note: The structure assumes quiz_id is UUID (based on foreign key fix) and student_id is UUID.
     const studentIdStr = String(student_id); 
-    const quizIdStr = String(quiz_id); // Treat quiz_id as string/UUID
+    const quizIdStr = String(quiz_id);
+
+    // Use a client for two queries
+    const client = await pool.connect();
 
     try {
-        // NOTE: In a real system, add eligibility checks here.
+        await client.query('BEGIN');
 
-        const query = `
+        // Step 1: Fetch Quiz Details (Title and Time)
+        const quizDetailsQuery = `
+            SELECT title, time_limit_minutes FROM ${QUIZZES_TABLE} 
+            WHERE id = $1 AND status = 'Published'
+        `;
+        const quizResult = await client.query(quizDetailsQuery, [quizIdStr]);
+
+        if (quizResult.rowCount === 0) {
+            throw new Error('Quiz not found or is not published.', 404);
+        }
+        const quizDetails = quizResult.rows[0];
+
+        // Step 2: Insert the attempt
+        const attemptQuery = `
             INSERT INTO ${ATTEMPT_TABLE}
                 (student_id, quiz_id, start_time, verification_image, room_number, system_id, status)
             VALUES ($1, $2, NOW(), $3, $4, $5, 'In Progress')
             RETURNING attempt_id;
         `;
-        
         const values = [
             studentIdStr, 
             quizIdStr,    
@@ -281,22 +383,36 @@ router.post('/exam/start', authenticateToken, authorize(['Student']), async (req
             system_id || null
         ];
 
-        const result = await pool.query(query, values);
-        const attempt_id = result.rows[0].attempt_id;
+        const attemptResult = await client.query(attemptQuery, values);
+        const attempt_id = attemptResult.rows[0].attempt_id;
 
+        await client.query('COMMIT');
+        
         console.log(`Exam attempt started: Student ID ${studentIdStr}, Quiz ID ${quizIdStr}, Attempt ID ${attempt_id}`);
+        
+        // Step 3: Return both attempt_id AND quiz_details
         res.status(200).json({
             message: 'Verification successful. Attempt created.',
-            attempt_id: attempt_id
+            attempt_id: attempt_id,
+            quiz_details: {
+                title: quizDetails.title,
+                time_limit_minutes: quizDetails.time_limit_minutes
+            }
         });
 
     } catch (error) {
+        await client.query('ROLLBACK');
         console.error(`Exam start error for Student ID ${student_id}, Quiz ID ${quiz_id}:`, error);
-        if (error.code === '23503' && error.constraint === 'student_exam_attempts_student_id_fkey') {
-             console.error(`Foreign key violation: Student ID ${student_id} does not exist in students table.`);
+        
+        if (error.status === 404) {
+             return res.status(404).json({ message: error.message });
+        }
+        if (error.code === '23503') { // Foreign key violation
              return res.status(400).json({ message: `Invalid Student ID provided. Student not found.`});
         }
         res.status(500).json({ message: 'Internal server error during exam start process.' });
+    } finally {
+        client.release();
     }
 });
 
@@ -331,7 +447,6 @@ router.get('/attempts/:attemptId/questions', authenticateToken, authorize(['Stud
             WHERE qql.quiz_id = $1 
             ORDER BY qql.question_order ASC;
         `;
-        // Note: quizId is a UUID string here
         const result = await pool.query(query, [quizId]);
 
         res.status(200).json(result.rows);
@@ -400,8 +515,8 @@ router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student
         const quizId = attemptDetails.quiz_id;
 
         // --- START GRADING LOGIC ---
-
-        // 2a. Fetch all correct answers & marks for this specific quiz to create an answer key.
+        
+        // 2a. Fetch all correct answers & marks for this specific quiz
         const questionsQuery = `
             SELECT qq.question_id, qq.correct_option, qq.marks
             FROM ${QUESTIONS_TABLE} qq
@@ -410,7 +525,6 @@ router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student
         `;
         const questionsResult = await client.query(questionsQuery, [quizId]);
 
-        // Create a Map for efficient lookup: Map<question_id, { correct_option, marks }>
         const answerKey = new Map();
         questionsResult.rows.forEach(row => {
             answerKey.set(Number(row.question_id), {
@@ -419,10 +533,8 @@ router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student
             });
         });
 
-        // Create a Map of student answers for efficient lookup: Map<question_id, answer>
         const studentAnswersMap = new Map(answers.map(a => [Number(a.question_id), a.answer]));
 
-        // Initialize counters for the summary
         let totalScore = 0;
         let correctCount = 0;
         let incorrectCount = 0;
@@ -451,7 +563,6 @@ router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student
                 incorrectCount++;
             }
 
-            // Insert the detailed result for this single question
             await client.query(insertResultQuery, [
                 attemptId,
                 questionId,

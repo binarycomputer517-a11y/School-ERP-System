@@ -3,56 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Question Management - Quiz ID 1</title>
-    </head>
+    <title>Question Management</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; margin: 20px; }
+        .container { max-width: 1400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1, h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        h1 { font-size: 1.8em; }
+        h2 { font-size: 1.4em; color: #555; }
+        .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 20px; }
+        .panel { border: 1px solid #ddd; border-radius: 5px; background: #fdfdfd; }
+        .panel h2 { padding: 10px 15px; margin: 0; background: #f9f9f9; border-bottom: 1px solid #ddd; }
+        #central-bank-list, #linked-questions-list { padding: 10px 15px; max-height: 500px; overflow-y: auto; }
+        .question-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; border-bottom: 1px solid #eee; }
+        .question-item:last-child { border-bottom: none; }
+        .question-item span { flex-grow: 1; margin-right: 10px; font-size: 0.95em; }
+        .add-btn, .remove-btn, #save-links-btn {
+            padding: 5px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.9em;
+            transition: background-color 0.2s;
+        }
+        .add-btn { background-color: #28a745; color: white; }
+        .add-btn:hover { background-color: #218838; }
+        .remove-btn { background-color: #dc3545; color: white; }
+        .remove-btn:hover { background-color: #c82333; }
+        #save-links-btn {
+            background-color: #007bff; color: white; padding: 12px 25px; font-size: 1.1em;
+            display: block; width: 100%; margin-top: 25px;
+        }
+        #save-links-btn:hover { background-color: #0056b3; }
+    </style>
+</head>
 <body>
 
     <div class="container">
-        <h1 id="quiz-title">Managing Questions for Quiz ID: 1 (Title: CF)</h1>
+        <h1 id="quiz-title">Loading Quiz Details...</h1>
 
         <div class="grid-container">
             
             <div class="panel">
-                <h2>Central Question Bank (Total Questions: <span id="central-count">...</span>)</h2>
+                <h2>Central Question Bank (Total: <span id="central-count">...</span>)</h2>
                 <div id="central-bank-list">
                     <p>Loading questions from central repository...</p>
                 </div>
             </div>
 
             <div class="panel">
-                <h2>Questions Linked to This Quiz (Count: <span id="linked-count">...</span>)</h2>
+                <h2>Questions Linked to This Quiz (Total: <span id="linked-count">...</span>)</h2>
                 <div id="linked-questions-list">
-                    <p>Loading linked questions (from `quiz_question_links`)...</p>
+                    <p>Loading linked questions...</p>
                 </div>
             </div>
         </div>
 
-        <button id="save-links-btn" onclick="saveLinks()">Save Question Order & Links</button>
+        <button id="save-links-btn" onclick="saveLinks()">Save Question Links & Order</button>
     </div>
 
     <script>
-        const QUIZ_ID = 1; // **NOTE:** Should be dynamically retrieved from URL. Using 1 for demonstration.
+        // QUIZ_ID will be set globally after DOMContentLoaded
+        let QUIZ_ID = null; 
         const QUIZ_API = '/api/online-exam'; 
 
         // State to hold the linked question IDs and their order
-        let linkedQuestions = [];
+        let linkedQuestions = []; // Format: [{ question_id, question_order, question_text }]
 
-        // --- NEW: Authenticated API Handler ---
+        // --- Authenticated API Handler ---
         async function handleApi(url, options = {}) {
             const token = localStorage.getItem('erp-token');
+            if (!token) {
+                alert('Authentication error. Please log in again.');
+                window.location.href = '/login.html';
+                throw new Error('No token found');
+            }
             const authHeaders = { 'Authorization': `Bearer ${token}` };
             
             options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
-            const response = await fetch(url, options);
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: 'Server Error' }));
-                throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message}`);
-            }
-            return response.json();
-        }
-        // --- END of API Handler ---
 
-        // --- API FUNCTIONS (FIXED) ---
+            try {
+                const response = await fetch(url, options);
+                if (!response.ok) {
+                    const errorBody = await response.json().catch(() => ({ message: 'Server Error' }));
+                    throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message}`);
+                }
+                if (response.status === 204) return null; // No Content
+                return response.json();
+            } catch (error) {
+                console.error(`API Error: ${error.message}`);
+                throw error;
+            }
+        }
+
+        /**
+         * Gets the 'quizId' parameter from the URL.
+         */
+        function getQuizIdFromUrl() {
+            const params = new URLSearchParams(window.location.search);
+            const quizId = params.get('quizId'); // Get ID from ?quizId=...
+
+            // Check if it's a valid UUID string (not empty or too short)
+            if (!quizId || quizId.trim().length < 10) { 
+                console.error("Invalid or missing 'quizId' in URL.");
+                alert("CRITICAL ERROR: Invalid or missing Quiz ID in the URL. Returning to the exam list.");
+                window.location.href = 'online-exam.html'; // Go back
+                return null;
+            }
+            return quizId; // Return the UUID string
+        }
+
+
+        // --- API Functions ---
 
         /**
          * Fetches all questions from the Central Bank
@@ -60,45 +117,46 @@
         async function fetchCentralBank() {
             const list = document.getElementById('central-bank-list');
             try {
-                // Uses the corrected backend endpoint
+                // This route must exist on your server
                 const centralBankData = await handleApi(`${QUIZ_API}/question-bank`);
                 document.getElementById('central-count').textContent = centralBankData.length;
-
                 renderCentralBank(centralBankData);
-
             } catch (error) {
                 console.error('Error fetching central bank:', error);
-                list.innerHTML = `<p style="color: red;">Failed to load questions: ${error.message}. Check token/server status.</p>`;
+                list.innerHTML = `<p style="color: red;">Failed to load questions: ${error.message}.</p>`;
             }
         }
 
         /**
-         * Fetches questions already linked to this quiz (FIXED: Calls dedicated admin route)
+         * Fetches questions already linked to this quiz
          */
         async function fetchLinkedQuestions() {
+            if (!QUIZ_ID) return; // Don't run if ID is not set
             const list = document.getElementById('linked-questions-list');
             list.innerHTML = `<p>Fetching linked questions...</p>`;
             try {
-                // FIX: Use the dedicated admin route to get linked questions
+                // This route must exist on your server
                 const linkedData = await handleApi(`${QUIZ_API}/quizzes/${QUIZ_ID}/links`);
 
                 linkedQuestions = linkedData.map(q => ({
-                    question_id: q.question_id,
+                    // Note: Your 'school_erp' schema uses 'question_id'
+                    question_id: q.question_id, 
                     question_order: q.question_order,
                     question_text: q.question_text
                 }));
 
                 renderLinkedQuestions();
-                // Re-render central bank after linked questions are known
+                // After knowing which are linked, render the bank list
                 fetchCentralBank(); 
 
-            } catch (error) {
+            } catch (error)
+ {
                 console.error('Error fetching linked questions:', error);
                 list.innerHTML = `<p style="color: red;">Failed to load linked questions: ${error.message}</p>`;
             }
         }
 
-        // --- Rendering Logic (remain unchanged) ---
+        // --- Rendering Logic ---
 
         /**
          * Renders the Central Bank list
@@ -106,15 +164,19 @@
         function renderCentralBank(data) {
             const list = document.getElementById('central-bank-list');
             list.innerHTML = data.map(q => {
-                // Check if question is already linked before rendering the 'Add' button
-                const isLinked = linkedQuestions.some(linked => linked.question_id === q.id);
+                // Your 'school_erp' schema uses 'question_id'
+                const question_id = q.question_id; 
+
+                // Check if this question is already linked
+                const isLinked = linkedQuestions.some(linked => linked.question_id === question_id);
+                
                 const buttonHtml = isLinked 
-                    ? `<span style="color: gray;">Linked</span>`
-                    : `<button class="add-btn" onclick="addQuestion(${q.id}, '${q.question_text.replace(/'/g, "\\'")}')">Add</button>`;
+                    ? `<span style="color: gray; font-weight: bold;">Linked</span>`
+                    : `<button class="add-btn" onclick="addQuestion(${question_id}, '${q.question_text.replace(/'/g, "\\'")}')">Add</button>`;
 
                 return `
-                    <div class="question-item">
-                        <span>${q.question_text.substring(0, 70)}... (ID: ${q.id})</span>
+                    <div class="question-item" id="bank-q-${question_id}">
+                        <span>${q.question_text.substring(0, 70)}... (ID: ${question_id})</span>
                         ${buttonHtml}
                     </div>
                 `;
@@ -122,47 +184,67 @@
         }
 
         /**
-         * Renders the Linked Questions list (The most important part)
+         * Renders the Linked Questions list
          */
         function renderLinkedQuestions() {
             const list = document.getElementById('linked-questions-list');
             document.getElementById('linked-count').textContent = linkedQuestions.length;
 
+            if (linkedQuestions.length === 0) {
+                list.innerHTML = '<p style="text-align: center; color: #777;">No questions linked yet. Add from the bank.</p>';
+                return;
+            }
+
             list.innerHTML = linkedQuestions
-                .sort((a, b) => a.question_order - b.question_order)
+                .sort((a, b) => a.question_order - b.question_order) // Sort by order
                 .map((q, index) => `
-                    <div class="question-item" data-question-id="${q.question_id}" data-order="${index + 1}">
-                        <span>${index + 1}. ${q.question_text} (ID: ${q.question_id})</span>
+                    <div class="question-item" data-question-id="${q.question_id}">
+                        <span><strong>${index + 1}.</strong> ${q.question_text} (ID: ${q.question_id})</span>
                         <button class="remove-btn" onclick="removeQuestion(${q.question_id})">Remove</button>
                     </div>
                 `).join('');
         }
 
 
-        // --- Core Linking Logic (remain unchanged) ---
+        // --- Core Linking Logic ---
 
         function addQuestion(id, text) {
             if (linkedQuestions.some(q => q.question_id === id)) {
                 alert('Question is already linked!');
                 return;
             }
+            // Add to array
             linkedQuestions.push({
                 question_id: id,
                 question_text: text,
-                question_order: linkedQuestions.length + 1 
+                question_order: linkedQuestions.length + 1 // Add to the end
             });
+            // Re-render list
             renderLinkedQuestions();
-            // Re-render central bank to update 'Linked' status
-            fetchCentralBank(); 
+            
+            // Update the button in the bank list
+            const bankItemButtonContainer = document.querySelector(`#bank-q-${id} button`);
+            if (bankItemButtonContainer) {
+                bankItemButtonContainer.outerHTML = `<span style="color: gray; font-weight: bold;">Linked</span>`;
+            }
         }
 
         function removeQuestion(id) {
             linkedQuestions = linkedQuestions.filter(q => q.question_id !== id);
-            // Re-sequence the order after removal
+            // Re-calculate order numbers after removal
             linkedQuestions.forEach((q, index) => q.question_order = index + 1);
+            
+            // Re-render list
             renderLinkedQuestions();
-            // Re-render central bank to update 'Add' button status
-            fetchCentralBank(); 
+            
+            // Update the button in the bank list
+            const bankItemSpan = document.querySelector(`#bank-q-${id} span[style*="gray"]`);
+            if (bankItemSpan) {
+                // Need to find the text again to re-create the button
+                const bankItem = document.getElementById(`bank-q-${id}`);
+                const text = bankItem.querySelector('span').textContent.split(' (ID:')[0];
+                bankItemSpan.outerHTML = `<button class="add-btn" onclick="addQuestion(${id}, '${text.replace(/'/g, "\\'")}')">Add</button>`;
+            }
         }
 
 
@@ -170,15 +252,19 @@
          * FINAL ACTION: Sends the finalized order to the backend to update quiz_question_links.
          */
         async function saveLinks() {
+            if (!QUIZ_ID) return;
+            const btn = document.getElementById('save-links-btn');
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+
             // 1. Prepare data for the backend
             const finalLinks = linkedQuestions.map(q => ({
                 question_id: q.question_id,
                 question_order: q.question_order
             }));
 
-            // 2. API Call (Assumes PUT /api/online-exam/quizzes/1/link-questions is implemented)
+            // 2. API Call (This route must exist on your server)
             try {
-                // NOTE: This assumes a PUT route exists to handle the full list update/replacement
                 await handleApi(`${QUIZ_API}/quizzes/${QUIZ_ID}/link-questions`, {
                     method: 'PUT',
                     body: JSON.stringify({ links: finalLinks })
@@ -187,13 +273,33 @@
                 alert(`✅ SUCCESS: ${finalLinks.length} links saved for Quiz ID ${QUIZ_ID}.`);
             } catch (error) {
                 alert(`❌ FAILED to save links: ${error.message}`);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Save Question Links & Order';
             }
         }
 
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
+            // *** THIS IS THE MAIN FIX ***
+            QUIZ_ID = getQuizIdFromUrl();
+            if (!QUIZ_ID) {
+                return; // Stop execution if ID is invalid
+            }
+
+            // Dynamically set page title and header
+            const titleText = `Managing Questions for Quiz ID: ${QUIZ_ID}`;
+            document.title = titleText;
+            const titleElement = document.getElementById('quiz-title');
+            if (titleElement) {
+                titleElement.textContent = titleText;
+            }
+            // *** END OF FIX ***
+
+            // Fetch linked questions first
             fetchLinkedQuestions(); 
+            // fetchLinkedQuestions() will call fetchCentralBank() after it succeeds
         });
     </script>
 </body>
