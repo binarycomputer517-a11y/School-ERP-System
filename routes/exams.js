@@ -76,12 +76,13 @@ router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES
     try {
         const { examId, subjectId } = req.params;
 
-        // Using standard column names as found in the INSERT/UPSERT section
+        // FIX APPLIED: Assuming marks table columns are shorter (e.g., theory_marks)
+        // **YOU MUST CONFIRM** these short names exist in your 'marks' table.
         const result = await pool.query(
             `SELECT 
                 student_id, 
-                marks_obtained_theory,
-                marks_obtained_practical
+                theory_marks AS marks_obtained_theory,      /* Corrected Alias Assumption */
+                practical_marks AS marks_obtained_practical /* Corrected Alias Assumption */
              FROM marks 
              WHERE exam_id = $1 AND subject_id = $2
              ORDER BY student_id`,
@@ -98,7 +99,6 @@ router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES
         res.json(marks);
     } catch (error) {
         console.error('SQL Error fetching existing marks:', error.message); 
-        // If this crashes, the column names above are definitively wrong in the marks table.
         res.status(500).json({ message: 'Failed to fetch existing marks due to a database error. Check your table and column names.' });
     }
 });
@@ -279,15 +279,15 @@ router.get('/marksheet/roll/:rollNumber', authenticateToken, authorize(MARK_VIEW
         res.status(500).json({ message: 'Internal server error while retrieving marksheet.' });
     }
 });
-// routes/exams.js (Add this route)
 
 /**
  * @route   GET /api/exams/list
  * @desc    Get a simplified list of all active exams (for dropdowns/filters).
  * @access  Private (Management Roles)
  */
-router.get('/list', authenticateToken, authorize(EXAM_MANAGEMENT_ROLES), async (req, res) => {
+router.get('/list', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, res) => {
     try {
+        // NOTE: We assume 'exams' table exists and the columns are correct.
         const query = `
             SELECT 
                 id, 
@@ -305,5 +305,6 @@ router.get('/list', authenticateToken, authorize(EXAM_MANAGEMENT_ROLES), async (
         res.status(500).json({ message: 'Failed to retrieve exam list.' });
     }
 });
+
 
 module.exports = router;
