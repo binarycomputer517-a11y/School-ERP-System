@@ -613,6 +613,14 @@ document.addEventListener('DOMContentLoaded', () => {
             marksExamSelect.innerHTML = '<option value="">-- Select Exam --</option>';
             
             exams.forEach(exam => {
+                // *** 🛑 বাগ ফিক্স ১: 🛑 ***
+                // খারাপ ডেটা ফিল্টার করুন
+                if (!exam || !exam.exam_id) {
+                    console.warn('Skipping exam with null or undefined ID:', exam);
+                    return; // এই exam-এর জন্য option তৈরি করবেন না
+                }
+                // *** ফিক্স শেষ ***
+
                 examCache[exam.exam_id] = exam; // Cache the full exam object
 
                 const option = document.createElement('option');
@@ -945,7 +953,16 @@ document.addEventListener('DOMContentLoaded', () => {
         maxMarksDisplay.textContent = '0';
         studentMarksBody.innerHTML = '<tr><td colspan="3">Select an exam and subject and click "Load Students" to begin marks entry.</td></tr>';
 
-        if (!examId) return;
+        // *** 🛑 বাগ ফিক্স ২: 🛑 ***
+        // 'undefined' স্ট্রিং ভ্যালু চেক করুন
+        if (!examId || examId === "undefined") {
+             marksSubjectSelect.disabled = true;
+             marksSubjectSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+             maxMarksDisplay.textContent = '0';
+             studentMarksBody.innerHTML = '<tr><td colspan="3">Select an exam and subject and click "Load Students" to begin marks entry.</td></tr>';
+             return;
+        }
+        // *** ফিক্স শেষ ***
         
         let courseId = selectedOption.dataset.courseId;
         
@@ -994,10 +1011,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const examId = marksExamSelect.value;
         const subjectId = marksSubjectSelect.value;
         
-        if (!examId || !subjectId) {
+        // *** 🛑 বাগ ফিক্স ৩: 🛑 ***
+        // 'undefined' স্ট্রিং ভ্যালু চেক করুন
+        if (!examId || examId === "undefined" || !subjectId) {
             displayError('marks-error-msg', 'Please select both an Exam and a Subject.');
             return;
         }
+        // *** ফিক্স শেষ ***
         
         const selectedOption = marksExamSelect.options[marksExamSelect.selectedIndex];
         let courseId = selectedOption.dataset.courseId;
