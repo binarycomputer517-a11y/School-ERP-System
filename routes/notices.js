@@ -4,7 +4,7 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
-const moment = require('moment'); // (Keep moment if used elsewhere, otherwise it's just extra code)
+const moment = require('moment'); 
 
 // Database Table Constants
 const NOTICES_TABLE = 'notices'; 
@@ -24,7 +24,6 @@ const NOTICE_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff'];
 // 1. NOTICE CREATION WITH TARGETING (POST)
 // =========================================================
 router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
-    // FIX: Use req.user.id for consistency
     const creatorId = req.user.id; 
     const { 
         title, 
@@ -49,9 +48,10 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
         await client.query('BEGIN');
 
         // 1. Insert Notice (Content)
+        // NOTE: Removed is_active from INSERT if it doesn't exist in the table.
         const noticeQuery = `
-            INSERT INTO ${NOTICES_TABLE} (title, content, posted_by, target_role, expiry_date, is_active)
-            VALUES ($1, $2, $3, $4, $5, TRUE)
+            INSERT INTO ${NOTICES_TABLE} (title, content, posted_by, target_role, expiry_date)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id;
         `;
         const noticeResult = await pool.query(noticeQuery, [
@@ -109,17 +109,16 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
  */
 router.get('/my-feed', authenticateToken, async (req, res) => {
     const userRole = req.user.role;
-    // FIX: Use req.user.id for consistency
     const userId = req.user.id;
 
     try {
+        // NOTE: Removed n.is_active check from WHERE clause if column doesn't exist
         const query = `
             SELECT 
                 n.id, n.title, n.content, n.created_at, n.expiry_date,
                 (SELECT status FROM ${DELIVERY_LOG_TABLE} WHERE notice_id = n.id AND user_id = $1 AND channel = 'In-App') AS delivery_status
             FROM ${NOTICES_TABLE} n
-            WHERE n.is_active = TRUE 
-            AND (n.target_role = $2 OR n.target_role = 'All')
+            WHERE (n.target_role = $2 OR n.target_role = 'All')
             AND (n.expiry_date IS NULL OR n.expiry_date >= CURRENT_DATE)
             ORDER BY n.created_at DESC;
         `;
@@ -138,7 +137,6 @@ router.get('/my-feed', authenticateToken, async (req, res) => {
  */
 router.put('/mark-read/:noticeId', authenticateToken, async (req, res) => {
     const { noticeId } = req.params;
-    // FIX: Use req.user.id for consistency
     const userId = req.user.id;
     
     try {
@@ -171,9 +169,10 @@ router.put('/mark-read/:noticeId', authenticateToken, async (req, res) => {
  */
 router.get('/all-management', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
     try {
+        // FIX 1: Removed non-existent column is_active from SELECT list.
         const query = `
             SELECT 
-                id, title, content, created_at, target_role, is_active
+                id, title, content, created_at, target_role
             FROM ${NOTICES_TABLE}
             ORDER BY created_at DESC;
         `;
@@ -220,8 +219,7 @@ router.get('/log/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLE
  */
 router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
     try {
-        // FIX APPLIED: Correctly joins users (u) and teachers (t) to find staff DOB,
-        // and uses EXTRACT(MONTH/DAY) to ignore the year.
+        // FIX 2: Cast u.id (integer) to TEXT to match s.student_id (uuid, returned as text) in UNION.
         const query = `
             -- 1. Get STUDENT Birthdays (from students table)
             SELECT 
@@ -239,7 +237,7 @@ router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_RO
 
             -- 2. Get STAFF/ADMIN Birthdays (Joining users and teachers table for DOB and Name)
             SELECT 
-                u.id AS entity_id, 
+                u.id::text AS entity_id,             
                 t.full_name,                        
                 u.role, 
                 t.date_of_birth AS dob_date         
