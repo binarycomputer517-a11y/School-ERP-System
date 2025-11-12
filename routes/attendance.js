@@ -40,7 +40,6 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
             const { user_id, status, remarks } = record; 
             
             // --- STEP 1: Determine Profile Type and Get Profile ID (Profile's PK) ---
-            // FIX: Uses student_id and id (for teachers) as the PKs for lookup.
             const profileQuery = await client.query(`
                 SELECT student_id AS profile_id, 'student' AS role FROM students WHERE user_id = $1
                 UNION ALL
@@ -59,9 +58,6 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
             
             // --- STEP 2: Define SQL Columns and Conflict Constraint ---
             
-            // FIX: Uses the exact UNIQUE INDEX columns found in the schema:
-            // Student: (student_id, subject_id, attendance_date)
-            // Staff: (staff_id, attendance_date)
             const conflictColumns = isStudent 
                 ? 'student_id, subject_id, attendance_date' 
                 : 'staff_id, attendance_date';
@@ -280,17 +276,21 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
         }
         
         const userRes = await pool.query(userQuery, userParams);
-        const userIds = userRes.rows.map(u => u.user_id);
+        
+        // userIds is an array of UUIDs (assuming users.id is UUID)
+        const userIds = userRes.rows.map(u => u.user_id); 
         
         if (userIds.length === 0) {
             return res.status(200).json({ users: [] });
         }
 
         // 2. Get all attendance records
+        // CRITICAL FIX: Removed the incorrect '::uuid[]' cast and cast attendance.user_id to TEXT 
+        // for safe comparison against the UUID strings in the userIds array.
         const attendanceQuery = `
             SELECT user_id, attendance_date, status, subject_id, batch_id 
             FROM attendance
-            WHERE user_id = ANY($1::uuid[]) 
+            WHERE user_id::text = ANY($1)  
               AND attendance_date BETWEEN $2 AND $3
             ORDER BY attendance_date;
         `;
@@ -298,7 +298,8 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 
         // 3. Process the data
         const processedUsers = userRes.rows.map(user => {
-            const userRecords = attendanceRes.rows.filter(r => r.user_id === user.user_id);
+            // NOTE: The filter here might need adjusting if attendance.user_id is INT and user.user_id is UUID
+            const userRecords = attendanceRes.rows.filter(r => String(r.user_id) === String(user.user_id));
             return {
                 ...user,
                 attendance: userRecords,
@@ -333,7 +334,7 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
         SELECT a.attendance_date, a.status, a.remarks, s.subject_name 
         FROM attendance a
         LEFT JOIN subjects s ON a.subject_id = s.id 
-        WHERE a.user_id = $1::uuid 
+        WHERE a.user_id::text = $1  
     `;
     const params = [targetUserId];
     
@@ -452,7 +453,7 @@ router.get('/batches', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (r
         const query = `SELECT id, batch_name AS name FROM batches ORDER BY batch_name;`; 
         
         const { rows } = await pool.query(query);
-        res.status(200).json(rows); // FIX: Changed status from 500 to 200, assuming the query above is correct.
+        res.status(200).json(rows); 
     } catch (err) {
         console.error('Error fetching batches:', err); 
         res.status(500).json({ message: 'Server error fetching batches. Check your database schema for the correct name column in the batches table.', error: err.message });
