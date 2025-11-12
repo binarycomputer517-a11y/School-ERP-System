@@ -14,7 +14,7 @@ router.get('/course/:courseId', authenticateToken, authorize(['Admin', 'Teacher'
         const result = await pool.query(`
             SELECT s.id, s.subject_name, s.subject_code 
             FROM subjects s
-            JOIN course_subjects cs ON s.id = cs.subject_id -- FIX: s.subject_id changed to s.id
+            JOIN course_subjects cs ON s.id = cs.subject_id -- FIX: Changed s.subject_id to s.id
             WHERE cs.course_id = $1
             ORDER BY s.subject_name;
         `, [courseId]);
@@ -33,7 +33,7 @@ router.get('/course/:courseId', authenticateToken, authorize(['Admin', 'Teacher'
 router.get('/', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     try {
         // FIX: ORDER BY subject_id changed to ORDER BY id
-        const result = await pool.query('SELECT * FROM subjects ORDER BY id'); 
+        const result = await pool.query('SELECT * FROM subjects ORDER BY id');
         res.json(result.rows);
     } catch (err) { 
         console.error('Error fetching all subjects:', err);
@@ -45,7 +45,7 @@ router.get('/', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']
 router.post('/', authenticateToken, authorize(['Admin']), async (req, res) => {
     const { subject_name, subject_code } = req.body;
     try {
-        // This query is likely fine as 'id' should have a default UUID generator
+        // This query is fine as 'id' is the primary key and should be auto-generated
         const newSubject = await pool.query(
             "INSERT INTO subjects (subject_name, subject_code) VALUES ($1, $2) RETURNING *", 
             [subject_name, subject_code]
