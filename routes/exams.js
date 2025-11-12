@@ -47,7 +47,7 @@ router.get('/status', authenticateToken, authorize(MARK_MANAGER_ROLES), async (r
                 c.course_name,
                 -- Simplistic check: If any marks exist for the student, assume marksheet is 'Generated'
                 CASE WHEN EXISTS (
-                    -- FIX: Using confirmed PK s.student_id
+                    -- FIX: Using confirmed student PK s.student_id
                     SELECT 1 FROM marks m WHERE m.student_id = s.student_id
                 ) THEN 'Generated' ELSE 'Pending' END AS marksheet_status,
                 'Pending' AS certificate_status 
@@ -76,7 +76,7 @@ router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES
     try {
         const { examId, subjectId } = req.params;
 
-        // FIX: Reverting to standard long column names, assuming they must exist in the schema
+        // Using standard column names as found in the INSERT/UPSERT section
         const result = await pool.query(
             `SELECT 
                 student_id, 
@@ -98,6 +98,7 @@ router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES
         res.json(marks);
     } catch (error) {
         console.error('SQL Error fetching existing marks:', error.message); 
+        // If this crashes, the column names above are definitively wrong in the marks table.
         res.status(500).json({ message: 'Failed to fetch existing marks due to a database error. Check your table and column names.' });
     }
 });
