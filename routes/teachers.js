@@ -1,3 +1,5 @@
+// routes/teachers.js
+
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -8,7 +10,7 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 const TEACHERS_TABLE = 'teachers';
 const USERS_TABLE = 'users';
 const DEPARTMENTS_TABLE = 'hr_departments'; 
-const BRANCHES_TABLE = 'branches'; // Assuming 'branches' table exists for user's branch
+const BRANCHES_TABLE = 'branches'; 
 
 // --- Role Definitions ---
 const CRUD_ROLES = ['Super Admin', 'Admin', 'HR'];
@@ -16,7 +18,6 @@ const LIST_ROLES = ['Super Admin', 'Admin', 'HR', 'Teacher', 'Coordinator'];
 
 // --- Helper: Get Configuration IDs from Request ---
 function getConfigIds(req) {
-    // This correctly gets branch_id from the LOGGED IN USER (for the users table)
     const branch_id = req.user.branch_id; 
     return { branch_id, created_by: req.user.id, updated_by: req.user.id };
 }
@@ -24,7 +25,7 @@ function getConfigIds(req) {
 // routes/teachers.js
 
 // =========================================================
-// 1. GET: Main List (Full Details for Table View) - FIX APPLIED
+// 1. GET: Main List (Full Details for Table View) - FINAL FIX
 // =========================================================
 
 /**
@@ -36,7 +37,7 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
-                t.id AS teacher_id,               /* <--- FIX 1: Use t.id and alias it as teacher_id */
+                t.teacher_id,              
                 t.full_name, 
                 t.employee_id, 
                 t.designation, 
@@ -52,7 +53,7 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
                 u.id AS user_id,
 
                 -- Data from Department Table
-                hd.name AS department_name, 
+                hd.department_name AS department_name,  /* <--- FIX 1: Using confirmed column name */
                 hd.description AS department_description, 
 
                 -- Data from User's Branch
@@ -85,7 +86,7 @@ router.get('/list', authenticateToken, authorize(LIST_ROLES), async (req, res) =
     try {
         const query = `
             SELECT 
-                t.id AS teacher_id, /* FIX 2: Use t.id and alias it as teacher_id */
+                t.teacher_id AS teacher_id, /* Using the actual PK */
                 t.full_name, 
                 u.id AS user_id,
                 u.username,
@@ -103,7 +104,7 @@ router.get('/list', authenticateToken, authorize(LIST_ROLES), async (req, res) =
     }
 });
 
-// --- GET: Single Teacher Details - FIX APPLIED ---
+// --- GET: Single Teacher Details - FINAL FIX ---
 /**
  * @route   GET /api/teachers/:id
  * @desc    Get details for a single teacher (Used for Edit form population).
@@ -116,11 +117,11 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
             SELECT 
                 t.*,
                 u.username, u.role, 
-                hd.name AS department_name
+                hd.department_name AS department_name /* FIX 2: Using confirmed column name */
             FROM ${TEACHERS_TABLE} t
             LEFT JOIN ${USERS_TABLE} u ON t.user_id = u.id
             LEFT JOIN ${DEPARTMENTS_TABLE} hd ON t.department_id = hd.id
-            WHERE t.id = $1; /* FIX 3: Use the correct primary key t.id */
+            WHERE t.teacher_id = $1; /* Using the actual PK */
         `;
         const result = await pool.query(query, [teacherId]);
 
@@ -186,7 +187,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
                 department_id
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id, full_name, employee_id; /* FIX 4: Changed teacher_id to id in RETURNING clause */
+            RETURNING teacher_id, full_name, employee_id;
         `;
         const teacherResult = await client.query(teacherQuery, [
             newUserId, full_name, employee_id, designation || null, 
@@ -218,7 +219,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
 
 
 // =========================================================
-// 4. PUT: Update Existing Teacher Details - FIX APPLIED
+// 4. PUT: Update Existing Teacher Details
 // =========================================================
 
 /**
@@ -227,7 +228,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
  * @access  Private (Admin, Super Admin, HR)
  */
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    const teacherId = req.params.id; // This is t.id (the primary key)
+    const teacherId = req.params.id; // This is t.teacher_id
     const {
         full_name, designation, email, phone_number, date_of_birth, address, hire_date, is_active,
         department_id, new_role 
@@ -249,7 +250,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
                 date_of_birth = $5, address = $6, hire_date = $7, is_active = $8,
                 department_id = $9, 
                 updated_at = CURRENT_TIMESTAMP, updated_by = $10
-            WHERE id = $11 /* FIX 5: Use the correct primary key id */
+            WHERE teacher_id = $11 /* Using the actual PK */
             RETURNING user_id, full_name;
         `;
         const teacherResult = await pool.query(teacherQuery, [
@@ -303,7 +304,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
 });
 
 // =========================================================
-// 5. DELETE: Soft Delete Teacher - FIX APPLIED
+// 5. DELETE: Soft Delete Teacher
 // =========================================================
 
 /**
@@ -312,7 +313,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
  * @access  Private (Admin, Super Admin, HR)
  */
 router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    const teacherId = req.params.id; // This is t.id (the primary key)
+    const teacherId = req.params.id; // This is t.teacher_id
     
     if (!teacherId || teacherId === 'undefined') {
         return res.status(400).json({ message: 'Invalid Teacher ID provided for deletion.' });
@@ -326,7 +327,7 @@ router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res)
         const teacherUpdateQuery = `
             UPDATE ${TEACHERS_TABLE} SET 
                 is_active = FALSE, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1 /* FIX 6: Use the correct primary key id */
+            WHERE teacher_id = $1 /* Using the actual PK */
             RETURNING user_id;
         `;
         const teacherResult = await pool.query(teacherUpdateQuery, [teacherId]);
