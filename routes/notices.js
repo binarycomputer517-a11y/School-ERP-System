@@ -48,7 +48,7 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
         await client.query('BEGIN');
 
         // 1. Insert Notice (Content)
-        // NOTE: Removed non-existent column 'is_active' from INSERT statement.
+        // NOTE: Removed non-existent column 'is_active' from INSERT statement based on schema.
         const noticeQuery = `
             INSERT INTO ${NOTICES_TABLE} (title, content, posted_by, target_role, expiry_date)
             VALUES ($1, $2, $3, $4, $5)
