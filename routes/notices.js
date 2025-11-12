@@ -48,7 +48,7 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
         await client.query('BEGIN');
 
         // 1. Insert Notice (Content)
-        // NOTE: Removed is_active from INSERT if it doesn't exist in the table.
+        // NOTE: Removed non-existent column 'is_active' from INSERT statement.
         const noticeQuery = `
             INSERT INTO ${NOTICES_TABLE} (title, content, posted_by, target_role, expiry_date)
             VALUES ($1, $2, $3, $4, $5)
@@ -219,11 +219,12 @@ router.get('/log/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLE
  */
 router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
     try {
-        // FIX 2: Cast u.id (integer) to TEXT to match s.student_id (uuid, returned as text) in UNION.
+        // FIX 2: Explicitly cast both s.student_id (uuid) and u.id (integer) to TEXT
+        // to resolve the UNION ALL type mismatch error (42804).
         const query = `
             -- 1. Get STUDENT Birthdays (from students table)
             SELECT 
-                s.student_id AS entity_id, 
+                s.student_id::text AS entity_id, 
                 s.first_name || ' ' || s.last_name AS full_name, 
                 'Student' AS role, 
                 s.dob AS dob_date
