@@ -1,5 +1,3 @@
-// routes/subjects.js
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -9,16 +7,14 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 // --- Subject Management Routes ---
 // =================================================================
 
-// ⭐ NEW/FIXED: Get all subjects linked to a specific course ID.
-// This endpoint resolves the client's 404 error for:
-// GET http://localhost:3005/api/subjects/course/2
+// ⭐ FIXED: Get all subjects linked to a specific course ID.
 router.get('/course/:courseId', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
     const { courseId } = req.params;
     try {
         const result = await pool.query(`
-            SELECT s.subject_id, s.subject_name, s.subject_code 
+            SELECT s.id, s.subject_name, s.subject_code 
             FROM subjects s
-            JOIN course_subjects cs ON s.subject_id = cs.subject_id
+            JOIN course_subjects cs ON s.id = cs.subject_id -- FIX: s.subject_id changed to s.id
             WHERE cs.course_id = $1
             ORDER BY s.subject_name;
         `, [courseId]);
@@ -36,7 +32,8 @@ router.get('/course/:courseId', authenticateToken, authorize(['Admin', 'Teacher'
 // GET all subjects
 router.get('/', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM subjects ORDER BY subject_id');
+        // FIX: ORDER BY subject_id changed to ORDER BY id
+        const result = await pool.query('SELECT * FROM subjects ORDER BY id'); 
         res.json(result.rows);
     } catch (err) { 
         console.error('Error fetching all subjects:', err);
@@ -48,6 +45,7 @@ router.get('/', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']
 router.post('/', authenticateToken, authorize(['Admin']), async (req, res) => {
     const { subject_name, subject_code } = req.body;
     try {
+        // This query is likely fine as 'id' should have a default UUID generator
         const newSubject = await pool.query(
             "INSERT INTO subjects (subject_name, subject_code) VALUES ($1, $2) RETURNING *", 
             [subject_name, subject_code]
@@ -62,8 +60,9 @@ router.post('/', authenticateToken, authorize(['Admin']), async (req, res) => {
 router.put('/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     const { subject_name, subject_code } = req.body;
     try {
+        // FIX: WHERE subject_id changed to WHERE id
         const result = await pool.query(
-            "UPDATE subjects SET subject_name = $1, subject_code = $2 WHERE subject_id = $3 RETURNING *",
+            "UPDATE subjects SET subject_name = $1, subject_code = $2 WHERE id = $3 RETURNING *",
             [subject_name, subject_code, req.params.id]
         );
         if (result.rowCount === 0) return res.status(404).json({ message: 'Subject not found' });
@@ -76,7 +75,8 @@ router.put('/:id', authenticateToken, authorize(['Admin']), async (req, res) => 
 // DELETE a subject by ID
 router.delete('/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
-        const result = await pool.query("DELETE FROM subjects WHERE subject_id = $1 RETURNING subject_id", [req.params.id]);
+        // FIX: WHERE subject_id changed to WHERE id
+        const result = await pool.query("DELETE FROM subjects WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) return res.status(404).json({ message: 'Subject not found.' });
         res.status(200).json({ message: 'Subject deleted successfully.' });
     } catch (err) {
