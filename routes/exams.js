@@ -76,8 +76,7 @@ router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES
     try {
         const { examId, subjectId } = req.params;
 
-        // Fetching split marks columns (using the marks_obtained columns for the frontend form)
-        // FIX: Assumes marks_obtained_theory and marks_obtained_practical are the correct column names.
+        // FIX: Reverting to standard long column names, assuming they must exist in the schema
         const result = await pool.query(
             `SELECT 
                 student_id, 
@@ -148,7 +147,7 @@ router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, r
         }
 
         // === STEP 2: PERFORM UPSERT ===
-        // Includes grade calculation.
+        // The column names in the INSERT/UPDATE section MUST match the schema exactly.
         const upsertQuery = `
             INSERT INTO marks (
                 student_id, subject_id, exam_id, course_id, 
@@ -169,4 +168,116 @@ router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, r
         for (const markEntry of marks) {
             // Use NULL for SQL insertion if the mark was not provided/is an empty string (as the schema allows it)
             const theoryMark = markEntry.marks_obtained_theory !== null ? parseInt(markEntry.marks_obtained_theory) : null;
-            const practicalMark = markEntry.marks_obtained_practical !== null ? parseInt(markEntry.marks
+            const practicalMark = markEntry.marks_obtained_practical !== null ? parseInt(markEntry.marks_obtained_practical) : null;
+            
+            // Calculate total for NOT NULL column (treat NULL inputs as 0 for sum)
+            const totalObtained = (theoryMark || 0) + (practicalMark || 0);
+
+            // Determine the Grade
+            // Ensure calculation happens only if totalMaxPossible is > 0
+            const grade = totalMaxPossible > 0 ? calculateGrade(totalObtained, totalMaxPossible) : null; 
+
+            // Only proceed if marks were actually entered (or if required fields were inserted)
+            if (theoryMark !== null || practicalMark !== null) {
+                await client.query(upsertQuery, [
+                    markEntry.student_id, 
+                    subject_id, 
+                    exam_id, 
+                    course_id,        // $4
+                    theoryMark,       // $5 (NULL or integer)
+                    practicalMark,    // $6 (NULL or integer)
+                    totalObtained,    // $7: The calculated sum, required by NOT NULL constraint
+                    grade,            // $8: The calculated grade (or NULL if max marks is 0)
+                    entered_by        // $9
+                ]);
+            }
+        }
+
+        await client.query('COMMIT');
+        res.status(200).json({ message: 'Marks saved successfully.' });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Marks saving error:', error);
+        res.status(500).json({ message: 'Failed to save marks due to a database error.' });
+    } finally {
+        client.release();
+    }
+});
+
+
+// =======================================================================================
+// 3. MARK SHEET VIEW ROUTE 
+// =======================================================================================
+/**
+ * @route   GET /api/marks/marksheet/roll/:rollNumber
+ * @desc    Get consolidated marksheet data for a single student.
+ * @access  Private (Super Admin, Admin, Teacher, Coordinator)
+ */
+router.get('/marksheet/roll/:rollNumber', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
+    const rollNumber = req.params.rollNumber;
+
+    try {
+        // 1. Fetch Student/Course/Batch Details
+        const studentQuery = `
+            SELECT 
+                s.student_id AS student_id, s.first_name, s.last_name, s.enrollment_no, -- FIX: Using confirmed PK s.student_id
+                c.course_name, b.batch_name
+            FROM students s
+            JOIN courses c ON s.course_id = c.id
+            JOIN batches b ON s.batch_id = b.id
+            WHERE s.enrollment_no = $1;
+        `;
+        const studentResult = await pool.query(studentQuery, [rollNumber]);
+        const student = studentResult.rows[0];
+
+        if (!student) {
+            return res.status(404).json({ message: 'Student roll number not found.' });
+        }
+
+        // 2. Fetch All Marks for the Student
+        const marksQuery = `
+            SELECT 
+                e.exam_name, 
+                -- Use LEFT JOIN and COALESCE to safely get max_marks (default to 0) 
+                COALESCE(es.max_marks, 0) AS total_marks, 
+                sub.subject_name, sub.subject_code,
+                -- Use total_marks_obtained directly from the table (since it's now inserted)
+                m.total_marks_obtained AS marks_obtained,
+                m.grade /* Fetching the calculated grade */
+            FROM marks m
+            JOIN exams e ON m.exam_id = e.id
+            -- Use LEFT JOIN here to prevent failure if schedule is missing
+            LEFT JOIN exam_schedules es ON e.id = es.exam_id AND m.subject_id = es.subject_id 
+            JOIN subjects sub ON m.subject_id = sub.id
+            WHERE m.student_id = $1
+            ORDER BY e.exam_date, sub.subject_code;
+        `;
+        const marksResult = await pool.query(marksQuery, [student.student_id]);
+
+        // 3. Consolidate Data for Frontend
+        const marksheetData = {
+            roll_number: rollNumber,
+            student_name: `${student.first_name} ${student.last_name}`,
+            course_name: student.course_name,
+            batch_name: student.batch_name,
+            marks: marksResult.rows.map(mark => ({
+                exam_name: mark.exam_name,
+                subject_name: mark.subject_name,
+                subject_code: mark.subject_code,
+                marks_obtained: parseFloat(mark.marks_obtained) || 0,
+                total_marks: parseFloat(mark.total_marks) || 0,
+                grade: mark.grade // Include the grade for display
+            }))
+        };
+
+        res.status(200).json(marksheetData);
+
+    } catch (error) {
+        console.error(`Error retrieving marksheet for ${rollNumber}:`, error);
+        res.status(500).json({ message: 'Internal server error while retrieving marksheet.' });
+    }
+});
+
+
+module.exports = router;
