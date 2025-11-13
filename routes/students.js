@@ -1,5 +1,3 @@
-// routes/students.js
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -26,8 +24,8 @@ const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'H
  */
 router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     
-    // ⭐ FIX: Correctly retrieve the integer ID from the authenticated user object.
-    const creatorId = req.user.userId; 
+    // ⭐ FIX: Retrieve the user's UUID (from users.id) for the foreign key.
+    const creatorId = req.user.id; 
 
     const {
         username, password,
@@ -111,7 +109,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             enrollment_no,
             permanent_address,
             blood_group,
-            creatorId, // INTEGER ID
+            creatorId, // UUID
             parent_first_name,
             parent_last_name,
             parent_phone_number,
@@ -198,7 +196,9 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
  */
 router.get('/:studentId', authenticateToken, async (req, res) => {
     const { studentId } = req.params;
-    const { role, userId: currentUserId } = req.user; 
+    
+    // ⭐ FIX: Use 'req.user.id' (UUID) for comparing against other UUIDs
+    const { role, id: currentUserId } = req.user; 
 
     const isAuthorized = STUDENT_MANAGEMENT_ROLES.includes(role);
 
@@ -287,7 +287,9 @@ router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(STUD
  */
 router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     const { studentId } = req.params;
-    const updatedBy = req.user.userId; // Integer ID
+    
+    // ⭐ FIX: Use 'req.user.id' (UUID) for the 'updated_by' foreign key
+    const updatedBy = req.user.id; // UUID
 
     // CRITICAL FIX: Destructure first_name and last_name here so we can return them later.
     const { user_id, username, first_name, last_name } = req.body;

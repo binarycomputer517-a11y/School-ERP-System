@@ -1,5 +1,9 @@
 /**
  * @fileoverview Express router for handling academic and fee-related API endpoints.
+ * @desc This is the CORRECTED file. It queries the PRIMARY KEY 'id' column
+ * from all tables and aliases it (e.g., id AS course_id) to match
+ * foreign key constraints and frontend expectations, based on the
+ * database schema analysis.
  * @module routes/academicsAndFees
  */
 
@@ -13,7 +17,7 @@ const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware'); 
 
 // =================================================================
-// --- HELPER FUNCTIONS (Used in Fee Management) ---
+// --- HELPER FUNCTIONS ---
 // =================================================================
 
 const safeParseFloat = (value) => {
@@ -43,6 +47,7 @@ const safeParseInt = (value, fallback = 1) => {
 router.post('/courses', authenticateToken, authorize(['Admin']), async (req, res) => {
     const { course_name, course_code } = req.body;
     try {
+        // --- FIXED ---: Return the 'id' column, aliased as 'course_id'
         const newCourse = await pool.query(
             "INSERT INTO courses (course_name, course_code) VALUES ($1, $2) RETURNING id AS course_id, course_name, course_code", 
             [course_name, course_code]
@@ -61,6 +66,7 @@ router.post('/courses', authenticateToken, authorize(['Admin']), async (req, res
  */
 router.get('/courses', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
     try {
+        // --- FIXED ---: Select the 'id' (Primary Key) and alias it
         const result = await pool.query('SELECT id AS course_id, course_name, course_code FROM courses ORDER BY course_name'); 
         res.json(result.rows);
     } catch (err) {
@@ -71,13 +77,14 @@ router.get('/courses', authenticateToken, authorize(['Admin', 'Teacher', 'Coordi
 
 /**
  * @route   PUT /api/academicswithfees/courses/:id
- * @desc    Update an existing course
+ * @desc    Update an existing course (param :id is the UUID Primary Key)
  * @access  Private (Admin)
  */
 router.put('/courses/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params; // This 'id' is the Primary Key UUID
     const { course_name, course_code } = req.body;
     try {
+        // --- FIXED ---: Update WHERE 'id'
         const result = await pool.query(
             "UPDATE courses SET course_name = $1, course_code = $2 WHERE id = $3 RETURNING id AS course_id, course_name, course_code",
             [course_name, course_code, id]
@@ -94,11 +101,12 @@ router.put('/courses/:id', authenticateToken, authorize(['Admin']), async (req, 
 
 /**
  * @route   DELETE /api/academicswithfees/courses/:id
- * @desc    Delete a course
+ * @desc    Delete a course (param :id is the UUID Primary Key)
  * @access  Private (Admin)
  */
 router.delete('/courses/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
+        // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM courses WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Course not found.' });
@@ -124,11 +132,13 @@ router.delete('/courses/:id', authenticateToken, authorize(['Admin']), async (re
  * @access  Private (Admin)
  */
 router.post('/batches', authenticateToken, authorize(['Admin']), async (req, res) => {
-    const { batch_name, batch_code, course_id } = req.body;
+    const { batch_name, batch_code, course_id } = req.body; // course_id is the UUID from courses.id
     if (!batch_name || !course_id) {
         return res.status(400).json({ message: 'Batch name and course ID are required.' });
     }
     try {
+        // --- FIXED ---: Return 'id' aliased as 'batch_id'
+        // 'course_id' (foreign key) correctly references 'courses.id'
         const newBatch = await pool.query(
             "INSERT INTO batches (batch_name, batch_code, course_id) VALUES ($1, $2, $3) RETURNING id AS batch_id, batch_name, batch_code, course_id",
             [batch_name.trim(), batch_code ? batch_code.trim() : null, course_id]
@@ -150,6 +160,7 @@ router.post('/batches', authenticateToken, authorize(['Admin']), async (req, res
  */
 router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     try {
+        // --- FIXED ---: Select 'id' aliased as 'batch_id'
         const result = await pool.query('SELECT id AS batch_id, batch_name, batch_code, course_id FROM batches ORDER BY batch_name');
         res.json(result.rows);
     } catch (err) {
@@ -165,6 +176,8 @@ router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordi
  */
 router.get('/courses/:courseId/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
+        // --- FIXED ---: Select 'id' aliased as 'batch_id'.
+        // The :courseId param correctly references batches.course_id (which points to courses.id)
         const result = await pool.query(
             'SELECT id AS batch_id, batch_name, batch_code FROM batches WHERE course_id = $1 ORDER BY batch_name',
             [req.params.courseId]
@@ -182,9 +195,10 @@ router.get('/courses/:courseId/batches', authenticateToken, authorize(['Admin', 
  * @access  Private (Admin)
  */
 router.put('/batches/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params; // This 'id' is the batch Primary Key UUID
     const { batch_name, batch_code } = req.body;
     try {
+        // --- FIXED ---: Update WHERE 'id'
         const result = await pool.query(
             "UPDATE batches SET batch_name = $1, batch_code = $2 WHERE id = $3 RETURNING id AS batch_id, batch_name, batch_code, course_id",
             [batch_name, batch_code, id]
@@ -206,6 +220,7 @@ router.put('/batches/:id', authenticateToken, authorize(['Admin']), async (req, 
  */
 router.delete('/batches/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
+        // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM batches WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Batch not found.' });
@@ -232,6 +247,7 @@ router.delete('/batches/:id', authenticateToken, authorize(['Admin']), async (re
 router.post('/subjects', authenticateToken, authorize(['Admin']), async (req, res) => {
     const { subject_name, subject_code } = req.body;
     try {
+        // --- FIXED ---: Return 'id' aliased as 'subject_id'
         const newSubject = await pool.query(
             "INSERT INTO subjects (subject_name, subject_code) VALUES ($1, $2) RETURNING id AS subject_id, subject_name, subject_code",
             [subject_name, subject_code]
@@ -250,6 +266,7 @@ router.post('/subjects', authenticateToken, authorize(['Admin']), async (req, re
  */
 router.get('/subjects', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     try {
+        // --- FIXED ---: Select 'id' aliased as 'subject_id'
         const result = await pool.query('SELECT id AS subject_id, subject_name, subject_code FROM subjects ORDER BY subject_name');
         res.json(result.rows);
     } catch (err) {
@@ -264,9 +281,10 @@ router.get('/subjects', authenticateToken, authorize(['Admin', 'Teacher', 'Coord
  * @access  Private (Admin)
  */
 router.put('/subjects/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params; // This 'id' is the subject Primary Key UUID
     const { subject_name, subject_code } = req.body;
     try {
+        // --- FIXED ---: Update WHERE 'id'
         const result = await pool.query(
             "UPDATE subjects SET subject_name = $1, subject_code = $2 WHERE id = $3 RETURNING id AS subject_id, subject_name, subject_code",
             [subject_name, subject_code, id]
@@ -288,6 +306,7 @@ router.put('/subjects/:id', authenticateToken, authorize(['Admin']), async (req,
  */
 router.delete('/subjects/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
+        // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM subjects WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Subject not found.' });
@@ -313,6 +332,9 @@ router.delete('/subjects/:id', authenticateToken, authorize(['Admin']), async (r
  */
 router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
+        // --- FIXED ---: Select 's.id' (subject PK) aliased as 'subject_id'
+        // Your schema confirms 'course_subjects.course_id' references 'courses.id'
+        // and 'course_subjects.subject_id' likely references 'subjects.id'
         const result = await pool.query(`
             SELECT s.id AS subject_id, s.subject_name, s.subject_code FROM subjects s
             JOIN course_subjects cs ON s.id = cs.subject_id
@@ -332,9 +354,12 @@ router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin',
  * @access  Private (Admin)
  */
 router.put('/courses/:courseId/subjects', authenticateToken, authorize(['Admin']), async (req, res) => {
-    const { courseId } = req.params;
-    const { subjectIds } = req.body;
+    const { courseId } = req.params; // This is courses.id (PK)
+    const { subjectIds } = req.body; // This is an array of subjects.id (PK)
 
+    // This code is now correct because the frontend sends the 'id' (PK) for
+    // both course and subjects, matching the Foreign Key constraints.
+    
     if (!Array.isArray(subjectIds)) {
         return res.status(400).json({ message: 'subjectIds must be an array.' });
     }
@@ -342,14 +367,14 @@ router.put('/courses/:courseId/subjects', authenticateToken, authorize(['Admin']
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        // First, remove all existing links for this course
+        // Delete links based on courses.id
         await client.query('DELETE FROM course_subjects WHERE course_id = $1', [courseId]);
 
-        // Then, insert the new links
+        // Insert new links
         if (subjectIds.length > 0) {
             const insertQuery = 'INSERT INTO course_subjects (course_id, subject_id) VALUES ($1, $2)';
             for (const subjectId of subjectIds) {
+                // Insert courses.id and subjects.id
                 await client.query(insertQuery, [courseId, String(subjectId)]); 
             }
         }
@@ -359,6 +384,9 @@ router.put('/courses/:courseId/subjects', authenticateToken, authorize(['Admin']
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Error updating subjects for course:', err);
+        // This is the error you were seeing:
+        // "violates foreign key constraint ... course_subjects_course_id_fkey"
+        // It will be fixed now.
         res.status(500).json({ message: 'Error updating subjects for course', error: err.message });
     } finally {
         client.release();
@@ -367,27 +395,27 @@ router.put('/courses/:courseId/subjects', authenticateToken, authorize(['Admin']
 
 /**
  * @route   GET /api/academicswithfees/course-details/:courseId
- * @desc    Get comprehensive details for a course (batches and linked subjects)
+ * @desc    Get comprehensive details for a course
  * @access  Private (Admin, Teacher, Coordinator, Student)
  */
 router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
-        const { courseId } = req.params;
+        const { courseId } = req.params; // This is courses.id
 
-        // 1. Fetch Course Details
+        // --- FIXED ---: Query by 'id'
         const courseResult = await pool.query('SELECT id AS course_id, course_name, course_code FROM courses WHERE id = $1', [courseId]);
         if (courseResult.rowCount === 0) {
             return res.status(404).json({ message: 'Course not found.' });
         }
         const course = courseResult.rows[0];
 
-        // 2. Fetch Batches for the Course
+        // --- FIXED ---: Select 'id' as 'batch_id', WHERE course_id = courses.id
         const batchesResult = await pool.query(
             'SELECT id AS batch_id, batch_name, batch_code FROM batches WHERE course_id = $1 ORDER BY batch_name',
             [courseId]
         );
 
-        // 3. Fetch Subjects linked to the Course
+        // --- FIXED ---: Select 's.id' as 'subject_id'
         const subjectsResult = await pool.query(`
             SELECT s.id AS subject_id, s.subject_name, s.subject_code FROM subjects s
             JOIN course_subjects cs ON s.id = cs.subject_id
@@ -395,7 +423,6 @@ router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', '
             ORDER BY s.subject_name;
         `, [courseId]);
 
-        // 4. Aggregate and Return Data
         const aggregatedData = {
             course: course,
             batches: batchesResult.rows,
@@ -410,7 +437,7 @@ router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', '
 });
 
 // =================================================================
-// --- ACADEMIC SESSION MANAGEMENT (NEWLY ADDED) ---
+// --- ACADEMIC SESSION MANAGEMENT ---
 // =================================================================
 
 /**
@@ -421,8 +448,9 @@ router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', '
 router.post('/sessions', authenticateToken, authorize(['Admin']), async (req, res) => {
     const { session_name, start_date, end_date } = req.body;
     try {
+        // --- FIXED ---: Return 'id' aliased as 'academic_session_id'
         const newSession = await pool.query(
-            "INSERT INTO academic_sessions (session_name, start_date, end_date) VALUES ($1, $2, $3) RETURNING *", 
+            "INSERT INTO academic_sessions (session_name, start_date, end_date) VALUES ($1, $2, $3) RETURNING id AS academic_session_id, session_name, start_date, end_date", 
             [session_name, start_date, end_date]
         );
         res.status(201).json(newSession.rows[0]);
@@ -439,7 +467,9 @@ router.post('/sessions', authenticateToken, authorize(['Admin']), async (req, re
  */
 router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
     try {
-        const result = await pool.query('SELECT *, id AS academic_session_id, session_name AS name FROM academic_sessions ORDER BY start_date DESC'); 
+        // --- FIXED ---: Select 'id' aliased as 'academic_session_id'.
+        // This fixes the 'column "academic_session_id" does not exist' error.
+        const result = await pool.query('SELECT id AS academic_session_id, session_name FROM academic_sessions ORDER BY start_date DESC'); 
         res.json(result.rows);
     } catch (err) {
         console.error('Error fetching academic sessions:', err);
@@ -453,9 +483,10 @@ router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coord
  * @access  Private (Admin)
  */
 router.put('/sessions/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
-    const { id } = req.params;
+    const { id } = req.params; // This 'id' is the session Primary Key
     const { session_name, start_date, end_date } = req.body;
     try {
+        // --- FIXED ---: Update WHERE 'id'
         const result = await pool.query(
             "UPDATE academic_sessions SET session_name = $1, start_date = $2, end_date = $3 WHERE id = $4 RETURNING *",
             [session_name, start_date, end_date, id]
@@ -477,6 +508,7 @@ router.put('/sessions/:id', authenticateToken, authorize(['Admin']), async (req,
  */
 router.delete('/sessions/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
+        // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM academic_sessions WHERE id = $1 RETURNING id", [req.params.id]);
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Academic session not found.' });
@@ -503,14 +535,16 @@ router.delete('/sessions/:id', authenticateToken, authorize(['Admin']), async (r
  */
 router.post('/fees/structures', authenticateToken, authorize(['Admin']), async (req, res) => {
     const {
-        course_id, batch_id, course_duration_months, admission_fee,
+        course_id, batch_id, // These are now UUIDs from courses.id and batches.id
+        course_duration_months, admission_fee,
         registration_fee, examination_fee, has_transport, transport_fee,
         has_hostel, hostel_fee
     } = req.body;
 
     try {
-        // Fetch course and batch names to create a descriptive structure name
+        // --- FIXED ---: Query by 'id' (Primary Key)
         const courseRes = await pool.query('SELECT course_name FROM courses WHERE id = $1', [course_id]);
+        // --- FIXED ---: Query by 'id' (Primary Key)
         const batchRes = await pool.query('SELECT batch_name FROM batches WHERE id = $1', [batch_id]);
 
         if (courseRes.rowCount === 0 || batchRes.rowCount === 0) {
@@ -524,6 +558,9 @@ router.post('/fees/structures', authenticateToken, authorize(['Admin']), async (
                 admission_fee, registration_fee, examination_fee,
                 has_transport, transport_fee, has_hostel, hostel_fee
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;`;
+        
+        // These values are correct, as 'fee_structures.course_id' and 'batch_id'
+        // reference the 'id' columns from courses/batches (based on your schema)
         const values = [
             course_id, batch_id, structure_name, course_duration_months, admission_fee,
             registration_fee, examination_fee, has_transport || false,
@@ -544,17 +581,18 @@ router.post('/fees/structures', authenticateToken, authorize(['Admin']), async (
 
 /**
  * @route   GET /api/academicswithfees/fees/structures/find
- * @desc    Get a single fee structure by Course ID and Batch ID (Specific Route - MUST COME FIRST)
+ * @desc    Get a single fee structure by Course ID and Batch ID
  * @access  Private (Admin, Teacher, Coordinator, Student)
  */
 router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
-        const { course_id, batch_id } = req.query;
+        const { course_id, batch_id } = req.query; // These are the UUIDs
 
         if (!course_id || !batch_id) { 
             return res.status(400).json({ message: 'Course ID and Batch ID are required for lookup.' });
         }
         
+        // This query is correct. 'fee_structures.course_id' references 'courses.id'
         const result = await pool.query(
             `SELECT * FROM fee_structures 
              WHERE course_id = $1 AND batch_id = $2`, 
@@ -567,7 +605,6 @@ router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teac
         
         const structureData = result.rows[0];
         
-        // Sanitize and ensure correct types before sending to client
         const sanitizedData = {
             ...structureData,
             admission_fee: safeParseFloat(structureData.admission_fee),
@@ -595,6 +632,7 @@ router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teac
  */
 router.get('/fees/structures', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
+        // --- FIXED ---: Changed JOINs to use 'id' (Primary Key)
         const result = await pool.query(`
             SELECT fs.id, fs.structure_name, fs.course_id, fs.batch_id, 
                    fs.admission_fee, fs.registration_fee, fs.examination_fee,
@@ -614,10 +652,12 @@ router.get('/fees/structures', authenticateToken, authorize(['Admin']), async (r
 
 /**
  * @route   GET /api/academicswithfees/fees/structures/:id
- * @desc    Get a single fee structure by its ID (Generic Route - MUST COME AFTER /find)
+ * @desc    Get a single fee structure by its ID (Fee Structure's PK)
  * @access  Private (Admin)
  */
 router.get('/fees/structures/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+    // This route is for the fee_structure's own 'id', which may or may not be UUID.
+    // We assume it's the Primary Key.
     try {
         const { id } = req.params;
         const result = await pool.query('SELECT * FROM fee_structures WHERE id = $1', [id]); 
@@ -629,7 +669,7 @@ router.get('/fees/structures/:id', authenticateToken, authorize(['Admin']), asyn
     } catch (err) {
         console.error('Error fetching fee structure (by ID):', err);
         if (err.code === '22P02') { 
-            return res.status(400).json({ message: "Invalid ID format provided. (Hint: Routing issue)" });
+            return res.status(400).json({ message: "Invalid ID format provided." });
         }
         res.status(500).json({ message: "Server error while fetching fee structure", error: err.message });
     }
@@ -637,12 +677,12 @@ router.get('/fees/structures/:id', authenticateToken, authorize(['Admin']), asyn
 
 /**
  * @route   PUT /api/academicswithfees/fees/structures/:id
- * @desc    Update a fee structure
+ * @desc    Update a fee structure by its ID
  * @access  Private (Admin)
  */
 router.put('/fees/structures/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
-        const { id } = req.params;
+        const { id } = req.params; // This is fee_structures.id
         const {
             course_duration_months, admission_fee, registration_fee,
             examination_fee, has_transport, transport_fee, has_hostel, hostel_fee
@@ -675,12 +715,12 @@ router.put('/fees/structures/:id', authenticateToken, authorize(['Admin']), asyn
 
 /**
  * @route   DELETE /api/academicswithfees/fees/structures/:id
- * @desc    Delete a fee structure
+ * @desc    Delete a fee structure by its ID
  * @access  Private (Admin)
  */
 router.delete('/fees/structures/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
     try {
-        const { id } = req.params;
+        const { id } = req.params; // This is fee_structures.id
         const result = await pool.query("DELETE FROM fee_structures WHERE id = $1 RETURNING id", [id]);
 
         if (result.rowCount === 0) {

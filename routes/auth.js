@@ -1,5 +1,3 @@
-// routes/auth.js
-
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -25,9 +23,10 @@ async function findUserAndVerifyPassword(username, password) {
             u.password_hash, 
             u.role, 
             u.branch_id,
-            u.reference_id,
-            -- Fetch the profile's primary key (UUID) based on the user's role
-            COALESCE(s.student_id::text, t.teacher_id::text) AS profile_uuid
+            -- সমাধান ১: u.reference_id কলামটি নেই, u.serial_id আছে
+            u.serial_id AS reference_id,
+            -- সমাধান ২: t.teacher_id কলামটি নেই, t.id আছে
+            COALESCE(s.student_id::text, t.id::text) AS profile_uuid
         FROM ${USERS_TABLE} u
         LEFT JOIN students s ON u.id = s.user_id AND u.role = 'Student'
         LEFT JOIN teachers t ON u.id = t.user_id AND u.role = 'Teacher'

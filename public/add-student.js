@@ -3,11 +3,10 @@
 document.addEventListener('DOMContentLoaded', initializeAddForm);
 
 // --- Global Constants ---
-const AUTH_TOKEN = localStorage.getItem('erp-token'); // (Note: Not used directly by new handleApi)
 const ACADEMICS_API = '/api/academicswithfees';
 
 
-// --- CORE API HANDLER (Updated) ---
+// --- CORE API HANDLER ---
 /**
  * Helper function for authenticated API calls. 
  * Handles token, branch, and session headers.
@@ -26,7 +25,6 @@ async function handleApi(url, options = {}) {
     }
 
     // 3. Add Authentication and Custom Headers
-    
     options.headers = { 
         ...options.headers,
         'Content-Type': 'application/json', 
@@ -37,7 +35,7 @@ async function handleApi(url, options = {}) {
         'active-session-id': ACTIVE_SESSION_ID
     };
     
-    // Delete 'Content-Type' for GET requests
+    // Delete 'Content-Type' for GET/HEAD requests
     if (options.method === 'GET' || options.method === 'HEAD') {
         delete options.headers['Content-Type'];
     }
@@ -48,7 +46,9 @@ async function handleApi(url, options = {}) {
     // 5. Handle Errors
     if (response.status === 401 || response.status === 403) {
         console.error('API Unauthorized or Forbidden:', url);
-        throw new Error('Unauthorized or Forbidden access. Please check server logs or re-login.');
+        alert('Session expired or unauthorized. Please log in again.');
+        window.location.href = '/login.html'; // Redirect to login
+        throw new Error('Unauthorized or Forbidden access.');
     }
     
     if (!response.ok) {
@@ -91,7 +91,7 @@ function validateCurrentStep() {
 }
 
 /**
- * NEW HELPER FUNCTION: Iterates over the ENTIRE form's required fields to find the first error.
+ * Iterates over the ENTIRE form's required fields to find the first error.
  * Used upon submission.
  * @param {HTMLFormElement} form 
  * @returns {HTMLElement | null} The first element with a validation error, or null.
@@ -100,8 +100,8 @@ function validateFullFormAndFindFirstError(form) {
     let firstInvalidInput = null;
     let isValid = true;
 
-    // Select ALL required inputs across all visible fieldsets (excluding the hidden system IDs)
-    const requiredInputs = form.querySelectorAll('fieldset:not([style*="none"]) [required]:not([type="hidden"])');
+    // Select ALL required inputs across all visible fieldsets
+    const requiredInputs = form.querySelectorAll('fieldset [required]:not([type="hidden"])');
 
     requiredInputs.forEach(input => {
         // Reset border first
@@ -140,7 +140,9 @@ function updateProgressBar(currentStep) {
  * Handles the logic for switching between form tabs, including validation check.
  */
 function openTab(evt, tabId) {
-    const clickedButton = evt.currentTarget;
+    // evt can be null if called manually, but evt.currentTarget is needed if clicked
+    const clickedButton = evt.currentTarget || document.querySelector(`.tab-button[data-tab="${tabId}"]`);
+    
     const newStep = parseInt(clickedButton.getAttribute('data-step'), 10);
     const currentActiveStep = parseInt(document.querySelector('.tab-button.active')?.getAttribute('data-step') || '1', 10);
     
@@ -178,11 +180,22 @@ function initializeAddForm() {
         return;
     }
     
+    // 1. Attach Form Submit Handler
     form.addEventListener('submit', handleAddStudentSubmit);
     
+    // 2. Attach Tab Button Click Handlers
+    document.querySelectorAll('.tab-button[data-tab]').forEach(button => {
+        button.addEventListener('click', (event) => {
+            const tabId = event.currentTarget.getAttribute('data-tab');
+            openTab(event, tabId);
+        });
+    });
+
+    // 3. Attach Course Change Handler
     const courseSelect = document.getElementById('course_id');
     if (courseSelect) courseSelect.addEventListener('change', handleCourseChange);
 
+    // 4. Set Initial State
     updateProgressBar(1);
     loadInitialDropdowns();
 }
@@ -194,7 +207,10 @@ async function loadInitialDropdowns() {
     const batchSelect = document.getElementById('batch_id');
     const sessionSelect = document.getElementById('academic_session_id'); // Get the session select element
     
-    if (!courseSelect || !batchSelect || !sessionSelect) return;
+    if (!courseSelect || !batchSelect || !sessionSelect) {
+        console.error('Missing critical select elements (session, course, or batch)');
+        return;
+    }
 
     courseSelect.innerHTML = '<option value="">Loading Courses...</option>';
     sessionSelect.innerHTML = '<option value="">Loading Sessions...</option>';
@@ -203,6 +219,7 @@ async function loadInitialDropdowns() {
 
     try {
         // --- Load Academic Sessions ---
+        // (This API endpoint must exist)
         const sessionResponse = await handleApi(`${ACADEMICS_API}/sessions`); 
         const sessions = await sessionResponse.json();
         
@@ -214,10 +231,11 @@ async function loadInitialDropdowns() {
         }
         
         // --- Load Courses ---
+        // (This API endpoint must exist)
         const courseResponse = await handleApi(`${ACADEMICS_API}/courses`); 
         const courses = await courseResponse.json();
         
-        if (!Array.isArray(courses)) {
+        if (!Array.isArray(courses) || courses.length === 0) {
              courseSelect.innerHTML = '<option value="">No courses found</option>';
              return;
         }
@@ -318,33 +336,35 @@ async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
 
     feeDisplayEl.innerHTML = 'Fetching fee structure...';
     try {
-        // **REQUIRED BACKEND ENDPOINT**
         const response = await handleApi(`${ACADEMICS_API}/fees/structures/find?course_id=${courseId}&batch_id=${batchId}`);
         const structure = await response.json();
+        
+        // Helper to calculate total fee
+        const calculateTotalFee = (s) => {
+            const admission = parseFloat(s.admission_fee) || 0;
+            const registration = parseFloat(s.registration_fee) || 0;
+            const examination = parseFloat(s.examination_fee) || 0;
+            const duration = parseInt(s.course_duration_months) || 0;
+            const transport = s.has_transport ? (parseFloat(s.transport_fee) || 0) * duration : 0;
+            const hostel = s.has_hostel ? (parseFloat(s.hostel_fee) || 0) * duration : 0;
+            return (admission + registration + examination + transport + hostel).toFixed(2);
+        };
+        
         const totalFee = calculateTotalFee(structure);
 
-        const admissionFee = parseFloat(structure.admission_fee) || 0;
-        const registrationFee = parseFloat(structure.registration_fee) || 0;
-        const examinationFee = parseFloat(structure.examination_fee) || 0;
-        const duration = parseInt(structure.course_duration_months) || 0;
-        const transportFeeMonthly = parseFloat(structure.transport_fee) || 0;
-        const hostelFeeMonthly = parseFloat(structure.hostel_fee) || 0;
-        const transportTotal = structure.has_transport ? (transportFeeMonthly * duration) : 0;
-        const hostelTotal = structure.has_hostel ? (hostelFeeMonthly * duration) : 0;
-        
         feeDisplayEl.innerHTML = `
             <h4>💰 Fee Structure Details</h4>
-            <p><strong>Admission Fee:</strong> ₹${admissionFee.toFixed(2)}</p>
-            <p><strong>Registration Fee:</strong> ₹${registrationFee.toFixed(2)}</p>
-            <p><strong>Examination Fee:</strong> ₹${examinationFee.toFixed(2)}</p>
-            ${structure.has_transport ? `<p><strong>Transport Fee (x${duration} mos):</strong> ₹${transportTotal.toFixed(2)}</p>` : ''}
-            ${structure.has_hostel ? `<p><strong>Hostel Fee (x${duration} mos):</strong> ₹${hostelTotal.toFixed(2)}</p>` : ''}
+            <p><strong>Structure Name:</strong> ${structure.structure_name || 'N/A'}</p>
+            <p><strong>Admission Fee:</strong> ₹${(parseFloat(structure.admission_fee) || 0).toFixed(2)}</p>
+            <p><strong>Registration Fee:</strong> ₹${(parseFloat(structure.registration_fee) || 0).toFixed(2)}</p>
+            <p><strong>Examination Fee:</strong> ₹${(parseFloat(structure.examination_fee) || 0).toFixed(2)}</p>
+            ${structure.has_transport ? `<p><strong>Transport Fee:</strong> ₹${(parseFloat(structure.transport_fee) || 0).toFixed(2)} / month</p>` : ''}
+            ${structure.has_hostel ? `<p><strong>Hostel Fee:</strong> ₹${(parseFloat(structure.hostel_fee) || 0).toFixed(2)} / month</p>` : ''}
             <hr>
-            <p style="font-weight: bold;">TOTAL ESTIMATED FEE: ₹${totalFee}</p>
+            <p style="font-weight: bold;">TOTAL ESTIMATED FEE (Course Duration ${structure.course_duration_months} mos): ₹${totalFee}</p>
         `;
         
     } catch (err) {
-        // Check if the error message is from a 404 response
         if (err.message.includes('Server error: 404')) {
             feeDisplayEl.innerHTML = '<p style="color:red;">⚠️ No Fee Structure found for this Course/Batch combination.</p>';
         } else {
@@ -352,18 +372,6 @@ async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
             feeDisplayEl.innerHTML = '<p style="color:red;">A server error occurred while retrieving fees.</p>';
         }
     }
-}
-
-function calculateTotalFee(structure) {
-    const admission = parseFloat(structure.admission_fee) || 0;
-    const registration = parseFloat(structure.registration_fee) || 0;
-    const examination = parseFloat(structure.examination_fee) || 0;
-    const duration = parseInt(structure.course_duration_months) || 0;
-    
-    const transport = structure.has_transport ? (parseFloat(structure.transport_fee) || 0) * duration : 0;
-    const hostel = structure.has_hostel ? (parseFloat(structure.hostel_fee) || 0) * duration : 0;
-    
-    return (admission + registration + examination + transport + hostel).toFixed(2);
 }
 
 function clearFeeAndSubjectDisplay(feeDisplayEl, subjectsDisplayEl) { 
@@ -394,6 +402,7 @@ async function handleAddStudentSubmit(event) {
         const tabButton = document.querySelector(`.tab-button[data-step="${stepNumber}"]`);
         
         if (tabButton) {
+            // Manually create a simple event object for openTab
             openTab({currentTarget: tabButton}, fieldsetWithError.id);
         }
         
@@ -421,8 +430,8 @@ async function handleAddStudentSubmit(event) {
     const studentData = Object.fromEntries(formData.entries());
     delete studentData.confirm_password; 
 
-    // Handle empty optional IDs
-    for (const key of ['academic_session_id', 'branch_id']) {
+    // Handle empty optional IDs (branch_id is removed as it's in the header)
+    for (const key of ['academic_session_id']) {
         if (studentData[key] === '') {
             studentData[key] = null;
         }
@@ -449,7 +458,6 @@ async function handleAddStudentSubmit(event) {
         }
         
     } catch (error) {
-         // This now catches 400, 403, 409, 500 errors from handleApi
          console.error('Submission Error:', error);
          alert(`❌ Enrollment Failed: ${error.message || 'Unknown error'}`);
     } finally {

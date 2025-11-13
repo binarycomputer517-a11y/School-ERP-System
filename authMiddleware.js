@@ -2,7 +2,7 @@ const jwt = require('jsonwebtoken');
 
 /**
  * Middleware to verify the JWT from the Authorization header or the URL query string.
- * This version safely extracts the INTEGER core user ID.
+ * This version safely extracts the UUID core ID and the INTEGER reference ID.
  */
 function authenticateToken(req, res, next) {
     // 1. Check the Authorization Header first (Standard API Calls)
@@ -15,7 +15,9 @@ function authenticateToken(req, res, next) {
     }
 
     if (token == null) {
-        return res.sendStatus(401); // 401: Unauthorized - No token provided
+        // 401: Unauthorized - No token provided
+        // This is where "Session expired or unauthorized" usually originates if no token is found.
+        return res.sendStatus(401); 
     }
 
     jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
@@ -23,35 +25,27 @@ function authenticateToken(req, res, next) {
             // Token is invalid, expired, or malformed
             return res.sendStatus(403); // 403: Forbidden
         }
-
-        // --- EXTRACTING INTEGER IDs ---
-
-        const coreUserId = user.id; // Comes from users.id (Expected to be an INTEGER)
         
-        // This is the profile-specific ID (UUID/Text) retrieved during login.
-        const profileReferenceId = user.reference_id || null; 
+        // --- Core ID Extraction ---
+        // user.id is the UUID from users.id (The actual primary key)
+        const coreUUID = user.id; 
         
-        // FIX: Ensure coreUserId is cast to INTEGER to match the users.id column type.
-        let processedUserId;
-        if (coreUserId !== undefined && coreUserId !== null) {
-            processedUserId = parseInt(coreUserId, 10); 
-            
-            // Critical Check: If parseInt results in NaN (Not a Number), the token payload is rejected.
-            if (isNaN(processedUserId)) {
-                 console.error('JWT payload contains non-numeric core user ID for INTEGER schema.');
-                 return res.status(403).json({ message: 'Forbidden: Token payload structure is invalid.' });
-            }
-        } else {
-             return res.status(403).json({ message: 'Forbidden: Token payload missing User ID.' });
+        // user.reference_id is the INTEGER from users.serial_id (The numeric ID)
+        const referenceId = user.reference_id || null; 
+        
+        // Critical Check: Ensure the core UUID is present
+        if (!coreUUID) {
+             console.error('JWT payload missing core UUID.');
+             return res.status(403).json({ message: 'Forbidden: Token payload missing core user ID (UUID).' });
         }
         
         // 4. Attach IDs to the request object.
         req.user = {
-            // userId is the core ID linked to the 'users' table (INTEGER)
-            userId: processedUserId, 
+            // FIX: Pass the actual UUID from the token payload 'id'
+            id: coreUUID, 
             
-            // This is the profile-specific ID (UUID or Text) for profile tables
-            referenceId: profileReferenceId, 
+            // FIX: Pass the INTEGER reference ID as 'userId' for legacy/numeric use
+            userId: referenceId, 
             
             role: user.role,     
             branch_id: user.branch_id 
@@ -71,7 +65,7 @@ function authorize(roles = []) {
     }
 
     return (req, res, next) => {
-        // req.user.role is set by authenticateToken.
+        // Ensure req.user.id (the UUID) or req.user.role exists.
         if (!req.user || !req.user.role) {
              return res.status(403).json({ message: 'Forbidden: Authentication failed during token verification.' });
         }

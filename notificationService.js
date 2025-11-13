@@ -1,5 +1,3 @@
-// notificationService.js
-
 const { pool } = require('./database');
 
 // Configuration 
@@ -35,13 +33,13 @@ const checkBusLocationsAndSendAlerts = async () => {
             // 3. Find students linked to this specific route/stop
             const studentsToNotifyQuery = `
                 SELECT 
-                    s.id AS student_id, 
+                    s.student_id AS student_id,  -- <-- সমাধান ১: 's.id' নয়, 's.student_id'
                     u.id AS user_id, 
                     u.username,
                     s.phone_number
                 FROM students s
                 JOIN users u ON s.user_id = u.id
-                JOIN student_transport_assignments sta ON s.id = sta.student_id
+                JOIN student_transport_assignments sta ON s.student_id = sta.student_id -- <-- সমাধান ২: 's.id' নয়, 's.student_id'
                 WHERE 
                     /* 🛑 FIX APPLIED: Explicitly cast parameters to UUID to resolve 'uuid = integer' error. 
                        This ensures the database compares UUID strings against UUID columns. */
