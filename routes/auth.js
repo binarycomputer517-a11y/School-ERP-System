@@ -1,5 +1,3 @@
-// routes/auth.js
-
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -13,8 +11,22 @@ const USERS_TABLE = 'users';
 
 // Helper function to find a user and verify their password
 async function findUserAndVerifyPassword(username, password) {
+    // NOTE: This query now joins profiles to ensure data is available for JWT payload generation.
     const userResult = await pool.query(
-        `SELECT id, username, password_hash, role, branch_id FROM ${USERS_TABLE} WHERE username = $1 AND is_active = TRUE`,
+        `
+        SELECT 
+            u.id, 
+            u.username, 
+            u.password_hash, 
+            u.role, 
+            u.branch_id,
+            -- Fetch the profile's primary key (UUID) based on the user's role
+            COALESCE(s.student_id::text, t.id::text) AS profile_reference_id 
+        FROM ${USERS_TABLE} u
+        LEFT JOIN students s ON u.id = s.user_id AND u.role = 'Student'
+        LEFT JOIN teachers t ON u.id = t.user_id AND u.role = 'Teacher'
+        WHERE u.username = $1 AND u.is_active = TRUE
+        `,
         [username]
     );
 
@@ -24,13 +36,12 @@ async function findUserAndVerifyPassword(username, password) {
         return null; // User not found or inactive
     }
     
-    // Production/Secure Verification:
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     return passwordMatch ? user : null;
 }
 
 // =================================================================
-// --- USER REGISTRATION ROUTE ---
+// --- USER REGISTRATION ROUTE (Unchanged) ---
 // =================================================================
 
 /**
@@ -40,7 +51,6 @@ async function findUserAndVerifyPassword(username, password) {
 router.post('/register', async (req, res) => {
     const { username, password, role } = req.body;
     
-    // Minimal validation
     if (!username || !password || !role) {
         return res.status(400).json({ message: 'Missing required fields: username, password, or role.' });
     }
@@ -77,7 +87,7 @@ router.post('/register', async (req, res) => {
 });
 
 // =================================================================
-// --- PUBLIC FORGOT PASSWORD INITIATION ---
+// --- PUBLIC FORGOT PASSWORD INITIATION (Unchanged) ---
 // =================================================================
 
 /**
@@ -93,32 +103,27 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     try {
-        // 1. Find the user by email
         const userResult = await pool.query(
             `SELECT id, username FROM ${USERS_TABLE} WHERE email = $1 AND is_active = TRUE`,
             [email]
         );
         const user = userResult.rows[0];
 
-        // 2. Generate a short-lived, special purpose token
-        let resetToken = 'DEBUG_TOKEN'; // Default/Debug token
+        let resetToken = 'DEBUG_TOKEN';
 
         if (user) {
             resetToken = jwt.sign(
                 { id: user.id, type: 'password_reset' },
                 JWT_SECRET,
-                { expiresIn: '1h' } // Token expires in 1 hour
+                { expiresIn: '1h' }
             );
             
-            // 3. Construct the Reset Link (Simulated email)
             const resetUrl = `http://localhost:3005/reset-password.html?token=${resetToken}`;
             console.log(`[AUTH] Password Reset Link for ${user.username}: ${resetUrl}`);
         }
 
-        // Send success message regardless of whether the user exists (for security reasons)
         res.status(200).json({
             message: 'Password reset link sent successfully. Check your inbox (or server console for the link).',
-            // NOTE: Do not send the token in a real response! For debug only.
             token: resetToken 
         });
 
@@ -130,7 +135,7 @@ router.post('/forgot-password', async (req, res) => {
 
 
 // =================================================================
-// --- PUBLIC PASSWORD RESET (FORGOT PASSWORD) ---
+// --- PUBLIC PASSWORD RESET (FORGOT PASSWORD) (Unchanged) ---
 // =================================================================
 
 /**
@@ -146,15 +151,12 @@ router.post('/reset-password', async (req, res) => {
     }
 
     try {
-        // 1. Verify and decode the reset token
         const decoded = jwt.verify(token, JWT_SECRET);
         const userId = decoded.id; 
 
-        // 2. Hash the new password
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(password, saltRounds);
 
-        // 3. Update the password in the database
         const result = await pool.query(
             `UPDATE ${USERS_TABLE} SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id`,
             [newPasswordHash, userId]
@@ -164,12 +166,10 @@ router.post('/reset-password', async (req, res) => {
             return res.status(404).send('User not found or password already reset.');
         }
 
-        // 4. Success Response
         res.status(200).send('Password has been successfully reset.');
 
     } catch (error) {
         if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-            // This response matches the error string expected by the frontend
             return res.status(401).send('Error: The password reset link is invalid or expired. Please request a new link.');
         }
         console.error('Server Password Reset Error:', error);
@@ -179,7 +179,7 @@ router.post('/reset-password', async (req, res) => {
 
 
 // =================================================================
-// --- LOGIN ROUTE (FINAL) ---
+// --- LOGIN ROUTE (FINAL FIX) ---
 // =================================================================
 
 /**
@@ -190,40 +190,47 @@ router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     
     try {
-        const verifiedUser = await findUserAndVerifyPassword(username, password);
+        // findUserAndVerifyPassword now fetches the profile_reference_id
+        const user = await findUserAndVerifyPassword(username, password);
 
-        if (!verifiedUser) {
+        if (!user) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
         
-        // --- 1. CRITICAL LOOKUPS ---
-        
-        // Fetch Active Session ID
+        // --- 1. Fetch Active Session ID (Unchanged) ---
         const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
         const activeSessionId = sessionRes.rows[0]?.id || null; 
         
-        // 2. Generate Token
+        // --- 2. Generate Token (CRITICAL FIX) ---
+        
         const generatedToken = jwt.sign(
-            { id: verifiedUser.id, role: verifiedUser.role, branch_id: verifiedUser.branch_id }, 
+            { 
+                id: user.id, // CORE INTEGER ID
+                role: user.role, 
+                branch_id: user.branch_id,
+                // THIS IS THE FIX: Include the Profile UUID/Text ID for middleware validation
+                reference_id: user.profile_reference_id
+            }, 
             JWT_SECRET, 
             { expiresIn: '8h' }
         );
 
-        // 3. Construct Response Payload
+        // --- 3. Construct Response Payload ---
         const responsePayload = {
             token: generatedToken,
-            role: verifiedUser.role,
-            username: verifiedUser.username,
+            role: user.role,
+            username: user.username,
             
-            'user-id': verifiedUser.id,           
-            reference_id: verifiedUser.id,           
+            'user-id': user.id,           
+            // Pass the reference_id back to the client for local storage access
+            reference_id: user.profile_reference_id,           
             
-            userBranchId: verifiedUser.branch_id || '',
+            userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',     
         };
 
         // Update last login time
-        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [verifiedUser.id]);
+        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
 
 
         return res.status(200).json(responsePayload);

@@ -377,7 +377,7 @@
     
     <div id="loading-modal" class="modal"><div class="modal-content"><div class="spinner"></div></div></div>
 
-   <script>
+<script>
         const API_BASE_URL = 'http://localhost:3005/api';
         const ATTENDANCE_API_PATH = '/attendance'; // Base path for attendance module endpoints
         const ACADEMICS_API_PATH = '/academicswithfees'; // Base path for course/batch loading
@@ -389,7 +389,7 @@
 
         // Guard Check (for client-side redirection)
         if (!token || !['Super Admin', 'Admin', 'Teacher', 'Coordinator'].includes(userRole)) {
-            // window.location.href = '/login.html';
+            // window.location.href = '/login.html'; // Security Note: Uncomment this in production.
             console.error('Access Denied: User role not authorized to view this page.');
         }
 
@@ -403,7 +403,15 @@
              document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
              button.classList.add('active');
              document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-             document.getElementById(button.dataset.tab).classList.add('active');
+             const targetTabId = button.dataset.tab;
+             document.getElementById(targetTabId).classList.add('active');
+
+             // FIX 1: Stop monitoring when switching away from the marking tab
+             if (targetTabId !== 'mark-attendance-tab' && attendanceMonitorInterval) {
+                 clearInterval(attendanceMonitorInterval);
+                 attendanceMonitorInterval = null;
+                 console.log('Attendance Monitor stopped.');
+             }
         }
 
         async function handleApi(endpoint, method = 'GET', body = null) {
@@ -418,7 +426,8 @@
                 const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
                 if (!response.ok) {
                     const err = await response.json().catch(() => ({ message: response.statusText || 'Unknown server error.' }));
-                    throw new Error(err.message || `Error ${response.status}: API Endpoint not found or server failed.`);
+                    // FIX: Use response.statusText if available, or status code if not.
+                    throw new Error(err.message || response.statusText || `Error ${response.status}: API Endpoint not found or server failed.`);
                 }
                 if (response.status === 204) return null;
                 return await response.json();
@@ -432,43 +441,8 @@
             }
         }
         
-        // --- Data Loading (Academic Filters - Retained for Reports Tab) ---
+        // --- Data Loading Functions (loadAllSubjects, loadDepartments, loadDynamicBatches, updateMarkingFilters remain unchanged as they were correct) ---
         
-        // REMOVING COURSE LOAD LOGIC from initial loading, but keeping the function definition.
-        // The Mark Attendance tab now uses the universal filter set.
-        
-        // --- Universal Marking Filter Logic (NEW) ---
-
-        // Function to dynamically update filters based on selected role in Marking tab
-        async function updateMarkingFilters() {
-            const role = document.getElementById('markingRoleSelect').value;
-            const wrapper = document.getElementById('markingDynamicFilterWrapper');
-            const subjectSelect = document.getElementById('subjectSelect');
-
-            wrapper.innerHTML = '';
-            subjectSelect.innerHTML = '<option value="">Select Subject (Optional)</option>';
-            
-            // Reset Roster
-            document.getElementById('attendanceTbody').innerHTML = '';
-            document.getElementById('rosterStatus').textContent = 'Please select filters and load a roster to begin.';
-
-            if (role === 'Student') {
-                wrapper.innerHTML = `
-                    <div><label for="markingDynamicFilter">Batch:</label>
-                    <select id="markingDynamicFilter"><option value="">Select Batch</option></select></div>
-                `;
-                 await loadDynamicBatches('markingDynamicFilter'); 
-                 await loadAllSubjects('subjectSelect'); 
-            } else if (role === 'Employee' || role === 'Teacher') {
-                wrapper.innerHTML = `
-                    <div><label for="markingDynamicFilter">Department (Branch):</label>
-                    <select id="markingDynamicFilter"><option value="">Select Department</option></select></div>
-                `;
-                 await loadDepartments('markingDynamicFilter');
-                 if (role === 'Teacher') await loadAllSubjects('subjectSelect'); 
-            }
-        }
-
         // Loads ALL subjects 
         async function loadAllSubjects(selectId) {
             const select = document.getElementById(selectId);
@@ -508,6 +482,36 @@
                 batches.forEach(batch => {
                     select.innerHTML += `<option value="${batch.id}">${batch.name}</option>`;
                 });
+            }
+        }
+        
+        // Function to dynamically update filters based on selected role in Marking tab
+        async function updateMarkingFilters() {
+            const role = document.getElementById('markingRoleSelect').value;
+            const wrapper = document.getElementById('markingDynamicFilterWrapper');
+            const subjectSelect = document.getElementById('subjectSelect');
+
+            wrapper.innerHTML = '';
+            subjectSelect.innerHTML = '<option value="">Select Subject (Optional)</option>';
+            
+            // Reset Roster
+            document.getElementById('attendanceTbody').innerHTML = '';
+            document.getElementById('rosterStatus').textContent = 'Please select filters and load a roster to begin.';
+
+            if (role === 'Student') {
+                wrapper.innerHTML = `
+                    <div><label for="markingDynamicFilter">Batch:</label>
+                    <select id="markingDynamicFilter"><option value="">Select Batch</option></select></div>
+                `;
+                 await loadDynamicBatches('markingDynamicFilter'); 
+                 await loadAllSubjects('subjectSelect'); 
+            } else if (role === 'Employee' || role === 'Teacher') {
+                wrapper.innerHTML = `
+                    <div><label for="markingDynamicFilter">Department (Branch):</label>
+                    <select id="markingDynamicFilter"><option value="">Select Department</option></select></div>
+                `;
+                 await loadDepartments('markingDynamicFilter');
+                 if (role === 'Teacher') await loadAllSubjects('subjectSelect'); 
             }
         }
         
@@ -665,11 +669,13 @@
                 const existingRecord = currentRosterData.find(r => r.user_id === user_id);
                 const markMethod = existingRecord ? existingRecord.mark_method : 'manual';
                 
-                // Only save/update if manually marked OR if it's currently unmarked and we are marking it
-                if (statusInput && markMethod === 'manual') { 
+                // FIX 2: Only check if a status input is checked AND that status input is not disabled.
+                // This allows manual overriding of pre-existing records (which should be handled on the server by setting mark_method='manual').
+                if (statusInput && !statusInput.disabled) { 
                     const status = statusInput.value;
                     const remarks = row.querySelector('.remarks-btn').dataset.remarks || '';
                     if (status !== 'unmarked') {
+                        // Send the record for saving/updating
                         records.push({ user_id: user_id, status, remarks }); 
                     }
                 }
@@ -863,7 +869,8 @@
                 
                 const percentage = parseFloat(percentageCell.dataset.percentage);
                 if (isChecked) {
-                    row.style.display = percentage < 75 ? 'none' : '';
+                    // FIX 3: Show rows where percentage is BELOW 75, hide those >= 75
+                    row.style.display = percentage < 75 ? '' : 'none';
                 } else {
                     row.style.display = '';
                 }
