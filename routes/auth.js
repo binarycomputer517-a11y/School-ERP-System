@@ -11,16 +11,16 @@ const USERS_TABLE = 'users';
 
 // Helper function to find a user and verify their password
 async function findUserAndVerifyPassword(username, password) {
-    // NOTE: This query now joins profiles to ensure data is available for JWT payload generation.
+    // --- 💎 FIX #1: Added 'u.serial_id' to the query ---
     const userResult = await pool.query(
         `
         SELECT 
             u.id, 
+            u.serial_id, -- <-- ADDED THIS LINE
             u.username, 
             u.password_hash, 
             u.role, 
             u.branch_id,
-            -- Fetch the profile's primary key (UUID) based on the user's role
             COALESCE(s.student_id::text, t.id::text) AS profile_reference_id 
         FROM ${USERS_TABLE} u
         LEFT JOIN students s ON u.id = s.user_id AND u.role = 'Student'
@@ -43,12 +43,9 @@ async function findUserAndVerifyPassword(username, password) {
 // =================================================================
 // --- USER REGISTRATION ROUTE (Unchanged) ---
 // =================================================================
-
-/**
- * @route POST /api/auth/register
- * @desc Creates a new user account with a hashed password.
- */
 router.post('/register', async (req, res) => {
+    // ... (Your existing /register code is fine) ...
+    // ... (No changes needed here) ...
     const { username, password, role } = req.body;
     
     if (!username || !password || !role) {
@@ -86,16 +83,13 @@ router.post('/register', async (req, res) => {
     }
 });
 
+
 // =================================================================
 // --- PUBLIC FORGOT PASSWORD INITIATION (Unchanged) ---
 // =================================================================
-
-/**
- * @route POST /api/auth/forgot-password
- * @desc Initiates password reset by sending a tokenized link to the user's email.
- * @access Public
- */
 router.post('/forgot-password', async (req, res) => {
+    // ... (Your existing /forgot-password code is fine) ...
+    // ... (No changes needed here) ...
     const { email } = req.body;
 
     if (!email) {
@@ -112,6 +106,7 @@ router.post('/forgot-password', async (req, res) => {
         let resetToken = 'DEBUG_TOKEN';
 
         if (user) {
+            // This token uses 'id' (UUID), which is fine for a temporary password reset
             resetToken = jwt.sign(
                 { id: user.id, type: 'password_reset' },
                 JWT_SECRET,
@@ -137,13 +132,9 @@ router.post('/forgot-password', async (req, res) => {
 // =================================================================
 // --- PUBLIC PASSWORD RESET (FORGOT PASSWORD) (Unchanged) ---
 // =================================================================
-
-/**
- * @route POST /api/auth/reset-password
- * @desc Resets the user's password using a temporary token (from URL/Email).
- * @access Public (This must be mounted publicly in server.js)
- */
 router.post('/reset-password', async (req, res) => {
+    // ... (Your existing /reset-password code is fine) ...
+    // ... (No changes needed here) ...
     const { token, password } = req.body;
 
     if (!token || !password) {
@@ -152,7 +143,7 @@ router.post('/reset-password', async (req, res) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.id; 
+        const userId = decoded.id; // This is the UUID, which is correct for this one-time use
 
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(password, saltRounds);
@@ -190,7 +181,7 @@ router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     
     try {
-        // findUserAndVerifyPassword now fetches the profile_reference_id
+        // findUserAndVerifyPassword now fetches 'serial_id'
         const user = await findUserAndVerifyPassword(username, password);
 
         if (!user) {
@@ -203,17 +194,19 @@ router.post('/login', async (req, res) => {
         
         // --- 2. Generate Token (CRITICAL FIX) ---
         
-        const generatedToken = jwt.sign(
-            { 
-                id: user.id, // CORE INTEGER ID
-                role: user.role, 
-                branch_id: user.branch_id,
-                // THIS IS THE FIX: Include the Profile UUID/Text ID for middleware validation
-                reference_id: user.profile_reference_id
-            }, 
-            JWT_SECRET, 
-            { expiresIn: '8h' }
-        );
+        // --- 💎 FIX #2: Changed 'user.id' to 'user.serial_id' ---
+        // This is the payload your middleware will decode.
+        // It will set 'req.user.userId' to the INTEGER serial_id.
+        const tokenPayload = {
+            id: user.serial_id, // <-- THIS IS THE FIX (e.g., 1, 2, 16)
+            role: user.role, 
+            branch_id: user.branch_id,
+            reference_id: user.profile_reference_id,
+            // We also include the real UUID for convenience
+            user_uuid: user.id 
+        };
+        
+        const generatedToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '8h' });
 
         // --- 3. Construct Response Payload ---
         const responsePayload = {
@@ -221,17 +214,16 @@ router.post('/login', async (req, res) => {
             role: user.role,
             username: user.username,
             
-            'user-id': user.id,           
-            // Pass the reference_id back to the client for local storage access
-            reference_id: user.profile_reference_id,           
+            'user-id': user.serial_id, // <-- Send the Integer ID
+            reference_id: user.profile_reference_id, // The Profile's UUID
+            user_uuid: user.id, // The User's UUID
             
             userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',     
         };
 
-        // Update last login time
+        // Update last login time (using the UUID primary key)
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
-
 
         return res.status(200).json(responsePayload);
         

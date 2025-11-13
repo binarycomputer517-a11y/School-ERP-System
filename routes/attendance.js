@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
-const { authenticateToken, authorize } = require('../authMiddleware'); 
+const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Role Definitions ---
 const MARKING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser'];
@@ -9,19 +9,15 @@ const ROSTER_VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator'];
 const REPORT_VIEW_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
 const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee'];
 
-
 // =================================================================
 // 1. MARKING ATTENDANCE (POST /mark)
 // =================================================================
 
-/**
- * @route   POST /api/attendance/mark
- * @desc    Mark attendance for one or more users (Student, Teacher, Employee).
- * @access  Private (Admin, Teacher, ApiUser, Super Admin)
- */
 router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, res) => {
-    const { batch_id, subject_id, attendance_date, records, mark_method } = req.body; 
-    const marked_by = req.user.userId; // INTEGER
+    const { batch_id, subject_id, attendance_date, records, mark_method } = req.body;
+    
+    // req.user.userId is the Integer ID (e.g., 1-16) from the token.
+    const marker_integer_id = req.user.userId; 
 
     if (!attendance_date || !records || !Array.isArray(records) || records.length === 0) {
         return res.status(400).json({ message: 'Missing required fields (date, records).' });
@@ -30,19 +26,34 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
     const client = await pool.connect();
 
     try {
+        // --- 💎 KEY FIX 💎 ---
+        // We look up the user's actual UUID (`id`)
+        // using the integer ID (`serial_id`) from the token.
+        
+        const markerQuery = await client.query(`
+            SELECT id FROM users WHERE serial_id = $1
+        `, [marker_integer_id]);
+        
+        if (markerQuery.rowCount === 0) {
+            await client.query('ROLLBACK'); 
+            return res.status(401).json({ message: 'Authentication error: Marker user not found in database.' });
+        }
+        
+        // Now we have the correct UUID for the 'marked_by' column.
+        const marked_by_uuid = markerQuery.rows[0].id;
+        // --- 💎 END FIX 💎 ---
+
         await client.query('BEGIN');
 
         const finalMarkMethod = mark_method || 'manual';
 
         for (const record of records) {
-            const { user_id, status, remarks } = record; // user_id is INTEGER
+            const { user_id, status, remarks } = record; // user_id is UUID
             
-            // --- STEP 1: Determine Profile Type and Get Profile ID (UUID/Text) ---
-            // Note: user_id is INTEGER, so joins must be on the INTEGER foreign keys (user_id) in profile tables.
             const profileQuery = await client.query(`
-                SELECT student_id AS profile_id, 'student' AS role FROM students WHERE user_id = $1
+                SELECT student_id AS profile_id, 'student' AS role FROM students WHERE user_id = $1::uuid
                 UNION ALL
-                SELECT teacher_id AS profile_id, 'teacher' AS role FROM teachers WHERE user_id = $1 
+                SELECT id AS profile_id, 'staff' AS role FROM teachers WHERE user_id = $1::uuid
                 LIMIT 1
             `, [user_id]);
 
@@ -53,32 +64,30 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
             }
             
             const isStudent = profile.role === 'student';
-            const profileId = profile.profile_id; // UUID from student_id or teacher_id
-            
-            // --- STEP 2: Define SQL Columns and Conflict Constraint (UPSERT key) ---
+            const profileId = profile.profile_id; // This is a UUID
             
             const conflictColumns = isStudent 
                 ? 'student_id, subject_id, attendance_date' 
-                : 'staff_id, attendance_date';
+                : 'staff_id, attendance_date'; 
                 
             const upsertQuery = `
                 INSERT INTO attendance (user_id, student_id, staff_id, batch_id, subject_id, attendance_date, status, remarks, marked_by, mark_method)
-                VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9, $10)
+                VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9::uuid, $10)
                 ON CONFLICT (${conflictColumns}) 
                 DO UPDATE SET status = EXCLUDED.status, remarks = EXCLUDED.remarks, marked_by = EXCLUDED.marked_by, mark_method = EXCLUDED.mark_method;
             `;
-
+            
             await client.query(upsertQuery, [
-                user_id, // $1: INTEGER (no cast)
+                user_id, // $1: users.id (UUID)
                 isStudent ? profileId : null, // $2: student_id (UUID)
-                isStudent ? null : profileId,   // $3: staff_id (UUID from teachers.teacher_id)
-                batch_id || null, 
-                subject_id || null, 
-                attendance_date,
-                status,
-                remarks || null,
-                marked_by, // req.user.userId (INTEGER)
-                finalMarkMethod
+                isStudent ? null : profileId,  // $3: staff_id (UUID)
+                batch_id || null, // $4: batch_id (UUID)
+                subject_id || null, // $5: subject_id (UUID)
+                attendance_date, // $6
+                status, // $7
+                remarks || null, // $8
+                marked_by_uuid, // $9: marked_by (UUID)
+                finalMarkMethod // $10
             ]);
         }
 
@@ -87,40 +96,35 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
 
     } catch (err) {
         await client.query('ROLLBACK');
-        console.error('Error marking attendance:', err);
-        res.status(500).json({ message: 'Server error while marking attendance. Check DB constraints and type casting.', error: err.message });
+        console.error('Error marking attendance (Transaction rolled back):', err);
+        res.status(500).json({ message: 'Server error while marking attendance. Transaction rolled back.', error: err.message });
     } finally {
         client.release();
     }
 });
 
-
+// -------------------------------------------------------------------------------------------------
 // =================================================================
-// 2. DAILY ROSTER REPORT (GET /report/roster/universal)
+// 2. REPORTING ENDPOINTS
 // =================================================================
 
-/**
- * @route   GET /api/attendance/report/roster/universal
- * @desc    Get daily attendance roster for any role (Student, Teacher, Employee) filtered by batch_id or branch_id.
- * @access  Private (Admin, Teacher, Coordinator, Super Admin)
- */
 router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
     const { role, filter_id, subject_id, date } = req.query;
 
     if (!role || !filter_id || !date) {
-        return res.status(400).json({ message: 'Role, filter_id, and date are required query parameters.' });
+        return res.status(400).json({ message: 'Role, filter_id (batch/branch ID), and date are required query parameters.' });
     }
 
     try {
         let userSelectQuery = '';
         const params = [];
         let subjectCondition = '';
-        let attendancePkColumn = ''; 
+        let attendancePkColumn = '';
         
-        // --- STEP 1: Build the Dynamic User List Query ---
+        let paramCounter = 1;
+        params.push(filter_id); 
         
         if (role === 'Student') {
-            params.push(filter_id);
             userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -130,31 +134,31 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                     'student_id' AS profile_pk_column
                 FROM students s
                 JOIN users u ON s.user_id = u.id 
-                WHERE s.batch_id = $1::uuid 
+                WHERE s.batch_id = $1::uuid
             `;
             attendancePkColumn = 'student_id';
+            
             if (subject_id) {
+                paramCounter++;
                 params.push(subject_id);
-                subjectCondition = `AND a.subject_id = $${params.length}::uuid`;
+                subjectCondition = `AND a.subject_id = $${paramCounter}::uuid`;
             }
 
         } else if (role === 'Teacher') {
-            params.push(filter_id);
             userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
                     t.full_name, 
                     t.employee_id AS user_identifier,
-                    t.teacher_id AS profile_pk_id,  
-                    'staff_id' AS profile_pk_column 
+                    t.id AS profile_pk_id, 
+                    'staff_id' AS profile_pk_column
                 FROM teachers t
-                JOIN users u ON t.user_id = u.id
+                JOIN users u ON t.user_id = u.id 
                 WHERE u.branch_id = $1::uuid
             `;
             attendancePkColumn = 'staff_id';
             
         } else if (role === 'Employee') {
-             params.push(filter_id);
              userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -165,16 +169,15 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                 FROM users u
                 WHERE u.role = 'Employee' AND u.branch_id = $1::uuid
             `;
-            // NOTE: profile_pk_id (u.id - INT) links to attendance.user_id (INT)
-            attendancePkColumn = 'user_id'; 
+            attendancePkColumn = 'user_id';
             
         } else {
             return res.status(400).json({ message: 'Invalid role specified.' });
         }
         
-        // --- STEP 2: Append Date and Finalize Attendance Join Condition ---
+        paramCounter++;
         params.push(date); 
-        const dateParamIndex = params.length;
+        const dateParamIndex = paramCounter;
 
         const attendanceJoinCondition = `
             LEFT JOIN attendance a ON u_list.profile_pk_id = a.${attendancePkColumn}
@@ -182,7 +185,6 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                 AND a.attendance_date = $${dateParamIndex}
         `;
         
-        // --- STEP 3: Construct the Final Query ---
         const finalQuery = `
             WITH user_list AS (${userSelectQuery})
             SELECT 
@@ -210,15 +212,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
     }
 });
 
-// =================================================================
-// 3. CONSOLIDATED REPORT (GET /report/consolidated)
-// =================================================================
 
-/**
- * @route   GET /api/attendance/report/consolidated
- * @desc    Get a full monthly attendance report for a specific ROLE group (Student, Teacher, Employee).
- * @access  Private (Admin, Coordinator, Super Admin)
- */
 router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLES), async (req, res) => {
     const { role, month, year, optional_filter_id } = req.query;
 
@@ -231,7 +225,6 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
         const lastDay = new Date(year, month, 0).getDate();
         const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         
-        // 1. Build the Dynamic User List Query
         let userQuery = `
             SELECT 
                 u.id AS user_id, 
@@ -247,7 +240,6 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 
         const userParams = [role];
 
-        // Filter by optional ID (Branch ID is UUID)
         if (optional_filter_id) {
             userQuery += ` AND u.branch_id = $2::uuid`; 
             userParams.push(optional_filter_id);
@@ -255,24 +247,21 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
         
         const userRes = await pool.query(userQuery, userParams);
         
-        // userIds is an array of INTEGERS (from users.id)
         const userIds = userRes.rows.map(u => u.user_id); 
         
         if (userIds.length === 0) {
             return res.status(200).json({ users: [] });
         }
 
-        // 2. Get all attendance records
         const attendanceQuery = `
             SELECT user_id, attendance_date, status, subject_id, batch_id 
             FROM attendance
-            WHERE user_id = ANY($1::int[])  
+            WHERE user_id = ANY($1::uuid[])  
               AND attendance_date BETWEEN $2 AND $3
             ORDER BY attendance_date;
         `;
         const attendanceRes = await pool.query(attendanceQuery, [userIds, startDate, endDate]);
 
-        // 3. Process the data (Mapping remains the same)
         const processedUsers = userRes.rows.map(user => {
             const userRecords = attendanceRes.rows.filter(r => r.user_id === user.user_id);
             return {
@@ -290,45 +279,55 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 });
 
 
-// =================================================================
-// 4. INDIVIDUAL USER REPORT & CRUD
-// =================================================================
-
-/**
- * @route   GET /api/attendance/report/user/:userId
- * @desc    Get attendance report for a single user.
- * @access  Private (Admin, Teacher, Coordinator, Student, Employee, Super Admin)
- */
 router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLES), async (req, res) => {
-    const targetUserId = req.params.userId; // INTEGER ID passed as string
+    const targetUserId = req.params.userId; // This is the UUID from the URL
     
-    // Security check: Allow self-service access.
-    if (!['Admin', 'Teacher', 'Coordinator', 'Super Admin'].includes(req.user.role) && req.user.userId !== parseInt(targetUserId, 10)) {
-         return res.status(403).json({ message: 'Forbidden: You can only access your own records.' });
+    // Security check for self-service
+    if (['Student', 'Employee'].includes(req.user.role)) {
+        let userUUIDFromToken = '';
+        try {
+            // --- 💎 KEY FIX #2 💎 ---
+            const selfQuery = await pool.query(`
+                SELECT id FROM users WHERE serial_id = $1
+            `, [req.user.userId]); // req.user.userId is the Integer
+            
+            if (selfQuery.rowCount > 0) {
+                userUUIDFromToken = selfQuery.rows[0].id;
+            }
+        } catch (e) {
+            return res.status(500).json({ message: 'Error verifying user identity.' });
+        }
+        
+        if (userUUIDFromToken !== targetUserId) {
+            return res.status(403).json({ message: 'Forbidden: You can only access your own records.' });
+        }
     }
-     
+      
     const { subject_id, start_date, end_date } = req.query;
     
     let query = `
-        SELECT a.attendance_date, a.status, a.remarks, s.subject_name 
+        SELECT a.id, a.attendance_date, a.status, a.remarks, a.mark_method, s.subject_name 
         FROM attendance a
         LEFT JOIN subjects s ON a.subject_id = s.id 
-        WHERE a.user_id = $1
+        WHERE a.user_id = $1::uuid
     `;
     const params = [targetUserId];
+    let paramCounter = 1;
     
-    // Dynamic query building
     if (subject_id) {
+        paramCounter++;
         params.push(subject_id);
-        query += ` AND a.subject_id = $${params.length}::uuid`; 
+        query += ` AND a.subject_id = $${paramCounter}::uuid`; 
     }
     if (start_date) {
+        paramCounter++;
         params.push(start_date);
-        query += ` AND a.attendance_date >= $${params.length}`;
+        query += ` AND a.attendance_date >= $${paramCounter}`;
     }
     if (end_date) {
+        paramCounter++;
         params.push(end_date);
-        query += ` AND a.attendance_date <= $${params.length}`;
+        query += ` AND a.attendance_date <= $${paramCounter}`;
     }
     
     query += ' ORDER BY a.attendance_date DESC;';
@@ -345,12 +344,28 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
 /**
  * @route   PUT /api/attendance/:attendanceId
  * @desc    Update a single attendance record.
- * @access  Private (Admin, Teacher, Super Admin)
+ * @access  Private
  */
 router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', 'Super Admin']), async (req, res) => {
-    const { attendanceId } = req.params;
+    const { attendanceId } = req.params; // attendance.id (UUID)
     const { status, remarks } = req.body;
-    const marked_by = req.user.userId; // INTEGER
+    
+    // --- 💎 KEY FIX #3 💎 ---
+    let marked_by_uuid;
+    try {
+        const markerQuery = await pool.query(`
+            SELECT id FROM users WHERE serial_id = $1
+        `, [req.user.userId]); // req.user.userId is Integer
+        
+        if (markerQuery.rowCount === 0) {
+            return res.status(401).json({ message: 'Authentication error: Marker user not found.' });
+        }
+        marked_by_uuid = markerQuery.rows[0].id;
+    } catch (err) {
+         console.error('Error fetching marker UUID for update:', err);
+         return res.status(500).json({ message: 'Server error during user lookup.', error: err.message });
+    }
+    // --- 💎 END FIX 💎 ---
 
     if (!status) {
         return res.status(400).json({ message: 'Status is required.' });
@@ -359,12 +374,11 @@ router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', '
     try {
         const query = `
             UPDATE attendance 
-            SET status = $1, remarks = $2, marked_by = $3, mark_method = 'manual'
-            WHERE id = $4 
+            SET status = $1, remarks = $2, marked_by = $3::uuid, mark_method = 'manual'
+            WHERE id = $4::uuid 
             RETURNING *;
         `;
-        // $3 (marked_by) is INTEGER
-        const { rows } = await pool.query(query, [status, remarks || null, marked_by, attendanceId]);
+        const { rows } = await pool.query(query, [status, remarks || null, marked_by_uuid, attendanceId]);
         
         if (rows.length === 0) {
             return res.status(404).json({ message: 'Attendance record not found.' });
@@ -383,10 +397,11 @@ router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', '
  * @access  Private (Admin, Super Admin)
  */
 router.delete('/:attendanceId', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
-    const { attendanceId } = req.params;
+    const { attendanceId } = req.params; // This is attendance.id (UUID)
 
     try {
-        const result = await pool.query('DELETE FROM attendance WHERE id = $1 RETURNING *', [attendanceId]);
+        // Use ::uuid to cast the parameter
+        const result = await pool.query('DELETE FROM attendance WHERE id = $1::uuid RETURNING *', [attendanceId]);
         
         if (result.rowCount === 0) {
             return res.status(404).json({ message: 'Attendance record not found.' });
@@ -401,13 +416,13 @@ router.delete('/:attendanceId', authenticateToken, authorize(['Admin', 'Super Ad
 );
 
 // =================================================================
-// 5. FILTER ENDPOINTS
+// 4. FILTER ENDPOINTS
 // =================================================================
 
 /**
  * @route   GET /api/attendance/departments
  * @desc    Get a list of all active departments/branches for filter population.
- * @access  Private (Used by roles that need to view rosters)
+ * @access  Private
  */
 router.get('/departments', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
     try {
@@ -417,14 +432,14 @@ router.get('/departments', authenticateToken, authorize(ROSTER_VIEW_ROLES), asyn
         res.status(200).json(rows);
     } catch (err) {
         console.error('Error fetching departments/branches:', err);
-        res.status(500).json({ message: 'Server error fetching departments.', error: err.message });
+        res.status(500).json({ message: 'Server error fetching departments. Check DB schema for the correct table and column names (e.g., branches table with id, branch_name).', error: err.message });
     }
 });
 
 /**
  * @route   GET /api/attendance/batches
  * @desc    Get a list of all active batches/classes for filter population.
- * @access  Private (Used by roles that need to view rosters)
+ * @access  Private
  */
 router.get('/batches', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
     try {
@@ -434,14 +449,14 @@ router.get('/batches', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (r
         res.status(200).json(rows); 
     } catch (err) {
         console.error('Error fetching batches:', err); 
-        res.status(500).json({ message: 'Server error fetching batches.', error: err.message });
+        res.status(500).json({ message: 'Server error fetching batches. Check your database schema for the correct name column in the batches table (id, batch_name).', error: err.message });
     }
 });
 
 /**
  * @route   GET /api/attendance/subjects
  * @desc    Get a list of all active subjects for filter population.
- * @access  Private (Used by roles that need to view rosters)
+ * @access  Private
  */
 router.get('/subjects', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
     try {
@@ -450,7 +465,7 @@ router.get('/subjects', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (
         res.status(200).json(rows);
     } catch (err) {
         console.error('Error fetching all subjects:', err);
-        res.status(500).json({ message: 'Server error fetching subjects.', error: err.message });
+        res.status(500).json({ message: 'Server error fetching subjects. Check column names (id, subject_name) in the subjects table.', error: err.message });
     }
 });
 
