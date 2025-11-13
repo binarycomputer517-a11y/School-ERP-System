@@ -20,9 +20,8 @@ const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'St
  * @access  Private (Admin, Teacher, ApiUser, Super Admin)
  */
 router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, res) => {
-    // Note: 'role' is passed from frontend but mainly used for logic in Roster/Report queries.
     const { batch_id, subject_id, attendance_date, records, mark_method } = req.body; 
-    const marked_by = req.user.userId; // UUID
+    const marked_by = req.user.userId; // INTEGER
 
     if (!attendance_date || !records || !Array.isArray(records) || records.length === 0) {
         return res.status(400).json({ message: 'Missing required fields (date, records).' });
@@ -36,19 +35,19 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
         const finalMarkMethod = mark_method || 'manual';
 
         for (const record of records) {
-            const { user_id, status, remarks } = record; // user_id is the UUID from frontend
+            const { user_id, status, remarks } = record; // user_id is INTEGER
             
-            // --- STEP 1: Determine Profile Type and Get Profile ID (UUID) ---
+            // --- STEP 1: Determine Profile Type and Get Profile ID (UUID/Text) ---
+            // Note: user_id is INTEGER, so joins must be on the INTEGER foreign keys (user_id) in profile tables.
             const profileQuery = await client.query(`
-                SELECT student_id AS profile_id, 'student' AS role FROM students WHERE user_id = $1::uuid
+                SELECT student_id AS profile_id, 'student' AS role FROM students WHERE user_id = $1
                 UNION ALL
-                SELECT id AS profile_id, 'teacher' AS role FROM teachers WHERE user_id = $1::uuid
+                SELECT teacher_id AS profile_id, 'teacher' AS role FROM teachers WHERE user_id = $1 
                 LIMIT 1
             `, [user_id]);
 
             const profile = profileQuery.rows[0];
             if (!profile) {
-                 // Skips generic employees not linked to a specific staff profile table (teachers/employees)
                  console.warn(`Profile not found for user_id: ${user_id}. Skipping record.`);
                  continue; 
             }
@@ -64,21 +63,21 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
                 
             const upsertQuery = `
                 INSERT INTO attendance (user_id, student_id, staff_id, batch_id, subject_id, attendance_date, status, remarks, marked_by, mark_method)
-                VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9::uuid, $10)
+                VALUES ($1, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9, $10)
                 ON CONFLICT (${conflictColumns}) 
                 DO UPDATE SET status = EXCLUDED.status, remarks = EXCLUDED.remarks, marked_by = EXCLUDED.marked_by, mark_method = EXCLUDED.mark_method;
             `;
 
             await client.query(upsertQuery, [
-                user_id, // $1: users.id (UUID)
+                user_id, // $1: INTEGER (no cast)
                 isStudent ? profileId : null, // $2: student_id (UUID)
-                isStudent ? null : profileId,   // $3: staff_id (UUID from teachers.id)
+                isStudent ? null : profileId,   // $3: staff_id (UUID from teachers.teacher_id)
                 batch_id || null, 
                 subject_id || null, 
                 attendance_date,
                 status,
                 remarks || null,
-                marked_by, // req.user.userId (UUID)
+                marked_by, // req.user.userId (INTEGER)
                 finalMarkMethod
             ]);
         }
@@ -146,7 +145,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                     u.id::text AS user_id, 
                     t.full_name, 
                     t.employee_id AS user_identifier,
-                    t.id AS profile_pk_id,  
+                    t.teacher_id AS profile_pk_id,  
                     'staff_id' AS profile_pk_column 
                 FROM teachers t
                 JOIN users u ON t.user_id = u.id
@@ -166,7 +165,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                 FROM users u
                 WHERE u.role = 'Employee' AND u.branch_id = $1::uuid
             `;
-            // NOTE: Linking generic Employee via the attendance.user_id (UUID) FK column
+            // NOTE: profile_pk_id (u.id - INT) links to attendance.user_id (INT)
             attendancePkColumn = 'user_id'; 
             
         } else {
@@ -248,7 +247,7 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 
         const userParams = [role];
 
-        // Filter by optional ID (Batch ID or Department/Branch ID)
+        // Filter by optional ID (Branch ID is UUID)
         if (optional_filter_id) {
             userQuery += ` AND u.branch_id = $2::uuid`; 
             userParams.push(optional_filter_id);
@@ -256,7 +255,7 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
         
         const userRes = await pool.query(userQuery, userParams);
         
-        // userIds is an array of UUIDs (from users.id)
+        // userIds is an array of INTEGERS (from users.id)
         const userIds = userRes.rows.map(u => u.user_id); 
         
         if (userIds.length === 0) {
@@ -267,13 +266,13 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
         const attendanceQuery = `
             SELECT user_id, attendance_date, status, subject_id, batch_id 
             FROM attendance
-            WHERE user_id = ANY($1::uuid[])  
+            WHERE user_id = ANY($1::int[])  
               AND attendance_date BETWEEN $2 AND $3
             ORDER BY attendance_date;
         `;
         const attendanceRes = await pool.query(attendanceQuery, [userIds, startDate, endDate]);
 
-        // 3. Process the data
+        // 3. Process the data (Mapping remains the same)
         const processedUsers = userRes.rows.map(user => {
             const userRecords = attendanceRes.rows.filter(r => r.user_id === user.user_id);
             return {
@@ -301,10 +300,10 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
  * @access  Private (Admin, Teacher, Coordinator, Student, Employee, Super Admin)
  */
 router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLES), async (req, res) => {
-    const targetUserId = req.params.userId; // UUID
+    const targetUserId = req.params.userId; // INTEGER ID passed as string
     
     // Security check: Allow self-service access.
-    if (!['Admin', 'Teacher', 'Coordinator', 'Super Admin'].includes(req.user.role) && req.user.userId !== targetUserId) {
+    if (!['Admin', 'Teacher', 'Coordinator', 'Super Admin'].includes(req.user.role) && req.user.userId !== parseInt(targetUserId, 10)) {
          return res.status(403).json({ message: 'Forbidden: You can only access your own records.' });
     }
      
@@ -314,7 +313,7 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
         SELECT a.attendance_date, a.status, a.remarks, s.subject_name 
         FROM attendance a
         LEFT JOIN subjects s ON a.subject_id = s.id 
-        WHERE a.user_id = $1::uuid
+        WHERE a.user_id = $1
     `;
     const params = [targetUserId];
     
@@ -351,7 +350,7 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
 router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', 'Super Admin']), async (req, res) => {
     const { attendanceId } = req.params;
     const { status, remarks } = req.body;
-    const marked_by = req.user.userId;
+    const marked_by = req.user.userId; // INTEGER
 
     if (!status) {
         return res.status(400).json({ message: 'Status is required.' });
@@ -360,10 +359,11 @@ router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', '
     try {
         const query = `
             UPDATE attendance 
-            SET status = $1, remarks = $2, marked_by = $3::uuid, mark_method = 'manual'
+            SET status = $1, remarks = $2, marked_by = $3, mark_method = 'manual'
             WHERE id = $4 
             RETURNING *;
         `;
+        // $3 (marked_by) is INTEGER
         const { rows } = await pool.query(query, [status, remarks || null, marked_by, attendanceId]);
         
         if (rows.length === 0) {
