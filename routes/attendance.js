@@ -5,7 +5,7 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Role Definitions ---
 const MARKING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser'];
-const ROSTER_VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator'];
+const ROSTER_VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator','ApiUser'];
 const REPORT_VIEW_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
 const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee'];
 
