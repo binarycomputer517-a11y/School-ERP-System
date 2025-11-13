@@ -2,13 +2,12 @@ const jwt = require('jsonwebtoken');
 
 /**
  * Middleware to verify the JWT from the Authorization header or the URL query string.
+ * This version separates the INTEGER user ID from the UUID reference ID.
  */
 function authenticateToken(req, res, next) {
-    // 1. Check the Authorization Header first (Standard API Calls)
     const authHeader = req.headers['authorization'];
     let token = authHeader && authHeader.split(' ')[1];
 
-    // 2. If token is not in the header, check the URL query string (for file downloads)
     if (!token && req.query.token) {
         token = req.query.token;
     }
@@ -21,39 +20,38 @@ function authenticateToken(req, res, next) {
         if (err) {
             return res.sendStatus(403); 
         }
+        
+        // --- FINAL FIXES FOR HYBRID ID SCHEMA ---
 
-        // --- CRITICAL FIXES FOR INTEGER ID DATABASE ---
+        // 1. Determine the core integer user ID (used for the 'users' table FK)
+        const coreUserId = user.id; // Assume the primary JWT field is the INTEGER users.id
+
+        // 2. Determine the profile-specific reference ID (UUID, used for Students/Teachers tables)
+        const profileReferenceId = user.reference_id || user.student_id || user.teacher_id || null; 
         
-        // 1. Safely retrieve the ID from the token payload.
-        const rawUserId = user.id || user.reference_id;
-        
-        // 2. Convert ID to an integer if it's a small number, as indicated by your DB schema (ID 1, 2, 5).
-        // This ensures compatibility if your database columns (like created_by, user_id) are integers.
-        let userIdFromToken;
-        if (rawUserId && !isNaN(rawUserId)) {
-            // Use parseInt to convert string '1' to number 1
-            userIdFromToken = parseInt(rawUserId, 10); 
+        // 3. Process coreUserId to ensure it is always an INTEGER number if present.
+        let processedUserId;
+        if (coreUserId && !isNaN(coreUserId)) {
+            processedUserId = parseInt(coreUserId, 10); 
         } else {
-            // Keep it as a string (UUID) if it looks like one.
-            userIdFromToken = rawUserId; 
+             // If ID is missing or non-numeric (e.g., in a flawed token), treat it as an error
+             console.error('JWT payload is missing a valid numeric user ID (users.id).');
+             return res.status(403).json({ message: 'Forbidden: Token payload structure is invalid.' });
         }
         
-        // --- END CRITICAL FIXES ---
-
+        // 4. Attach BOTH IDs to the request object.
         req.user = {
-            // Assigning the processed ID to 'userId'
-            userId: userIdFromToken, 
+            // This is the core ID linked to the 'users' table (INTEGER)
+            userId: processedUserId, 
+            
+            // This is the profile-specific ID linked to Students/Teachers tables (UUID or INTEGER profile PK)
+            referenceId: profileReferenceId, 
+            
             role: user.role,     
             branch_id: user.branch_id 
         };
 
-        // Safety check: Ensure an ID was actually found in the token payload
-        if (!req.user.userId) {
-            console.error('JWT token payload is missing a valid ID.');
-            return res.status(403).json({ message: 'Forbidden: Invalid token payload structure.' });
-        }
-        
-        next(); // Proceeds to the next middleware or route handler.
+        next();
     });
 }
 
