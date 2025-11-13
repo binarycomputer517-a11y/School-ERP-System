@@ -1,3 +1,5 @@
+// routes/auth.js
+
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -11,7 +13,10 @@ const USERS_TABLE = 'users';
 
 // Helper function to find a user and verify their password
 async function findUserAndVerifyPassword(username, password) {
-    // NOTE: This query now joins profiles to ensure data is available for JWT payload generation.
+    // --- ✅ KEY FIX ---
+    // This query correctly selects the 'id' (Integer)
+    // and joins students/teachers to get the Profile UUID.
+    // It does NOT look for 'serial_id'.
     const userResult = await pool.query(
         `
         SELECT 
@@ -20,8 +25,9 @@ async function findUserAndVerifyPassword(username, password) {
             u.password_hash, 
             u.role, 
             u.branch_id,
+            u.reference_id,
             -- Fetch the profile's primary key (UUID) based on the user's role
-            COALESCE(s.student_id::text, t.id::text) AS profile_reference_id 
+            COALESCE(s.student_id::text, t.teacher_id::text) AS profile_uuid
         FROM ${USERS_TABLE} u
         LEFT JOIN students s ON u.id = s.user_id AND u.role = 'Student'
         LEFT JOIN teachers t ON u.id = t.user_id AND u.role = 'Teacher'
@@ -41,13 +47,8 @@ async function findUserAndVerifyPassword(username, password) {
 }
 
 // =================================================================
-// --- USER REGISTRATION ROUTE (Unchanged) ---
+// --- USER REGISTRATION ROUTE ---
 // =================================================================
-
-/**
- * @route POST /api/auth/register
- * @desc Creates a new user account with a hashed password.
- */
 router.post('/register', async (req, res) => {
     const { username, password, role } = req.body;
     
@@ -59,6 +60,7 @@ router.post('/register', async (req, res) => {
     
     try {
         const passwordHash = await bcrypt.hash(password, saltRounds);
+        // branch_id is UUID, which is correct for your schema
         const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
 
         const query = `
@@ -87,14 +89,8 @@ router.post('/register', async (req, res) => {
 });
 
 // =================================================================
-// --- PUBLIC FORGOT PASSWORD INITIATION (Unchanged) ---
+// --- PUBLIC FORGOT PASSWORD INITIATION ---
 // =================================================================
-
-/**
- * @route POST /api/auth/forgot-password
- * @desc Initiates password reset by sending a tokenized link to the user's email.
- * @access Public
- */
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
 
@@ -103,6 +99,7 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     try {
+        // This correctly uses the 'id' (Integer)
         const userResult = await pool.query(
             `SELECT id, username FROM ${USERS_TABLE} WHERE email = $1 AND is_active = TRUE`,
             [email]
@@ -113,7 +110,7 @@ router.post('/forgot-password', async (req, res) => {
 
         if (user) {
             resetToken = jwt.sign(
-                { id: user.id, type: 'password_reset' },
+                { id: user.id, type: 'password_reset' }, // user.id is the Integer
                 JWT_SECRET,
                 { expiresIn: '1h' }
             );
@@ -135,14 +132,8 @@ router.post('/forgot-password', async (req, res) => {
 
 
 // =================================================================
-// --- PUBLIC PASSWORD RESET (FORGOT PASSWORD) (Unchanged) ---
+// --- PUBLIC PASSWORD RESET (FORGOT PASSWORD) ---
 // =================================================================
-
-/**
- * @route POST /api/auth/reset-password
- * @desc Resets the user's password using a temporary token (from URL/Email).
- * @access Public (This must be mounted publicly in server.js)
- */
 router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body;
 
@@ -152,11 +143,12 @@ router.post('/reset-password', async (req, res) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.id; 
+        const userId = decoded.id; // This is the integer ID
 
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(password, saltRounds);
 
+        // This correctly updates the user by the 'id' (Integer)
         const result = await pool.query(
             `UPDATE ${USERS_TABLE} SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id`,
             [newPasswordHash, userId]
@@ -179,59 +171,45 @@ router.post('/reset-password', async (req, res) => {
 
 
 // =================================================================
-// --- LOGIN ROUTE (FINAL FIX) ---
+// --- LOGIN ROUTE (FINAL FIX for bcsmsm) ---
 // =================================================================
-
-/**
- * @route POST /api/auth/login
- * @desc Authenticates user and returns JWT + Session Setup Data
- */
 router.post('/login', async (req, res) => {
     const { username, password } = req.body;
     
     try {
-        // findUserAndVerifyPassword now fetches the profile_reference_id
         const user = await findUserAndVerifyPassword(username, password);
-
         if (!user) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
         
-        // --- 1. Fetch Active Session ID (Unchanged) ---
         const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
         const activeSessionId = sessionRes.rows[0]?.id || null; 
         
-        // --- 2. Generate Token (CRITICAL FIX) ---
+        // --- ✅ KEY FIX ---
+        // The token payload is now 100% correct for your bcsmsm schema
+        const tokenPayload = { 
+            id: user.id, // CORE INTEGER ID (e.g., 1, 2, 5)
+            role: user.role, 
+            branch_id: user.branch_id,
+            reference_id: user.reference_id, // Integer reference
+            profile_uuid: user.profile_uuid // UUID reference (student_id or teacher_id)
+        };
         
-        const generatedToken = jwt.sign(
-            { 
-                id: user.id, // CORE INTEGER ID
-                role: user.role, 
-                branch_id: user.branch_id,
-                // THIS IS THE FIX: Include the Profile UUID/Text ID for middleware validation
-                reference_id: user.profile_reference_id
-            }, 
-            JWT_SECRET, 
-            { expiresIn: '8h' }
-        );
+        const generatedToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '8h' });
 
-        // --- 3. Construct Response Payload ---
         const responsePayload = {
             token: generatedToken,
             role: user.role,
             username: user.username,
-            
-            'user-id': user.id,           
-            // Pass the reference_id back to the client for local storage access
-            reference_id: user.profile_reference_id,           
-            
+            'user-id': user.id, // The Integer ID
+            reference_id: user.reference_id,
+            profile_uuid: user.profile_uuid, // The Profile UUID
             userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',     
         };
 
-        // Update last login time
+        // Update last login time (using the integer ID)
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
-
 
         return res.status(200).json(responsePayload);
         
@@ -240,6 +218,5 @@ router.post('/login', async (req, res) => {
         return res.status(500).json({ message: 'Authentication server failed. Please check database connectivity.' });
     }
 });
-
 
 module.exports = router;
