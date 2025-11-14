@@ -19,13 +19,14 @@ const LIST_ROLES = ['Super Admin', 'Admin', 'HR', 'Teacher', 'Coordinator'];
 // --- Helper: Get Configuration IDs from Request ---
 function getConfigIds(req) {
     const branch_id = req.user.branch_id; 
+    // Assuming req.user.id is the UUID of the user marking the record
     return { branch_id, created_by: req.user.id, updated_by: req.user.id };
 }
 
 // routes/teachers.js
 
 // =========================================================
-// 1. GET: Main List (Full Details for Table View) - FIX 1
+// 1. GET: Main List (Full Details for Table View) - FIX 1 (COLUMN NAME)
 // =========================================================
 
 /**
@@ -37,7 +38,7 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
-                t.id AS teacher_id,              /* <-- FIX 1: t.teacher_id changed to t.id */
+                t.id AS teacher_id,              /* Primary Key is 'id', aliased as 'teacher_id' */
                 t.full_name, 
                 t.employee_id, 
                 t.designation, 
@@ -52,8 +53,8 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
                 u.role, 
                 u.id AS user_id,
 
-                -- Data from Department Table
-                hd.department_name AS department_name, 
+                -- Data from Department Table (FIX: Changed hd.department_name to hd.name)
+                hd.name AS department_name, 
                 hd.description AS department_description, 
 
                 -- Data from User's Branch
@@ -68,6 +69,7 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         const result = await pool.query(query);
         res.status(200).json(result.rows);
     } catch (error) {
+        // This is the error point: error: column hd.department_name does not exist
         console.error('Error fetching full teachers list:', error);
         res.status(500).json({ message: 'Failed to retrieve teachers list.' });
     }
@@ -86,7 +88,7 @@ router.get('/list', authenticateToken, authorize(LIST_ROLES), async (req, res) =
     try {
         const query = `
             SELECT 
-                t.id AS teacher_id, /* <-- FIX 2: t.teacher_id changed to t.id (This fixes the recurring error) */
+                t.id AS teacher_id, /* Primary Key is 'id', aliased as 'teacher_id' */
                 t.full_name, 
                 u.id AS user_id,
                 u.username,
@@ -117,11 +119,11 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
             SELECT 
                 t.*,
                 u.username, u.role, 
-                hd.department_name AS department_name 
+                hd.name AS department_name /* FIX: Changed hd.department_name to hd.name */
             FROM ${TEACHERS_TABLE} t
             LEFT JOIN ${USERS_TABLE} u ON t.user_id = u.id
             LEFT JOIN ${DEPARTMENTS_TABLE} hd ON t.department_id = hd.id
-            WHERE t.id = $1; /* <-- FIX 3: t.teacher_id changed to t.id */
+            WHERE t.id = $1; 
         `;
         const result = await pool.query(query, [teacherId]);
 
@@ -187,7 +189,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
                 department_id
             )
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-            RETURNING id AS teacher_id, full_name, employee_id; /* <-- FIX 4: teacher_id changed to id AS teacher_id */
+            RETURNING id AS teacher_id, full_name, employee_id; 
         `;
         const teacherResult = await client.query(teacherQuery, [
             newUserId, full_name, employee_id, designation || null, 
@@ -228,7 +230,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
  * @access  Private (Admin, Super Admin, HR)
  */
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    const teacherId = req.params.id; // This is t.id
+    const teacherId = req.params.id; // This is t.id (UUID)
     const {
         full_name, designation, email, phone_number, date_of_birth, address, hire_date, is_active,
         department_id, new_role 
@@ -250,7 +252,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
                 date_of_birth = $5, address = $6, hire_date = $7, is_active = $8,
                 department_id = $9, 
                 updated_at = CURRENT_TIMESTAMP, updated_by = $10
-            WHERE id = $11 /* <-- FIX 5: teacher_id changed to id */
+            WHERE id = $11 
             RETURNING user_id, full_name;
         `;
         const teacherResult = await pool.query(teacherQuery, [
@@ -313,7 +315,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
  * @access  Private (Admin, Super Admin, HR)
  */
 router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    const teacherId = req.params.id; // This is t.id
+    const teacherId = req.params.id; // This is t.id (UUID)
     
     if (!teacherId || teacherId === 'undefined') {
         return res.status(400).json({ message: 'Invalid Teacher ID provided for deletion.' });
@@ -327,7 +329,7 @@ router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res)
         const teacherUpdateQuery = `
             UPDATE ${TEACHERS_TABLE} SET 
                 is_active = FALSE, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1 /* <-- FIX 6: teacher_id changed to id */
+            WHERE id = $1 
             RETURNING user_id;
         `;
         const teacherResult = await pool.query(teacherUpdateQuery, [teacherId]);
