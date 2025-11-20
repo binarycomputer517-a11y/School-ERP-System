@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
-const { authenticateToken, authorize } = require('../authMiddleware'); // authMiddleware now provides UUID as req.user.id
+const { authenticateToken, authorize } = require('../authMiddleware'); 
+// NOTE: authMiddleware now provides the role in **LOWERCASE** (e.g., 'admin', 'teacher')
 
-// --- Role Definitions ---
-const MARKING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser'];
-const ROSTER_VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'ApiUser'];
-const REPORT_VIEW_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
-const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee'];
+// --- FIX: Role Definitions Must Be Lowercase ---
+const MARKING_ROLES = ['super admin', 'admin', 'teacher', 'apiuser'];
+const ROSTER_VIEW_ROLES = ['super admin', 'admin', 'teacher', 'coordinator', 'apiuser'];
+const REPORT_VIEW_ROLES = ['super admin', 'admin', 'coordinator'];
+const USER_REPORT_ROLES = ['super admin', 'admin', 'teacher', 'coordinator', 'student', 'employee'];
 
 // =================================================================
 // 0. HELPER FUNCTION: Removed (UUID Mode now used via req.user.id)
@@ -53,6 +54,7 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
                  continue; 
             }
             
+            // NOTE: profile.role here is either 'student' or 'staff' (lowercase from the query itself)
             const isStudent = profile.role === 'student';
             const profileId = profile.profile_id; // This is a UUID
             
@@ -100,8 +102,6 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
         }
         console.error('******************************');
         
-        // No Authentication error check needed here, as the ID is directly from the verified token
-        
         res.status(500).json({ message: 'Server error while marking attendance. Transaction rolled back.', error: err.message });
     } finally {
         client.release();
@@ -128,7 +128,8 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
         let paramCounter = 1;
         params.push(filter_id); 
         
-        if (role === 'Student') {
+        // NOTE: role is already lowercase here due to authMiddleware
+        if (role === 'student') {
             userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -148,7 +149,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                 subjectCondition = `AND a.subject_id = $${paramCounter}::uuid`;
             }
 
-        } else if (role === 'Teacher') {
+        } else if (role === 'teacher') {
             userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -162,7 +163,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
             `;
             attendancePkColumn = 'staff_id';
             
-        } else if (role === 'Employee') {
+        } else if (role === 'employee') {
              userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -237,9 +238,9 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
                 COALESCE(s.enrollment_no, t.employee_id, u.id::text) AS user_identifier,
                 u.branch_id AS department_id_reference
             FROM users u
-            LEFT JOIN students s ON u.id = s.user_id AND u.role = 'Student'
-            LEFT JOIN teachers t ON u.id = t.user_id AND u.role = 'Teacher'
-            WHERE u.role = $1
+            LEFT JOIN students s ON u.id = s.user_id AND u.role = 'student' -- NOTE: Role check adjusted
+            LEFT JOIN teachers t ON u.id = t.user_id AND u.role = 'teacher' -- NOTE: Role check adjusted
+            WHERE LOWER(u.role) = $1
         `;
 
         const userParams = [role];
@@ -288,7 +289,8 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
     
     // UUID FIX: req.user.id is the UUID from the token
     // Security check for self-service
-    if (['Student', 'Employee'].includes(req.user.role)) {
+    // The roles 'student' and 'employee' are now guaranteed lowercase.
+    if (['student', 'employee'].includes(req.user.role)) {
         // Direct comparison of the target UUID with the authenticated user's UUID
         if (req.user.id !== targetUserId) { 
             return res.status(403).json({ message: 'Forbidden: You can only access your own records.' });
@@ -338,7 +340,7 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
  * @desc    Update a single attendance record.
  * @access  Private
  */
-router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', 'Super Admin']), async (req, res) => {
+router.put('/:attendanceId', authenticateToken, authorize(MARKING_ROLES), async (req, res) => {
     const { attendanceId } = req.params; // attendance.id (UUID)
     const { status, remarks } = req.body;
     
@@ -375,7 +377,7 @@ router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', '
  * @desc    Delete a single attendance record.
  * @access  Private (Admin, Super Admin)
  */
-router.delete('/:attendanceId', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+router.delete('/:attendanceId', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
     const { attendanceId } = req.params; // This is attendance.id (UUID)
 
     try {
