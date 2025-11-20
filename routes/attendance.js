@@ -4,17 +4,11 @@ const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware'); 
 // NOTE: authMiddleware now provides the role in **LOWERCASE** (e.g., 'admin', 'teacher')
 
-// --- FIX: Role Definitions Must Be Lowercase ---
+// --- FIX 1: Role Definitions Must Be Lowercase for Case-Insensitive Checks ---
 const MARKING_ROLES = ['super admin', 'admin', 'teacher', 'apiuser'];
 const ROSTER_VIEW_ROLES = ['super admin', 'admin', 'teacher', 'coordinator', 'apiuser'];
 const REPORT_VIEW_ROLES = ['super admin', 'admin', 'coordinator'];
 const USER_REPORT_ROLES = ['super admin', 'admin', 'teacher', 'coordinator', 'student', 'employee'];
-
-// =================================================================
-// 0. HELPER FUNCTION: Removed (UUID Mode now used via req.user.id)
-// =================================================================
-// NOTE: The function getMarkerIdAndType has been removed because 
-// req.user.id now directly contains the user's UUID (users.id).
 
 // =================================================================
 // 1. MARKING ATTENDANCE (POST /mark)
@@ -23,7 +17,7 @@ const USER_REPORT_ROLES = ['super admin', 'admin', 'teacher', 'coordinator', 'st
 router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, res) => {
     const { batch_id, subject_id, attendance_date, records, mark_method } = req.body;
     
-    // UUID FIX: req.user.id is the UUID from the token payload (users.id)
+    // FIX: req.user.id is the Integer ID (PK)
     const marked_by_id = req.user.id; 
 
     if (!attendance_date || !records || !Array.isArray(records) || records.length === 0) {
@@ -38,8 +32,8 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
         const finalMarkMethod = mark_method || 'manual';
 
         for (const record of records) {
-            const { user_id, status, remarks } = record; // user_id is UUID
-            
+            const { user_id, status, remarks } = record; // user_id is the profile's UUID
+
             // Look up the profile ID (student_id or staff_id) linked to the user_id
             const profileQuery = await client.query(`
                 SELECT student_id AS profile_id, 'student' AS role FROM students WHERE user_id = $1::uuid
@@ -54,23 +48,21 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
                  continue; 
             }
             
-            // NOTE: profile.role here is either 'student' or 'staff' (lowercase from the query itself)
             const isStudent = profile.role === 'student';
-            const profileId = profile.profile_id; // This is a UUID
+            const profileId = profile.profile_id; 
             
             const conflictColumns = isStudent 
                 ? 'student_id, subject_id, attendance_date' 
                 : 'staff_id, attendance_date'; 
                 
-            // UUID FIX: marked_by is explicitly cast as ::uuid
+            // FIX: Remove ::uuid cast from marked_by ($9) to accept Integer ID
             const upsertQuery = `
                 INSERT INTO attendance (user_id, student_id, staff_id, batch_id, subject_id, attendance_date, status, remarks, marked_by, mark_method)
-                VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9::uuid, $10)
+                VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9, $10)
                 ON CONFLICT (${conflictColumns}) 
                 DO UPDATE SET status = EXCLUDED.status, remarks = EXCLUDED.remarks, marked_by = EXCLUDED.marked_by, mark_method = EXCLUDED.mark_method;
             `;
             
-            // The final query execution
             await client.query(upsertQuery, [
                 user_id, 
                 isStudent ? profileId : null, 
@@ -80,7 +72,7 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
                 attendance_date, 
                 status, 
                 remarks || null, 
-                marked_by_id, // UUID used directly
+                marked_by_id, // Integer used directly
                 finalMarkMethod 
             ]);
         }
@@ -113,7 +105,10 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
 // =================================================================
 
 router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
-    const { role, filter_id, subject_id, date } = req.query;
+    // FIX 2: Extract the role from the query parameter and immediately convert it to lowercase
+    const role = req.query.role ? req.query.role.toLowerCase() : null;
+    
+    const { filter_id, subject_id, date } = req.query;
 
     if (!role || !filter_id || !date) {
         return res.status(400).json({ message: 'Role, filter_id (batch/branch ID), and date are required query parameters.' });
@@ -128,7 +123,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
         let paramCounter = 1;
         params.push(filter_id); 
         
-        // NOTE: role is already lowercase here due to authMiddleware
+        // Internal role checks based on the normalized lowercase role
         if (role === 'student') {
             userSelectQuery = `
                 SELECT 
@@ -164,6 +159,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
             attendancePkColumn = 'staff_id';
             
         } else if (role === 'employee') {
+             // FIX 3: Added ::text cast to the role column for ENUM compatibility
              userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -172,7 +168,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                     u.id AS profile_pk_id, 
                     'user_id' AS profile_pk_column
                 FROM users u
-                WHERE u.role = 'Employee' AND u.branch_id = $1::uuid
+                WHERE LOWER(u.role::text) = 'employee' AND u.branch_id = $1::uuid
             `;
             attendancePkColumn = 'user_id';
             
@@ -230,6 +226,7 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
         const lastDay = new Date(year, month, 0).getDate();
         const endDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
         
+        // FIX 4: Added ::text cast for ENUM compatibility
         let userQuery = `
             SELECT 
                 u.id AS user_id, 
@@ -238,9 +235,9 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
                 COALESCE(s.enrollment_no, t.employee_id, u.id::text) AS user_identifier,
                 u.branch_id AS department_id_reference
             FROM users u
-            LEFT JOIN students s ON u.id = s.user_id AND u.role = 'student' -- NOTE: Role check adjusted
-            LEFT JOIN teachers t ON u.id = t.user_id AND u.role = 'teacher' -- NOTE: Role check adjusted
-            WHERE LOWER(u.role) = $1
+            LEFT JOIN students s ON u.id = s.user_id AND LOWER(u.role::text) = 'student'
+            LEFT JOIN teachers t ON u.id = t.user_id AND LOWER(u.role::text) = 'teacher'
+            WHERE LOWER(u.role::text) = $1
         `;
 
         const userParams = [role];
@@ -261,10 +258,11 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
         const attendanceQuery = `
             SELECT user_id, attendance_date, status, subject_id, batch_id 
             FROM attendance
-            WHERE user_id = ANY($1::uuid[])  
+            WHERE user_id = ANY($1) -- No ::uuid[] cast needed for integer IDs
               AND attendance_date BETWEEN $2 AND $3
             ORDER BY attendance_date;
         `;
+        // NOTE: userIds contains Integer IDs
         const attendanceRes = await pool.query(attendanceQuery, [userIds, startDate, endDate]);
 
         const processedUsers = userRes.rows.map(user => {
@@ -285,29 +283,29 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 
 
 router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLES), async (req, res) => {
-    const targetUserId = req.params.userId; // This is the UUID from the URL
+    const targetUserId = req.params.userId; 
     
-    // UUID FIX: req.user.id is the UUID from the token
-    // Security check for self-service
-    // The roles 'student' and 'employee' are now guaranteed lowercase.
+    // Security check for self-service using normalized role
     if (['student', 'employee'].includes(req.user.role)) {
-        // Direct comparison of the target UUID with the authenticated user's UUID
-        if (req.user.id !== targetUserId) { 
+        // req.user.id is the Integer PK, targetUserId should match or be convertible
+        if (String(req.user.id) !== targetUserId) { 
             return res.status(403).json({ message: 'Forbidden: You can only access your own records.' });
         }
     }
       
     const { subject_id, start_date, end_date } = req.query;
     
+    // user_id is an integer PK, so no cast is used here
     let query = `
         SELECT a.id, a.attendance_date, a.status, a.remarks, a.mark_method, s.subject_name 
         FROM attendance a
         LEFT JOIN subjects s ON a.subject_id = s.id 
-        WHERE a.user_id = $1::uuid
+        WHERE a.user_id = $1
     `;
     const params = [targetUserId];
     let paramCounter = 1;
     
+    // Parameter casting remains the same for auxiliary UUID columns (subject_id, which is in a UUID table)
     if (subject_id) {
         paramCounter++;
         params.push(subject_id);
@@ -344,7 +342,7 @@ router.put('/:attendanceId', authenticateToken, authorize(MARKING_ROLES), async 
     const { attendanceId } = req.params; // attendance.id (UUID)
     const { status, remarks } = req.body;
     
-    // UUID FIX: Retrieve the UUID directly from the token
+    // FIX: Retrieve the Integer ID directly
     const marked_by_id = req.user.id; 
 
     if (!status) {
@@ -352,10 +350,10 @@ router.put('/:attendanceId', authenticateToken, authorize(MARKING_ROLES), async 
     }
 
     try {
-        // UUID FIX: marked_by is explicitly cast as ::uuid
+        // FIX: Remove ::uuid cast from marked_by ($3)
         const query = `
             UPDATE attendance 
-            SET status = $1, remarks = $2, marked_by = $3::uuid, mark_method = 'manual'
+            SET status = $1, remarks = $2, marked_by = $3, mark_method = 'manual'
             WHERE id = $4::uuid 
             RETURNING *;
         `;
@@ -406,8 +404,6 @@ router.delete('/:attendanceId', authenticateToken, authorize(['admin', 'super ad
  */
 router.get('/departments', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
     try {
-        // NOTE: The previous schema output showed 'branches', but the code uses 'departments' 
-        // linked to the 'hr_departments' table. This query uses 'branches' as per the schema suggestion in the error log.
         const query = `SELECT id, branch_name AS name FROM branches ORDER BY branch_name;`; 
         
         const { rows } = await pool.query(query);
