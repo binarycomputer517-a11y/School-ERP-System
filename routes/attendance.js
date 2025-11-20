@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
-const { authenticateToken, authorize } = require('../authMiddleware');
+const { authenticateToken, authorize } = require('../authMiddleware'); // authMiddleware now provides UUID as req.user.id
 
 // --- Role Definitions ---
 const MARKING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser'];
@@ -10,59 +10,10 @@ const REPORT_VIEW_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
 const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee'];
 
 // =================================================================
-// 0. HELPER FUNCTION: Handle UUID/Integer DB Inconsistency (CRITICAL FIX APPLIED)
+// 0. HELPER FUNCTION: Removed (UUID Mode now used via req.user.id)
 // =================================================================
-
-/**
- * Dynamically determines the marker's actual database ID (UUID or Integer) 
- * and its type based on the integer ID received in the token (req.user.userId).
- * This fixed version ensures safer querying for both serial_id and integer PKs.
- * @param {object} client - PostgreSQL client object
- * @param {number} marker_integer_id - The user ID (integer) from the JWT token
- * @returns {object} { id: string|number, is_uuid: boolean }
- */
-async function getMarkerIdAndType(client, marker_integer_id) {
-    let markerQuery = { rowCount: 0, rows: [] };
-    
-    // --- Attempt 1: Search by serial_id (Most reliable for integer token IDs) ---
-    try {
-        markerQuery = await client.query(`
-            SELECT id, pg_typeof(id) AS id_type 
-            FROM users 
-            WHERE serial_id = $1
-        `, [marker_integer_id]);
-
-    } catch (err) {
-        console.warn('Attempt 1 (serial_id) failed:', err.message);
-    }
-
-    // --- Attempt 2: Search by the primary 'id' column, casting input to INT ---
-    if (markerQuery.rowCount === 0) {
-        try {
-            // This handles systems where 'id' is a pure integer PK.
-            markerQuery = await client.query(`
-                SELECT id, pg_typeof(id) AS id_type 
-                FROM users 
-                WHERE id = $1::text::int
-            `, [marker_integer_id]);
-
-        } catch (err) {
-            // Ignore failure if users.id is UUID.
-        }
-    }
-    
-    // --- Final Validation ---
-    if (markerQuery.rowCount === 0) {
-        throw new Error('Authentication error: Marker user not found in database.');
-    }
-    
-    const markerInfo = markerQuery.rows[0];
-    
-    return {
-        id: markerInfo.id,
-        is_uuid: markerInfo.id_type === 'uuid'
-    };
-}
+// NOTE: The function getMarkerIdAndType has been removed because 
+// req.user.id now directly contains the user's UUID (users.id).
 
 // =================================================================
 // 1. MARKING ATTENDANCE (POST /mark)
@@ -71,8 +22,8 @@ async function getMarkerIdAndType(client, marker_integer_id) {
 router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, res) => {
     const { batch_id, subject_id, attendance_date, records, mark_method } = req.body;
     
-    // req.user.userId is the Integer ID from the token.
-    const marker_integer_id = req.user.userId; 
+    // UUID FIX: req.user.id is the UUID from the token payload (users.id)
+    const marked_by_id = req.user.id; 
 
     if (!attendance_date || !records || !Array.isArray(records) || records.length === 0) {
         return res.status(400).json({ message: 'Missing required fields (date, records).' });
@@ -81,11 +32,6 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
     const client = await pool.connect();
 
     try {
-        // Retrieve the correct ID and casting for the 'marked_by' column
-        const markerInfo = await getMarkerIdAndType(client, marker_integer_id);
-        const marked_by_id = markerInfo.id;
-        const marked_by_cast = markerInfo.is_uuid ? '::uuid' : '';
-
         await client.query('BEGIN');
 
         const finalMarkMethod = mark_method || 'manual';
@@ -114,10 +60,10 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
                 ? 'student_id, subject_id, attendance_date' 
                 : 'staff_id, attendance_date'; 
                 
-            // Use the dynamic cast for the marked_by parameter ($9)
+            // UUID FIX: marked_by is explicitly cast as ::uuid
             const upsertQuery = `
                 INSERT INTO attendance (user_id, student_id, staff_id, batch_id, subject_id, attendance_date, status, remarks, marked_by, mark_method)
-                VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9${marked_by_cast}, $10)
+                VALUES ($1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::uuid, $6, $7, $8, $9::uuid, $10)
                 ON CONFLICT (${conflictColumns}) 
                 DO UPDATE SET status = EXCLUDED.status, remarks = EXCLUDED.remarks, marked_by = EXCLUDED.marked_by, mark_method = EXCLUDED.mark_method;
             `;
@@ -132,7 +78,7 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
                 attendance_date, 
                 status, 
                 remarks || null, 
-                marked_by_id, // UUID or Integer
+                marked_by_id, // UUID used directly
                 finalMarkMethod 
             ]);
         }
@@ -143,11 +89,9 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
     } catch (err) {
         await client.query('ROLLBACK');
         
-        // AGGRESSIVE ERROR LOGGING (Crucial for final debugging)
         console.error('*** CRITICAL UPSERT ERROR ***');
         console.error('Error marking attendance (Transaction rolled back):', err.message);
         
-        // Log specific PostgreSQL details if available (Constraint/Detail)
         if (err.detail) {
             console.error('DB DETAIL:', err.detail);
         }
@@ -155,11 +99,8 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
             console.error('DB CONSTRAINT VIOLATION:', err.constraint);
         }
         console.error('******************************');
-
-        // Handle specific Authentication error separately
-        if (err.message.includes('Authentication error: Marker user not found')) {
-            return res.status(401).json({ message: err.message });
-        }
+        
+        // No Authentication error check needed here, as the ID is directly from the verified token
         
         res.status(500).json({ message: 'Server error while marking attendance. Transaction rolled back.', error: err.message });
     } finally {
@@ -345,25 +286,11 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLES), async (req, res) => {
     const targetUserId = req.params.userId; // This is the UUID from the URL
     
+    // UUID FIX: req.user.id is the UUID from the token
     // Security check for self-service
     if (['Student', 'Employee'].includes(req.user.role)) {
-        let userUUIDFromToken = '';
-        try {
-            // Use the lookup logic to find the user's UUID
-            const selfQuery = await pool.query(`
-                SELECT id 
-                FROM users 
-                WHERE serial_id = $1 OR id = $1::integer
-            `, [req.user.userId]); // req.user.userId is Integer
-            
-            if (selfQuery.rowCount > 0) {
-                userUUIDFromToken = selfQuery.rows[0].id;
-            }
-        } catch (e) {
-            return res.status(500).json({ message: 'Error verifying user identity.' });
-        }
-        
-        if (userUUIDFromToken !== targetUserId) {
+        // Direct comparison of the target UUID with the authenticated user's UUID
+        if (req.user.id !== targetUserId) { 
             return res.status(403).json({ message: 'Forbidden: You can only access your own records.' });
         }
     }
@@ -415,29 +342,18 @@ router.put('/:attendanceId', authenticateToken, authorize(['Admin', 'Teacher', '
     const { attendanceId } = req.params; // attendance.id (UUID)
     const { status, remarks } = req.body;
     
-    // Retrieve the correct ID and casting for the 'marked_by' column
-    const marker_integer_id = req.user.userId; 
-    let marked_by_id;
-    let marked_by_cast = '';
-
-    try {
-        const markerInfo = await getMarkerIdAndType(pool, marker_integer_id); 
-        marked_by_id = markerInfo.id;
-        marked_by_cast = markerInfo.is_uuid ? '::uuid' : '';
-    } catch (err) {
-         console.error('Error fetching marker ID for update:', err.message);
-         return res.status(401).json({ message: err.message });
-    }
+    // UUID FIX: Retrieve the UUID directly from the token
+    const marked_by_id = req.user.id; 
 
     if (!status) {
         return res.status(400).json({ message: 'Status is required.' });
     }
 
     try {
-        // Use dynamic cast for the marked_by parameter ($3)
+        // UUID FIX: marked_by is explicitly cast as ::uuid
         const query = `
             UPDATE attendance 
-            SET status = $1, remarks = $2, marked_by = $3${marked_by_cast}, mark_method = 'manual'
+            SET status = $1, remarks = $2, marked_by = $3::uuid, mark_method = 'manual'
             WHERE id = $4::uuid 
             RETURNING *;
         `;
@@ -488,6 +404,8 @@ router.delete('/:attendanceId', authenticateToken, authorize(['Admin', 'Super Ad
  */
 router.get('/departments', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
     try {
+        // NOTE: The previous schema output showed 'branches', but the code uses 'departments' 
+        // linked to the 'hr_departments' table. This query uses 'branches' as per the schema suggestion in the error log.
         const query = `SELECT id, branch_name AS name FROM branches ORDER BY branch_name;`; 
         
         const { rows } = await pool.query(query);
