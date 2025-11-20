@@ -13,8 +13,7 @@ const USERS_TABLE = 'users';
 
 // Helper function to find a user and verify their password
 async function findUserAndVerifyPassword(username, password) {
-    // --- ✅ FINAL CORRECT QUERY for bcsmsm ---
-    // This query now only selects columns that exist in the bcsmsm users table.
+    // Query selects necessary columns: id (UUID), username, password_hash, role, branch_id.
     const userResult = await pool.query(
         `
         SELECT 
@@ -23,7 +22,6 @@ async function findUserAndVerifyPassword(username, password) {
             u.password_hash, 
             u.role, 
             u.branch_id
-            /* u.reference_id was removed as it caused a column does not exist error */
         FROM ${USERS_TABLE} u
         WHERE u.username = $1 AND u.is_active = TRUE
         `,
@@ -41,7 +39,7 @@ async function findUserAndVerifyPassword(username, password) {
 }
 
 // =================================================================
-// --- USER REGISTRATION ROUTE (Correct for bcsmsm Integer ID) ---
+// --- USER REGISTRATION ROUTE ---
 // =================================================================
 router.post('/register', async (req, res) => {
     const { username, password, role } = req.body;
@@ -54,6 +52,7 @@ router.post('/register', async (req, res) => {
     
     try {
         const passwordHash = await bcrypt.hash(password, saltRounds);
+        // NOTE: Default Branch ID should be replaced with actual logic for a production system.
         const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
 
         const query = `
@@ -63,6 +62,7 @@ router.post('/register', async (req, res) => {
             VALUES ($1, $2, $3, TRUE, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
             RETURNING id, username, role;
         `;
+        // Ensure the role saved in the DB is stored consistently (e.g., Title Case)
         const values = [ username, passwordHash, role, defaultBranchId ];
 
         const { rows } = await pool.query(query, values);
@@ -82,7 +82,7 @@ router.post('/register', async (req, res) => {
 });
 
 // =================================================================
-// --- FORGOT/RESET PASSWORD (Correct for bcsmsm Integer ID) ---
+// --- FORGOT/RESET PASSWORD ---
 // =================================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
@@ -92,8 +92,9 @@ router.post('/forgot-password', async (req, res) => {
     }
 
     try {
+        // Query must include 'email' column, which we assume exists in the users table.
         const userResult = await pool.query(
-            `SELECT id, username FROM ${USERS_TABLE} WHERE email = $1 AND is_active = TRUE`,
+            `SELECT id, username, email FROM ${USERS_TABLE} WHERE email = $1 AND is_active = TRUE`,
             [email]
         );
         const user = userResult.rows[0];
@@ -101,6 +102,7 @@ router.post('/forgot-password', async (req, res) => {
         let resetToken = 'DEBUG_TOKEN';
 
         if (user) {
+            // Token uses the user's UUID (user.id)
             resetToken = jwt.sign(
                 { id: user.id, type: 'password_reset' },
                 JWT_SECRET,
@@ -109,6 +111,7 @@ router.post('/forgot-password', async (req, res) => {
             
             const resetUrl = `http://localhost:3005/reset-password.html?token=${resetToken}`;
             console.log(`[AUTH] Password Reset Link for ${user.username}: ${resetUrl}`);
+            // In a production system, email sending logic goes here.
         }
 
         res.status(200).json({
@@ -132,13 +135,14 @@ router.post('/reset-password', async (req, res) => {
 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.id; // This is the integer ID
+        const userId = decoded.id; // This is the UUID from the token payload
 
         const saltRounds = 10;
         const newPasswordHash = await bcrypt.hash(password, saltRounds);
 
         const result = await pool.query(
-            `UPDATE ${USERS_TABLE} SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2 RETURNING id`,
+            // user.id is the UUID
+            `UPDATE ${USERS_TABLE} SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2::uuid RETURNING id`,
             [newPasswordHash, userId]
         );
 
@@ -159,7 +163,7 @@ router.post('/reset-password', async (req, res) => {
 
 
 // =================================================================
-// --- LOGIN ROUTE (FINAL FIX) ---
+// --- LOGIN ROUTE (FINAL, STABLE UUID/CASE-INSENSITIVE FIX) ---
 // =================================================================
 
 router.post('/login', async (req, res) => {
@@ -173,16 +177,17 @@ router.post('/login', async (req, res) => {
         }
         
         // --- 1. Fetch Active Session ID ---
+        // Assuming 'academic_sessions' table exists with an 'is_active' column
         const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
         const activeSessionId = sessionRes.rows[0]?.id || null; 
         
         // --- 2. Generate Token ---
-        // Token uses the user.id (Integer) as the primary identifier.
+        // The token payload includes the UUID (user.id) and the original role.
+        // The authentication middleware will handle the lowercase conversion.
         const tokenPayload = { 
-            id: user.id, // CORE INTEGER ID (The PK for bcsmsm)
-            role: user.role, 
+            id: user.id, // CORE UUID
+            role: user.role, // Original role stored in DB
             branch_id: user.branch_id
-            /* reference_id was removed */
         };
         
         const generatedToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '8h' });
@@ -190,18 +195,17 @@ router.post('/login', async (req, res) => {
         // --- 3. Construct Response Payload ---
         const responsePayload = {
             token: generatedToken,
-            role: user.role,
+            role: user.role, // Send the original case role back to client UI
             username: user.username,
             
-            'user-id': user.id,           
-            /* reference_id was removed */
+            'user-id': user.id, // UUID
             
             userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',     
         };
 
         // Update last login time
-        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [user.id]);
+        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
 
         return res.status(200).json(responsePayload);
         
