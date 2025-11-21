@@ -12,11 +12,12 @@ function initializeStudentView() {
     // 1. Authentication Check
     if (!AUTH_TOKEN) {
         displayError('Error: You are not authenticated. Please log in.');
+        // NOTE: In a production app, redirect to /login.html here.
         return;
     }
     
     // 2. Get Student ID from URL
-    const studentId = getStudentIdFromUrl();
+    const studentId = getStudentIdFromUrl(); // This is the Student Profile UUID (students.student_id)
 
     if (studentId) {
         fetchStudentData(studentId);
@@ -37,14 +38,15 @@ function initializeStudentView() {
  */
 function getStudentIdFromUrl() {
     const params = new URLSearchParams(window.location.search);
-    return params.get('id'); // Assumes URL looks like: /view-student.html?id=...
+    return params.get('id'); // Assumes URL looks like: /view-student.html?id=... (UUID)
 }
 
 /**
  * Fetches student data from the server API.
- * @param {string} studentId The UUID of the student to fetch.
+ * @param {string} studentId The UUID of the student profile to fetch.
  */
 async function fetchStudentData(studentId) {
+    // API_ENDPOINT uses the student profile ID (UUID)
     const API_ENDPOINT = `/api/students/${studentId}`;
     const container = document.getElementById('studentProfileContainer');
     container.innerHTML = '<p>Loading student data...</p>';
@@ -68,6 +70,7 @@ async function fetchStudentData(studentId) {
             if (response.status === 404) {
                  displayError('Student profile not found.');
             } else if (response.status === 403) {
+                 // Error handled by backend logic (Admin/Teacher/Self check)
                  displayError('Forbidden: You do not have permission to view this profile.');
             } else {
                  displayError(`Failed to fetch student data: Server returned status ${response.status}. ${errorText.substring(0, 100)}...`);
