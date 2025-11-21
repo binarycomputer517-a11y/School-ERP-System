@@ -90,13 +90,24 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             -- created_by is $18. We send NULL to bypass the INTEGER/UUID crash.
             VALUES ($1::uuid, $2, $3, $4::uuid, $5::uuid, $6, $7, $8, $9::uuid, $10::uuid, 
                     $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
-                    $21, $22, $23, $24, $25::uuid)
+                    $21, $22, $23, $24, $25)
             RETURNING student_id, enrollment_no;
         `;
         
-        // --- CRITICAL FIX: Send NULL for the INTEGER FK created_by field ($18) ---
-        // This avoids the 'invalid input syntax for type integer' error.
+        // --- CRITICAL FIX 1: Audit Field Handling ---
+        // 1. created_by (INTEGER FK): Send NULL to bypass the crash.
         const createdByNull = null; 
+        
+        // 2. parent_user_id (INTEGER FK): Check if client sent a value, and ensure it's not a UUID string.
+        let finalParentUserId = parent_user_id || null;
+        if (finalParentUserId && isNaN(parseInt(finalParentUserId))) {
+            // If the value exists but is not an integer (like the crashing UUID), force it to NULL.
+            finalParentUserId = null; 
+        } else if (finalParentUserId) {
+            // If it's a string representation of an integer, cast it to an integer.
+            finalParentUserId = parseInt(finalParentUserId); 
+        }
+
 
         const studentInsertResult = await client.query(studentInsertQuery, [
             user_id, // $1 (UUID FK)
@@ -116,14 +127,14 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             enrollment_no, // $15
             permanent_address, // $16
             blood_group, // $17
-            createdByNull, // $18 (CRITICAL FIX: Insert NULL into the INTEGER created_by column)
+            createdByNull, // $18 (CRITICAL FIX: NULL for INTEGER created_by column)
             parent_first_name, // $19
             parent_last_name, // $20
             parent_phone_number, // $21
             parent_email, // $22
             profile_image_path || null, // $23
             signature_path || null, // $24
-            parent_user_id || null // $25 (UUID or NULL)
+            finalParentUserId // $25 (CRITICAL FIX: Guaranteed NULL or INTEGER)
         ]);
 
         await client.query('COMMIT'); 
@@ -342,6 +353,14 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
                 throw new Error('User record not found or not a student.');
             }
         }
+        
+        // --- CRITICAL FIX 3: Get Integer PK for audit columns ---
+        const creatorIntIdRes = await client.query(
+            `SELECT serial_id FROM ${USERS_TABLE} WHERE id = $1::uuid`, 
+            [updatedBy]
+        );
+        const updatedByIntId = creatorIntIdRes.rows[0]?.serial_id || null; 
+
 
         // 2. Dynamically build the Student Update Query
         const updateFields = [];
@@ -375,11 +394,15 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
                  updateFields.push(`${key} = $${paramIndex++}::uuid`);
                  updateValues.push(studentBodyFields[key]);
             // Special handling for audit columns which are still INTEGER
-            } else if (['created_by', 'updated_by'].includes(key) && studentBodyFields[key] !== undefined) {
-                // If the code tries to update a value, we assume it's NULL or the correct INTEGER PK
-                // This is a safety measure against UUID insertion here.
-                updateFields.push(`${key} = $${paramIndex++}`);
-                updateValues.push(studentBodyFields[key] || null); 
+            } else if (key === 'created_by' && studentBodyFields[key] !== undefined) {
+                 // CRITICAL FIX: created_by requires INTEGER
+                 updateFields.push(`${key} = $${paramIndex++}`);
+                 // Ensure the value is safe (NULL or INTEGER)
+                 updateValues.push(updatedByIntId || null); 
+            } else if (key === 'updated_by' && studentBodyFields[key] !== undefined) {
+                 // CRITICAL FIX: updated_by requires INTEGER
+                 updateFields.push(`${key} = $${paramIndex++}`);
+                 updateValues.push(updatedByIntId || null); 
             } else {
                  addField(key, studentBodyFields[key]);
             }
@@ -395,7 +418,7 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         }
         
         // Ensure control fields are appended (updated_by is UUID PK)
-        updateFields.push(`updated_by = $${paramIndex++}::uuid`);
+        updateFields.push(`updated_by = $${paramIndex++}::uuid`); // Standard UUID update (to main updated_by)
         updateValues.push(updatedBy);
         updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 

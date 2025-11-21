@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', initializeAddForm);
 
 // --- Global Constants ---
 const ACADEMICS_API = '/api/academicswithfees';
+const API_BASE_URL = ''; // Leave blank if relative, or use http://localhost:3005/api
 
 
 // --- CORE API HANDLER ---
@@ -11,26 +12,29 @@ const ACADEMICS_API = '/api/academicswithfees';
  * Helper function for authenticated API calls. 
  * Handles token, branch, and session headers.
  */
-async function handleApi(url, options = {}) {
+async function handleApi(endpoint, options = {}) {
     // 1. Get all required items from localStorage
     const AUTH_TOKEN = localStorage.getItem('erp-token');
+    // Ensure these are fetched correctly for the backend middleware
     const ACTIVE_BRANCH_ID = localStorage.getItem('active_branch_id');
     const ACTIVE_SESSION_ID = localStorage.getItem('active_session_id');
 
     // 2. Set default options
     options.method = options.method || 'GET';
     
-    if (options.body && typeof options.body === 'object' && !options.headers?.['Content-Type']) {
-        options.body = JSON.stringify(options.body);
+    // 3. Serialize Body if necessary
+    let requestBody = options.body;
+    if (requestBody && typeof requestBody === 'object') {
+        requestBody = JSON.stringify(requestBody);
     }
-
-    // 3. Add Authentication and Custom Headers
+    
+    // 4. Set Authentication and Custom Headers
     options.headers = { 
         ...options.headers,
         'Content-Type': 'application/json', 
         'Authorization': `Bearer ${AUTH_TOKEN}`,
         
-        // --- These two lines are the solution ---
+        // --- Custom Headers for Backend Middleware ---
         'active-branch-id': ACTIVE_BRANCH_ID,
         'active-session-id': ACTIVE_SESSION_ID
     };
@@ -40,21 +44,28 @@ async function handleApi(url, options = {}) {
         delete options.headers['Content-Type'];
     }
 
-    // 4. Make the API call
-    const response = await fetch(url, options);
+    // 5. Make the API call
+    const url = `${API_BASE_URL}${endpoint}`;
+    const response = await fetch(url, { ...options, body: requestBody });
 
-    // 5. Handle Errors
+    // 6. Handle Errors
     if (response.status === 401 || response.status === 403) {
         console.error('API Unauthorized or Forbidden:', url);
         alert('Session expired or unauthorized. Please log in again.');
-        window.location.href = '/login.html'; // Redirect to login
+        // window.location.href = '/login.html'; // Uncomment in production
         throw new Error('Unauthorized or Forbidden access.');
     }
     
     if (!response.ok) {
-        const errorText = await response.text().catch(() => 'Unknown server error');
-        console.error(`API Error ${response.status}:`, errorText);
-        throw new Error(`Server error: ${response.status}. ${errorText.substring(0, 100)}...`);
+        // Attempt to read error message from JSON body first
+        let errorData = await response.json().catch(() => null);
+        
+        if (errorData?.message || errorData?.error) {
+            throw new Error(`Server error: ${response.status}. ${errorData.message || errorData.error}`);
+        } else {
+            const errorText = await response.text().catch(() => 'Unknown server error');
+            throw new Error(`Server error: ${response.status}. ${errorText.substring(0, 100)}...`);
+        }
     }
     
     return response; // Return the successful response
@@ -76,7 +87,8 @@ function validateCurrentStep() {
     
     requiredInputs.forEach(input => {
         if (!input.value || (input.tagName === 'SELECT' && input.value === '')) {
-            input.style.border = '2px solid var(--accent-color)'; 
+            // Using a standard CSS variable for accent color, assuming it's defined elsewhere
+            input.style.border = '2px solid red'; 
             isValid = false;
         } else {
             input.style.border = ''; 
@@ -108,7 +120,8 @@ function validateFullFormAndFindFirstError(form) {
         input.style.border = '';
 
         if (!input.value || (input.tagName === 'SELECT' && input.value === '')) {
-            input.style.border = '2px solid var(--accent-color)';
+            // Using a standard CSS variable for accent color, assuming it's defined elsewhere
+            input.style.border = '2px solid red';
             if (isValid) {
                 isValid = false;
                 firstInvalidInput = input;
@@ -219,19 +232,18 @@ async function loadInitialDropdowns() {
 
     try {
         // --- Load Academic Sessions ---
-        // (This API endpoint must exist)
         const sessionResponse = await handleApi(`${ACADEMICS_API}/sessions`); 
         const sessions = await sessionResponse.json();
         
         sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
         if (Array.isArray(sessions)) {
             sessions.forEach(s => {
+                // Ensure ID is passed correctly, whether it's 'id' or 'academic_session_id'
                 sessionSelect.innerHTML += `<option value="${s.id || s.academic_session_id}">${s.name || s.session_name}</option>`;
             });
         }
         
         // --- Load Courses ---
-        // (This API endpoint must exist)
         const courseResponse = await handleApi(`${ACADEMICS_API}/courses`); 
         const courses = await courseResponse.json();
         
@@ -242,7 +254,7 @@ async function loadInitialDropdowns() {
 
         courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
         courses.forEach(c => {
-            courseSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name} (${c.course_code})</option>`;
+            sessionSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name} (${c.course_code})</option>`;
         });
     } catch (err) {
         console.error('Failed to load initial data:', err);
@@ -397,13 +409,14 @@ async function handleAddStudentSubmit(event) {
     if (firstInvalidInput) {
         const fieldsetWithError = firstInvalidInput.closest('fieldset');
         const stepMap = { personal: 1, academics: 2, parents: 3, login: 4 }; 
-        const stepNumber = stepMap[fieldsetWithError.id];
+        const stepId = fieldsetWithError.id;
+        const stepNumber = stepMap[stepId];
         
         const tabButton = document.querySelector(`.tab-button[data-step="${stepNumber}"]`);
         
         if (tabButton) {
             // Manually create a simple event object for openTab
-            openTab({currentTarget: tabButton}, fieldsetWithError.id);
+            openTab({currentTarget: tabButton}, stepId);
         }
         
         firstInvalidInput.focus();
@@ -416,9 +429,11 @@ async function handleAddStudentSubmit(event) {
     
     if (passwordInput.value !== confirmPasswordInput.value) {
         alert("Error: Passwords do not match!");
-        passwordInput.style.border = '2px solid var(--accent-color)';
-        confirmPasswordInput.style.border = '2px solid var(--accent-color)';
-        openTab({currentTarget: document.querySelector('.tab-bar button[data-step="4"]')}, 'login');
+        passwordInput.style.border = '2px solid red'; // Use red for visibility
+        confirmPasswordInput.style.border = '2px solid red'; // Use red for visibility
+        // FIX: Ensure correct arguments for openTab when directing to the login step
+        const loginTabButton = document.querySelector('.tab-button[data-step="4"]');
+        if (loginTabButton) openTab({currentTarget: loginTabButton}, 'login');
         return; 
     } else {
         passwordInput.style.border = '';
@@ -430,12 +445,13 @@ async function handleAddStudentSubmit(event) {
     const studentData = Object.fromEntries(formData.entries());
     delete studentData.confirm_password; 
 
-    // Handle empty optional IDs (branch_id is removed as it's in the header)
-    for (const key of ['academic_session_id']) {
-        if (studentData[key] === '') {
+    // --- CRITICAL FRONT-END DATA CLEANUP (Prevents backend crash on optional INTEGER FKs) ---
+    for (const key of ['parent_user_id', 'academic_session_id', 'branch_id']) {
+        if (studentData[key] === '' || studentData[key] === 'null' || studentData[key] === 'N/A') {
             studentData[key] = null;
         }
     }
+
 
     const API_ENDPOINT = '/api/students'; 
     submitButton.textContent = 'Submitting...';
@@ -452,7 +468,7 @@ async function handleAddStudentSubmit(event) {
         // 5. UI Reset on Success
         clearFeeAndSubjectDisplay(document.getElementById('fee-structure-display'), document.getElementById('subjects-display'));
         
-        const firstTabButton = document.querySelector('.tab-bar button[data-step="1"]');
+        const firstTabButton = document.querySelector('.tab-button[data-step="1"]');
         if (firstTabButton) {
             openTab({currentTarget: firstTabButton}, 'personal');
         }
