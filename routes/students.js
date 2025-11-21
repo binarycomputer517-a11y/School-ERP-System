@@ -9,8 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const USERS_TABLE = 'users'; 
 const STUDENTS_TABLE = 'students'; 
 
-// Define ALL roles that can manage records (Management is usually Title Case in the DB, 
-// but we normalize the check to lowercase in the code).
+// Define ALL roles that can manage records. (Used for authorize middleware)
 const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'HR'];
 
 
@@ -20,7 +19,7 @@ const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'H
 
 /**
  * @route   POST /api/students
- * @desc    Create a new user (role='student') and insert the corresponding student record.
+ * @desc    Create a new user (role='Student') and insert the corresponding student record.
  * @access  Private (Admin, Staff, Super Admin, Teacher, HR)
  */
 router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
@@ -62,7 +61,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         await client.query('BEGIN');
 
         // --- Step 1: Insert into the 'users' table ---
-        // NOTE: The 'users.id' (PK) is auto-generated as INTEGER.
+        // users.id is auto-generated as INTEGER.
         const userInsertQuery = `
             INSERT INTO ${USERS_TABLE} (username, password_hash, role, branch_id)
             VALUES ($1, $2, 'Student', $3::uuid)
@@ -93,7 +92,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             RETURNING student_id, enrollment_no;
         `;
         const studentInsertResult = await client.query(studentInsertQuery, [
-            user_id, 
+            user_id, // INTEGER FK to users.id
             admission_id,
             admission_date || new Date().toISOString().slice(0, 10),
             academic_session_id,
@@ -110,7 +109,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             enrollment_no,
             permanent_address,
             blood_group,
-            creatorId, // Integer
+            creatorId, // INTEGER created_by
             parent_first_name,
             parent_last_name,
             parent_phone_number,
@@ -190,6 +189,9 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
     }
 });
 
+// -------------------------------------------------------------------------
+// FIX: Implement Self-Access Authorization Check
+// -------------------------------------------------------------------------
 /**
  * @route   GET /api/students/:studentId
  * @desc    Get detailed profile information for a single student.
@@ -439,7 +441,7 @@ router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin
     try {
         await client.query('BEGIN');
 
-        // 1. Get the user_id linked to the student (user_id is Integer PK)
+        // 1. Get the user_id linked to the student (user_id is Integer FK)
         const getUserIdQuery = `SELECT user_id FROM ${STUDENTS_TABLE} WHERE student_id = $1::uuid;`;
         const studentResult = await client.query(getUserIdQuery, [studentId]);
 
