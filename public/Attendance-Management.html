@@ -388,6 +388,7 @@
 
         // Guard Check (for client-side redirection)
         if (!token || !['Super Admin', 'Admin', 'Teacher', 'Coordinator'].includes(userRole)) {
+            // NOTE: Since the backend authorization is case-insensitive, this client-side check is less critical, but kept for redirection.
             // window.location.href = '/login.html'; // Uncomment in production
             console.error('Access Denied: User role not authorized to view this page.');
         }
@@ -438,7 +439,7 @@
             }
         }
         
-        // --- Universal Marking Filter Logic (NEW) ---
+        // --- Universal Marking Filter Logic ---
 
         // Function to dynamically update filters based on selected role in Marking tab
         async function updateMarkingFilters() {
@@ -552,8 +553,11 @@
             const mode = document.querySelector('input[name="attendanceMode"]:checked').value;
             const rosterStatus = document.getElementById('rosterStatus');
             
+            // FIX 4: Convert client role to lowercase before sending to backend API
+            const standardizedRole = role.toLowerCase();
+
             // Endpoint uses the NEW UNIVERSAL ATTENDANCE API path
-            const endpoint = `${ATTENDANCE_API_PATH}/report/roster/universal?role=${role}&filter_id=${filter_id}&subject_id=${subject_id}&date=${date}`;
+            const endpoint = `${ATTENDANCE_API_PATH}/report/roster/universal?role=${standardizedRole}&filter_id=${filter_id}&subject_id=${subject_id}&date=${date}`;
             
             const fetchAndRender = async () => {
                 const users = await handleApi(endpoint); 
@@ -650,7 +654,7 @@
             });
         }
 
-        // FIX: The saveAttendance logic is made robust to prevent sending duplicate records (self-conflict)
+        // The saveAttendance logic is robust to prevent sending duplicate records
         async function saveAttendance() {
             const role = document.getElementById('markingRoleSelect').value || null;
             const filter_id = document.getElementById('markingDynamicFilter').value || null;
@@ -658,7 +662,6 @@
             const attendance_date = document.getElementById('attendanceDate').value;
             const records = [];
             
-            // Use a Set to track user_ids already added to the records array in this transaction
             const savedUserIds = new Set();
             
             document.querySelectorAll('#attendanceTbody tr').forEach(row => {
@@ -666,14 +669,13 @@
                 const statusInput = row.querySelector(`input[name="status-${user_id}"]:checked`);
                 const remarkBtn = row.querySelector('.remarks-btn');
                 
-                // Only process if a status is selected AND the radio button is NOT disabled
                 if (statusInput && !statusInput.disabled && !savedUserIds.has(user_id)) { 
                     const status = statusInput.value;
                     const remarks = remarkBtn ? remarkBtn.dataset.remarks || '' : '';
                     
                     if (status !== 'unmarked') {
                         records.push({ user_id: user_id, status, remarks }); 
-                        savedUserIds.add(user_id); // Mark user as processed
+                        savedUserIds.add(user_id); 
                     }
                 }
             });
@@ -683,7 +685,6 @@
                 return;
             }
 
-            // Determine if batch_id is applicable based on role
             const batch_id = role === 'Student' ? filter_id : null;
             
             const body = { 
@@ -695,11 +696,9 @@
                 records 
             }; 
             
-            // Endpoint uses the ATTENDANCE API path
             const result = await handleApi(`${ATTENDANCE_API_PATH}/mark`, 'POST', body);
             if (result) {
                 alert('Attendance saved successfully!');
-                // Reload the roster to show the updated status and method
                 await loadRoster(); 
             }
         }
@@ -775,7 +774,7 @@
             
             reportErrorMessage.textContent = ''; // Clear previous errors
 
-            const role = roleSelect.value;
+            const role = roleSelect.value.toLowerCase(); // FIX 5: Standardize role before API call
             const month = monthSelect.value;
             const dynamicFilter = document.getElementById('dynamicFilter');
             const optional_filter_id = dynamicFilter ? dynamicFilter.value : '';
@@ -948,7 +947,7 @@
             updateConsolidatedFilters(); 
             
             // NEW: Initialize the universal marking filters
-            updateMarkingFilters(); // Initialize the new filters
+            updateMarkingFilters(); 
             handleModeChange();
         });
     </script>
