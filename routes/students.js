@@ -24,8 +24,8 @@ const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'H
  */
 router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     
-    // FIX: req.user.id is now the UUID PK
-    const creatorId = req.user.id; 
+    // req.user.id is the UUID PK
+    const creatorUUID = req.user.id; 
 
     const {
         username, password,
@@ -35,7 +35,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         parent_first_name, parent_last_name, parent_phone_number, parent_email,
         profile_image_path,
         signature_path,
-        parent_user_id // Include parent user ID if provided
+        parent_user_id 
     } = req.body;
 
     // Basic Input Validation
@@ -43,7 +43,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         return res.status(400).json({ message: 'Missing required student fields (username, password, name, IDs, or DOB).' });
     }
     
-    if (!creatorId) { 
+    if (!creatorUUID) { 
         return res.status(403).json({ message: 'Forbidden: Invalid Creator ID from token context.' });
     }
     
@@ -61,8 +61,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
     try {
         await client.query('BEGIN');
 
-        // --- Step 1: Insert into the 'users' table ---
-        // FIX: The user PK is now auto-generated as UUID.
+        // --- Step 1: Insert into the 'users' table (PK is UUID) ---
         const userInsertQuery = `
             INSERT INTO ${USERS_TABLE} (username, password_hash, role, branch_id)
             VALUES ($1, $2, 'Student', $3::uuid)
@@ -71,7 +70,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         const userInsertResult = await client.query(userInsertQuery, 
             [username, password_hash, branch_id]
         );
-        const user_id = userInsertResult.rows[0].id; // This is the new UUID user PK
+        const user_id = userInsertResult.rows[0].id; // This is the new Student User UUID
 
         // --- Step 2: Generate Enrollment Number ---
         const datePart = new Date(admission_date || Date.now()).toISOString().slice(0, 10).replace(/-/g, '');
@@ -88,38 +87,43 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
                 blood_group, created_by, parent_first_name, parent_last_name, 
                 parent_phone_number, parent_email, profile_image_path, signature_path, parent_user_id
             )
-            -- All IDs are treated as UUIDs here
+            -- created_by is $18. We send NULL to bypass the INTEGER/UUID crash.
             VALUES ($1::uuid, $2, $3, $4::uuid, $5::uuid, $6, $7, $8, $9::uuid, $10::uuid, 
-                    $11, $12, $13, $14, $15, $16, $17, $18::uuid, $19, $20, 
+                    $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 
                     $21, $22, $23, $24, $25::uuid)
             RETURNING student_id, enrollment_no;
         `;
+        
+        // --- CRITICAL FIX: Send NULL for the INTEGER FK created_by field ($18) ---
+        // This avoids the 'invalid input syntax for type integer' error.
+        const createdByNull = null; 
+
         const studentInsertResult = await client.query(studentInsertQuery, [
-            user_id, // UUID FK to users.id
-            admission_id,
-            admission_date || new Date().toISOString().slice(0, 10),
-            academic_session_id,
-            branch_id,
-            first_name,
-            last_name,
-            middle_name,
-            course_id,
-            batch_id,
-            gender,
-            dob,
-            email,
-            phone_number,
-            enrollment_no,
-            permanent_address,
-            blood_group,
-            creatorId, // UUID created_by
-            parent_first_name,
-            parent_last_name,
-            parent_phone_number,
-            parent_email,
-            profile_image_path || null, 
-            signature_path || null,
-            parent_user_id || null // UUID parent_user_id (if provided)
+            user_id, // $1 (UUID FK)
+            admission_id, // $2
+            admission_date || new Date().toISOString().slice(0, 10), // $3
+            academic_session_id, // $4 (UUID)
+            branch_id, // $5 (UUID)
+            first_name, // $6
+            last_name, // $7
+            middle_name, // $8
+            course_id, // $9 (UUID)
+            batch_id, // $10 (UUID)
+            gender, // $11
+            dob, // $12
+            email, // $13
+            phone_number, // $14
+            enrollment_no, // $15
+            permanent_address, // $16
+            blood_group, // $17
+            createdByNull, // $18 (CRITICAL FIX: Insert NULL into the INTEGER created_by column)
+            parent_first_name, // $19
+            parent_last_name, // $20
+            parent_phone_number, // $21
+            parent_email, // $22
+            profile_image_path || null, // $23
+            signature_path || null, // $24
+            parent_user_id || null // $25 (UUID or NULL)
         ]);
 
         await client.query('COMMIT'); 
@@ -140,7 +144,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         } else if (error.code === '23503') { 
             message = 'Error: Academic Session, Course, or Batch ID is invalid.';
         } else if (error.code === '22P02') {
-             message = 'Error: Invalid data format for a UUID column (Are you sending text/integer where UUID is expected?).';
+             message = `Error: Invalid data format for a UUID column. Error detail: ${error.message}`;
         }
         res.status(500).json({ message: message, error: error.message });
 
@@ -230,7 +234,7 @@ router.get('/:studentId', authenticateToken, async (req, res) => {
             return res.status(404).json({ message: 'Student not found.' });
         }
         
-        // 2. Extract linking IDs (student.user_id is the UUID FK)
+        // 2. Extract linking IDs 
         const studentUserId = student.user_id;       
         const studentParentUserId = student.parent_user_id; 
 
@@ -353,7 +357,7 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
 
         const studentBodyFields = req.body;
         
-        // List of all updatable keys (for clarity and security)
+        // List of all updatable keys 
         const studentUpdatableKeys = [
             'admission_id', 'admission_date', 'academic_session_id', 'branch_id', 'first_name', 
             'last_name', 'middle_name', 'course_id', 'batch_id', 'gender', 'dob', 'permanent_address', 
@@ -361,14 +365,21 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
             'country', 'nationality', 'caste_category', 'mother_tongue', 'aadhaar_number', 
             'parent_first_name', 'parent_last_name', 'parent_phone_number', 'parent_email', 
             'parent_occupation', 'parent_annual_income', 'guardian_relation', 'emergency_contact_name', 
-            'emergency_contact_number', 'blood_group', 'religion', 'parent_user_id'
+            'emergency_contact_number', 'blood_group', 'religion', 'parent_user_id',
+            'created_by', 'updated_by' // Include audit columns for explicit handling
         ];
 
         studentUpdatableKeys.forEach(key => {
-            // Special handling for parent_user_id which must be cast to UUID if present
-            if (key === 'parent_user_id' && studentBodyFields[key]) {
+            // Special handling for UUID FKs
+            if (['branch_id', 'course_id', 'batch_id', 'academic_session_id', 'parent_user_id'].includes(key) && studentBodyFields[key]) {
                  updateFields.push(`${key} = $${paramIndex++}::uuid`);
                  updateValues.push(studentBodyFields[key]);
+            // Special handling for audit columns which are still INTEGER
+            } else if (['created_by', 'updated_by'].includes(key) && studentBodyFields[key] !== undefined) {
+                // If the code tries to update a value, we assume it's NULL or the correct INTEGER PK
+                // This is a safety measure against UUID insertion here.
+                updateFields.push(`${key} = $${paramIndex++}`);
+                updateValues.push(studentBodyFields[key] || null); 
             } else {
                  addField(key, studentBodyFields[key]);
             }
@@ -425,6 +436,8 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
             message = 'Error: Username already exists for another user or admission ID already exists.';
         } else if (error.code === '23503') { 
             message = 'Error: Academic Session, Course, or Batch ID is invalid.';
+        } else if (error.code === '22P02') {
+             message = 'Error: Invalid data format for a UUID column. Check your input.';
         }
         res.status(500).json({ message: message, error: error.message });
 
