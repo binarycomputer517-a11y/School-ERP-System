@@ -231,19 +231,18 @@ async function loadInitialDropdowns() {
     batchSelect.disabled = true;
 
     try {
-        // --- Load Academic Sessions ---
+        // --- Load Academic Sessions (Correct) ---
         const sessionResponse = await handleApi(`${ACADEMICS_API}/sessions`); 
         const sessions = await sessionResponse.json();
         
         sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
         if (Array.isArray(sessions)) {
             sessions.forEach(s => {
-                // Ensure ID is passed correctly, whether it's 'id' or 'academic_session_id'
                 sessionSelect.innerHTML += `<option value="${s.id || s.academic_session_id}">${s.name || s.session_name}</option>`;
             });
         }
         
-        // --- Load Courses ---
+        // --- Load Courses (Correct) ---
         const courseResponse = await handleApi(`${ACADEMICS_API}/courses`); 
         const courses = await courseResponse.json();
         
@@ -254,8 +253,10 @@ async function loadInitialDropdowns() {
 
         courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
         courses.forEach(c => {
-            sessionSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name} (${c.course_code})</option>`;
+            // FIX: Populate courseSelect with course data
+            courseSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name} (${c.course_code})</option>`;
         });
+        
     } catch (err) {
         console.error('Failed to load initial data:', err);
         sessionSelect.innerHTML = '<option value="">Error loading sessions</option>';
@@ -431,7 +432,7 @@ async function handleAddStudentSubmit(event) {
         alert("Error: Passwords do not match!");
         passwordInput.style.border = '2px solid red'; // Use red for visibility
         confirmPasswordInput.style.border = '2px solid red'; // Use red for visibility
-        // FIX: Ensure correct arguments for openTab when directing to the login step
+        
         const loginTabButton = document.querySelector('.tab-button[data-step="4"]');
         if (loginTabButton) openTab({currentTarget: loginTabButton}, 'login');
         return; 
@@ -448,6 +449,11 @@ async function handleAddStudentSubmit(event) {
     // --- CRITICAL FRONT-END DATA CLEANUP (Prevents backend crash on optional INTEGER FKs) ---
     for (const key of ['parent_user_id', 'academic_session_id', 'branch_id']) {
         if (studentData[key] === '' || studentData[key] === 'null' || studentData[key] === 'N/A') {
+            studentData[key] = null;
+        }
+        // If the key is parent_user_id (which is a crash point), ensure it is NULL if not a valid number
+        // NOTE: The backend fix relies on this field being NULL if not correctly linked
+        if (key === 'parent_user_id' && studentData[key] !== null && isNaN(parseInt(studentData[key]))) {
             studentData[key] = null;
         }
     }
