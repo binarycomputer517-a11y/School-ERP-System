@@ -324,7 +324,7 @@
         // 1. Load the list of all students
         async function loadStudents() {
             try {
-                // Assuming /api/students returns student objects with student_id and roll_number
+                // Assuming /api/students returns student objects with student_id, first_name, last_name, and roll_number
                 const response = await fetch('/api/students', { headers: authHeaders });
                 if (!response.ok) throw new Error('Failed to load students.');
                 const students = await response.json();
@@ -332,6 +332,7 @@
                 students.forEach(student => {
                     if (student && student.student_id) {
                         const fullName = `${student.first_name} ${student.last_name}`;
+                        // FIX: Ensure roll_number is used in the display dropdown text
                         studentSelect.innerHTML += `<option value="${student.student_id}">${fullName} (Roll No: ${student.roll_number || 'N/A'})</option>`;
                     }
                 });
@@ -349,7 +350,7 @@
                 return;
             }
             try {
-                // This is the endpoint that was failing: /api/fees/student/:studentId
+                // This is the endpoint that was fixed in the backend: /api/fees/student/:studentId
                 const response = await fetch(`/api/fees/student/${studentId}`, { headers: authHeaders });
                 
                 // CRITICAL: Handle the 404 response gracefully
@@ -367,8 +368,12 @@
                 const totalPaid = safeNum(data.total_paid);
                 const balance = safeNum(data.balance);
 
-                document.getElementById('student-name-header').textContent = `Fee Status for ${data.student_name}`;
+                // FIX: Update header to include Roll Number
+                document.getElementById('student-name-header').textContent = `Fee Status for ${data.student_name} (Roll No: ${data.roll_number || 'N/A'})`;
+                
+                // FIX: Update course/batch info
                 document.getElementById('course-batch-info').textContent = `Course: ${data.course_name} | Batch: ${data.batch_name}`;
+                
                 document.getElementById('total-fees').textContent = `₹${totalFees.toFixed(2)}`;
                 document.getElementById('total-paid').textContent = `₹${totalPaid.toFixed(2)}`;
                 document.getElementById('balance-due').textContent = `₹${balance.toFixed(2)}`;
@@ -388,7 +393,7 @@
                         structureList.appendChild(li);
                     });
                 } else {
-                    structureList.innerHTML = '<li class="text-warning" style="text-align: center;">No defined fee structure found for this student\'s course/batch.</li>';
+                    structureList.innerHTML = '<li class="text-warning" style="text-align: center;">No defined fee structure found for this student\'s course/batch (or no invoices generated).</li>';
                 }
 
                 // Payment History 
@@ -438,7 +443,6 @@
             statusMessage.textContent = 'Processing payment...';
             
             const paymentData = {
-                // FIX: Removed parseInt() as student_id is a UUID string
                 student_id: selectedStudentId, 
                 amount_paid: parseFloat(document.getElementById('amount_paid').value),
                 payment_mode: document.getElementById('payment_mode').value,

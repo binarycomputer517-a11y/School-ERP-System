@@ -11,13 +11,16 @@ const INVOICES_TABLE = 'fee_invoices';
 const ITEMS_TABLE = 'invoice_items';
 const PAYMENTS_TABLE = 'fee_payments';
 const USERS_TABLE = 'users';
-const STUDENTS_TABLE = 'students'; // Added for clarity in the fix
+const STUDENTS_TABLE = 'students';
 const TRANSPORT_ASSIGNMENTS_TABLE = 'student_transport_assignments'; 
 const ROUTES_TABLE = 'transport_routes'; 
+const COURSES_TABLE = 'courses';
+const BATCHES_TABLE = 'batches';
 
 // Constants
 const BASE_TUITION_FEE = 5000.00; 
 const FEE_STATUSES = ['Pending', 'Partial', 'Paid', 'Waived', 'Overdue'];
+const FEE_ROLES = ['Admin', 'Staff', 'Super Admin']; // Common roles for payment collection/viewing
 
 // =========================================================
 // 1. INVOICE GENERATION (POST) - ADMIN ONLY
@@ -30,7 +33,8 @@ const FEE_STATUSES = ['Pending', 'Partial', 'Paid', 'Waived', 'Overdue'];
  */
 router.post('/generate/:month/:year', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     const { month, year } = req.params;
-    const adminId = req.user.userId;
+    // NOTE: req.user.userId is assumed to be the UUID of the admin user
+    const adminId = req.user.userId; 
     const issueDate = moment(`${year}-${month}-01`).format('YYYY-MM-DD'); 
     const dueDate = moment(issueDate).add(15, 'days').format('YYYY-MM-DD');
 
@@ -38,16 +42,18 @@ router.post('/generate/:month/:year', authenticateToken, authorize(['Admin', 'Su
     try {
         await client.query('BEGIN');
         
-        // 1. Fetch all active students and their current transport assignment
+        // 1. Fetch all active students, starting from the STUDENTS_TABLE
         const studentsRes = await client.query(`
             SELECT 
-                u.id AS student_id, u.username, 
-                r.monthly_fee AS transport_fee, r.route_name
-            FROM ${USERS_TABLE} u
-            LEFT JOIN ${TRANSPORT_ASSIGNMENTS_TABLE} ta ON u.id = ta.student_id
+                s.student_id, -- The PK for the student profile and FK for fee_invoices
+                u.username,    
+                r.monthly_fee AS transport_fee, 
+                r.route_name
+            FROM ${STUDENTS_TABLE} s
+            JOIN ${USERS_TABLE} u ON s.user_id = u.id 
+            LEFT JOIN ${TRANSPORT_ASSIGNMENTS_TABLE} ta ON s.student_id = ta.student_id
             LEFT JOIN ${ROUTES_TABLE} r ON ta.route_id = r.id
-            WHERE u.role = 'Student'
-            AND u.is_active = TRUE; 
+            WHERE u.is_active = TRUE; -- Filter for active users
         `);
         
         const generatedInvoices = [];
@@ -77,7 +83,7 @@ router.post('/generate/:month/:year', authenticateToken, authorize(['Admin', 'Su
             // C. Insert Invoice Record
             const invoiceQuery = `
                 INSERT INTO ${INVOICES_TABLE} (student_id, issue_date, due_date, total_amount, status, created_by)
-                VALUES ($1, $2, $3, $4, 'Pending', $5)
+                VALUES ($1::uuid, $2, $3, $4, 'Pending', $5::uuid) 
                 RETURNING id;
             `;
             const invoiceResult = await client.query(invoiceQuery, [
@@ -87,7 +93,7 @@ router.post('/generate/:month/:year', authenticateToken, authorize(['Admin', 'Su
 
             // D. Insert Invoice Items
             const itemsValues = items.map(item => 
-                `('${invoiceId}', '${item.description}', ${item.amount})`
+                `('${invoiceId}', '${item.description.replace(/'/g, "''")}', ${item.amount})`
             ).join(',');
             
             await client.query(`
@@ -123,7 +129,6 @@ router.post('/generate/:month/:year', authenticateToken, authorize(['Admin', 'Su
  * @access  Private (Admin, Teacher, Staff, Super Admin)
  */
 router.post('/collect', authenticateToken, authorize(['Admin', 'Teacher', 'Staff', 'Super Admin']), async (req, res) => {
-    // student_id here is the UUID from the students table
     const { student_id, amount_paid, payment_mode, notes } = req.body;
     const collectedBy = req.user.userId; 
 
@@ -142,7 +147,7 @@ router.post('/collect', authenticateToken, authorize(['Admin', 'Teacher', 'Staff
             SELECT 
                 id, total_amount, paid_amount, (total_amount - paid_amount) AS balance_due
             FROM ${INVOICES_TABLE}
-            WHERE student_id = $1 AND status != 'Paid' AND status != 'Waived'
+            WHERE student_id = $1::uuid AND status != 'Paid' AND status != 'Waived'
             ORDER BY due_date ASC;
         `, [student_id]);
         
@@ -161,7 +166,7 @@ router.post('/collect', authenticateToken, authorize(['Admin', 'Teacher', 'Staff
                 // A. Record Payment Transaction 
                 const paymentQuery = `
                     INSERT INTO ${PAYMENTS_TABLE} (invoice_id, amount, payment_mode, transaction_id, collected_by, remarks)
-                    VALUES ($1, $2, $3, $4, $5, $6)
+                    VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6)
                     RETURNING id;
                 `;
                 const paymentResult = await client.query(paymentQuery, [
@@ -184,7 +189,7 @@ router.post('/collect', authenticateToken, authorize(['Admin', 'Teacher', 'Staff
                     SET 
                         paid_amount = paid_amount + $1,
                         status = $2
-                    WHERE id = $3;
+                    WHERE id = $3::uuid;
                 `, [paymentOnThisInvoice, newStatus, invoiceId]); 
                 
 
@@ -228,21 +233,34 @@ router.get('/invoices/student/:studentId', authenticateToken, async (req, res) =
     const userId = req.user.userId;
     const userRole = req.user.role;
 
-    if (userRole !== 'Admin' && userRole !== 'Staff' && userRole !== 'Super Admin' && studentId !== userId) {
+    // IMPORTANT: Security Check needs to verify if the studentId corresponds to the current userId
+    let isStudentSelf = false;
+    try {
+        const studentCheck = await pool.query(
+            `SELECT student_id FROM ${STUDENTS_TABLE} WHERE user_id = $1::uuid AND student_id = $2::uuid`,
+            [userId, studentId]
+        );
+        if (studentCheck.rowCount > 0) {
+            isStudentSelf = true;
+        }
+    } catch (e) {
+        // Ignore errors if UUID format is wrong, access will just be denied below
+    }
+
+    if (!FEE_ROLES.map(r => r.toLowerCase()).includes(userRole.toLowerCase()) && !isStudentSelf) {
         return res.status(403).json({ message: 'Access denied to these invoices.' });
     }
 
     try {
+        // FIX: Corrected JOIN logic to link fee_invoices (i) -> students (s) -> users (u)
         const query = `
             SELECT 
                 i.*, 
                 u.username AS student_name
             FROM ${INVOICES_TABLE} i
-            -- NOTE: If your student table is linked to users table, you might need a different join here
-            -- The existing join is likely wrong as i.student_id is UUID from students table
-            -- Assuming 'u' is the student's user record, this needs verification based on your schema.
-            JOIN ${USERS_TABLE} u ON i.student_id = u.student_id 
-            WHERE i.student_id = $1
+            JOIN ${STUDENTS_TABLE} s ON i.student_id = s.student_id
+            JOIN ${USERS_TABLE} u ON s.user_id = u.id 
+            WHERE i.student_id = $1::uuid
             ORDER BY i.issue_date DESC; 
         `;
         const result = await pool.query(query, [studentId]);
@@ -265,7 +283,7 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
         const query = `
             SELECT *
             FROM ${ITEMS_TABLE}
-            WHERE invoice_id = $1
+            WHERE invoice_id = $1::uuid
             ORDER BY created_at ASC;
         `;
         const result = await pool.query(query, [invoiceId]);
@@ -278,7 +296,7 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
 
 
 // =========================================================
-// 4. CONSOLIDATED STUDENT FEE STATUS (GET) - FIXED LOGIC
+// 4. CONSOLIDATED STUDENT FEE STATUS (GET) 
 // =========================================================
 
 /**
@@ -286,8 +304,7 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
  * @desc    Get consolidated fee status (invoices, payments, balance) for a single student.
  * @access  Private (Admin, Staff, Super Admin)
  */
-router.get('/student/:studentId', authenticateToken, authorize(['Admin', 'Staff', 'Super Admin']), async (req, res) => {
-    // studentId here is the UUID from the students.id column
+router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     const { studentId } = req.params;
     
     try {
@@ -295,7 +312,7 @@ router.get('/student/:studentId', authenticateToken, authorize(['Admin', 'Staff'
         const totalFeesQuery = `
             SELECT COALESCE(SUM(total_amount), 0.00) AS total_fees
             FROM ${INVOICES_TABLE}
-            WHERE student_id = $1;
+            WHERE student_id = $1::uuid;
         `;
         const totalFeesResult = await pool.query(totalFeesQuery, [studentId]);
         const totalFees = parseFloat(totalFeesResult.rows[0].total_fees);
@@ -305,7 +322,7 @@ router.get('/student/:studentId', authenticateToken, authorize(['Admin', 'Staff'
             SELECT COALESCE(SUM(p.amount), 0.00) AS total_paid
             FROM ${PAYMENTS_TABLE} p
             JOIN ${INVOICES_TABLE} i ON p.invoice_id = i.id
-            WHERE i.student_id = $1;
+            WHERE i.student_id = $1::uuid;
         `;
         const totalPaidResult = await pool.query(totalPaidQuery, [studentId]);
         const totalPaid = parseFloat(totalPaidResult.rows[0].total_paid);
@@ -320,7 +337,7 @@ router.get('/student/:studentId', authenticateToken, authorize(['Admin', 'Staff'
                 p.payment_date AS payment_date 
             FROM ${PAYMENTS_TABLE} p
             JOIN ${INVOICES_TABLE} i ON p.invoice_id = i.id
-            WHERE i.student_id = $1
+            WHERE i.student_id = $1::uuid
             ORDER BY p.payment_date DESC; 
         `;
         const historyResult = await pool.query(historyQuery, [studentId]);
@@ -332,7 +349,7 @@ router.get('/student/:studentId', authenticateToken, authorize(['Admin', 'Staff'
                 SUM(it.amount) AS amount  
             FROM ${ITEMS_TABLE} it
             JOIN ${INVOICES_TABLE} inv ON it.invoice_id = inv.id
-            WHERE inv.student_id = $1
+            WHERE inv.student_id = $1::uuid
             GROUP BY it.description 
             ORDER BY SUM(it.amount) DESC; 
         `;
@@ -340,23 +357,22 @@ router.get('/student/:studentId', authenticateToken, authorize(['Admin', 'Staff'
         const feeStructure = structureResult.rows;
 
 
-        // 5. Fetch basic student details (FIXED: Queries students table by student.id and joins to users)
+        // 5. Fetch basic student details (FIX: Added roll_number)
         const studentDetailsQuery = `
             SELECT 
                 u.username AS student_name, 
                 c.course_name, 
-                b.batch_name
+                b.batch_name,
+                s.roll_number -- <--- ADDED ROLL NUMBER
             FROM ${STUDENTS_TABLE} s
-            JOIN ${USERS_TABLE} u ON s.user_id = u.id -- Link student record to their user account
-            -- Join to courses and batches tables for actual names (assuming they exist and are correctly named)
-            LEFT JOIN courses c ON s.course_id = c.id
-            LEFT JOIN batches b ON s.batch_id = b.id
-            WHERE s.id = $1;
+            JOIN ${USERS_TABLE} u ON s.user_id = u.id 
+            LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
+            LEFT JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
+            WHERE s.student_id = $1::uuid;
         `;
         const studentDetailsResult = await pool.query(studentDetailsQuery, [studentId]);
         
         if (studentDetailsResult.rowCount === 0) {
-            // This is the correct check: if the student UUID doesn't exist in the students table
             return res.status(404).json({ message: 'Student not found.' }); 
         }
         
@@ -366,10 +382,10 @@ router.get('/student/:studentId', authenticateToken, authorize(['Admin', 'Staff'
         const balance = totalFees - totalPaid;
 
         res.status(200).json({
-            // Use actual names from the joined tables
             student_name: studentDetails.student_name,
-            course_name: studentDetails.course_name || 'N/A', // Handle case where joins might fail
-            batch_name: studentDetails.batch_name || 'N/A', // Handle case where joins might fail
+            course_name: studentDetails.course_name || 'N/A', 
+            batch_name: studentDetails.batch_name || 'N/A', 
+            roll_number: studentDetails.roll_number || 'N/A', // <--- ADDED ROLL NUMBER TO RESPONSE
             total_fees: totalFees,
             total_paid: totalPaid,
             balance: balance,
