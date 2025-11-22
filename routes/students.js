@@ -8,6 +8,8 @@ const { v4: uuidv4 } = require('uuid');
 // Database Table Constants
 const USERS_TABLE = 'users'; 
 const STUDENTS_TABLE = 'students'; 
+const INVOICES_TABLE = 'fee_invoices';
+const PAYMENTS_TABLE = 'fee_payments';
 
 // Define ALL roles that can manage records. (Used for authorize middleware)
 const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'HR'];
@@ -24,7 +26,7 @@ const STUDENT_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff', 'Teacher', 'H
  */
 router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (req, res) => {
     
-    // req.user.id is the UUID PK
+    // req.user.id is the UUID PK of the creator
     const creatorUUID = req.user.id; 
 
     const {
@@ -94,18 +96,22 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             RETURNING student_id, enrollment_no;
         `;
         
-        // --- CRITICAL FIX 1: Audit Field Handling ---
-        // 1. created_by (INTEGER FK): Send NULL to bypass the crash.
+        // --- CRITICAL FIX 1: Audit Field Handling (NULL for broken INTEGER FKs) ---
+        // This resolves the 'invalid input syntax for type integer' crash on audit columns.
         const createdByNull = null; 
         
-        // 2. parent_user_id (INTEGER FK): Check if client sent a value, and ensure it's not a UUID string.
+        // Ensure parent_user_id is NULL if it's not a proper Integer (or UUID string)
         let finalParentUserId = parent_user_id || null;
-        if (finalParentUserId && isNaN(parseInt(finalParentUserId))) {
-            // If the value exists but is not an integer (like the crashing UUID), force it to NULL.
-            finalParentUserId = null; 
+        if (finalParentUserId && isNaN(parseInt(finalParentUserId)) && finalParentUserId.length > 10) {
+            finalParentUserId = null; // Assume it's a broken UUID string, force NULL
         } else if (finalParentUserId) {
-            // If it's a string representation of an integer, cast it to an integer.
+            // Assume it's an old INTEGER FK value if it was sent by client
             finalParentUserId = parseInt(finalParentUserId); 
+        } else if (parent_user_id && parent_user_id.length === 36) {
+            // If the client explicitly sends a UUID for parent_user_id, use it.
+            finalParentUserId = parent_user_id;
+        } else {
+             finalParentUserId = null;
         }
 
 
@@ -134,7 +140,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
             parent_email, // $22
             profile_image_path || null, // $23
             signature_path || null, // $24
-            finalParentUserId // $25 (CRITICAL FIX: Guaranteed NULL or INTEGER)
+            finalParentUserId // $25 (Guaranteed NULL or correctly handled ID)
         ]);
 
         await client.query('COMMIT'); 
@@ -155,7 +161,7 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         } else if (error.code === '23503') { 
             message = 'Error: Academic Session, Course, or Batch ID is invalid.';
         } else if (error.code === '22P02') {
-             message = `Error: Invalid data format for a UUID column. Error detail: ${error.message}`;
+             message = `Error: Invalid data format for an ID. Check if academic session or branch ID is a valid UUID. Error detail: ${error.message}`;
         }
         res.status(500).json({ message: message, error: error.message });
 
@@ -355,6 +361,8 @@ router.put('/:studentId', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES)
         }
         
         // --- CRITICAL FIX 3: Get Integer PK for audit columns ---
+        // This assumes serial_id still holds the integer PK, which is required 
+        // because created_by/updated_by are still INTEGER columns.
         const creatorIntIdRes = await client.query(
             `SELECT serial_id FROM ${USERS_TABLE} WHERE id = $1::uuid`, 
             [updatedBy]
@@ -524,5 +532,40 @@ router.delete('/:studentId', authenticateToken, authorize(['Admin', 'Super Admin
     }
 });
 
+
+/**
+ * @route   GET /api/students/refundable
+ * @desc    Get a list of all students with a positive refundable balance (overpaid).
+ * @access  Private (Admin, Finance)
+ */
+router.get('/refundable', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                s.student_id, 
+                s.first_name, 
+                s.last_name, 
+                s.roll_number,
+                -- Calculation: Total Paid (p.amount) - Total Invoiced (i.total_amount)
+                (COALESCE(SUM(p.amount), 0.00) - COALESCE(SUM(i.total_amount), 0.00)) AS refundable_balance
+            FROM students s
+            LEFT JOIN ${INVOICES_TABLE} i ON s.student_id = i.student_id
+            LEFT JOIN ${PAYMENTS_TABLE} p ON i.id = p.invoice_id
+            GROUP BY s.student_id, s.first_name, s.last_name, s.roll_number
+            HAVING (COALESCE(SUM(p.amount), 0.00) > COALESCE(SUM(i.total_amount), 0.00))
+            ORDER BY refundable_balance DESC;
+        `;
+        
+        const { rows } = await pool.query(query);
+        
+        // The client expects 'student_id', 'first_name', 'last_name', 'roll_number', and 'refundable_balance'
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('Refundable Students Fetch Error:', error);
+        // The detailed server error will be caught here
+        res.status(500).json({ message: 'Failed to retrieve students eligible for refund. Check the database column names.', error: error.message });
+    }
+});
 
 module.exports = router;
