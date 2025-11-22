@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Receipt</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { font-family: 'Courier New', Courier, monospace; background: #eee; padding: 40px; }
+        .receipt {
+            max-width: 400px;
+            margin: auto;
+            background: white;
+            padding: 20px;
+            border: 1px dashed #333;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        .header { text-align: center; margin-bottom: 20px; }
+        .header h2 { margin: 0; text-transform: uppercase; }
+        .header p { margin: 5px 0; font-size: 0.9em; color: #666; }
+        .row { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 0.95em; }
+        .divider { border-top: 1px dashed #ccc; margin: 15px 0; }
+        .total { font-weight: bold; font-size: 1.2em; }
+        .footer { text-align: center; font-size: 0.8em; margin-top: 30px; color: #888; }
+        .btn-print {
+            display: block; width: 100%; padding: 10px; background: #333; color: white; 
+            border: none; cursor: pointer; margin-top: 20px; text-align: center; text-decoration: none;
+        }
+        @media print {
+            body { background: white; padding: 0; }
+            .receipt { border: none; box-shadow: none; }
+            .btn-print { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="receipt" id="receipt-content">
+    <p style="text-align:center;">Loading Receipt...</p>
+</div>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const txnId = urlParams.get('id');
+    const token = localStorage.getItem('erp-token');
+
+    async function loadReceipt() {
+        if (!txnId) return;
+
+        try {
+            const response = await fetch(`/api/invoices/payment/${txnId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('Receipt not found');
+            const data = await response.json();
+            
+            document.getElementById('receipt-content').innerHTML = `
+                <div class="header">
+                    <h2>Payment Receipt</h2>
+                    <p>School ERP System</p>
+                    <p>Date: ${new Date(data.payment_date).toLocaleDateString()}</p>
+                </div>
+                
+                <div class="divider"></div>
+                
+                <div class="row"><span>Transaction ID:</span> <span>${data.transaction_id}</span></div>
+                <div class="row"><span>Student:</span> <span>${data.student_name}</span></div>
+                <div class="row"><span>Roll No:</span> <span>${data.roll_number || 'N/A'}</span></div>
+                <div class="row"><span>Course:</span> <span>${data.course_name}</span></div>
+                <div class="row"><span>Payment Mode:</span> <span>${data.payment_mode}</span></div>
+                
+                <div class="divider"></div>
+                
+                <div class="row total">
+                    <span>AMOUNT PAID:</span>
+                    <span>₹${parseFloat(data.amount).toFixed(2)}</span>
+                </div>
+
+                <div class="footer">
+                    <p>Thank you for your payment!</p>
+                    <p>For questions, contact admin@school.com</p>
+                </div>
+
+                <button class="btn-print" onclick="window.print()"><i class="fas fa-print"></i> Print / Save PDF</button>
+            `;
+        } catch (error) {
+            document.getElementById('receipt-content').innerHTML = `<p style="text-align:center; color:red;">Error: ${error.message}</p>`;
+        }
+    }
+
+    loadReceipt();
+</script>
+
+</body>
+</html>

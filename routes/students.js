@@ -8,6 +8,7 @@ const { v4: uuidv4 } = require('uuid');
 // Database Table Constants
 const USERS_TABLE = 'users'; 
 const STUDENTS_TABLE = 'students'; 
+// Include fee-related constants for the /refundable route
 const INVOICES_TABLE = 'fee_invoices';
 const PAYMENTS_TABLE = 'fee_payments';
 
@@ -97,10 +98,10 @@ router.post('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (
         `;
         
         // --- CRITICAL FIX 1: Audit Field Handling (NULL for broken INTEGER FKs) ---
-        // This resolves the 'invalid input syntax for type integer' crash on audit columns.
+        // 1. created_by (INTEGER FK): Send NULL directly to bypass the crash.
         const createdByNull = null; 
         
-        // Ensure parent_user_id is NULL if it's not a proper Integer (or UUID string)
+        // 2. parent_user_id (INTEGER FK): Check if client sent a value, and ensure it's not a UUID string.
         let finalParentUserId = parent_user_id || null;
         if (finalParentUserId && isNaN(parseInt(finalParentUserId)) && finalParentUserId.length > 10) {
             finalParentUserId = null; // Assume it's a broken UUID string, force NULL
@@ -213,6 +214,41 @@ router.get('/', authenticateToken, authorize(STUDENT_MANAGEMENT_ROLES), async (r
     } catch (error) {
         console.error('Fetch All Students Error:', error);
         res.status(500).json({ message: 'Failed to retrieve student list.' });
+    }
+});
+
+/**
+ * @route   GET /api/students/refundable
+ * @desc    Get a list of all students with a positive refundable balance (overpaid).
+ * @access  Private (Admin, Finance)
+ */
+router.get('/refundable', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                s.student_id, 
+                s.first_name, 
+                s.last_name, 
+                s.roll_number,
+                -- Calculation: Total Paid (p.amount) - Total Invoiced (i.total_amount)
+                (COALESCE(SUM(p.amount), 0.00) - COALESCE(SUM(i.total_amount), 0.00)) AS refundable_balance
+            FROM students s
+            LEFT JOIN ${INVOICES_TABLE} i ON s.student_id = i.student_id
+            LEFT JOIN ${PAYMENTS_TABLE} p ON i.id = p.invoice_id
+            GROUP BY s.student_id, s.first_name, s.last_name, s.roll_number
+            HAVING (COALESCE(SUM(p.amount), 0.00) > COALESCE(SUM(i.total_amount), 0.00))
+            ORDER BY refundable_balance DESC;
+        `;
+        
+        const { rows } = await pool.query(query);
+        
+        // The client expects 'student_id', 'first_name', 'last_name', 'roll_number', and 'refundable_balance'
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('Refundable Students Fetch Error:', error);
+        // The detailed server error will be caught here
+        res.status(500).json({ message: 'Failed to retrieve students eligible for refund. Check the database column names.', error: error.message });
     }
 });
 

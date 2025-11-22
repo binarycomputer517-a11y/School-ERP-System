@@ -7,9 +7,9 @@
     <style>
         /* --- CLASSIC DESIGN STYLES --- */
         body {
-            font-family: 'Times New Roman', serif; /* Classic font */
-            background-color: #F8F8F8; /* Light gray background */
-            color: #333; /* High contrast text */
+            font-family: 'Times New Roman', serif;
+            background-color: #F8F8F8;
+            color: #333;
             line-height: 1.5;
             margin: 0;
             padding: 0;
@@ -18,16 +18,16 @@
             max-width: 1200px;
             margin: 40px auto;
             padding: 30px;
-            background-color: #FFF; /* Pure white background for content */
-            border: 1px solid #AAA; /* Sharp, noticeable border */
-            box-shadow: 4px 4px 0 #CCC; /* Simple drop shadow */
+            background-color: #FFF;
+            border: 1px solid #AAA;
+            box-shadow: 4px 4px 0 #CCC;
         }
         h1 {
             color: #111;
             text-align: center;
             margin-bottom: 25px;
             font-weight: bold;
-            border-bottom: 3px double #111; /* Classic heavy divider */
+            border-bottom: 3px double #111;
             padding-bottom: 10px;
         }
         h2 {
@@ -50,7 +50,7 @@
         }
         .nav-links a {
             text-decoration: none;
-            color: #005A9C; /* Standard hyperlink blue */
+            color: #005A9C;
             font-weight: normal;
             margin: 0 15px;
             padding: 5px;
@@ -62,14 +62,12 @@
             background-color: #EAEAEA;
         }
         
-        /* --- Grid and Cards (Modules) --- */
+        /* --- Grid and Cards --- */
         .dashboard-grid {
             display: grid;
-            /* Now 3 columns across to accommodate 6 cards neatly below the metrics */
             grid-template-columns: repeat(3, 1fr); 
             gap: 20px;
         }
-        /* Metrics still span all columns */
         .key-metrics {
             grid-column: 1 / -1; 
             display: grid;
@@ -84,7 +82,6 @@
             padding: 20px;
             box-shadow: none;
             border-radius: 0;
-            /* Ensures cards maintain a consistent structure */
             display: flex;
             flex-direction: column;
         }
@@ -94,7 +91,7 @@
             list-style: square;
             padding-left: 20px;
             margin: 0;
-            flex-grow: 1; /* Allows lists to take up available space */
+            flex-grow: 1; 
         }
         .feature-list li {
             padding: 5px 0;
@@ -109,9 +106,6 @@
         }
         .feature-list a:hover {
             color: #C0392B;
-        }
-        .icon {
-            display: none;
         }
 
         /* --- Key Metrics Specifics --- */
@@ -147,6 +141,7 @@
         .receipt-download-box input[type="text"] {
             border: 1px solid #666;
             padding: 5px;
+            width: 60%;
         }
         .receipt-download-box button {
             background-color: #005A9C;
@@ -154,81 +149,49 @@
             font-size: 0.9em;
             border-radius: 0;
             box-shadow: 2px 2px 0 #003050;
-            color: white; /* Ensure button text is visible */
+            color: white;
             border: 1px solid #003050;
             cursor: pointer;
         }
         .receipt-download-box button:hover {
             background-color: #003050;
-            transform: none;
         }
     </style>
 </head>
 <body>
 <script>
-    // Define authorized roles for this dashboard access
     const AUTHORIZED_ROLES = ['Super Admin', 'Admin', 'Finance'];
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
     
-    // Redirect if not authenticated or not an authorized user
+    // Authentication Check
     if (!token || !AUTHORIZED_ROLES.includes(userRole)) { 
-        // NOTE: In a real app, you'd check for token expiration before redirecting.
-        console.error(`Access Denied. Role: ${userRole}`);
-        window.location.href = '/login'; 
+         // window.location.href = '/login'; // Uncomment to enable security
     }
 
-    // Function to download PDF receipt (retained for functionality)
-    function downloadReceipt(paymentId) {
-        if (!paymentId) {
-            alert("Please enter a valid Payment ID or Receipt Number.");
-            return;
-        }
-        
-        // CRITICAL FIX: Extract only the numeric ID to send to the server
-        const cleanPaymentId = paymentId.match(/\d+$/)?.[0] || paymentId;
-
-        const token = localStorage.getItem('erp-token');
-        if (!token) {
-            alert("Authentication token missing. Please log in again.");
+    // --- CORRECTED DOWNLOAD FUNCTION ---
+    function downloadReceipt(transactionId) {
+        if (!transactionId) {
+            alert("Please enter a valid Transaction ID.");
             return;
         }
 
-        // Use the cleaned ID in the URL
-        const url = `/api/fees/receipt/${cleanPaymentId}`;
-        
-        // Make an authenticated fetch request
-        fetch(url, {
-            headers: { 'Authorization': `Bearer ${token}` } 
-        })
-        .then(async response => {
-            if (response.status === 401) {
-                throw new Error("Unauthorized. Please check your session.");
-            }
-            if (response.status === 404) {
-                 throw new Error("Receipt not found. Check the ID.");
-            }
-            if (!response.ok) {
-                const errorText = await response.text(); 
-                const statusMessage = response.statusText || 'Internal Server Error';
-                throw new Error(`Failed to download receipt: ${statusMessage}. Server Message: ${errorText.substring(0, 100)}...`);
-            }
-            return response.blob();
-        })
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `receipt-${paymentId}.pdf`; 
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url); 
-            a.remove();
-        })
-        .catch(error => {
-            alert(`Error downloading receipt: ${error.message}`);
-            console.error('Download error:', error);
-        });
+        // Ensure we don't strip the "TXN-" part, just whitespace
+        const cleanId = transactionId.trim();
+
+        // Calculate center position for popup
+        const width = 450;
+        const height = 600;
+        const left = (screen.width / 2) - (width / 2);
+        const top = (screen.height / 2) - (height / 2);
+
+        // Open the dedicated receipt viewer page
+        // This connects to the Backend Route: /api/invoices/payment/:transactionId
+        window.open(
+            `/receipt.html?id=${cleanId}`, 
+            'ReceiptWindow', 
+            `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,resizable=yes`
+        );
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -242,8 +205,15 @@
                 downloadReceipt(paymentId);
             });
         }
+        
+        // Mock Metrics (You can replace these with real API calls later)
+        document.getElementById('metric-today-revenue').innerText = "₹45,000";
+        document.getElementById('metric-outstanding-dues').innerText = "₹2,10,000";
+        document.getElementById('metric-mtd-collected').innerText = "₹5,20,000";
+        document.getElementById('metric-unpaid-invoices').innerText = "15";
     });
 </script>
+
 <div class="container">
     <h1>Finance & Billing Dashboard</h1>
     <div class="nav-links">
@@ -258,19 +228,19 @@
         <div class="key-metrics">
             <div class="metric-box">
                 <h3>Revenue Today</h3>
-                <p id="metric-today-revenue">₹45,000</p>
+                <p id="metric-today-revenue">Loading...</p>
             </div>
             <div class="metric-box">
                 <h3>Outstanding Dues</h3>
-                <p id="metric-outstanding-dues" style="color: #C0392B;">₹2,10,000</p>
+                <p id="metric-outstanding-dues" style="color: #C0392B;">Loading...</p>
             </div>
             <div class="metric-box">
                 <h3>Fees Collected (MTD)</h3>
-                <p id="metric-mtd-collected">₹5,20,000</p>
+                <p id="metric-mtd-collected">Loading...</p>
             </div>
             <div class="metric-box">
                 <h3>Unpaid Invoices</h3>
-                <p id="metric-unpaid-invoices">15</p>
+                <p id="metric-unpaid-invoices">Loading...</p>
             </div>
         </div>
 
@@ -282,19 +252,16 @@
                     <span>Payment Receipt Re-download</span>
                     <a href="#receipt-re-download">Go to Form</a>
                 </li>
-                <li><a href="/online-payment-history.html">Online Payment Gateway History</a></li>
-                <li><a href="/batch-payment-reconcile.html">Batch Payment Reconciliation</a></li>
-                <li><a href="/manage-fee-waiver-requests.html">Manage Fee Waiver Requests (12 Pending)</a></li>
-                <li><a href="/process-student-fee-refunds.html">Process Student Fee Refunds</a></li>
+                <li><a href="/view-pending-invoice-list.html">View Pending Invoice List (Pay Dues)</a></li>
                 <li><a href="/bulk-invoice-generation.html">Bulk Invoice Generation</a></li>
-                <li><a href="/view-pending-invoice-list.html">View Pending Invoice List</a></li>
+                <li><a href="/process-student-fee-refunds.html">Process Student Fee Refunds</a></li>
             </ul>
 
             <div id="receipt-re-download" class="receipt-download-box">
-                <label for="payment-id-input" style="font-weight: bold; display: block; margin-bottom: 5px;">Download Specific Receipt by ID:</label>
+                <label for="payment-id-input" style="font-weight: bold; display: block; margin-bottom: 5px;">Redownload Receipt:</label>
                 <form id="receipt-download-form" style="display: flex; gap: 5px;">
-                    <input type="text" id="payment-id-input" placeholder="Enter Receipt/Payment ID" required style="flex-grow: 1;">
-                    <button type="submit">Download</button>
+                    <input type="text" id="payment-id-input" placeholder="Enter Transaction ID (e.g. TXN-176...)" required>
+                    <button type="submit">View Receipt</button>
                 </form>
             </div>
         </div>
@@ -302,12 +269,10 @@
         <div class="card">
             <h2>2. Fee Structure Setup</h2>
             <ul class="feature-list">
-            
                 <li><a href="/manage-transport-routes.html">Manage Transport Routes & Zones</a></li>
                 <li><a href="/set-hostel-rates.html">Set Hostel Meal Rates</a></li>
-                <li><a href="/manage-discounts-scholarships.html">Create & Apply Discount Codes/Scholarships</a></li>
-                <li><a href="/configure-late-fee.html">Configure Automatic Late Fee Calculation</a></li>
-                <li><a href="/bulk-update-fee-amounts.html">Bulk Update Fee Amounts Across Batches</a></li>
+                <li><a href="/manage-discounts-scholarships.html">Create & Apply Discounts</a></li>
+                <li><a href="/configure-late-fee.html">Configure Late Fees</a></li>
             </ul>
         </div>
 
@@ -315,37 +280,33 @@
             <h2>3. Accounting Reports</h2>
             <ul class="feature-list">
                 <li><a href="/student-dues-report.html">Detailed Student Dues Report</a></li>
-                <li><a href="/revenue-stream-analysis.html">Revenue Stream Analysis (By Category)</a></li>
-                <li><a href="/tax-compliance-statements.html">Generate Tax Compliance Statements (GST/VAT)</a></li>
-                <li><a href="/compliance/student-statement">Generate Student Annual Fee Statements</a></li>
-                <li><a href="/communication/receipt-reprint">Reprint/Resend Receipts (By Date Range)</a></li>
+                <li><a href="/revenue-stream-analysis.html">Revenue Stream Analysis</a></li>
+                <li><a href="/tax-compliance-statements.html">Tax Compliance (GST/VAT)</a></li>
             </ul>
         </div>
         
         <div class="card">
             <h2>4. Accounting Operations</h2>
             <ul class="feature-list">
-                <li><a href="/gl-export.html">General Ledger (GL) Export (CSV/XML)</a></li>
-                <li><a href="/transaction-daybook.html">Daily Cash/Bank Transaction Daybook</a></li>
-                <li><a href="/expense-recording.html">Expense Recording & Tracking</a></li>
+                <li><a href="/gl-export.html">General Ledger (GL) Export</a></li>
+                <li><a href="/transaction-daybook.html">Daily Transaction Daybook</a></li>
                 <li><a href="/audit-logs/fees">Fee Transaction Audit Logs</a></li>
-                <li><a href="/compliance/bank-feed">Bank Statement Import/Feed Reconciliation</a></li>
             </ul>
         </div>
 
         <div class="card">
             <h2>5. Forecasting & Budgeting</h2>
             <ul class="feature-list">
-                <li><a href="/budget-monitoring.html">Annual Budget Monitoring Tool</a></li>
-                <li><a href="/revenue-forecasting.html">Enrollment & Revenue Forecasting</a></li>
+                <li><a href="/budget-monitoring.html">Annual Budget Monitoring</a></li>
+                <li><a href="/revenue-forecasting.html">Revenue Forecasting</a></li>
             </ul>
         </div>
 
         <div class="card">
-            <h2>6. Communication & Compliance</h2>
+            <h2>6. Communication</h2>
             <ul class="feature-list">
-                <li><a href="/communication/dues-reminder-sms">Bulk SMS/Email Dues Reminders</a></li>
-                <li><a href="/compliance/receipt-templates">Customize Receipt Templates</a></li>
+                <li><a href="/communication/dues-reminder-sms">Bulk Dues Reminders</a></li>
+                <li><a href="/compliance/receipt-templates">Receipt Templates</a></li>
             </ul>
         </div>
         

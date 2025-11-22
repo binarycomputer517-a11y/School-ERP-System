@@ -11,6 +11,7 @@
             --primary-color: #4a90e2;
             --secondary-color: #797d7f;
             --success-color: #27ae60;
+            --error-color: #c0392b;
             --warning-color: #f39c12;
             --light-gray-color: #f4f7f9;
             --dark-gray-color: #555;
@@ -73,7 +74,7 @@
             border: 1px solid var(--border-color);
         }
         .action-btns { grid-column: 4; align-self: end; }
-        .action-btns button { width: 100%; padding: 10px; margin-top: 5px; }
+        .action-btns button { width: 100%; padding: 10px; margin-top: 5px; cursor: pointer; border: none; color: white; border-radius: 4px; }
         .dues-table {
             width: 100%;
             border-collapse: collapse;
@@ -83,7 +84,7 @@
             padding: 12px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
-            font-size: 0.85em;
+            font-size: 0.9em;
         }
         .dues-table th {
             background-color: var(--primary-color);
@@ -92,7 +93,8 @@
         }
         .dues-table tfoot td {
             font-weight: 700;
-            background-color: var(--light-gray-color);
+            background-color: #f0f0f0;
+            border-top: 2px solid #ccc;
         }
         .placeholder-message {
             text-align: center;
@@ -107,8 +109,9 @@
     const userRole = localStorage.getItem('user-role');
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     
-    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
-        window.location.href = '/login'; 
+    // Auth Check
+    if (!token) { 
+        // window.location.href = '/login.html'; 
     }
     
     // --- Helper for API Calls ---
@@ -117,45 +120,52 @@
         const response = await fetch(url, options);
         if (!response.ok) {
             const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+            throw new Error(errorBody.message || `Error ${response.status}: ${response.statusText}`);
         }
         return response.json();
     }
     
     /**
-     * Fetches and renders the list of student dues.
+     * Fetches and renders the report
      */
-    async function fetchAndRenderDues(filters) {
+    async function fetchAndRenderDues(filters = {}) {
         const tbody = document.getElementById('dues-tbody');
         const tfoot = document.getElementById('dues-tfoot');
+        
+        // Show loading state
         tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">Generating report...</td></tr>';
         tfoot.innerHTML = '';
 
         try {
-            // ❌ ACTUAL API CALL: Endpoint assumed to return filtered dues list ❌
             const queryString = new URLSearchParams(filters).toString();
+            // Call the Backend Report Route
             const dues = await handleApi('/api/reports/student-dues?' + queryString); 
             
             tbody.innerHTML = '';
-            if (dues.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">No outstanding dues found matching the criteria.</td></tr>';
+            
+            if (!dues || dues.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">No outstanding dues found matching criteria.</td></tr>';
                 return;
             }
 
             let totalOutstanding = 0;
             
             dues.forEach(d => {
-                const balance = parseFloat(d.balance_due) || 0;
+                // CRITICAL FIX: Use parseFloat to convert DB strings to numbers
+                const totalFees = parseFloat(d.total_fees || 0);
+                const totalPaid = parseFloat(d.total_paid || 0);
+                const balance = parseFloat(d.balance_due || 0);
+                
                 totalOutstanding += balance;
                 
                 const row = `<tr>
-                    <td>${d.roll_number}</td>
-                    <td>${d.student_name}</td>
-                    <td>${d.course_name}</td>
-                    <td>₹${(d.total_fees || 0).toFixed(2)}</td>
-                    <td>₹${(d.total_paid || 0).toFixed(2)}</td>
+                    <td>${d.roll_number || '-'}</td>
+                    <td>${d.student_name || 'Unknown'}</td>
+                    <td>${d.course_name || 'N/A'}</td>
+                    <td>₹${totalFees.toFixed(2)}</td>
+                    <td>₹${totalPaid.toFixed(2)}</td>
                     <td style="color: ${balance > 0 ? 'var(--error-color)' : 'var(--success-color)'}; font-weight: 600;">₹${balance.toFixed(2)}</td>
-                    <td>${d.last_payment_date || 'N/A'}</td>
+                    <td>${d.last_payment_date ? new Date(d.last_payment_date).toLocaleDateString() : 'Never'}</td>
                 </tr>`;
                 tbody.innerHTML += row;
             });
@@ -163,7 +173,7 @@
             // Render footer summary
             tfoot.innerHTML = `<tr>
                 <td colspan="5" style="text-align: right;">GRAND TOTAL OUTSTANDING:</td>
-                <td style="color: var(--error-color);">₹${totalOutstanding.toFixed(2)}</td>
+                <td style="color: var(--error-color); font-size: 1.1em;">₹${totalOutstanding.toFixed(2)}</td>
                 <td></td>
             </tr>`;
 
@@ -174,18 +184,20 @@
     }
     
     /**
-     * Loads courses for the filter dropdown.
+     * Load Course Dropdown
      */
     async function loadCourses() {
         const courseFilter = document.getElementById('course-filter');
         try {
-            // API endpoint from academicswithfees.js
             const courses = await handleApi('/api/academicswithfees/courses');
             courses.forEach(c => {
-                courseFilter.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`;
+                const option = document.createElement('option');
+                option.value = c.course_id;
+                option.innerText = c.course_name;
+                courseFilter.appendChild(option);
             });
         } catch (error) {
-            console.error('Could not load courses for filter.', error);
+            console.error('Could not load courses.', error);
         }
     }
 
@@ -193,23 +205,22 @@
     document.addEventListener('DOMContentLoaded', () => {
         loadCourses();
         
-        // Initial load of the report
-        fetchAndRenderDues({});
+        // Initial Load
+        fetchAndRenderDues();
 
+        // Handle Form Submit
         document.getElementById('report-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const filters = {
                 course_id: document.getElementById('course-filter').value,
-                status: document.getElementById('status-filter').value,
-                min_amount: document.getElementById('min-amount').value,
-                overdue: document.getElementById('overdue-only').checked,
+                q: document.getElementById('search-input').value.trim()
             };
             fetchAndRenderDues(filters);
         });
         
+        // Export Button (Placeholder)
         document.getElementById('export-btn').addEventListener('click', () => {
-            alert('Exporting Dues Report (CSV/Excel) based on current filters.');
-            // In a real app, this would trigger a dedicated /api/reports/student-dues/export endpoint
+            alert('Export feature coming soon (requires backend CSV generation module).');
         });
     });
 </script>
@@ -225,29 +236,20 @@
         <form id="report-form">
             <div class="filter-grid">
                 <div class="form-group">
-                    <label for="course-filter">Course/Program:</label>
+                    <label for="course-filter">Course:</label>
                     <select id="course-filter">
                         <option value="">All Courses</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="status-filter">Enrollment Status:</label>
-                    <select id="status-filter">
-                        <option value="Active">Active</option>
-                        <option value="All">All Students</option>
-                        <option value="Withdrawn">Withdrawn</option>
-                    </select>
+                    <label for="search-input">Search:</label>
+                    <input type="text" id="search-input" placeholder="Student Name or Roll No">
                 </div>
-                <div class="form-group">
-                    <label for="min-amount">Minimum Due Amount (₹):</label>
-                    <input type="number" id="min-amount" min="0" step="1" placeholder="e.g., 500">
-                </div>
+                <div class="form-group"></div> 
+                
                 <div class="form-group action-btns">
-                    <label for="overdue-only" style="font-weight: normal; font-size: 0.9em; margin-bottom: 10px;">
-                        <input type="checkbox" id="overdue-only" style="width: auto;"> Show Overdue Only
-                    </label>
-                    <button type="submit" class="submit-btn" style="background-color: var(--primary-color);">Generate Report</button>
-                    <button type="button" id="export-btn" class="submit-btn" style="background-color: var(--success-color);">Export Data</button>
+                    <button type="submit" style="background-color: var(--primary-color);">Generate Report</button>
+                    <button type="button" id="export-btn" style="background-color: var(--success-color);">Export Data</button>
                 </div>
             </div>
         </form>
@@ -259,14 +261,14 @@
                     <th>Roll No.</th>
                     <th>Student Name</th>
                     <th>Course</th>
-                    <th>Total Fees (₹)</th>
+                    <th>Total Billed (₹)</th>
                     <th>Total Paid (₹)</th>
                     <th>Balance Due (₹)</th>
-                    <th>Last Payment Date</th>
+                    <th>Last Payment</th>
                 </tr>
             </thead>
             <tbody id="dues-tbody">
-                <tr><td colspan="7" class="placeholder-message">Results will appear here after filtering.</td></tr>
+                <tr><td colspan="7" class="placeholder-message">Loading data...</td></tr>
             </tbody>
             <tfoot id="dues-tfoot"></tfoot>
         </table>

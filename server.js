@@ -92,7 +92,8 @@ const departmentRoutes = require('./routes/hr/departments');
 const mediaRouter = require('./routes/media');
 const vmsRouter = require('./routes/vms');
 const alumniRouter = require('./routes/alumni'); 
-
+const invoicesRouter = require('./routes/invoices');
+const reportsRoutes = require('./routes/reports');
 
 // --- PUBLIC API ROUTES (NO AUTH REQUIRED) ---
 app.use('/api/auth', authRoutes); 
@@ -121,11 +122,11 @@ app.use('/api/cafeteria', cafeteriaRouter);
 app.use('/api/messaging', messagingRouter);
 app.use('/api/library', libraryRouter);
 app.use('/api/staffhr', staffhrRouter);
-
+app.use('/api/reports', reportsRoutes);
 // FIX: Only one mount for feesRoutes is kept.
 app.use('/api/fees', feesRoutes); 
 app.use('/api/payments', paymentsRouter);
-
+app.use('/api/invoices', invoicesRouter);
 app.use('/api/subjects', subjectsRouter);
 app.use('/api/ptm', ptmRoutes);
 app.use('/api/hostel', hostelRouter); 

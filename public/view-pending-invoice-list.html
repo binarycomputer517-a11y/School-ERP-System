@@ -60,11 +60,13 @@
             background-color: #ecf0f1;
             border-radius: 5px;
             align-items: center;
+            flex-wrap: wrap;
         }
         .filter-controls select, .filter-controls input {
             padding: 8px;
             border-radius: 4px;
             border: 1px solid var(--border-color);
+            min-width: 150px;
         }
         #invoice-table {
             width: 100%;
@@ -84,146 +86,32 @@
         }
         .status-overdue { color: var(--error-color); font-weight: 600; }
         .status-pending { color: var(--warning-color); font-weight: 600; }
+        .status-partial { color: #17a2b8; font-weight: 600; }
+        
         .action-btn {
-            padding: 6px 10px;
+            padding: 6px 12px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-size: 0.85em;
             margin-right: 5px;
-            background-color: var(--secondary-color);
             color: white;
+            transition: 0.3s;
         }
+        .btn-view { background-color: var(--secondary-color); }
+        .btn-pay { background-color: var(--success-color); }
+        .btn-pay:hover { background-color: #219150; }
+        .btn-pay:disabled { background-color: #ccc; cursor: not-allowed; }
+
         .placeholder-message {
             text-align: center;
             padding: 40px 0;
             color: var(--secondary-color);
         }
+        .small-text { font-size: 0.8em; color: #888; }
     </style>
 </head>
 <body>
-<script>
-    const token = localStorage.getItem('erp-token');
-    const userRole = localStorage.getItem('user-role');
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
-    
-    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
-        window.location.href = '/login'; 
-    }
-    
-    // --- Helper for API Calls ---
-    async function handleApi(url, options = {}) {
-        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
-        }
-        return response.json();
-    }
-
-    // Function to load courses and populate the filter dropdown
-    async function loadCourses() {
-        const courseFilter = document.getElementById('course-filter');
-        const initialOption = courseFilter.querySelector('option[value=""]');
-        courseFilter.innerHTML = ''; 
-        courseFilter.appendChild(initialOption); // Keep the default "All Courses" option
-        
-        try {
-            // Use the established endpoint for fetching all courses
-            const courses = await handleApi('/api/academicswithfees/courses');
-            
-            courses.forEach(course => {
-                const option = document.createElement('option');
-                option.value = course.course_id;
-                option.textContent = `${course.course_name} (${course.course_code})`;
-                courseFilter.appendChild(option);
-            });
-            
-        } catch (error) {
-            console.error('Error loading courses for filter:', error);
-            const errorOption = document.createElement('option');
-            errorOption.value = '';
-            errorOption.textContent = 'Error loading courses';
-            courseFilter.appendChild(errorOption);
-        }
-    }
-
-
-    // Placeholder function for fetching pending invoices
-    async function fetchPendingInvoices(filters) {
-        const tbody = document.getElementById('invoice-tbody');
-        tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">Loading pending invoices...</td></tr>';
-        
-        try {
-            // ❌ ACTUAL API CALL ❌
-            const queryString = new URLSearchParams(filters).toString();
-            // This is the endpoint that was added to fees.js
-            const invoices = await handleApi('/api/invoices/pending?' + queryString);
-            
-            renderInvoices(invoices);
-
-        } catch (error) {
-            console.error('Error fetching pending invoices:', error);
-            // ⭐ NEW FIX: Add a more specific error message when a 404 occurs
-            let errorMessage = error.message;
-            if (errorMessage.includes('404 (Not Found)')) {
-                 errorMessage = 'API Endpoint not found. Ensure the server is running and the routing file (fees.js) is correctly loaded.';
-            }
-
-            tbody.innerHTML = `<tr><td colspan="8" class="placeholder-message" style="color: var(--error-color);">Error loading data: ${errorMessage}</td></tr>`;
-        }
-    }
-
-    // Placeholder function to render results
-    function renderInvoices(invoices) {
-        const tbody = document.getElementById('invoice-tbody');
-        tbody.innerHTML = '';
-        
-        if (invoices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">No pending invoices found.</td></tr>';
-            return;
-        }
-        
-        // This loop structure is ready for real data
-        invoices.forEach(inv => {
-            const isOverdue = new Date(inv.due_date) < new Date();
-            const statusClass = isOverdue ? 'status-overdue' : 'status-pending';
-            const statusText = isOverdue ? 'Overdue' : 'Pending';
-
-            const row = `<tr>
-                <td>${inv.invoice_number}</td>
-                <td>${inv.student_name} (${inv.roll_number})</td>
-                <td>${inv.course}</td>
-                <td>₹${inv.amount.toFixed(2)}</td>
-                <td>${new Date(inv.issue_date).toLocaleDateString()}</td>
-                <td>${new Date(inv.due_date).toLocaleDateString()}</td>
-                <td><span class="${statusClass}">${statusText}</span></td>
-                <td>
-                    <button class="action-btn" onclick="alert('Sending reminder for Invoice ${inv.invoice_number}')">Send Reminder</button>
-                    <button class="action-btn" onclick="alert('Viewing PDF for Invoice ${inv.invoice_number}')">View PDF</button>
-                </td>
-            </tr>`;
-            tbody.innerHTML += row;
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        loadCourses(); // Populate course list on load
-        
-        // Get filter values and load data when "Apply Filters" is clicked
-        document.querySelector('.filter-controls button').addEventListener('click', () => {
-            const filters = {
-                course_id: document.getElementById('course-filter').value,
-                status: document.getElementById('status-filter').value,
-                q: document.getElementById('search-input').value.trim()
-            };
-            fetchPendingInvoices(filters);
-        });
-        
-        fetchPendingInvoices({}); // Initial data load
-    });
-</script>
 
 <div class="container">
     <h1>View Pending Invoice List</h1>
@@ -237,7 +125,7 @@
             <label for="course-filter">Course:</label>
             <select id="course-filter">
                 <option value="">All Courses</option>
-                </select>
+            </select>
 
             <label for="status-filter">Status:</label>
             <select id="status-filter">
@@ -245,20 +133,20 @@
                 <option value="overdue">Overdue Only</option>
             </select>
             
-            <input type="text" id="search-input" placeholder="Search by Student or Invoice ID">
+            <input type="text" id="search-input" placeholder="Name or Roll No">
 
-            <button class="action-btn">Apply Filters</button>
+            <button class="action-btn btn-view" id="apply-filters-btn">Apply Filters</button>
         </div>
 
         <h2>Outstanding Invoices</h2>
         <table id="invoice-table">
             <thead>
                 <tr>
-                    <th>Invoice No.</th>
+                    <th>Ref ID</th>
                     <th>Student</th>
                     <th>Course</th>
                     <th>Amount Due (₹)</th>
-                    <th>Date Issued</th>
+                    <th>Issued</th>
                     <th>Due Date</th>
                     <th>Status</th>
                     <th>Actions</th>
@@ -270,5 +158,161 @@
         </table>
     </div>
 </div>
+
+<script>
+    // --- AUTHENTICATION CHECK ---
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    // Redirect if not logged in
+    if (!token) window.location.href = '/login.html';
+
+    // --- API HELPER ---
+    async function handleApi(url, options = {}) {
+        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
+        const response = await fetch(url, options);
+        if (!response.ok) {
+            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+            throw new Error(errorBody.message || `Error ${response.status}: ${response.statusText}`);
+        }
+        return response.json();
+    }
+
+    // --- 1. LOAD COURSES FOR FILTER ---
+    async function loadCourses() {
+        const courseFilter = document.getElementById('course-filter');
+        try {
+            const courses = await handleApi('/api/academicswithfees/courses');
+            courses.forEach(course => {
+                const option = document.createElement('option');
+                option.value = course.course_id;
+                option.textContent = `${course.course_name} (${course.course_code})`;
+                courseFilter.appendChild(option);
+            });
+        } catch (error) {
+            console.error('Error loading courses:', error);
+        }
+    }
+
+    // --- 2. FETCH DATA ---
+    async function fetchPendingInvoices(filters = {}) {
+        const tbody = document.getElementById('invoice-tbody');
+        tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">Loading...</td></tr>';
+        
+        try {
+            const queryString = new URLSearchParams(filters).toString();
+            const invoices = await handleApi('/api/invoices/pending?' + queryString);
+            renderInvoices(invoices);
+        } catch (error) {
+            console.error('Error fetching invoices:', error);
+            tbody.innerHTML = `<tr><td colspan="8" class="placeholder-message" style="color: var(--error-color);">Error: ${error.message}</td></tr>`;
+        }
+    }
+
+    // --- 3. RENDER TABLE ---
+    function renderInvoices(invoices) {
+        const tbody = document.getElementById('invoice-tbody');
+        tbody.innerHTML = '';
+        
+        if (!invoices || invoices.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">No pending invoices found.</td></tr>';
+            return;
+        }
+        
+        invoices.forEach(inv => {
+            // Calculate Status and Classes
+            const isOverdue = new Date(inv.due_date) < new Date();
+            let statusClass = isOverdue ? 'status-overdue' : 'status-pending';
+            let statusText = isOverdue ? 'Overdue' : inv.status;
+
+            if (inv.status === 'Partial') {
+                statusClass = 'status-partial';
+            }
+
+            // Safe Number Formatting
+            const amount = parseFloat(inv.amount_due || 0);
+            const shortId = inv.invoice_id ? inv.invoice_id.substring(0, 8).toUpperCase() : 'N/A';
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><span title="${inv.invoice_id}">#${shortId}</span></td>
+                <td>
+                    ${inv.student_name || 'Unknown'} 
+                    <div class="small-text">${inv.roll_number || ''}</div>
+                </td>
+                <td>${inv.course_name || 'N/A'}</td>
+                <td style="font-weight:bold; color: #333;">₹${amount.toFixed(2)}</td>
+                <td>${inv.bill_date ? new Date(inv.bill_date).toLocaleDateString() : '-'}</td>
+                <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</td>
+                <td><span class="${statusClass}">${statusText}</span></td>
+                <td>
+                    <button class="action-btn btn-view" onclick="viewDetails('${inv.invoice_id}')">View</button>
+                    <button class="action-btn btn-pay" onclick="payNow(this, '${inv.invoice_id}', ${amount})">Pay</button>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    // --- 4. PAYMENT FUNCTION (REAL) ---
+    async function payNow(btnElement, id, amountDue) {
+        if (!confirm(`Are you sure you want to collect Full Payment of ₹${amountDue} for this invoice?`)) {
+            return;
+        }
+
+        // UI Feedback: Disable button to prevent double clicks
+        const originalText = btnElement.innerText;
+        btnElement.innerText = 'Processing...';
+        btnElement.disabled = true;
+
+        try {
+            // Call Backend API to process payment
+            await handleApi('/api/invoices/pay', {
+                method: 'POST',
+                body: JSON.stringify({
+                    invoice_id: id,
+                    payment_amount: amountDue, 
+                    payment_method: 'Cash' 
+                })
+            });
+
+            alert('✅ Payment Recorded Successfully!');
+            
+            // Refresh list to remove paid invoice
+            document.getElementById('apply-filters-btn').click(); 
+
+        } catch (error) {
+            alert('❌ Payment Failed: ' + error.message);
+            btnElement.innerText = originalText;
+            btnElement.disabled = false;
+        }
+    }
+
+    // --- 5. VIEW DETAILS FUNCTION ---
+    function viewDetails(id) {
+        // Opens the Invoice Details page in a new tab
+        window.open(`/invoice-details.html?id=${id}`, '_blank');
+    }
+
+    // --- EVENT LISTENERS ---
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCourses(); 
+        
+        // Apply Filters Button Click
+        document.getElementById('apply-filters-btn').addEventListener('click', () => {
+            const filters = {
+                course_id: document.getElementById('course-filter').value,
+                status: document.getElementById('status-filter').value,
+                q: document.getElementById('search-input').value.trim()
+            };
+            fetchPendingInvoices(filters);
+        });
+        
+        // Initial Load
+        fetchPendingInvoices(); 
+    });
+</script>
+
 </body>
 </html>
