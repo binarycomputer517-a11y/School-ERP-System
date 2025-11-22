@@ -87,7 +87,7 @@
         }
         .status-success { color: var(--success-color); font-weight: 600; }
         .status-failed { color: var(--error-color); font-weight: 600; }
-        .status-pending { color: var(--warning-color); font-weight: 600; }
+        .status-pending { color: var(--secondary-color); font-weight: 600; }
         /* Placeholder style for loading state */
         .loading-message {
             text-align: center;
@@ -98,18 +98,21 @@
 </head>
 <body>
 <script>
-    // Authentication Check for Admin/Finance Role
+    // --- Global Variables/Constants ---
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
-    
-    // Redirect if not authenticated or not an Admin/Finance user (assuming Admin role)
-    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
-        window.location.href = '/login'; 
+    const API_BASE_PATH = '/api/payments/online-history'; // Base path for the API
+
+    // Redirect if not authenticated or not an Admin/Finance Role
+    if (!token || (userRole.toLowerCase() !== 'admin' && userRole.toLowerCase() !== 'finance')) { 
+        window.location.href = '/login.html'; // Corrected path
     }
     
+    // Helper function to safely convert a value to a number
+    const safeNum = (value) => value !== null && value !== undefined ? parseFloat(value) : 0.00;
+
     /**
      * Renders the online payment history table.
-     * In a real application, this function would be called after fetching data from the API.
      * @param {Array<Object>} history - Array of payment history objects.
      */
     function renderHistory(history) {
@@ -117,39 +120,53 @@
         tbody.innerHTML = '';
 
         if (!history || history.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="loading-message">No payment records found. Use the filters to search, or check the server connection.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="loading-message">No payment records found for the selected criteria.</td></tr>';
             return;
         }
         
         history.forEach(p => {
-            // Assume the status is available, e.g., p.status
-            let statusClass = p.status === 'Success' ? 'status-success' : p.status === 'Failed' ? 'status-failed' : 'status-pending';
+            // NOTE: The backend should provide status and transaction details
+            const paymentStatus = p.status || 'Pending';
+            let statusClass = 'status-pending';
+            if (paymentStatus.toLowerCase() === 'success') statusClass = 'status-success';
+            if (paymentStatus.toLowerCase() === 'failed') statusClass = 'status-failed';
+            
             const row = `<tr>
-                <td>${p.date}</td>
-                <td>${p.student} (${p.roll})</td>
-                <td>${p.transaction_id}</td>
-                <td>₹${p.amount.toFixed(2)}</td>
-                <td><span class="${statusClass}">${p.status}</span></td>
-                <td><button onclick="alert('Viewing gateway details for ${p.transaction_id}')">View Details</button></td>
+                <td>${new Date(p.payment_date).toLocaleString()}</td>
+                <td>${p.first_name} ${p.last_name} (${p.enrollment_no || p.roll_number})</td>
+                <td>${p.transaction_id || 'N/A'}</td>
+                <td>₹${safeNum(p.amount_paid).toFixed(2)}</td>
+                <td><span class="${statusClass}">${paymentStatus}</span></td>
+                <td><button onclick="alert('Viewing gateway details for ${p.transaction_id || p.id}')">View Details</button></td>
             </tr>`;
             tbody.innerHTML += row;
         });
     }
 
-    // Function to fetch data from the server (for future implementation)
+    /**
+     * Function to fetch data from the server
+     * @param {Object} filters - Query parameters for the API call
+     */
     async function fetchOnlinePaymentHistory(filters = {}) {
         const tbody = document.getElementById('history-tbody');
         tbody.innerHTML = '<tr><td colspan="6" class="loading-message">Loading online payment history...</td></tr>';
         
         try {
-            // ❌ Placeholder for actual API call ❌
             const query = new URLSearchParams(filters).toString();
-            const response = await fetch(`/api/payments/online-history?${query}`, { 
+            
+            // This is the correct relative path to the new backend endpoint
+            const response = await fetch(`${API_BASE_PATH}?${query}`, { 
                 headers: { 'Authorization': `Bearer ${token}` } 
             });
 
+            if (response.status === 404) {
+                 // This should now be resolved by server.js mounting the payments router
+                 throw new Error(`Failed to fetch payments: Endpoint Not Found (404). Check server mounting.`);
+            }
+
             if (!response.ok) {
-                throw new Error(`Failed to fetch payments: ${response.statusText}`);
+                const errorText = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(`Failed to fetch payments: ${errorText.message}`);
             }
             const historyData = await response.json();
             renderHistory(historyData);
@@ -162,18 +179,22 @@
 
 
     document.addEventListener('DOMContentLoaded', () => {
-        // Initial load of history (will be an empty table or loading message until data is implemented)
+        // --- Initial Load ---
         fetchOnlinePaymentHistory(); 
         
-        // FUTURE IMPLEMENTATION: Event listener for the "Apply Filters" button
-        document.querySelector('.filter-controls button').addEventListener('click', () => {
-            const filters = {
-                startDate: document.getElementById('start-date-filter').value,
-                endDate: document.getElementById('end-date-filter').value,
-                status: document.getElementById('status-filter').value,
-            };
-            fetchOnlinePaymentHistory(filters);
-        });
+        // --- Event Listener for Filters ---
+        const applyFiltersButton = document.querySelector('.filter-controls button');
+        if (applyFiltersButton) {
+            applyFiltersButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                const filters = {
+                    startDate: document.getElementById('start-date-filter').value,
+                    endDate: document.getElementById('end-date-filter').value,
+                    status: document.getElementById('status-filter').value,
+                };
+                fetchOnlinePaymentHistory(filters);
+            });
+        }
     });
 </script>
 
@@ -186,7 +207,7 @@
     <div class="card">
         <h2>Transaction Log</h2>
         
-        <div class="filter-controls">
+        <form class="filter-controls">
             <label for="date-filter">Date Range:</label>
             <input type="date" id="start-date-filter">
             <label>to</label>
@@ -199,13 +220,13 @@
                 <option value="Pending">Pending</option>
                 <option value="Failed">Failed</option>
             </select>
-            <button>Apply Filters</button>
-        </div>
+            <button type="submit">Apply Filters</button>
+        </form>
 
         <table id="history-table">
             <thead>
                 <tr>
-                    <th>Date</th>
+                    <th>Date/Time</th>
                     <th>Student/Roll No</th>
                     <th>Gateway TXN ID</th>
                     <th>Amount (₹)</th>

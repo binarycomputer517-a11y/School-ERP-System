@@ -80,6 +80,7 @@ const assignmentsRouter = require('./routes/assignments');
 const staffhrRouter = require('./routes/staffhr');
 const messagingRouter = require('./routes/messaging');
 const cafeteriaRouter = require('./routes/cafeteria');
+const paymentsRouter = require('./routes/payments');
 const ptmRoutes = require('./routes/ptm');
 const dashboardRoutes = require('./routes/dashboard');
 const reportCardRouter = require('./routes/reportcard');
@@ -123,6 +124,7 @@ app.use('/api/staffhr', staffhrRouter);
 
 // FIX: Only one mount for feesRoutes is kept.
 app.use('/api/fees', feesRoutes); 
+app.use('/api/payments', paymentsRouter);
 
 app.use('/api/subjects', subjectsRouter);
 app.use('/api/ptm', ptmRoutes);
