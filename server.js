@@ -13,7 +13,6 @@ require('dotenv').config();
 // --- Custom Modules & Configuration ---
 const { initializeDatabase } = require('./database');
 const { startNotificationService } = require('./notificationService');
-// *** CRITICAL FIX: Destructure the correct key 'multerInstance' ***
 const { multerInstance } = require('./multerConfig'); 
 const { authenticateToken } = require('./authMiddleware'); // JWT Middleware
 
@@ -40,12 +39,11 @@ app.use(express.urlencoded({ extended: true }));
 
 // Serve static files (client assets) and uploads
 app.use(express.static(path.join(__dirname, 'public')));
-// The /uploads static route is crucial for accessing all uploaded files
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// CRITICAL FIX: Attach the initialized BASE Multer instance to the app object.
-app.set('upload', multerInstance); // <-- Uses the correctly imported 'multerInstance'
+// Attach the initialized BASE Multer instance to the app object.
+app.set('upload', multerInstance); 
 
 // ===================================
 // 3. API ROUTE DEFINITIONS
@@ -62,10 +60,10 @@ const academicsWithFeesRouter = require('./routes/academicswithfees');
 const teachersRoutes = require('./routes/teachers'); 
 const attendanceRouter = require('./routes/attendance'); 
 const noticesRouter = require('./routes/notices'); 
-const transportRouter = require('./routes/transport'); // Uses req.app.get('upload')
+const transportRouter = require('./routes/transport'); 
 const payrollRouter = require('./routes/payroll');
 const libraryRouter = require('./routes/library');
-const feesRoutes = require('./routes/fees');
+const feesRoutes = require('./routes/fees'); // Retain import for mount below
 const subjectsRouter = require('./routes/subjects');
 const activitiesRouter = require('./routes/clubsEvents'); 
 const onlineLearningRouter = require('./routes/onlineLearning');
@@ -77,7 +75,6 @@ const complianceRoutes = require('./routes/compliance');
 const sectionsRoutes = require('./routes/sections');
 const admissionRouter = require('./routes/admission');
 const coursesRouter = require('./routes/courses'); 
-// --- FIX: IMPORT THE ENQUIRIES ROUTER ---
 const enquiriesRouter = require('./routes/enquiries');
 const assignmentsRouter = require('./routes/assignments'); 
 const staffhrRouter = require('./routes/staffhr');
@@ -92,29 +89,22 @@ const hostelRouter = require('./routes/hostel');
 const erpInventoryAssetRouter = require('./routes/inventory-with-assets'); 
 const departmentRoutes = require('./routes/hr/departments');
 const mediaRouter = require('./routes/media');
-// VMS Routes (Needs a separate import if not already done, assuming it's called vmsRouter)
 const vmsRouter = require('./routes/vms');
-const alumniRouter = require('./routes/alumni'); // Import the alumni router
+const alumniRouter = require('./routes/alumni'); 
 
 
 // --- PUBLIC API ROUTES (NO AUTH REQUIRED) ---
-// Login, Register, Forgot Password Reset (Public routes for authentication)
 app.use('/api/auth', authRoutes); 
 app.use('/api/dashboard', dashboardRoutes); 
-
-// --- FIX: VMS ROUTES MUST BE PUBLIC ---
-// Host lookup and Visitor check-in must be mounted before authenticateToken.
 app.use('/api/users', userRoutes); 
-app.use('/api/vms', vmsRouter); 
+app.use('/api/vms', vmsRouter); // Public routes before authentication
 
 
 // --- PROTECTED API ROUTES (JWT AUTH REQUIRED) ---
-app.use('/api', authenticateToken); 
+app.use('/api', authenticateToken); // All routes below here require a valid token
 
 // All routes mounted here require a valid token
 app.use('/api/students', studentsRoutes);
-// NOTE: userRoutes is already mounted above, but protected endpoints within it 
-// must use authenticateToken internally.
 app.use('/api/timetable', timetableRoutes);
 app.use('/api/marks', marksRoutes);
 app.use('/api/academicswithfees', academicsWithFeesRouter);
@@ -130,7 +120,10 @@ app.use('/api/cafeteria', cafeteriaRouter);
 app.use('/api/messaging', messagingRouter);
 app.use('/api/library', libraryRouter);
 app.use('/api/staffhr', staffhrRouter);
-app.use('/api/fees', feesRoutes);
+
+// FIX: Only one mount for feesRoutes is kept.
+app.use('/api/fees', feesRoutes); 
+
 app.use('/api/subjects', subjectsRouter);
 app.use('/api/ptm', ptmRoutes);
 app.use('/api/hostel', hostelRouter); 
@@ -147,13 +140,11 @@ app.use('/api/certificates', certificatesRouter);
 app.use('/api/compliance', complianceRoutes);
 app.use('/api/sections', sectionsRoutes); 
 app.use('/api', erpInventoryAssetRouter); 
-// --- FIX: MOUNT THE ENQUIRIES ROUTER ---
 app.use('/api/enquiries', enquiriesRouter);
 app.use('/api/hr/departments', departmentRoutes);
-app.use('/api/fees', require('./routes/fees'));
 app.use('/api/media', mediaRouter);
-// --- NEW FIX: MOUNT THE ALUMNI ROUTER to fix the 404 error ---
-app.use('/api/alumni', alumniRouter); // Mount the alumni router at /api/alumni 
+app.use('/api/alumni', alumniRouter); 
+
 
 // ===================================
 // 4. PAGE SERVING & SPA ROUTING 
