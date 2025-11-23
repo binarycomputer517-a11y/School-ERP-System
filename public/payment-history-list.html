@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment History List | School ERP</title>
+    <style>
+        /* --- GLOBAL STYLES --- */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; margin: 0; padding: 0; }
+        .container { max-width: 1200px; margin: 30px auto; padding: 20px; background-color: #fff; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        
+        /* --- HEADER --- */
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        h1 { margin: 0; color: #2c3e50; }
+        .nav-link { text-decoration: none; color: #3498db; font-weight: 500; }
+
+        /* --- FILTERS SECTION --- */
+        .filter-section { display: flex; gap: 15px; background-color: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; align-items: flex-end; flex-wrap: wrap; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-size: 0.9em; margin-bottom: 5px; color: #666; }
+        .form-control { padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; }
+        .btn { padding: 9px 18px; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; transition: background 0.3s; }
+        .btn-primary { background-color: #3498db; color: white; }
+        .btn-primary:hover { background-color: #2980b9; }
+        .btn-secondary { background-color: #95a5a6; color: white; }
+        .btn-secondary:hover { background-color: #7f8c8d; }
+
+        /* --- DATA TABLE --- */
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #2c3e50; color: #fff; font-weight: 600; font-size: 0.95em; }
+        tr:hover { background-color: #f1f1f1; }
+        .amount-cell { font-weight: bold; color: #27ae60; }
+        .mode-badge { background-color: #e8f4fd; color: #3498db; border: 1px solid #bde0fe; padding: 3px 8px; border-radius: 4px; font-size: 0.85em; }
+        .text-center { text-align: center; }
+        .loading { color: #7f8c8d; font-style: italic; }
+        .no-data { color: #c0392b; font-weight: 500; }
+        .error-msg { color: red; font-weight: bold; }
+        
+        @media print { .filter-section, .nav-link, .action-col { display: none; } .container { box-shadow: none; border: none; } }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Payment History List</h1>
+        <a href="/finance-dashboard.html" class="nav-link">← Back to Dashboard</a>
+    </div>
+
+    <div class="filter-section">
+        <div class="form-group">
+            <label for="startDate">From Date</label>
+            <input type="date" id="startDate" class="form-control">
+        </div>
+        <div class="form-group">
+            <label for="endDate">To Date</label>
+            <input type="date" id="endDate" class="form-control">
+        </div>
+        <div class="form-group" style="flex-grow: 1;">
+            <label for="searchInput">Search Student / Receipt No</label>
+            <input type="text" id="searchInput" class="form-control" placeholder="Enter name, roll no, or receipt ID...">
+        </div>
+        <button class="btn btn-primary" onclick="fetchPaymentHistory()">Filter Records</button>
+        <button class="btn btn-secondary" onclick="exportToCSV()">Export CSV</button>
+    </div>
+
+    <div class="table-responsive">
+        <table id="paymentsTable">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Receipt No</th>
+                    <th>Student Name</th>
+                    <th>Roll No</th>
+                    <th>Class/Batch</th>
+                    <th>Mode</th>
+                    <th>Collected By</th>
+                    <th>Amount (₹)</th>
+                    <th class="action-col">Action</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr><td colspan="9" class="text-center loading">Loading real data from server...</td></tr>
+            </tbody>
+            <tfoot>
+                <tr style="background-color: #f9f9f9; font-weight: bold;">
+                    <td colspan="7" style="text-align: right;">Total Collected:</td>
+                    <td id="totalAmountDisplay">₹0.00</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+
+<script>
+    // --- CONFIGURATION ---
+    const API_BASE_URL = '/api'; 
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        // Set default date range (Current Month)
+        const date = new Date();
+        const firstDay = new Date(date.getFullYear(), date.getMonth(), 1);
+        const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+        
+        // Format to YYYY-MM-DD for input fields
+        document.getElementById('startDate').value = firstDay.toISOString().split('T')[0];
+        document.getElementById('endDate').value = lastDay.toISOString().split('T')[0];
+
+        fetchPaymentHistory();
+    });
+
+    // --- FETCH DATA FUNCTION ---
+    async function fetchPaymentHistory() {
+        const tbody = document.getElementById('tableBody');
+        const startDate = document.getElementById('startDate').value;
+        const endDate = document.getElementById('endDate').value;
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        const token = localStorage.getItem('erp-token');
+
+        if(!token) {
+            window.location.href = '/login.html';
+            return;
+        }
+
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center loading">Fetching records from database...</td></tr>';
+
+        try {
+            // Call the NEW backend route
+            const response = await fetch(`${API_BASE_URL}/fees/history?startDate=${startDate}&endDate=${endDate}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || "Failed to fetch data");
+            }
+
+            const data = await response.json();
+            
+            // Client-side filtering for search box
+            const filteredData = data.filter(p => {
+                const term = search.toLowerCase();
+                return (
+                    (p.student_name && p.student_name.toLowerCase().includes(term)) ||
+                    (p.receipt_number && p.receipt_number.toLowerCase().includes(term)) ||
+                    (p.roll_number && String(p.roll_number).toLowerCase().includes(term))
+                );
+            });
+
+            renderTable(filteredData);
+
+        } catch (error) {
+            console.error(error);
+            tbody.innerHTML = `<tr><td colspan="9" class="text-center error-msg">Error: ${error.message}</td></tr>`;
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('tableBody');
+        const totalDisplay = document.getElementById('totalAmountDisplay');
+        tbody.innerHTML = '';
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="text-center no-data">No payment records found for this period.</td></tr>';
+            totalDisplay.innerText = '₹0.00';
+            return;
+        }
+
+        let total = 0;
+
+        data.forEach(row => {
+            const amount = parseFloat(row.amount);
+            total += amount;
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>${new Date(row.payment_date).toLocaleDateString()}</td>
+                <td>${row.receipt_number}</td>
+                <td>${row.student_name}</td>
+                <td>${row.roll_number || '-'}</td>
+                <td>${row.course_name || '-'} / ${row.batch_name || '-'}</td>
+                <td><span class="mode-badge">${row.payment_mode}</span></td>
+                <td>${row.collected_by_name || 'System'}</td>
+                <td class="amount-cell">₹${amount.toFixed(2)}</td>
+                <td class="action-col">
+                    <button class="btn btn-primary" style="padding: 5px 10px; font-size: 12px;" onclick="viewReceipt('${row.payment_id}')">Receipt</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+        });
+
+        totalDisplay.innerText = `₹${total.toFixed(2)}`;
+    }
+
+    // --- VIEW RECEIPT ---
+    function viewReceipt(paymentId) {
+        const width = 450;
+        const height = 600;
+        const left = (screen.width / 2) - (width / 2);
+        const top = (screen.height / 2) - (height / 2);
+        const token = localStorage.getItem('erp-token');
+
+        // Fetch blob from API
+        fetch(`${API_BASE_URL}/fees/receipt/${paymentId}`, {
+             headers: { 'Authorization': `Bearer ${token}` }
+        })
+        .then(res => {
+            if(res.ok) return res.blob();
+            throw new Error('Receipt not generated or found.');
+        })
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            window.open(url, 'Receipt', `width=${width},height=${height},top=${top},left=${left}`);
+        })
+        .catch(err => alert(err.message));
+    }
+
+    // --- CSV EXPORT ---
+    function exportToCSV() {
+        const table = document.getElementById('paymentsTable');
+        let csv = [];
+        const rows = table.querySelectorAll("tr");
+        
+        for (let i = 0; i < rows.length; i++) {
+            let row = [], cols = rows[i].querySelectorAll("td, th");
+            // Exclude the last column (Actions)
+            for (let j = 0; j < cols.length - 1; j++) 
+                row.push('"' + cols[j].innerText + '"');
+            csv.push(row.join(","));        
+        }
+
+        const csvFile = new Blob([csv.join("\n")], {type: "text/csv"});
+        const downloadLink = document.createElement("a");
+        downloadLink.download = `payment_history_${new Date().toISOString().slice(0,10)}.csv`;
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = "none";
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+    }
+</script>
+
+</body>
+</html>

@@ -4,85 +4,139 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Transaction Daybook</title>
-    <link rel="stylesheet" href="/css/style.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
-        :root {
-            --primary-color: #4a90e2;
-            --success-color: #27ae60;
-            --error-color: #c0392b;
-            --light-gray-color: #f4f7f9;
-            --dark-gray-color: #555;
-            --border-color: #dfe6e9;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+
         body {
-            font-family: 'Poppins', sans-serif;
-            background-color: var(--light-gray-color);
-            color: var(--dark-gray-color);
-        }
-        .container {
-            max-width: 1200px;
-            margin: 30px auto;
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
             padding: 20px;
+            color: #333;
         }
-        .card {
-            background-color: #fff;
-            border-radius: 8px;
+
+        .container {
+            max-width: 1000px;
+            margin: 20px auto;
+            background: #fff;
             padding: 25px;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            border-top: 5px solid #C0392B; /* Red Theme */
         }
+
         .header-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
             margin-bottom: 20px;
         }
-        .filter-controls {
-            display: flex;
-            gap: 15px;
-            background: #ecf0f1;
+
+        h1 {
+            margin: 0;
+            color: #C0392B;
+            text-transform: uppercase;
+            font-size: 1.8rem;
+        }
+
+        .back-link {
+            text-decoration: none;
+            color: #3498db;
+            font-weight: 600;
+        }
+
+        /* Filter Box */
+        .filter-box {
+            background-color: #f1f1f1;
             padding: 15px;
             border-radius: 5px;
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
             margin-bottom: 20px;
         }
-        .filter-controls input, .filter-controls select {
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        input, select {
             padding: 8px;
             border: 1px solid #ccc;
             border-radius: 4px;
+            font-size: 1rem;
         }
-        .daybook-table {
+
+        .btn-view {
+            padding: 9px 20px;
+            background-color: #2980b9; /* Blue */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-view:hover { background-color: #1c5980; }
+
+        /* Table */
+        table {
             width: 100%;
             border-collapse: collapse;
+            margin-bottom: 20px;
         }
-        .daybook-table th, .daybook-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #eee;
-        }
-        .daybook-table th {
-            background-color: var(--primary-color);
+
+        thead {
+            background-color: #3498db; /* Blue Header */
             color: white;
         }
-        .type-income { color: var(--success-color); font-weight: bold; }
-        .type-expense { color: var(--error-color); font-weight: bold; }
-        
-        .summary-box {
-            margin-top: 20px;
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            font-size: 0.9rem;
+        }
+
+        th { font-weight: 600; text-transform: uppercase; font-size: 0.8rem; }
+        tr:hover { background-color: #f9f9f9; }
+
+        /* Badges */
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .badge-inc { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; } /* Income */
+        .badge-exp { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; } /* Expense */
+
+        /* Footer Totals */
+        .footer-totals {
             display: flex;
             justify-content: flex-end;
             gap: 30px;
-            font-size: 1.1em;
+            font-size: 1.1rem;
             font-weight: bold;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 2px solid #eee;
         }
-        .action-btn {
-            background-color: var(--primary-color);
-            color: white;
-            border: none;
-            padding: 8px 15px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
+        .total-inc { color: #27ae60; }
+        .total-exp { color: #c0392b; }
+        .net-bal { color: #2c3e50; }
+
+        .loading { text-align: center; color: #666; padding: 20px; }
     </style>
 </head>
 <body>
@@ -90,106 +144,106 @@
 <div class="container">
     <div class="header-row">
         <h1>Daily Transaction Daybook</h1>
-        <a href="/finance-dashboard.html" style="text-decoration: none; color: var(--primary-color);">← Back to Dashboard</a>
+        <a href="/admin-dashboard.html" class="back-link">← Back to Dashboard</a>
     </div>
 
-    <div class="card">
-        <div class="filter-controls">
-            <div>
-                <label>Select Date:</label>
-                <input type="date" id="daybook-date">
-            </div>
-            <div>
-                <label>Account/Mode:</label>
-                <select id="account-filter">
-                    <option value="All">All Accounts</option>
-                    <option value="Cash">Cash</option>
-                    <option value="Bank Transfer">Bank Transfer</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="UPI">UPI</option>
-                </select>
-            </div>
-            <div style="align-self: flex-end;">
-                <button class="action-btn" onclick="loadDaybook()">View Daybook</button>
-            </div>
+    <div class="filter-box">
+        <div class="form-group">
+            <label for="daybookDate">Select Date:</label>
+            <input type="date" id="daybookDate">
         </div>
-
-        <table class="daybook-table">
-            <thead>
-                <tr>
-                    <th>Txn ID</th>
-                    <th>Category</th>
-                    <th>Description / Payer</th>
-                    <th>Mode</th>
-                    <th>Amount (₹)</th>
-                    <th>Type</th>
-                </tr>
-            </thead>
-            <tbody id="daybook-body">
-                <tr><td colspan="6" style="text-align:center;">Select a date to view transactions.</td></tr>
-            </tbody>
-        </table>
-
-        <div class="summary-box">
-            <div>Total Income: <span id="total-income" style="color: var(--success-color);">₹0.00</span></div>
-            <div>Total Expense: <span id="total-expense" style="color: var(--error-color);">₹0.00</span></div>
-            <div>Net Balance: <span id="net-balance">₹0.00</span></div>
+        <div class="form-group">
+            <label for="accountMode">Account/Mode:</label>
+            <select id="accountMode">
+                <option value="All">All Accounts</option>
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="UPI">UPI</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+            </select>
         </div>
+        <button class="btn-view" onclick="loadDaybook()">View Daybook</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Txn ID</th>
+                <th>Category</th>
+                <th>Description / Payer</th>
+                <th>Mode</th>
+                <th>Amount (₹)</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody id="daybookBody">
+            <tr><td colspan="6" class="loading">Select a date and click View.</td></tr>
+        </tbody>
+    </table>
+
+    <div class="footer-totals">
+        <span class="total-inc">Total Income: ₹<span id="sumIncome">0.00</span></span>
+        <span class="total-exp">Total Expense: ₹<span id="sumExpense">0.00</span></span>
+        <span class="net-bal">Net Balance: ₹<span id="sumNet">0.00</span></span>
     </div>
 </div>
 
 <script>
+    const API_BASE_URL = '/api';
     const token = localStorage.getItem('erp-token');
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
 
-    // Set today's date by default
-    document.getElementById('daybook-date').valueAsDate = new Date();
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        if(!token) window.location.href = '/login.html';
+        
+        // Set today's date
+        document.getElementById('daybookDate').valueAsDate = new Date();
+        loadDaybook();
+    });
 
     async function loadDaybook() {
-        const date = document.getElementById('daybook-date').value;
-        const account = document.getElementById('account-filter').value;
-        const tbody = document.getElementById('daybook-body');
-        
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+        const dateInput = document.getElementById('daybookDate').value;
+        const modeFilter = document.getElementById('accountMode').value;
+        const tbody = document.getElementById('daybookBody');
+
+        if (!dateInput) {
+            alert("Please select a date.");
+            return;
+        }
+
+        tbody.innerHTML = '<tr><td colspan="6" class="loading">Fetching transactions...</td></tr>';
 
         try {
-            const response = await fetch(`/api/reports/daybook?date=${date}&account=${account}`, {
-                headers: authHeaders
+            // 1. Fetch Income (Fees) for the selected Date
+            const feesRes = await fetch(`${API_BASE_URL}/fees/history?startDate=${dateInput}&endDate=${dateInput}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
             });
             
-            if (!response.ok) throw new Error('Failed to load data');
-            
-            const transactions = await response.json();
-            
-            tbody.innerHTML = '';
-            if (transactions.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No transactions found for this date.</td></tr>';
-                updateTotals(0, 0);
-                return;
+            if (!feesRes.ok) throw new Error("Failed to fetch data");
+            const feesData = await feesRes.json();
+
+            // 2. Map Data to Transactions
+            let transactions = feesData.map(f => ({
+                id: f.receipt_number || f.payment_id || 'N/A',
+                category: 'Fee Collection',
+                desc: `${f.student_name} (${f.roll_number || 'N/A'}) - ${f.course_name}`,
+                mode: f.payment_mode,
+                amount: parseFloat(f.amount),
+                type: 'Income'
+            }));
+
+            // (Optional) Add Expenses logic here later
+            // transactions.push(...expenseData);
+
+            // 3. Filter by Mode (Case Insensitive Fix)
+            if (modeFilter !== 'All') {
+                transactions = transactions.filter(t => 
+                    t.mode && t.mode.toLowerCase() === modeFilter.toLowerCase()
+                );
             }
 
-            let income = 0;
-            let expense = 0;
-
-            transactions.forEach(txn => {
-                const amt = parseFloat(txn.amount);
-                if (txn.type === 'Income') income += amt;
-                else expense += amt;
-
-                const row = `
-                    <tr>
-                        <td>${txn.id || '-'}</td>
-                        <td>${txn.category}</td>
-                        <td>${txn.payer_payee || txn.remarks || '-'}</td>
-                        <td>${txn.payment_mode}</td>
-                        <td>₹${amt.toFixed(2)}</td>
-                        <td class="${txn.type === 'Income' ? 'type-income' : 'type-expense'}">${txn.type}</td>
-                    </tr>
-                `;
-                tbody.innerHTML += row;
-            });
-
-            updateTotals(income, expense);
+            // 4. Render & Calculate
+            renderTable(transactions);
 
         } catch (error) {
             console.error(error);
@@ -197,14 +251,44 @@
         }
     }
 
-    function updateTotals(inc, exp) {
-        document.getElementById('total-income').innerText = `₹${inc.toFixed(2)}`;
-        document.getElementById('total-expense').innerText = `₹${exp.toFixed(2)}`;
-        document.getElementById('net-balance').innerText = `₹${(inc - exp).toFixed(2)}`;
-    }
+    function renderTable(data) {
+        const tbody = document.getElementById('daybookBody');
+        tbody.innerHTML = '';
 
-    // Load automatically on open
-    loadDaybook();
+        let totalIncome = 0;
+        let totalExpense = 0;
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No transactions found for this date.</td></tr>';
+        } else {
+            data.forEach(txn => {
+                if (txn.type === 'Income') totalIncome += txn.amount;
+                if (txn.type === 'Expense') totalExpense += txn.amount;
+
+                const badgeClass = txn.type === 'Income' ? 'badge-inc' : 'badge-exp';
+                
+                // Ensure ID doesn't break layout if too long
+                const displayId = txn.id.length > 15 ? txn.id.substring(0, 12) + '...' : txn.id;
+
+                const row = `
+                    <tr>
+                        <td title="${txn.id}">${displayId}</td>
+                        <td>${txn.category}</td>
+                        <td>${txn.desc}</td>
+                        <td>${txn.mode}</td>
+                        <td style="font-weight:bold;">₹${txn.amount.toFixed(2)}</td>
+                        <td><span class="badge ${badgeClass}">${txn.type}</span></td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Update Totals
+        document.getElementById('sumIncome').innerText = totalIncome.toFixed(2);
+        document.getElementById('sumExpense').innerText = totalExpense.toFixed(2);
+        document.getElementById('sumNet').innerText = (totalIncome - totalExpense).toFixed(2);
+    }
 </script>
 
 </body>

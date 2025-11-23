@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -106,6 +107,15 @@
             padding: 20px 0;
             color: var(--dark-gray-color);
         }
+        .btn-delete {
+            background-color: var(--error-color);
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body>
@@ -114,8 +124,11 @@
     const userRole = localStorage.getItem('user-role');
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     
+    // [FIXED API BASE URL] Pointing to /api/fees/hostel...
+    const API_BASE = '/api/fees/hostel/rates';
+
     if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
-        window.location.href = '/login'; 
+        window.location.href = '/login.html'; 
     }
     
     // --- Helper for API Calls ---
@@ -130,15 +143,15 @@
     }
     
     /**
-     * Fetches and renders existing hostel rate structures.
+     * Fetch and render existing rates
      */
     async function fetchAndRenderRates() {
         const tbody = document.getElementById('rates-tbody');
         tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">Loading existing rates...</td></tr>';
 
         try {
-            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of defined rates ❌
-            const rates = await handleApi('/api/hostel/rates'); 
+            // [FIXED URL]
+            const rates = await handleApi(API_BASE); 
             
             tbody.innerHTML = '';
             if (rates.length === 0) {
@@ -150,9 +163,11 @@
                 const row = `<tr>
                     <td>${rate.rate_name}</td>
                     <td>${rate.room_type}</td>
-                    <td>₹${(rate.room_fee || 0).toFixed(2)} / Month</td>
-                    <td>₹${(rate.meal_fee || 0).toFixed(2)} / Month</td>
-                    <td><button onclick="editRate(${rate.id})">Edit</button></td>
+                    <td>₹${(parseFloat(rate.room_fee) || 0).toFixed(2)}</td>
+                    <td>₹${(parseFloat(rate.meal_fee) || 0).toFixed(2)}</td>
+                    <td>
+                        <button class="btn-delete" onclick="deleteRate('${rate.id}')">Delete</button>
+                    </td>
                 </tr>`;
                 tbody.innerHTML += row;
             });
@@ -164,24 +179,19 @@
     }
 
     /**
-     * Handles form submission for creating or updating a rate.
+     * Submit new rate
      */
     async function submitRate(formData) {
         const submitBtn = document.getElementById('submit-btn');
         submitBtn.disabled = true;
 
-        const rateId = formData.id;
-        const isUpdate = !!rateId;
-        const method = isUpdate ? 'PUT' : 'POST';
-        const url = isUpdate ? `/api/hostel/rates/${rateId}` : '/api/hostel/rates';
-
         try {
-            // ❌ ACTUAL API CALL for submission ❌
-            await handleApi(url, { method: method, body: JSON.stringify(formData) });
+            // [FIXED URL]
+            await handleApi(API_BASE, { method: 'POST', body: JSON.stringify(formData) });
             
-            alert(`✅ Hostel rate ${isUpdate ? 'updated' : 'created'} successfully!`);
+            alert(`✅ Hostel rate created successfully!`);
             document.getElementById('rate-form').reset();
-            fetchAndRenderRates(); // Refresh list
+            fetchAndRenderRates(); 
 
         } catch (error) {
             alert(`❌ Error saving rate: ${error.message}`);
@@ -190,10 +200,19 @@
         }
     }
 
-    // Placeholder for editing a rate (will load form with data)
-    function editRate(rateId) {
-        alert(`Loading Rate ID ${rateId} for editing (requires another API call to fetch single item).`);
-        // In a real app: fetch single rate, populate form inputs, change button text.
+    /**
+     * Delete rate
+     */
+    async function deleteRate(id) {
+        if(!confirm("Are you sure you want to delete this rate?")) return;
+        
+        try {
+            // [FIXED URL]
+            await handleApi(`${API_BASE}/${id}`, { method: 'DELETE' });
+            fetchAndRenderRates();
+        } catch (error) {
+            alert(`Error deleting: ${error.message}`);
+        }
     }
 
     document.addEventListener('DOMContentLoaded', () => {
@@ -202,7 +221,6 @@
         document.getElementById('rate-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const formData = {
-                id: document.getElementById('rate-id').value,
                 rate_name: document.getElementById('rate-name').value,
                 room_type: document.getElementById('room-type').value,
                 room_fee: parseFloat(document.getElementById('room-fee').value),
@@ -276,3 +294,4 @@
 </div>
 </body>
 </html>
+```
