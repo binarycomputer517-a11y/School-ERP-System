@@ -9,6 +9,7 @@ const REPORT_VIEW_ROLES = ['admin', 'finance', 'super admin'];
 // =========================================================
 // 1. GET STUDENT DUES REPORT
 // Route: /api/reports/student-dues
+// FIXED: Changed i.amount_paid to i.paid_amount
 // =========================================================
 router.get('/student-dues', authenticateToken, authorize(REPORT_VIEW_ROLES), async (req, res) => {
     const { course_id, q } = req.query; 
@@ -20,8 +21,8 @@ router.get('/student-dues', authenticateToken, authorize(REPORT_VIEW_ROLES), asy
                 COALESCE(u.full_name, s.first_name || ' ' || s.last_name) as student_name,
                 c.course_name,
                 SUM(i.total_amount) as total_fees,
-                SUM(COALESCE(i.amount_paid, 0)) as total_paid,
-                (SUM(i.total_amount) - SUM(COALESCE(i.amount_paid, 0))) as balance_due,
+                SUM(COALESCE(i.paid_amount, 0)) as total_paid,
+                (SUM(i.total_amount) - SUM(COALESCE(i.paid_amount, 0))) as balance_due,
                 (
                     SELECT MAX(payment_date) 
                     FROM fee_payments fp 
@@ -53,7 +54,7 @@ router.get('/student-dues', authenticateToken, authorize(REPORT_VIEW_ROLES), asy
 
         query += ` 
             GROUP BY s.roll_number, u.full_name, s.first_name, s.last_name, c.course_name, u.id
-            HAVING (SUM(i.total_amount) - SUM(COALESCE(i.amount_paid, 0))) > 0
+            HAVING (SUM(i.total_amount) - SUM(COALESCE(i.paid_amount, 0))) > 0
             ORDER BY balance_due DESC
         `;
 
@@ -93,7 +94,7 @@ router.get('/daybook', authenticateToken, authorize(REPORT_VIEW_ROLES), async (r
             LEFT JOIN student_invoices si ON fp.invoice_id = si.id
             LEFT JOIN users u ON si.student_id = u.id
             LEFT JOIN students s ON u.id = s.user_id
-            WHERE fp.payment_date = $1::date
+            WHERE fp.payment_date::date = $1::date
         `;
         
         const params = [date];
@@ -103,7 +104,6 @@ router.get('/daybook', authenticateToken, authorize(REPORT_VIEW_ROLES), async (r
             params.push(account);
         }
 
-        // FIXED: Sort by transaction_id (since it contains timestamp) instead of created_at
         incomeQuery += ` ORDER BY fp.transaction_id DESC`;
 
         const result = await pool.query(incomeQuery, params);

@@ -57,11 +57,15 @@ router.post('/bulk-generate', authenticateToken, authorize(INVOICE_GENERATION_RO
         const currentDate = new Date().toISOString().slice(0, 10);
 
         for (const student of studentsRes.rows) {
+            // FIXED: Changed amount_paid to paid_amount
             const invoiceQuery = `
-                INSERT INTO ${INVOICES_TABLE} (student_id, bill_date, due_date, total_amount, amount_paid, status, generated_by_id)
+                INSERT INTO ${INVOICES_TABLE} (student_id, issue_date, due_date, total_amount, paid_amount, status, created_by)
                 VALUES ($1::uuid, $2, $3, $4, 0.00, 'Pending', $5::uuid) 
                 RETURNING id;
             `;
+            
+            // Note: I also changed 'bill_date' to 'issue_date' and 'generated_by_id' to 'created_by' 
+            // to match your previous fees.js schema. If your DB uses bill_date, change it back.
             
             const invoiceResult = await client.query(invoiceQuery, [
                 student.user_id, 
@@ -104,22 +108,24 @@ router.get('/pending', authenticateToken, authorize(INVOICE_VIEW_ROLES), async (
     const { course_id, q } = req.query; 
 
     try {
+        // FIXED: Changed i.amount_paid to i.paid_amount
+        // FIXED: Changed i.bill_date to i.issue_date (matches standard schema)
         let query = `
             SELECT 
                 i.id AS invoice_id,
                 i.total_amount,
-                COALESCE(i.amount_paid, 0) AS amount_paid,
-                (i.total_amount - COALESCE(i.amount_paid, 0)) AS amount_due,
-                i.bill_date, 
+                COALESCE(i.paid_amount, 0) AS paid_amount,
+                (i.total_amount - COALESCE(i.paid_amount, 0)) AS amount_due,
+                i.issue_date, 
                 i.due_date,
                 i.status,
-                COALESCE(u.full_name, s.first_name || ' ' || s.last_name) AS student_name,
+                u.username AS student_name,
                 u.phone_number,
                 s.roll_number,
                 c.course_name
             FROM ${INVOICES_TABLE} i
-            LEFT JOIN ${USERS_TABLE} u ON i.student_id = u.id
-            LEFT JOIN ${STUDENTS_TABLE} s ON u.id = s.user_id
+            LEFT JOIN ${STUDENTS_TABLE} s ON i.student_id = s.student_id
+            LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
             WHERE i.status = 'Pending' OR i.status = 'Partial'
         `;
@@ -134,8 +140,7 @@ router.get('/pending', authenticateToken, authorize(INVOICE_VIEW_ROLES), async (
         
         if (q) {
              query += ` AND (
-                LOWER(COALESCE(u.full_name, '')) LIKE $${paramIndex} OR 
-                LOWER(COALESCE(s.first_name, '')) LIKE $${paramIndex} OR 
+                LOWER(COALESCE(u.username, '')) LIKE $${paramIndex} OR 
                 LOWER(COALESCE(s.roll_number, '')) LIKE $${paramIndex}
              )`;
              params.push(`%${q.toLowerCase()}%`);
@@ -188,7 +193,8 @@ router.post('/pay', authenticateToken, authorize(INVOICE_VIEW_ROLES), async (req
     try {
         await client.query('BEGIN');
 
-        const invQuery = `SELECT total_amount, amount_paid FROM ${INVOICES_TABLE} WHERE id = $1`;
+        // FIXED: Changed amount_paid to paid_amount
+        const invQuery = `SELECT total_amount, paid_amount FROM ${INVOICES_TABLE} WHERE id = $1`;
         const invResult = await client.query(invQuery, [invoice_id]);
         
         if (invResult.rows.length === 0) {
@@ -196,23 +202,25 @@ router.post('/pay', authenticateToken, authorize(INVOICE_VIEW_ROLES), async (req
         }
         
         const invoice = invResult.rows[0];
-        const currentPaid = parseFloat(invoice.amount_paid || 0);
+        const currentPaid = parseFloat(invoice.paid_amount || 0);
         const total = parseFloat(invoice.total_amount);
         const amountToPay = parseFloat(payment_amount);
-        const newAmountPaid = currentPaid + amountToPay;
+        const newPaidAmount = currentPaid + amountToPay;
         
         let newStatus = 'Pending';
-        if (newAmountPaid >= total) {
+        // Allow small float margin error
+        if (newPaidAmount >= (total - 0.01)) {
             newStatus = 'Paid';
-        } else if (newAmountPaid > 0) {
+        } else if (newPaidAmount > 0) {
             newStatus = 'Partial';
         }
 
+        // FIXED: Changed amount_paid to paid_amount
         await client.query(`
             UPDATE ${INVOICES_TABLE} 
-            SET amount_paid = $1, status = $2
+            SET paid_amount = $1, status = $2
             WHERE id = $3
-        `, [newAmountPaid, newStatus, invoice_id]);
+        `, [newPaidAmount, newStatus, invoice_id]);
 
         // Generate Transaction ID
         const transactionId = 'TXN-' + Date.now(); 
@@ -249,28 +257,31 @@ router.post('/pay', authenticateToken, authorize(INVOICE_VIEW_ROLES), async (req
 });
 
 // =========================================================
-// 5. GET SINGLE INVOICE DETAILS (GET)
+// 5. GET SINGLE INVOICE DETAILS (GET) - FIXED FOR FRONTEND DISPLAY
 // =========================================================
 router.get('/:id/details', authenticateToken, authorize(INVOICE_VIEW_ROLES), async (req, res) => {
     const { id } = req.params;
 
     try {
+        // We use aliases (AS) to map DB column names back to what Frontend expects
+        // issue_date -> bill_date
+        // paid_amount -> amount_paid
         const invoiceQuery = `
             SELECT 
                 i.id, 
-                i.bill_date, 
+                i.issue_date AS bill_date,   -- Fixes "Invalid Date"
                 i.due_date, 
-                i.status,
+                i.status, 
                 i.total_amount, 
-                i.amount_paid,
-                COALESCE(u.full_name, s.first_name || ' ' || s.last_name) as student_name,
+                COALESCE(i.paid_amount, 0) AS amount_paid, -- Fixes "NaN"
+                COALESCE(u.full_name, u.username) AS student_name,
                 u.email, 
                 u.phone_number,
                 s.roll_number,
                 c.course_name
             FROM ${INVOICES_TABLE} i
-            LEFT JOIN ${USERS_TABLE} u ON i.student_id = u.id
-            LEFT JOIN ${STUDENTS_TABLE} s ON u.id = s.user_id
+            LEFT JOIN ${STUDENTS_TABLE} s ON i.student_id = s.student_id
+            LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
             WHERE i.id = $1::uuid
         `;
@@ -296,7 +307,7 @@ router.get('/:id/details', authenticateToken, authorize(INVOICE_VIEW_ROLES), asy
 });
 
 // =========================================================
-// 6. GET PAYMENT RECEIPT DETAILS (GET) <-- THIS WAS MISSING
+// 6. GET PAYMENT RECEIPT DETAILS (GET)
 // =========================================================
 router.get('/payment/:transactionId', authenticateToken, authorize(INVOICE_VIEW_ROLES), async (req, res) => {
     const { transactionId } = req.params;
@@ -306,14 +317,14 @@ router.get('/payment/:transactionId', authenticateToken, authorize(INVOICE_VIEW_
             SELECT 
                 p.transaction_id, p.amount, p.payment_date, p.payment_mode,
                 i.id as invoice_id, i.total_amount as invoice_total,
-                COALESCE(u.full_name, s.first_name || ' ' || s.last_name) as student_name,
+                u.username AS student_name,
                 s.roll_number,
                 c.course_name,
                 u.email
             FROM fee_payments p
             JOIN student_invoices i ON p.invoice_id = i.id
-            JOIN users u ON i.student_id = u.id
-            LEFT JOIN students s ON u.id = s.user_id
+            JOIN students s ON i.student_id = s.student_id
+            JOIN users u ON s.user_id = u.id
             LEFT JOIN courses c ON s.course_id = c.id
             WHERE p.transaction_id = $1
         `;

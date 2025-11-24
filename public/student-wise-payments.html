@@ -3,115 +3,92 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Ledger & Payments | School ERP</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <title>Student Ledger | School ERP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
-        :root {
-            --primary-color: #4a90e2;
-            --secondary-color: #797d7f;
-            --success-color: #2ecc71;
-            --danger-color: #e74c3c;
-            --light-gray: #f8f9fa;
-            --border-color: #dfe6e9;
+        body { background-color: #f8f9fa; padding: 30px; font-family: 'Segoe UI', sans-serif; }
+        .container { background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 1000px; }
+        .header-info { border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .table th { background-color: #34495e; color: white; text-align: center; }
+        .text-debit { color: #c0392b; font-weight: bold; text-align: right; }
+        .text-credit { color: #27ae60; font-weight: bold; text-align: right; }
+        .text-balance { color: #2980b9; font-weight: bold; text-align: right; }
+        .no-print { margin-bottom: 20px; }
+        
+        @media print {
+            .no-print { display: none !important; }
+            body { background-color: white; padding: 0; }
+            .container { box-shadow: none; border: none; padding: 0; }
         }
-        body { font-family: 'Poppins', sans-serif; background: var(--light-gray); color: #333; margin: 0; padding: 0; }
-        .container { max-width: 1100px; margin: 30px auto; padding: 20px; }
-        .nav-links { margin-bottom: 20px; }
-        .nav-links a { text-decoration: none; color: var(--primary-color); font-weight: 500; }
-
-        /* Card Styles */
-        .card { background: #fff; padding: 25px; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.05); margin-bottom: 25px; }
-        h1, h2 { margin-top: 0; color: #444; }
-        
-        /* Search Bar */
-        .search-container { display: flex; gap: 15px; align-items: end; background: #f1f4f6; padding: 20px; border-radius: 8px; }
-        .form-group { flex: 1; }
-        label { display: block; margin-bottom: 5px; font-weight: 500; font-size: 0.9em; }
-        select, input { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        button { padding: 10px 20px; background: var(--success-color); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; }
-        button:hover { opacity: 0.9; }
-
-        /* Ledger Table */
-        .ledger-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        .ledger-table th, .ledger-table td { padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border-color); }
-        .ledger-table th { background: #f1f4f6; font-weight: 600; color: #555; }
-        
-        /* Status Badges */
-        .badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 500; }
-        .badge-debit { background: #ffebee; color: #c62828; } /* Invoice */
-        .badge-credit { background: #e8f5e9; color: #2e7d32; } /* Payment */
-        
-        .amount-debit { color: var(--danger-color); font-weight: 600; }
-        .amount-credit { color: var(--success-color); font-weight: 600; }
-
-        /* Summary Box */
-        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 20px; }
-        .summary-item { background: #fff; border: 1px solid var(--border-color); padding: 15px; border-radius: 6px; text-align: center; }
-        .summary-item h3 { margin: 0 0 5px 0; font-size: 0.9em; color: #777; }
-        .summary-item p { margin: 0; font-size: 1.4em; font-weight: 600; color: #333; }
-
-        .placeholder-msg { text-align: center; color: #888; padding: 40px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
-        <h1>Student Ledger & Payments</h1>
-        <div class="nav-links">
-            <a href="/finance-dashboard.html">← Dashboard</a>
+    
+    <div class="no-print">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <a href="/finance-dashboard.html" class="btn btn-outline-secondary">← Back to Dashboard</a>
+            <button onclick="window.print()" class="btn btn-primary">🖨️ Print Ledger</button>
+        </div>
+
+        <div class="card p-3 bg-light border-0">
+            <label class="form-label fw-bold">Select Student to View Ledger:</label>
+            <select id="studentSelect" class="form-select" onchange="fetchLedger()">
+                <option value="">-- Loading Students... --</option>
+            </select>
         </div>
     </div>
 
-    <div class="card">
-        <div class="search-container">
-            <div class="form-group">
-                <label>Select Student</label>
-                <select id="student-select">
-                    <option value="">Loading students...</option>
-                </select>
+    <div id="ledgerReport" style="display:none;">
+        <div class="header-info">
+            <div class="row">
+                <div class="col-6">
+                    <h4 class="text-uppercase text-primary mb-1">School ERP System</h4>
+                    <p class="text-muted small mb-0">123 Education Lane, West Bengal</p>
+                    <p class="text-muted small">Phone: +91-9876543210</p>
+                </div>
+                <div class="col-6 text-end">
+                    <h5 id="stName" class="fw-bold">Student Name</h5>
+                    <p class="mb-0">Roll No: <span id="stRoll" class="fw-bold"></span></p>
+                    <p class="mb-0 text-muted"><span id="stBatch"></span></p>
+                    <p class="small text-muted mt-1">Date: <span id="genDate"></span></p>
+                </div>
             </div>
-            <div class="form-group" style="max-width: 150px;">
-                <label>Or Search Roll No</label>
-                <input type="text" id="roll-search" placeholder="Ex: 101">
-            </div>
-            <button onclick="loadLedger()">View Ledger</button>
-        </div>
-    </div>
-
-    <div id="ledger-content" style="display: none;">
-        <div class="summary-grid">
-            <div class="summary-item">
-                <h3>Total Billed (Invoices)</h3>
-                <p id="sum-billed">₹0.00</p>
-            </div>
-            <div class="summary-item">
-                <h3>Total Paid (Receipts)</h3>
-                <p id="sum-paid" style="color: var(--success-color);">₹0.00</p>
-            </div>
-            <div class="summary-item">
-                <h3>Current Balance Due</h3>
-                <p id="sum-balance" style="color: var(--danger-color);">₹0.00</p>
-            </div>
+            <h3 class="text-center mt-3 text-decoration-underline">Student Account Ledger</h3>
         </div>
 
-        <div class="card">
-            <h2>Transaction History</h2>
-            <table class="ledger-table">
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped">
                 <thead>
                     <tr>
                         <th>Date</th>
+                        <th>Ref No</th>
                         <th>Description</th>
-                        <th>Type</th>
-                        <th>Ref No.</th>
-                        <th>Debit (₹)</th>
-                        <th>Credit (₹)</th>
+                        <th>Debit (Bill)</th>
+                        <th>Credit (Paid)</th>
+                        <th>Balance</th>
                     </tr>
                 </thead>
-                <tbody id="ledger-tbody">
-                    </tbody>
+                <tbody id="ledgerBody"></tbody>
+                <tfoot class="table-light fw-bold">
+                    <tr>
+                        <td colspan="3" class="text-end">Grand Total:</td>
+                        <td class="text-end text-danger" id="totalDebit">0.00</td>
+                        <td class="text-end text-success" id="totalCredit">0.00</td>
+                        <td class="text-end text-primary" id="finalBalance">0.00</td>
+                    </tr>
+                </tfoot>
             </table>
+        </div>
+        
+        <div class="row mt-5 pt-4">
+            <div class="col-6 text-center">
+                <div style="border-top: 1px dashed #000; width: 60%; margin: 0 auto;">Parent Signature</div>
+            </div>
+            <div class="col-6 text-center">
+                <div style="border-top: 1px dashed #000; width: 60%; margin: 0 auto;">Accountant Signature</div>
+            </div>
         </div>
     </div>
 
@@ -119,138 +96,103 @@
 
 <script>
     const token = localStorage.getItem('erp-token');
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const API_BASE = '/api';
 
-    if (!token) window.location.href = '/login';
-
-    // 1. Init: Load Students
+    // 1. Load Student List
     async function loadStudents() {
         try {
-            const response = await fetch('/api/students', { headers: authHeaders });
-            const students = await response.json();
+            const res = await fetch(`${API_BASE}/students`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const students = await res.json();
             
-            const select = document.getElementById('student-select');
+            const select = document.getElementById('studentSelect');
             select.innerHTML = '<option value="">-- Select Student --</option>';
             
             students.forEach(s => {
-                const opt = document.createElement('option');
-                opt.value = s.student_id;
-                opt.text = `${s.first_name} ${s.last_name} (Roll: ${s.roll_number || 'N/A'})`;
-                select.appendChild(opt);
+                const option = document.createElement('option');
+                option.value = s.student_id;
+                option.text = `${s.first_name} ${s.last_name} (${s.enrollment_no})`;
+                select.appendChild(option);
             });
         } catch (error) {
-            console.error('Error loading students:', error);
+            console.error("Error loading students", error);
         }
     }
 
-    // 2. Load Ledger Logic
-    async function loadLedger() {
-        const studentId = document.getElementById('student-select').value;
-        const rollNo = document.getElementById('roll-search').value;
-        
-        // Basic validation logic
-        let targetId = studentId;
-        if (!targetId && !rollNo) return alert("Please select a student or enter a roll number.");
-
-        // If searching by roll, find ID first (Simplified for this example: assuming dropdown is selected)
-        if (!targetId && rollNo) {
-            alert("Please select from the dropdown for precise results.");
-            return; 
-        }
-
-        document.getElementById('ledger-content').style.display = 'none';
-        
-        try {
-            // Fetch 1: Invoices (Debits)
-            // Use /api/fees/... prefix
-            const invRes = await fetch(`/api/fees/invoices/student/${targetId}`, { headers: authHeaders });
-            const invoices = await invRes.json();
-
-            // Fetch 2: Payments (Credits) - From student summary
-            const payRes = await fetch(`/api/fees/student/${targetId}`, { headers: authHeaders });
-            const studentData = await payRes.json();
-            
-            // Safe Array Checks (Prevents "undefined" error)
-            const payments = studentData.payments || []; 
-            const invoiceList = Array.isArray(invoices) ? invoices : [];
-
-            // Merge & Transform Data
-            let ledger = [];
-
-            // Add Invoices (Debit)
-            invoiceList.forEach(inv => {
-                ledger.push({
-                    date: new Date(inv.issue_date),
-                    desc: `Invoice Generated`,
-                    type: 'DEBIT',
-                    ref: inv.invoice_number,
-                    amount: parseFloat(inv.total_amount),
-                    displayDate: inv.issue_date
-                });
-            });
-
-            // Add Payments (Credit)
-            payments.forEach(pay => {
-                ledger.push({
-                    date: new Date(pay.payment_date),
-                    desc: `Fee Payment (${pay.payment_mode})`,
-                    type: 'CREDIT',
-                    ref: pay.receipt_number || 'N/A',
-                    amount: parseFloat(pay.amount_paid),
-                    displayDate: pay.payment_date
-                });
-            });
-
-            // Sort by Date (Oldest First)
-            ledger.sort((a, b) => a.date - b.date);
-
-            // Render
-            renderLedger(ledger);
-            
-            // Update Summary from the consolidated API
-            document.getElementById('sum-billed').innerText = `₹${studentData.total_fees.toFixed(2)}`;
-            document.getElementById('sum-paid').innerText = `₹${studentData.total_paid.toFixed(2)}`;
-            document.getElementById('sum-balance').innerText = `₹${studentData.balance.toFixed(2)}`;
-            
-            document.getElementById('ledger-content').style.display = 'block';
-
-        } catch (error) {
-            console.error(error);
-            alert('Error fetching ledger data. See console.');
-        }
-    }
-
-    // 3. Render Table
-    function renderLedger(data) {
-        const tbody = document.getElementById('ledger-tbody');
-        tbody.innerHTML = '';
-
-        if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="6" class="placeholder-msg">No transactions found for this student.</td></tr>';
+    // 2. Fetch Ledger Data
+    async function fetchLedger() {
+        const studentId = document.getElementById('studentSelect').value;
+        if (!studentId) {
+            document.getElementById('ledgerReport').style.display = 'none';
             return;
         }
 
-        data.forEach(row => {
-            const dateStr = new Date(row.displayDate).toLocaleDateString('en-IN');
-            const isDebit = row.type === 'DEBIT';
+        try {
+            const res = await fetch(`${API_BASE}/fees/ledger/${studentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
             
-            const tr = `
+            if(!res.ok) throw new Error("Failed to fetch ledger data");
+            
+            const data = await res.json();
+            renderLedger(data);
+
+        } catch (error) {
+            alert("Error: " + error.message);
+        }
+    }
+
+    // 3. Render Logic
+    function renderLedger(data) {
+        const { student, ledger } = data;
+        const tbody = document.getElementById('ledgerBody');
+        
+        document.getElementById('ledgerReport').style.display = 'block';
+        document.getElementById('stName').innerText = student.username;
+        document.getElementById('stRoll').innerText = student.roll_number || 'N/A';
+        document.getElementById('stBatch').innerText = `${student.course_name || ''} ${student.batch_name ? '- ' + student.batch_name : ''}`;
+        document.getElementById('genDate').innerText = new Date().toLocaleDateString();
+
+        tbody.innerHTML = '';
+        let runningBalance = 0;
+        let sumDebit = 0;
+        let sumCredit = 0;
+
+        if (ledger.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center py-3">No transactions found for this student.</td></tr>';
+            return;
+        }
+
+        ledger.forEach(row => {
+            const debit = parseFloat(row.debit);
+            const credit = parseFloat(row.credit);
+            
+            // Balance Calculation: Previous Balance + New Bill - New Payment
+            runningBalance = runningBalance + debit - credit;
+            
+            sumDebit += debit;
+            sumCredit += credit;
+
+            tbody.innerHTML += `
                 <tr>
-                    <td>${dateStr}</td>
-                    <td>${row.desc}</td>
-                    <td><span class="badge ${isDebit ? 'badge-debit' : 'badge-credit'}">${row.type}</span></td>
-                    <td style="font-family:monospace; color:#666;">${row.ref}</td>
-                    <td class="amount-debit">${isDebit ? '₹' + row.amount.toFixed(2) : '-'}</td>
-                    <td class="amount-credit">${!isDebit ? '₹' + row.amount.toFixed(2) : '-'}</td>
+                    <td class="text-center">${new Date(row.date).toLocaleDateString('en-IN')}</td>
+                    <td class="text-center small">${row.ref_no}</td>
+                    <td>${row.description}</td>
+                    <td class="text-debit">${debit > 0 ? '₹' + debit.toFixed(2) : '-'}</td>
+                    <td class="text-credit">${credit > 0 ? '₹' + credit.toFixed(2) : '-'}</td>
+                    <td class="text-balance">₹${runningBalance.toFixed(2)}</td>
                 </tr>
             `;
-            tbody.innerHTML += tr;
         });
+
+        document.getElementById('totalDebit').innerText = '₹' + sumDebit.toFixed(2);
+        document.getElementById('totalCredit').innerText = '₹' + sumCredit.toFixed(2);
+        document.getElementById('finalBalance').innerText = '₹' + runningBalance.toFixed(2);
     }
 
     // Initialize
-    document.addEventListener('DOMContentLoaded', loadStudents);
-
+    loadStudents();
 </script>
 
 </body>
