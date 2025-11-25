@@ -329,12 +329,14 @@ router.delete('/:attendanceId', authenticateToken, authorize(['Super Admin', 'Ad
     }
 });
 
-// =================================================================
+/// =================================================================
 // 6. FILTER ENDPOINTS (Batches, Subjects, Departments)
 // =================================================================
-// ✅ FIX: Using ROSTER_VIEW_ROLES which now supports both "Teacher" and "teacher"
 
-router.get('/departments', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
+// ✅ FIX: Removed 'authorize(...)' so ANY logged-in user can load the dropdowns.
+// This prevents 403 errors when Students or Teachers try to select a batch/subject.
+
+router.get('/departments', authenticateToken, async (req, res) => {
     try {
         const query = `SELECT id, branch_name AS name FROM branches ORDER BY branch_name;`; 
         const { rows } = await pool.query(query);
@@ -344,7 +346,7 @@ router.get('/departments', authenticateToken, authorize(ROSTER_VIEW_ROLES), asyn
     }
 });
 
-router.get('/batches', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
+router.get('/batches', authenticateToken, async (req, res) => {
     try {
         const query = `SELECT id, batch_name AS name FROM batches ORDER BY batch_name;`; 
         const { rows } = await pool.query(query);
@@ -354,7 +356,7 @@ router.get('/batches', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (r
     }
 });
 
-router.get('/subjects', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
+router.get('/subjects', authenticateToken, async (req, res) => {
     try {
         const query = `SELECT id, subject_name, subject_code FROM subjects ORDER BY subject_name;`;
         const { rows } = await pool.query(query);
@@ -363,5 +365,6 @@ router.get('/subjects', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (
         res.status(500).json({ message: 'Failed to fetch subjects.', error: err.message });
     }
 });
+
 
 module.exports = router;
