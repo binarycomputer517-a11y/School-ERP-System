@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Logs | School ERP</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; padding: 20px; color: #333; }
+        
+        .container { max-width: 1100px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        
+        h2 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+        .btn-back { font-size: 0.8em; padding: 5px 15px; background: #95a5a6; color: white; text-decoration: none; border-radius: 4px; }
+        
+        /* Filter Section */
+        .filters { display: flex; gap: 15px; background: #f8f9fa; padding: 15px; border-radius: 6px; margin-bottom: 20px; align-items: flex-end; }
+        .form-group { display: flex; flex-direction: column; gap: 5px; }
+        .form-group label { font-size: 0.85em; font-weight: 600; color: #555; }
+        .form-group input { padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        .btn-filter { padding: 9px 20px; background: #2980b9; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500; }
+        .btn-filter:hover { background: #1f618d; }
+
+        /* Table */
+        .table-responsive { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
+        th { background: #34495e; color: white; text-align: left; padding: 12px; font-weight: 500; }
+        td { padding: 12px; border-bottom: 1px solid #eee; }
+        tr:hover { background-color: #f1f1f1; }
+
+        /* Badges */
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: 600; }
+        .badge-payment { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .badge-invoice { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        
+        .user-tag { font-weight: 600; color: #555; }
+        .timestamp { color: #777; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>
+        <span>🛡️ System Audit Logs (Finance)</span>
+        <a href="/finance-dashboard.html" class="btn-back">← Back</a>
+    </h2>
+
+    <div class="filters">
+        <div class="form-group">
+            <label>Start Date</label>
+            <input type="date" id="startDate">
+        </div>
+        <div class="form-group">
+            <label>End Date</label>
+            <input type="date" id="endDate">
+        </div>
+        <button class="btn-filter" onclick="loadLogs()">Search Logs</button>
+    </div>
+
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th width="18%">Timestamp</th>
+                    <th width="15%">User (Staff)</th>
+                    <th width="15%">Action Type</th>
+                    <th width="35%">Details</th>
+                    <th width="17%">Reference ID</th>
+                </tr>
+            </thead>
+            <tbody id="logsBody">
+                <tr><td colspan="5" style="text-align:center; padding: 20px;">Loading audit trail...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    // Correct API Base
+    const API_BASE = '/api/fees/audit-logs'; 
+
+    if (!token) window.location.href = '/login.html';
+
+    // Set Defaults (This Month)
+    const today = new Date();
+    document.getElementById('endDate').valueAsDate = today;
+    document.getElementById('startDate').valueAsDate = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    async function loadLogs() {
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        const tbody = document.getElementById('logsBody');
+
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px; color:#666;">Fetching data...</td></tr>';
+
+        try {
+            const res = await fetch(`${API_BASE}?startDate=${start}&endDate=${end}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) throw new Error("Failed to fetch logs");
+            const logs = await res.json();
+
+            tbody.innerHTML = '';
+
+            if (logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding: 20px;">No activity found in this period.</td></tr>';
+                return;
+            }
+
+            logs.forEach(log => {
+                const dateObj = new Date(log.timestamp);
+                const dateStr = dateObj.toLocaleDateString('en-IN');
+                const timeStr = dateObj.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
+
+                // Badge Logic
+                let badgeClass = 'badge-payment';
+                if (log.action_type === 'INVOICE_GENERATED') badgeClass = 'badge-invoice';
+
+                const row = `
+                    <tr>
+                        <td class="timestamp">
+                            ${dateStr}<br><small>${timeStr}</small>
+                        </td>
+                        <td class="user-tag">👤 ${log.performed_by || 'System'}</td>
+                        <td><span class="badge ${badgeClass}">${log.action_type.replace('_', ' ')}</span></td>
+                        <td>${log.details}</td>
+                        <td style="font-family: monospace; font-size: 0.9em;">${log.reference_id}</td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error(error);
+            tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red;">Error: ${error.message}</td></tr>`;
+        }
+    }
+
+    // Initial Load
+    document.addEventListener('DOMContentLoaded', loadLogs);
+</script>
+
+</body>
+</html>

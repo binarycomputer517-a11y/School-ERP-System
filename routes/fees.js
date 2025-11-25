@@ -454,31 +454,29 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
     }
 });
 
-
 // =========================================================
-// 3.3 RECEIPT GENERATION (PDF) - Supports UUID OR Transaction ID
+// 3.3 PROFESSIONAL RECEIPT GENERATION (A5 Landscape - Fixed Layout)
 // =========================================================
 router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
     const { idOrTxn } = req.params;
     try {
-        // 1. Determine if input is UUID or Transaction ID
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idOrTxn);
-        
-        let whereClause = '';
-        if (isUUID) {
-            whereClause = `p.id = $1::uuid`;
-        } else {
-            whereClause = `p.transaction_id = $1`; // Search by TXN String
-        }
+        let whereClause = isUUID ? `p.id = $1::uuid` : `p.transaction_id = $1`;
 
-        // 2. Fetch Payment Data
         const q = `
-            SELECT p.*, i.invoice_number, u.username, s.roll_number, c.course_name 
+            SELECT 
+                p.transaction_id, p.amount, p.payment_date, p.payment_mode, p.remarks,
+                i.invoice_number, i.total_amount as invoice_total, (i.total_amount - i.paid_amount) as due_balance,
+                u.username AS student_name, 
+                s.roll_number, 
+                c.course_name,
+                b.batch_name
             FROM ${DB.PAYMENTS} p 
             JOIN ${DB.INVOICES} i ON p.invoice_id=i.id 
             JOIN ${DB.STUDENTS} s ON i.student_id=s.student_id 
             JOIN ${DB.USERS} u ON s.user_id=u.id 
             LEFT JOIN ${DB.COURSES} c ON s.course_id=c.id 
+            LEFT JOIN ${DB.BATCHES} b ON s.batch_id=b.id
             WHERE ${whereClause}
         `;
         
@@ -486,33 +484,93 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         if (!rows[0]) return res.status(404).json({ message: 'Receipt Not Found' });
         const data = rows[0];
 
-        // 3. Generate PDF
+        // --- PDF SETUP ---
         const doc = new PDFDocument({ size: 'A5', layout: 'landscape', margin: 30 });
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename=Receipt-${data.transaction_id}.pdf`);
         doc.pipe(res);
 
-        // Design
-        doc.rect(20, 20, 555, 380).stroke();
-        doc.font('Times-Bold').fontSize(16).text('SCHOOL NAME', { align: 'center' });
-        doc.fontSize(12).text('Money Receipt', { align: 'center', underline: true });
-        
-        doc.moveDown();
-        // Truncate TXN ID for display to prevent overlap if too long
-        const displayTxn = data.transaction_id.length > 20 ? data.transaction_id.substring(0, 20) + '...' : data.transaction_id;
-        
-        doc.fontSize(10).text(`Receipt No: ${displayTxn}`, 400, 100);
-        doc.text(`Date: ${moment(data.payment_date).format('DD/MM/YYYY')}`, 400, 115);
-        
-        doc.text(`Student: ${data.username}`, 40, 100);
-        doc.text(`Roll: ${data.roll_number || '-'} | Class: ${data.course_name || '-'}`, 40, 120);
+        // Border
+        doc.rect(20, 20, 555, 380).lineWidth(1).strokeColor('#333').stroke();
 
-        const y = 160;
-        doc.rect(40, y, 515, 25).fillAndStroke('#eee', '#000');
-        doc.fillColor('black').text('Description', 50, y+8).text('Amount', 480, y+8);
+        // 1. HEADER
+        const headerY = 35;
+        doc.fillColor('#2c3e50')
+           .fontSize(18).font("Helvetica-Bold").text('SCHOOL ERP SYSTEM', 40, headerY)
+           .fontSize(9).font("Helvetica").text('123 Education Lane, Kolkata - 700001', 40, headerY + 20)
+           .text('Phone: +91 9876543210', 40, headerY + 32);
+
+        doc.fillColor('#000')
+           .fontSize(14).font("Helvetica-Bold").text('MONEY RECEIPT', 400, headerY, { width: 155, align: 'right' })
+           .fontSize(9).font("Helvetica")
+           .text(`Receipt No: ${data.transaction_id}`, 350, headerY + 20, { width: 205, align: 'right' })
+           .text(`Date: ${moment(data.payment_date).format('DD-MM-YYYY')}`, 350, headerY + 32, { width: 205, align: 'right' });
+
+        doc.moveTo(40, headerY + 50).lineTo(555, headerY + 50).lineWidth(0.5).strokeColor('#aaa').stroke();
+
+        // 2. INFO
+        const infoY = headerY + 65;
+        doc.fillColor('#000');
         
-        doc.rect(40, y+25, 515, 30).stroke();
-        doc.text(`Fee Payment (${data.payment_mode})`, 50, y+35).text(parseFloat(data.amount).toFixed(2), 480, y+35);
+        // Col 1
+        doc.fontSize(10).font("Helvetica-Bold").text("Name:", 40, infoY);
+        doc.font("Helvetica").text(data.student_name, 80, infoY); // Offset X slightly
+        
+        // Col 2
+        doc.font("Helvetica-Bold").text("Roll No:", 250, infoY);
+        doc.font("Helvetica").text(data.roll_number || 'N/A', 300, infoY);
+        
+        // Col 3
+        doc.font("Helvetica-Bold").text("Mode:", 450, infoY);
+        doc.font("Helvetica").text(data.payment_mode, 490, infoY);
+
+        doc.font("Helvetica-Bold").text("Course:", 40, infoY + 18);
+        doc.font("Helvetica").text(`${data.course_name || ''} (${data.batch_name || ''})`, 85, infoY + 18);
+
+        // 3. TABLE
+        const tableTop = infoY + 45;
+        doc.rect(40, tableTop, 515, 20).fillAndStroke('#f0f0f0', '#ccc');
+        doc.fillColor('black').fontSize(9).font("Helvetica-Bold");
+        
+        doc.text("SL", 50, tableTop + 5);
+        doc.text("DESCRIPTION", 100, tableTop + 5);
+        doc.text("AMOUNT (INR)", 450, tableTop + 5, { width: 95, align: 'right' });
+
+        // Row
+        const rowY = tableTop + 25;
+        doc.font("Helvetica").fontSize(10);
+        doc.text("01", 50, rowY);
+        doc.text(`Tuition & Fee Payment (Ref: ${data.invoice_number})`, 100, rowY);
+        doc.font("Helvetica-Bold").text(parseFloat(data.amount).toFixed(2), 450, rowY, { width: 95, align: 'right' });
+
+        doc.moveTo(40, rowY + 20).lineTo(555, rowY + 20).lineWidth(0.5).stroke();
+
+        // 4. TOTALS (FIXED OVERLAP)
+        const totalY = rowY + 35;
+        
+        // Label Column
+        doc.fontSize(12).font("Helvetica-Bold")
+           .text("GRAND TOTAL:", 300, totalY, { width: 140, align: 'right' });
+        
+        // Amount Column (Separate X position)
+        doc.text(`Rs. ${parseFloat(data.amount).toFixed(2)}`, 450, totalY, { width: 95, align: 'right' });
+
+        // Due Balance (Below Total)
+        doc.fontSize(9).font("Helvetica").fillColor('#e74c3c')
+           .text(`(Remaining Due: Rs. ${parseFloat(data.due_balance).toFixed(2)})`, 40, totalY + 5);
+
+        // 5. FOOTER (Moved Up for Single Page)
+        const sigY = 300; // Moved up from 340
+
+        doc.fillColor('black').lineWidth(1);
+        doc.moveTo(60, sigY).lineTo(180, sigY).stroke();
+        doc.fontSize(8).text("Depositor Signature", 60, sigY + 5, { width: 120, align: 'center' });
+
+        doc.moveTo(400, sigY).lineTo(520, sigY).stroke();
+        doc.text("Authorized Signature", 400, sigY + 5, { width: 120, align: 'center' });
+
+        doc.fontSize(7).fillColor('#888')
+           .text(`Generated on ${moment().format('DD-MMM-YYYY HH:mm A')}`, 20, 360, { align: 'center', width: 555 }); // Moved up to 360
 
         doc.end();
 
@@ -521,6 +579,7 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'PDF Gen Failed' }); 
     }
 });
+
 // =========================================================
 // SECTION 4: SETTINGS & CONFIGURATION (ADMIN CRUD)
 // =========================================================
@@ -658,21 +717,89 @@ router.get('/reports/revenue-stream', authenticateToken, authorize(['admin', 'fi
     } catch (err) { res.status(500).json({ message: 'Error' }); }
 });
 
-// 5.3 ANNUAL BUDGET REPORT
+// =========================================================
+// 5.3 ANNUAL BUDGET REPORT (Smart Auto-Merge)
+// =========================================================
 router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    const start = `${year}-04-01`; const end = `${year+1}-03-31`;
-    try {
-        const targets = await pool.query(`SELECT c.name, b.budget_amount, c.type FROM ${DB.BUDGETS} b JOIN ${DB.BUDGET_CATS} c ON b.category_id=c.id WHERE b.fiscal_year=$1`, [year]);
-        const income = await pool.query(`SELECT SUM(amount) as val FROM ${DB.PAYMENTS} WHERE payment_date BETWEEN $1 AND $2`, [start, end]);
-        const expense = await pool.query(`SELECT c.name, SUM(e.amount) as val FROM ${DB.EXPENSES} e JOIN ${DB.BUDGET_CATS} c ON e.category_id=c.id WHERE e.expense_date BETWEEN $1 AND $2 GROUP BY c.name`, [start, end]);
+    // Fiscal Year: April 1st to March 31st
+    const start = `${year}-04-01`; 
+    const end = `${year+1}-03-31`;
 
-        const data = targets.rows.map(t => ({
-            ...t,
-            actual: (t.type==='Income') ? (income.rows[0].val||0) : (expense.rows.find(e=>e.name===t.name)?.val||0)
+    try {
+        // 1. Fetch Configured Targets
+        const targets = await pool.query(`
+            SELECT c.name, b.budget_amount, c.type 
+            FROM ${DB.BUDGETS} b 
+            JOIN ${DB.BUDGET_CATS} c ON b.category_id=c.id 
+            WHERE b.fiscal_year=$1
+        `, [year]);
+        
+        // Create base list from targets
+        let reportData = targets.rows.map(t => ({
+            name: t.name,
+            budgeted: parseFloat(t.budget_amount || 0),
+            type: t.type,
+            actual: 0 // Default
         }));
-        res.json({ year, report: data });
-    } catch (e) { res.status(500).json({ message: 'Error' }); }
+
+        // 2. Calculate & Merge Actual Income
+        const incomeRes = await pool.query(`
+            SELECT COALESCE(SUM(amount), 0) as val 
+            FROM ${DB.PAYMENTS} 
+            WHERE payment_date BETWEEN $1 AND $2
+        `, [start, end]);
+        
+        const totalIncome = parseFloat(incomeRes.rows[0].val);
+
+        // Try to find an 'Income' category to attach this value to
+        let incomeEntry = reportData.find(d => d.type === 'Income');
+        
+        if (incomeEntry) {
+            incomeEntry.actual = totalIncome;
+        } else if (totalIncome > 0) {
+            // Auto-inject Income if no target was configured
+            reportData.push({
+                name: 'Tuition Fee Collection',
+                budgeted: 0,
+                type: 'Income',
+                actual: totalIncome
+            });
+        }
+
+        // 3. Calculate & Merge Actual Expenses
+        const expenseRes = await pool.query(`
+            SELECT c.name, SUM(e.amount) as val 
+            FROM ${DB.EXPENSES} e 
+            JOIN ${DB.BUDGET_CATS} c ON e.category_id=c.id 
+            WHERE e.expense_date BETWEEN $1 AND $2 
+            GROUP BY c.name
+        `, [start, end]);
+
+        expenseRes.rows.forEach(exp => {
+            const val = parseFloat(exp.val);
+            // Try to find existing budget item
+            let item = reportData.find(d => d.name === exp.name && d.type === 'Expense');
+            
+            if (item) {
+                item.actual = val;
+            } else {
+                // Auto-inject unbudgeted expense
+                reportData.push({
+                    name: exp.name,
+                    budgeted: 0,
+                    type: 'Expense',
+                    actual: val
+                });
+            }
+        });
+
+        res.json({ year, report: reportData });
+
+    } catch (e) { 
+        console.error("Budget Report Error:", e);
+        res.status(500).json({ message: 'Error generating report' }); 
+    }
 });
 
 // 5.4 EXPENSE RECORDING
@@ -786,6 +913,112 @@ router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async 
 });
 
 // =========================================================
+// 5.8 DETAILED STUDENT DUES REPORT (Filters Support)
+// =========================================================
+router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
+    const { course_id, search } = req.query;
+
+    try {
+        let query = `
+            SELECT 
+                s.roll_number, 
+                u.username AS student_name, 
+                c.course_name,
+                -- Calculate Totals
+                COALESCE(SUM(i.total_amount), 0) AS total_billed,
+                COALESCE(SUM(i.paid_amount), 0) AS total_paid,
+                (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) AS balance_due,
+                -- Get Last Payment Date
+                MAX(p.payment_date) AS last_payment_date
+            FROM ${DB.STUDENTS} s
+            JOIN ${DB.USERS} u ON s.user_id = u.id
+            LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id
+            LEFT JOIN ${DB.INVOICES} i ON s.student_id = i.student_id AND i.status != 'Waived'
+            LEFT JOIN ${DB.PAYMENTS} p ON i.id = p.invoice_id
+            WHERE u.is_active = TRUE
+        `;
+
+        const params = [];
+        let paramIndex = 1;
+
+        // Filter by Course
+        if (course_id && course_id !== 'all') {
+            query += ` AND s.course_id = $${paramIndex++}::uuid`;
+            params.push(course_id);
+        }
+
+        // Filter by Search Name/Roll
+        if (search) {
+            query += ` AND (LOWER(u.username) LIKE $${paramIndex} OR LOWER(s.roll_number) LIKE $${paramIndex})`;
+            params.push(`%${search.toLowerCase()}%`);
+        }
+
+        query += `
+            GROUP BY s.student_id, u.username, s.roll_number, c.course_name
+            HAVING (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) > 0
+            ORDER BY balance_due DESC
+        `;
+
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Dues Report Error:', error);
+        res.status(500).json({ message: 'Failed to generate dues report.' });
+    }
+});
+
+
+// =========================================================
+// 5.9 GENERAL LEDGER EXPORT (Income vs Expense)
+// =========================================================
+router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
+    const { startDate, endDate } = req.query;
+    const start = startDate || moment().startOf('year').format('YYYY-MM-DD');
+    const end = endDate || moment().endOf('year').format('YYYY-MM-DD');
+
+    try {
+        // We combine Income (Payments) and Expenses into one timeline
+        const query = `
+            SELECT * FROM (
+                -- 1. INCOME (Credit)
+                SELECT 
+                    payment_date AS date,
+                    'Income' AS type,
+                    'Fee Collection' AS category,
+                    ('Ref: ' || transaction_id) AS description,
+                    amount AS credit,
+                    0.00 AS debit
+                FROM ${DB.PAYMENTS}
+                WHERE payment_date::date >= $1 AND payment_date::date <= $2
+
+                UNION ALL
+
+                -- 2. EXPENSES (Debit)
+                SELECT 
+                    e.expense_date AS date,
+                    'Expense' AS type,
+                    c.name AS category,
+                    e.description,
+                    0.00 AS credit,
+                    e.amount AS debit
+                FROM ${DB.EXPENSES} e
+                LEFT JOIN ${DB.BUDGET_CATS} c ON e.category_id = c.id
+                WHERE e.expense_date::date >= $1 AND e.expense_date::date <= $2
+            ) ledger_data
+            ORDER BY date DESC
+        `;
+
+        const result = await pool.query(query, [start, end]);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('GL Export Error:', error);
+        res.status(500).json({ message: 'Failed to generate GL report.' });
+    }
+});
+
+// =========================================================
 // SECTION 6: ADMIN UTILITIES (WAIVERS, DEFAULTERS)
 // =========================================================
 
@@ -850,4 +1083,64 @@ router.post('/reminders/send', authenticateToken, async (req, res) => {
     res.json({ message: `Simulated SMS sent to ${students?.length || 0} students.` });
 });
 
+
+// =========================================================
+// 6.3 FINANCE AUDIT LOGS (FIXED: NULL Handling in Details)
+// =========================================================
+router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
+    const { startDate, endDate } = req.query;
+    const start = startDate || moment().startOf('month').format('YYYY-MM-DD');
+    const end = endDate || moment().endOf('month').format('YYYY-MM-DD');
+
+    try {
+        // FIXED: Used COALESCE to prevent NULL values from breaking the description string
+        const query = `
+            SELECT * FROM (
+                -- 1. PAYMENT ACTIONS
+                SELECT 
+                    p.payment_date AS timestamp,
+                    'PAYMENT_COLLECTED' AS action_type,
+                    u.username AS performed_by,
+                    (
+                        'Collected ₹' || COALESCE(p.amount::text, '0') || 
+                        ' from ' || COALESCE(s.first_name, 'Student') || ' ' || COALESCE(s.last_name, '') ||
+                        ' (Roll: ' || COALESCE(s.roll_number, 'N/A') || ')' ||
+                        ' via ' || COALESCE(p.payment_mode, 'Unknown')
+                    ) AS details,
+                    p.transaction_id AS reference_id
+                FROM ${DB.PAYMENTS} p
+                JOIN ${DB.USERS} u ON p.collected_by = u.id
+                JOIN ${DB.INVOICES} i ON p.invoice_id = i.id
+                JOIN ${DB.STUDENTS} s ON i.student_id = s.student_id
+                WHERE p.payment_date::date >= $1 AND p.payment_date::date <= $2
+
+                UNION ALL
+
+                -- 2. INVOICE ACTIONS
+                SELECT 
+                    i.created_at AS timestamp,
+                    'INVOICE_GENERATED' AS action_type,
+                    u.username AS performed_by,
+                    (
+                        'Generated Bill of ₹' || COALESCE(i.total_amount::text, '0') || 
+                        ' for ' || COALESCE(s.first_name, 'Student') || ' ' || COALESCE(s.last_name, '') ||
+                        ' (Roll: ' || COALESCE(s.roll_number, 'N/A') || ')'
+                    ) AS details,
+                    i.invoice_number AS reference_id
+                FROM ${DB.INVOICES} i
+                JOIN ${DB.USERS} u ON i.created_by = u.id
+                JOIN ${DB.STUDENTS} s ON i.student_id = s.student_id
+                WHERE i.created_at::date >= $1 AND i.created_at::date <= $2
+            ) audit_data
+            ORDER BY timestamp DESC
+        `;
+
+        const result = await pool.query(query, [start, end]);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Audit Log Error:', error);
+        res.status(500).json({ message: 'Failed to fetch audit logs.' });
+    }
+});
 module.exports = router;

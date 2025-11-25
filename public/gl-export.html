@@ -6,209 +6,145 @@
     <title>General Ledger (GL) Export</title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
-        :root {
-            --primary-color: #4a90e2;
-            --secondary-color: #797d7f;
-            --success-color: #27ae60;
-            --light-gray-color: #f4f7f9;
-            --dark-gray-color: #555;
-            --border-color: #dfe6e9;
-            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-        }
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: var(--light-gray-color);
-            color: var(--dark-gray-color);
-            line-height: 1.6;
-        }
-        .container {
-            max-width: 700px;
-            margin: 30px auto;
-            padding: 20px;
-        }
-        h1 {
-            color: #333;
-            text-align: center;
-            margin-bottom: 20px;
-            font-weight: 600;
-        }
-        .nav-links {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .nav-links a {
-            text-decoration: none;
-            color: var(--primary-color);
-            font-weight: 500;
-        }
-        .card {
-            background-color: #fff;
-            border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 25px;
-            box-shadow: var(--card-shadow);
-            border: 1px solid var(--border-color);
-        }
-        .export-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .form-group label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
-        }
-        .export-grid select, .export-grid input {
-            width: 100%;
-            padding: 10px;
-            border-radius: 5px;
-            border: 1px solid var(--border-color);
-        }
-        .submit-btn {
-            grid-column: 1 / -1;
-            padding: 12px;
-            background-color: var(--success-color);
-            color: #fff;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .submit-btn:hover {
-            background-color: #219d55;
-        }
-        .info-message {
-            margin-top: 20px;
-            padding: 15px;
-            background-color: #e6f7ff;
-            border: 1px solid var(--primary-color);
-            border-radius: 5px;
-            font-size: 0.9em;
-        }
+        body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f6; padding: 20px; }
+        .container { max-width: 800px; margin: 40px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #ddd; }
+        h2 { text-align: center; color: #2c3e50; text-transform: uppercase; margin-bottom: 10px; }
+        .back-link { display: block; text-align: center; margin-bottom: 30px; text-decoration: none; color: #3498db; }
+        
+        .export-card { background: #f8f9fa; border: 1px solid #e9ecef; padding: 20px; border-radius: 6px; }
+        .form-group { margin-bottom: 20px; }
+        label { font-weight: 600; display: block; margin-bottom: 5px; color: #555; }
+        input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        .btn-export { width: 100%; padding: 12px; background-color: #0056b3; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background 0.2s; }
+        .btn-export:hover { background-color: #004494; }
+        
+        .error-msg { color: #c0392b; background: #f9d7da; padding: 10px; border-radius: 4px; margin-top: 15px; display: none; text-align: center; }
     </style>
 </head>
 <body>
-<script>
-    const token = localStorage.getItem('erp-token');
-    const userRole = localStorage.getItem('user-role');
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
-    
-    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
-        window.location.href = '/login'; 
-    }
-    
-    // --- Helper for API Calls ---
-    async function handleApi(url, options = {}) {
-        options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
-        const response = await fetch(url, options);
-        if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
-        }
-        return response.json();
-    }
-
-    /**
-     * Handles form submission to trigger the GL export.
-     */
-    async function exportGLData(formData) {
-        const submitBtn = document.getElementById('export-btn');
-        const messageBox = document.getElementById('export-message');
-        submitBtn.disabled = true;
-        messageBox.className = 'info-message';
-        messageBox.textContent = `Generating ${formData.format} export for the period ${formData.start_date} to ${formData.end_date}...`;
-
-        try {
-            // ❌ ACTUAL API CALL: Endpoint assumed to return file directly (e.g., as a Blob) ❌
-            const response = await fetch(`/api/reports/gl-export?${new URLSearchParams(formData)}`, { 
-                headers: { 'Authorization': `Bearer ${token}` } 
-            });
-
-            if (!response.ok) {
-                throw new Error(response.statusText || 'Failed to generate report.');
-            }
-            
-            // Assume the server returns a Blob/File
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `GL_Export_${formData.start_date}_to_${formData.end_date}.${formData.format.toLowerCase()}`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            a.remove();
-            
-            messageBox.textContent = `✅ Export complete! Check your downloads folder.`;
-            messageBox.style.borderColor = 'var(--success-color)';
-            messageBox.style.backgroundColor = '#e4f8e4';
-
-        } catch (error) {
-            messageBox.textContent = `❌ Export Error: ${error.message}`;
-            messageBox.style.borderColor = 'var(--error-color)';
-            messageBox.style.backgroundColor = '#fbecec';
-        } finally {
-            submitBtn.disabled = false;
-        }
-    }
-
-
-    document.addEventListener('DOMContentLoaded', () => {
-        document.getElementById('gl-export-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const formData = {
-                start_date: document.getElementById('start-date').value,
-                end_date: document.getElementById('end-date').value,
-                format: document.getElementById('export-format').value,
-                include_zero_balances: document.getElementById('include-zero').checked
-            };
-            exportGLData(formData);
-        });
-    });
-</script>
 
 <div class="container">
-    <h1>General Ledger (GL) Export</h1>
-    <div class="nav-links">
-        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
-    </div>
+    <h2>General Ledger (GL) Export</h2>
+    <a href="/finance-dashboard.html" class="back-link">← Back to Finance Dashboard</a>
 
-    <div class="card">
-        <h2>Export Criteria</h2>
-        <form id="gl-export-form">
-            <div class="export-grid">
-                <div class="form-group">
-                    <label for="start-date">Start Date:</label>
-                    <input type="date" id="start-date" required>
-                </div>
-                <div class="form-group">
-                    <label for="end-date">End Date:</label>
-                    <input type="date" id="end-date" required>
-                </div>
-                <div class="form-group">
-                    <label for="export-format">Export Format:</label>
-                    <select id="export-format" required>
-                        <option value="CSV">CSV (Comma Separated)</option>
-                        <option value="XML">XML (Financial Data Exchange)</option>
-                        <option value="JSON">JSON</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="include-zero" style="font-weight: normal; margin-top: 15px;">
-                        <input type="checkbox" id="include-zero" style="width: auto; margin-right: 5px;" checked> Include Zero Balance Accounts
-                    </label>
-                </div>
+    <div class="export-card">
+        <h3 style="margin-top: 0; color: #0056b3;">Export Criteria</h3>
+        <hr>
+        
+        <div class="row" style="display: flex; gap: 20px;">
+            <div class="form-group" style="flex: 1;">
+                <label>Start Date:</label>
+                <input type="date" id="startDate">
             </div>
-            <button type="submit" id="export-btn" class="submit-btn">Generate & Download GL Export</button>
-            <div id="export-message" class="info-message">
-                Select the time period and format, then click "Generate & Download".
+            <div class="form-group" style="flex: 1;">
+                <label>End Date:</label>
+                <input type="date" id="endDate">
             </div>
-        </form>
+        </div>
+
+        <div class="form-group">
+            <label>Export Format:</label>
+            <select disabled style="background: #e9ecef;">
+                <option>CSV (Comma Separated)</option>
+            </select>
+        </div>
+
+        <button class="btn-export" onclick="generateGL()">Generate & Download GL Export</button>
+        
+        <div id="errorBox" class="error-msg"></div>
     </div>
 </div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const API_BASE = '/api/fees'; // Correct Base URL for fees module
+
+    // Set Defaults (This Month)
+    const today = new Date();
+    document.getElementById('endDate').valueAsDate = today;
+    document.getElementById('startDate').valueAsDate = new Date(today.getFullYear(), today.getMonth(), 1);
+
+    async function generateGL() {
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        const errorBox = document.getElementById('errorBox');
+        
+        errorBox.style.display = 'none';
+
+        if (!start || !end) {
+            showError("Please select both start and end dates.");
+            return;
+        }
+
+        try {
+            // 1. Fetch Data
+            const res = await fetch(`${API_BASE}/reports/gl-export?startDate=${start}&endDate=${end}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) throw new Error("Failed to fetch GL data from server.");
+            
+            const data = await res.json();
+
+            if (data.length === 0) {
+                showError("No transactions found for the selected period.");
+                return;
+            }
+
+            // 2. Convert JSON to CSV
+            downloadCSV(data, `GL_Export_${start}_to_${end}.csv`);
+
+        } catch (error) {
+            console.error(error);
+            showError(error.message);
+        }
+    }
+
+    function downloadCSV(data, filename) {
+        if (!data || data.length === 0) return;
+
+        // CSV Header
+        const headers = ['Date', 'Type', 'Category', 'Description', 'Debit (Exp)', 'Credit (Inc)'];
+        const csvRows = [headers.join(',')];
+
+        // CSV Rows
+        data.forEach(row => {
+            const date = new Date(row.date).toLocaleDateString('en-IN');
+            // Escape commas in description
+            const desc = `"${(row.description || '').replace(/"/g, '""')}"`; 
+            
+            const values = [
+                date,
+                row.type,
+                row.category,
+                desc,
+                row.debit,
+                row.credit
+            ];
+            csvRows.push(values.join(','));
+        });
+
+        // Create Blob and Link
+        const csvString = csvRows.join('\n');
+        const blob = new Blob([csvString], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        
+        const a = document.createElement('a');
+        a.setAttribute('hidden', '');
+        a.setAttribute('href', url);
+        a.setAttribute('download', filename);
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+    }
+
+    function showError(msg) {
+        const box = document.getElementById('errorBox');
+        box.innerText = "❌ " + msg;
+        box.style.display = 'block';
+    }
+</script>
+
 </body>
 </html>

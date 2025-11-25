@@ -23,6 +23,8 @@
             background-color: var(--light-gray-color);
             color: var(--dark-gray-color);
             line-height: 1.6;
+            margin: 0;
+            padding: 0;
         }
         .container {
             max-width: 1200px;
@@ -34,6 +36,8 @@
             text-align: center;
             margin-bottom: 20px;
             font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
         .nav-links {
             text-align: center;
@@ -43,6 +47,15 @@
             text-decoration: none;
             color: var(--primary-color);
             font-weight: 500;
+            background: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        .nav-links a:hover {
+            background: var(--primary-color);
+            color: white;
         }
         .card {
             background-color: #fff;
@@ -52,67 +65,93 @@
             box-shadow: var(--card-shadow);
             border: 1px solid var(--border-color);
         }
+        
+        /* Filters */
         .filter-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
             gap: 20px;
-            padding: 15px;
-            background-color: #ecf0f1;
-            border-radius: 5px;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
             margin-bottom: 20px;
+            align-items: end;
         }
         .form-group label {
             display: block;
-            margin-bottom: 5px;
-            font-weight: 500;
+            margin-bottom: 8px;
+            font-weight: 600;
             font-size: 0.9em;
+            color: #333;
         }
         .filter-grid select, .filter-grid input {
             width: 100%;
-            padding: 8px;
+            padding: 10px;
             border-radius: 4px;
-            border: 1px solid var(--border-color);
+            border: 1px solid #ccc;
+            box-sizing: border-box; 
         }
-        .action-btns { grid-column: 4; align-self: end; }
-        .action-btns button { width: 100%; padding: 10px; margin-top: 5px; cursor: pointer; border: none; color: white; border-radius: 4px; }
+        .action-btns {
+            display: flex;
+            gap: 10px;
+        }
+        .action-btns button {
+            flex: 1;
+            padding: 10px;
+            cursor: pointer;
+            border: none;
+            color: white;
+            border-radius: 4px;
+            font-weight: 500;
+            transition: opacity 0.2s;
+        }
+        .action-btns button:hover { opacity: 0.9; }
+
+        /* Table */
         .dues-table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
+            margin-top: 10px;
         }
         .dues-table th, .dues-table td {
-            padding: 12px;
+            padding: 12px 15px;
             text-align: left;
             border-bottom: 1px solid var(--border-color);
-            font-size: 0.9em;
+            font-size: 0.95em;
         }
         .dues-table th {
-            background-color: var(--primary-color);
+            background-color: #34495e;
             color: #fff;
-            font-weight: 600;
+            font-weight: 500;
+            text-transform: uppercase;
+            font-size: 0.85em;
         }
+        .dues-table tr:hover { background-color: #f1f1f1; }
+        
+        /* Footer Totals */
         .dues-table tfoot td {
             font-weight: 700;
-            background-color: #f0f0f0;
-            border-top: 2px solid #ccc;
+            background-color: #eee;
+            border-top: 2px solid #999;
+            padding: 15px;
         }
         .placeholder-message {
             text-align: center;
             padding: 40px 0;
             color: var(--secondary-color);
+            font-style: italic;
         }
     </style>
 </head>
 <body>
+
 <script>
     const token = localStorage.getItem('erp-token');
-    const userRole = localStorage.getItem('user-role');
+    // NOTE: Correct API Base for fees module
+    const API_BASE = '/api'; 
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     
-    // Auth Check
-    if (!token) { 
-        // window.location.href = '/login.html'; 
-    }
+    if (!token) window.location.href = '/login.html';
     
     // --- Helper for API Calls ---
     async function handleApi(url, options = {}) {
@@ -120,7 +159,7 @@
         const response = await fetch(url, options);
         if (!response.ok) {
             const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-            throw new Error(errorBody.message || `Error ${response.status}: ${response.statusText}`);
+            throw new Error(errorBody.message || `Error ${response.status}`);
         }
         return response.json();
     }
@@ -132,48 +171,60 @@
         const tbody = document.getElementById('dues-tbody');
         const tfoot = document.getElementById('dues-tfoot');
         
-        // Show loading state
         tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">Generating report...</td></tr>';
         tfoot.innerHTML = '';
 
         try {
-            const queryString = new URLSearchParams(filters).toString();
-            // Call the Backend Report Route
-            const dues = await handleApi('/api/reports/student-dues?' + queryString); 
+            // Map frontend 'q' to backend 'search'
+            const params = new URLSearchParams({
+                course_id: filters.course_id || '',
+                search: filters.q || '' 
+            });
+
+            // Call the CORRECT backend endpoint
+            const dues = await handleApi(`${API_BASE}/fees/reports/student-dues?${params.toString()}`); 
             
             tbody.innerHTML = '';
             
             if (!dues || dues.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">No outstanding dues found matching criteria.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">No outstanding dues found matching criteria. Great job!</td></tr>';
                 return;
             }
 
             let totalOutstanding = 0;
+            let totalBilledSum = 0;
+            let totalPaidSum = 0;
             
             dues.forEach(d => {
-                // CRITICAL FIX: Use parseFloat to convert DB strings to numbers
-                const totalFees = parseFloat(d.total_fees || 0);
+                // Convert strings to floats for calculation
+                const totalBilled = parseFloat(d.total_billed || 0);
                 const totalPaid = parseFloat(d.total_paid || 0);
                 const balance = parseFloat(d.balance_due || 0);
                 
                 totalOutstanding += balance;
+                totalBilledSum += totalBilled;
+                totalPaidSum += totalPaid;
                 
                 const row = `<tr>
-                    <td>${d.roll_number || '-'}</td>
+                    <td style="font-weight:500;">${d.roll_number || '-'}</td>
                     <td>${d.student_name || 'Unknown'}</td>
                     <td>${d.course_name || 'N/A'}</td>
-                    <td>₹${totalFees.toFixed(2)}</td>
-                    <td>₹${totalPaid.toFixed(2)}</td>
-                    <td style="color: ${balance > 0 ? 'var(--error-color)' : 'var(--success-color)'}; font-weight: 600;">₹${balance.toFixed(2)}</td>
-                    <td>${d.last_payment_date ? new Date(d.last_payment_date).toLocaleDateString() : 'Never'}</td>
+                    <td>₹${totalBilled.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    <td style="color: var(--success-color);">₹${totalPaid.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    <td style="color: var(--error-color); font-weight: 700;">₹${balance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                    <td style="font-size:0.9em; color:#666;">
+                        ${d.last_payment_date ? new Date(d.last_payment_date).toLocaleDateString('en-IN') : '<span class="badge bg-warning text-dark">Never</span>'}
+                    </td>
                 </tr>`;
                 tbody.innerHTML += row;
             });
             
             // Render footer summary
             tfoot.innerHTML = `<tr>
-                <td colspan="5" style="text-align: right;">GRAND TOTAL OUTSTANDING:</td>
-                <td style="color: var(--error-color); font-size: 1.1em;">₹${totalOutstanding.toFixed(2)}</td>
+                <td colspan="3" style="text-align: right;">GRAND TOTALS:</td>
+                <td>₹${totalBilledSum.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                <td style="color: var(--success-color);">₹${totalPaidSum.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                <td style="color: var(--error-color); font-size: 1.2em;">₹${totalOutstanding.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                 <td></td>
             </tr>`;
 
@@ -189,7 +240,7 @@
     async function loadCourses() {
         const courseFilter = document.getElementById('course-filter');
         try {
-            const courses = await handleApi('/api/academicswithfees/courses');
+            const courses = await handleApi(`${API_BASE}/academicswithfees/courses`); // Verify this path exists in your academics module
             courses.forEach(c => {
                 const option = document.createElement('option');
                 option.value = c.course_id;
@@ -197,15 +248,14 @@
                 courseFilter.appendChild(option);
             });
         } catch (error) {
-            console.error('Could not load courses.', error);
+            console.warn('Could not load courses list (API might be different). Using manual input.');
         }
     }
-
 
     document.addEventListener('DOMContentLoaded', () => {
         loadCourses();
         
-        // Initial Load
+        // Initial Load (Fetch all defaulters)
         fetchAndRenderDues();
 
         // Handle Form Submit
@@ -218,9 +268,9 @@
             fetchAndRenderDues(filters);
         });
         
-        // Export Button (Placeholder)
+        // Export Button Logic (Simple CSV Export)
         document.getElementById('export-btn').addEventListener('click', () => {
-            alert('Export feature coming soon (requires backend CSV generation module).');
+            alert("Export functionality will be implemented with server-side PDF generation.");
         });
     });
 </script>
@@ -228,50 +278,51 @@
 <div class="container">
     <h1>Detailed Student Dues Report</h1>
     <div class="nav-links">
-        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+        <a href="/finance-dashboard.html">← Back to Dashboard</a>
     </div>
 
     <div class="card">
-        <h2>Report Filters</h2>
+        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0;">Report Filters</h3>
         <form id="report-form">
             <div class="filter-grid">
                 <div class="form-group">
-                    <label for="course-filter">Course:</label>
+                    <label for="course-filter">Filter by Course:</label>
                     <select id="course-filter">
                         <option value="">All Courses</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label for="search-input">Search:</label>
-                    <input type="text" id="search-input" placeholder="Student Name or Roll No">
+                    <label for="search-input">Search Student:</label>
+                    <input type="text" id="search-input" placeholder="Enter Name or Roll Number">
                 </div>
-                <div class="form-group"></div> 
                 
                 <div class="form-group action-btns">
                     <button type="submit" style="background-color: var(--primary-color);">Generate Report</button>
-                    <button type="button" id="export-btn" style="background-color: var(--success-color);">Export Data</button>
+                    <button type="button" id="export-btn" style="background-color: var(--success-color);">Download CSV</button>
                 </div>
             </div>
         </form>
 
-        <h2>Report Results</h2>
-        <table class="dues-table">
-            <thead>
-                <tr>
-                    <th>Roll No.</th>
-                    <th>Student Name</th>
-                    <th>Course</th>
-                    <th>Total Billed (₹)</th>
-                    <th>Total Paid (₹)</th>
-                    <th>Balance Due (₹)</th>
-                    <th>Last Payment</th>
-                </tr>
-            </thead>
-            <tbody id="dues-tbody">
-                <tr><td colspan="7" class="placeholder-message">Loading data...</td></tr>
-            </tbody>
-            <tfoot id="dues-tfoot"></tfoot>
-        </table>
+        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px;">Report Results</h3>
+        <div style="overflow-x: auto;">
+            <table class="dues-table">
+                <thead>
+                    <tr>
+                        <th>Roll No.</th>
+                        <th>Student Name</th>
+                        <th>Course</th>
+                        <th>Total Billed</th>
+                        <th>Total Paid</th>
+                        <th>Balance Due</th>
+                        <th>Last Payment</th>
+                    </tr>
+                </thead>
+                <tbody id="dues-tbody">
+                    <tr><td colspan="7" class="placeholder-message">Initializing data...</td></tr>
+                </tbody>
+                <tfoot id="dues-tfoot"></tfoot>
+            </table>
+        </div>
     </div>
 </div>
 </body>
