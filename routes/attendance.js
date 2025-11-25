@@ -1,20 +1,33 @@
 const express = require('express');
 const router = express.Router();
 
-// ✅ FIX 1: Correct file paths (prevents "Module Not Found" crash)
+// ✅ Correct file paths
 const { pool } = require('../database'); 
 const { authenticateToken, authorize } = require('../authMiddleware'); 
 
 // =================================================================
-// CONFIGURATION: ROLES
+// CONFIGURATION: ROLES (Case-Insensitive Support)
 // =================================================================
-const MARKING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser'];
+// ✅ FIX: Added lowercase versions to ensure "teacher" works as well as "Teacher"
+const MARKING_ROLES = [
+    'Super Admin', 'Admin', 'Teacher', 'ApiUser',
+    'super admin', 'admin', 'teacher', 'apiuser' 
+];
 
-// ✅ FIX 2: Added 'Teacher' & 'Coordinator' here.
-// This is the specific line that fixes your 403 Forbidden Error.
-const ROSTER_VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'ApiUser', 'HR', 'Staff'];
-const REPORT_VIEW_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'HR', 'Finance'];
-const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee'];
+const ROSTER_VIEW_ROLES = [
+    'Super Admin', 'Admin', 'Teacher', 'Coordinator', 'ApiUser', 'HR', 'Staff',
+    'super admin', 'admin', 'teacher', 'coordinator', 'apiuser', 'hr', 'staff'
+];
+
+const REPORT_VIEW_ROLES = [
+    'Super Admin', 'Admin', 'Coordinator', 'HR', 'Finance',
+    'super admin', 'admin', 'coordinator', 'hr', 'finance'
+];
+
+const USER_REPORT_ROLES = [
+    'Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee',
+    'super admin', 'admin', 'teacher', 'coordinator', 'student', 'employee'
+];
 
 // =================================================================
 // 1. MARKING ATTENDANCE (POST /mark)
@@ -257,7 +270,8 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
     
     // Security check
     const isSelf = String(req.user.id) === targetUserId;
-    const canViewOthers = ['Super Admin', 'Admin', 'Teacher', 'Coordinator'].includes(req.user.role);
+    // Allow admins/teachers to view others
+    const canViewOthers = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'super admin', 'admin', 'teacher', 'coordinator'].includes(req.user.role);
 
     if (!isSelf && !canViewOthers) {
         return res.status(403).json({ message: 'Forbidden: Can only view own records.' });
@@ -318,9 +332,7 @@ router.delete('/:attendanceId', authenticateToken, authorize(['Super Admin', 'Ad
 // =================================================================
 // 6. FILTER ENDPOINTS (Batches, Subjects, Departments)
 // =================================================================
-
-// ✅ FIX 3: Ensure these use ROSTER_VIEW_ROLES (which includes Teacher/Coordinator)
-// This enables the frontend dropdowns to load.
+// ✅ FIX: Using ROSTER_VIEW_ROLES which now supports both "Teacher" and "teacher"
 
 router.get('/departments', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
     try {
