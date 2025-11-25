@@ -1,4 +1,3 @@
-// /routes/payroll.js
 const express = require('express');
 const router = express.Router();
 // CRITICAL FIX: Import the exported 'pool' property, and then destructure its query/connect methods.
@@ -20,7 +19,7 @@ const PAYROLL_RECORDS_TABLE = 'payroll_records';
 const USERS_TABLE = 'users';
 const TEACHERS_TABLE = 'teachers';
 const DEPARTMENTS_TABLE = 'hr_departments';
-const PAYROLL_RUNS_TABLE = 'payroll_runs'; // <--- ADDED MISSING CONSTANT (Assumed name)
+const PAYROLL_RUNS_TABLE = 'payroll_runs'; // <--- ADDED MISSING CONSTANT
 
 // Use authenticateToken as the base middleware for all payroll routes
 router.use(authenticateToken);
@@ -37,14 +36,16 @@ router.use(authenticateToken);
 router.get('/run-history-list', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
     try {
         const result = await dbQuery(
-            // FIX 1: Using the defined constant
+            // FIX 1: The query needed to be updated to match the new columns in payroll_runs
+            // The previous error was: column "pay_period_start" does not exist
             `SELECT run_id, pay_period_start, pay_period_end, status, run_date 
              FROM ${PAYROLL_RUNS_TABLE} 
              ORDER BY pay_period_start DESC`
         );
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching payroll run history:', error);
+        // This is the error line from the logs:
+        console.error('Error fetching payroll run history:', error); 
         res.status(500).json({ message: 'Failed to fetch payroll run history' });
     }
 });
@@ -87,7 +88,8 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
         pay_period_start,
         pay_period_end,
         status,
-        total_employees,
+        // FIX 2: Removed total_employees from destructuring. This column does not exist in the DB.
+        // total_employees, 
         total_gross_pay,
         total_deductions,
         total_net_pay,
@@ -107,16 +109,18 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
         await client.query('BEGIN'); 
 
         // 1. Save data to the main 'payroll_runs' table
+        // FIX 2: Removed the 'total_employees' column from the INSERT statement.
         const runInsertQuery = `
             INSERT INTO ${PAYROLL_RUNS_TABLE} 
-                (pay_period_start, pay_period_end, status, total_employees, 
+                (pay_period_start, pay_period_end, status, 
                  total_gross_pay, total_deductions, total_net_pay, run_by_user_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING run_id;
         `;
         
+        // FIX 2: Removed 'total_employees' from the values array.
         const runValues = [
-            pay_period_start, pay_period_end, status, total_employees,
+            pay_period_start, pay_period_end, status,
             total_gross_pay, total_deductions, total_net_pay, run_by_user_id
         ];
 
@@ -157,7 +161,8 @@ router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
         if (client) {
             await client.query('ROLLBACK');
         }
-        console.error('Error in /api/payroll/save-run:', error);
+        // This is the error line from the logs:
+        console.error('Error in /api/payroll/save-run:', error); 
         res.status(500).json({ message: 'Failed to save payroll run', error: error.message });
     } finally {
         if (client) {
@@ -292,7 +297,7 @@ router.get('/employees/details', authorize(PAYROLL_MANAGER_ROLES), async (req, r
                 u.id AS user_id,
                 t.employee_id,
                 t.full_name, 
-                hd.department_name AS department, /* <--- FIX 2: Corrected column to department_name */
+                hd.department_name AS department, /* Corrected column to department_name */
                 hd.id AS department_id, 
                 pd.base_salary AS pay_grade,
                 pd.fixed_deductions,
