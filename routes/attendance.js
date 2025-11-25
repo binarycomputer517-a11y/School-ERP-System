@@ -36,7 +36,7 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
 
         for (const record of records) {
             const { user_id, status, remarks } = record; 
-            if (!status) continue; // Skip empty updates
+            if (!status) continue; 
 
             // Look up profile (Student or Staff)
             const profileQuery = await client.query(`
