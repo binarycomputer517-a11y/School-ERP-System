@@ -328,13 +328,9 @@ router.delete('/:attendanceId', authenticateToken, authorize(['Super Admin', 'Ad
         res.status(500).json({ message: 'Error deleting.', error: err.message });
     }
 });
-
-/// =================================================================
+// =================================================================
 // 6. FILTER ENDPOINTS (Batches, Subjects, Departments)
 // =================================================================
-
-// ✅ FIX: Removed 'authorize(...)' so ANY logged-in user can load the dropdowns.
-// This prevents 403 errors when Students or Teachers try to select a batch/subject.
 
 router.get('/departments', authenticateToken, async (req, res) => {
     try {
@@ -365,6 +361,5 @@ router.get('/subjects', authenticateToken, async (req, res) => {
         res.status(500).json({ message: 'Failed to fetch subjects.', error: err.message });
     }
 });
-
 
 module.exports = router;
