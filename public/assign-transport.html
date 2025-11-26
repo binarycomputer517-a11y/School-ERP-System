@@ -46,7 +46,7 @@
             display: block;
             font-weight: bold;
             margin-bottom: 5px;
-            grid-column: span 2; /* Labels span both columns */
+            grid-column: span 2;
         }
         #assign-form select, #assign-form input[type="text"] {
             padding: 10px;
@@ -54,13 +54,20 @@
             box-sizing: border-box;
             width: 100%;
             border-radius: 0;
-            grid-column: span 2; /* Inputs span both columns by default */
-        }
-        /* Specific inputs/selects that should align side-by-side */
-        #student-select, #route-select, #boarding_stop, #dropping_stop, #stop_latitude, #stop_longitude {
-            grid-column: span 1; 
+            grid-column: span 2;
         }
         
+        /* Helper class for feedback messages */
+        .status-message {
+            grid-column: span 2;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+        .error { color: #D32F2F; border: 1px solid #D32F2F; background: #FFEBEE; }
+        .success { color: #388E3C; border: 1px solid #388E3C; background: #E8F5E9; }
+
         button[type="submit"] {
             grid-column: 1 / 3;
             background-color: #005A9C; 
@@ -72,6 +79,7 @@
             margin-top: 15px; 
             box-shadow: 2px 2px 0 #000;
             font-weight: bold;
+            font-size: 1.1em;
         }
         button[type="submit"]:hover {
             background-color: #003366;
@@ -80,25 +88,23 @@
     </style>
 </head>
 <body>
-<script>
-    const token = localStorage.getItem('erp-token');
-    const userRole = localStorage.getItem('user-role');
-    const AUTHORIZED_ROLES = ['Admin', 'Super Admin'];
 
-    // Updated authorization check for Super Admin
-    if (!token || !AUTHORIZED_ROLES.includes(userRole)) { 
-        window.location.href = '/login'; 
-    }
-</script>
 <div class="container">
     <h1>Assign Student to a Route</h1>
-    <div class="nav-links"><a href="/manage-transport.html">← Back to Transport Management</a></div>
+    <div class="nav-links"><a href="manage-transport.html">← Back to Transport Management</a></div>
+    
+    <div id="status-box" class="status-message"></div>
+
     <form id="assign-form">
         <label for="student-select">Select Student:</label>
-        <select id="student-select" name="student_id" required></select>
+        <select id="student-select" name="student_id" required>
+            <option value="">Loading students...</option>
+        </select>
         
         <label for="route-select">Select Route:</label>
-        <select id="route-select" name="route_id" required></select>
+        <select id="route-select" name="route_id" required>
+            <option value="">Loading routes...</option>
+        </select>
         
         <label for="boarding_stop">Boarding Stop Name:</label>
         <input type="text" id="boarding_stop" name="boarding_stop" placeholder="e.g., Main Gate" required>
@@ -106,82 +112,115 @@
         <label for="dropping_stop">Dropping Stop Name:</label>
         <input type="text" id="dropping_stop" name="dropping_stop" placeholder="e.g., City Center Stop" required>
         
-        <label for="stop_latitude">Stop Latitude (for Notifications):</label>
-        <input type="text" id="stop_latitude" name="stop_latitude" placeholder="e.g., 26.712345" required>
-        
-        <label for="stop_longitude">Stop Longitude (for Notifications):</label>
-        <input type="text" id="stop_longitude" name="stop_longitude" placeholder="e.g., 88.432109" required>
-        
+        <input type="hidden" id="monthly_fee" name="monthly_fee" value="0">
+
         <button type="submit">Assign to Route</button>
     </form>
 </div>
-<script>
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
 
+<script>
+    // FIX 1: Use 'erp-token' instead of 'token' to match your dashboard
+    const token = localStorage.getItem('erp-token'); 
+    
+    // Redirect if no token
+    if (!token) { 
+        console.error("No token found. Redirecting to login.");
+        window.location.href = 'index.html'; 
+    }
+
+    const authHeaders = { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
+
+    // --- 1. Populate Dropdowns ---
     async function populateDropdowns() {
         const studentSelect = document.getElementById('student-select');
         const routeSelect = document.getElementById('route-select');
+        
         try {
-            // NOTE: Assuming /api/students returns an array where students have a 'user_id' field.
             const [students, routes] = await Promise.all([
-                fetch('/api/students', { headers: authHeaders }).then(res => res.json()),
-                fetch('/api/transport/routes', { headers: authHeaders }).then(res => res.json())
+                fetch('/api/transport/candidates', { headers: authHeaders }).then(res => {
+                    if(!res.ok) throw new Error("Failed to fetch students");
+                    return res.json();
+                }),
+                fetch('/api/transport/routes', { headers: authHeaders }).then(res => {
+                    if(!res.ok) throw new Error("Failed to fetch routes");
+                    return res.json();
+                })
             ]);
             
-            studentSelect.innerHTML = 
-                '<option value="">-- Select a Student --</option>' + 
+            // Populate Students
+            if (students.length === 0) {
+                studentSelect.innerHTML = '<option value="">No students found</option>';
+            } else {
+                studentSelect.innerHTML = '<option value="">-- Select a Student --</option>' + 
                 students.map(s => {
-                    // CRITICAL FIX FOR DB ERROR: The transport table references users.id (which is students.user_id).
-                    // We must determine the correct user ID to send.
-                    const idToUse = s.user_id || s.student_id || s.id; 
-                    
-                    if (!idToUse) {
-                        console.warn(`Student ${s.first_name} ${s.last_name} is missing ALL potential IDs (user_id/student_id/id) and was skipped.`);
-                        return ''; // Skip this student
-                    }
-
-                    // The log confirms that s.user_id is undefined for most, so we attempt to use the most likely correct field.
-                    // IMPORTANT: We are now passing idToUse, which will be the value of s.user_id if present.
-                    return `<option value="${idToUse}">${s.first_name} ${s.last_name} (Class: ${s.course_name || 'N/A'})</option>`;
+                    return `<option value="${s.student_id}">${s.first_name} ${s.last_name} (Roll: ${s.roll_number || 'N/A'})</option>`;
                 }).join('');
-                
-            routeSelect.innerHTML = '<option value="">-- Select a Route --</option>' + routes.map(r => `<option value="${r.id}">${r.route_name} (Fee: ₹${r.monthly_fee || 0})</option>`).join('');
+            }
+
+            // Populate Routes
+            routeSelect.innerHTML = '<option value="">-- Select a Route --</option>' + 
+                routes.map(r => `<option value="${r.id}" data-fee="${r.monthly_fee}">${r.route_name} (Fee: ₹${r.monthly_fee || 0})</option>`).join('');
             
         } catch(err) {
-            alert('Failed to load students or routes. Check console for details.');
             console.error(err);
+            showStatus('Failed to load data. Ensure server is running and you are logged in.', 'error');
         }
     }
 
-    document.getElementById('assign-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const data = Object.fromEntries(new FormData(this).entries());
-
-        // Client-side validation
-        if (!data.student_id) {
-            return alert('Please select a student.');
-        }
-        if (!data.route_id) {
-            return alert('Please select a route.');
-        }
-        
-        fetch('/api/transport/assign', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-            body: JSON.stringify(data)
-        })
-        .then(res => res.ok ? res.text() : res.text().then(text => Promise.reject(text)))
-        .then(successMessage => {
-            alert('Assignment Successful!');
-            window.location.href = '/manage-transport.html';
-        })
-        .catch(err => {
-             // Handle case where error is a raw error message string
-             const errorMessage = typeof err === 'string' ? err : err.message || 'Unknown network error.';
-             alert('Error assigning student: ' + errorMessage);
-        });
+    // --- 2. Handle Route Fee Logic ---
+    document.getElementById('route-select').addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const fee = selectedOption.getAttribute('data-fee') || 0;
+        document.getElementById('monthly_fee').value = fee;
     });
 
+    // --- 3. Handle Form Submit ---
+    document.getElementById('assign-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const statusBox = document.getElementById('status-box');
+        statusBox.style.display = 'none';
+
+        const formData = {
+            student_id: document.getElementById('student-select').value,
+            route_id: document.getElementById('route-select').value,
+            boarding_stop: document.getElementById('boarding_stop').value,
+            dropping_stop: document.getElementById('dropping_stop').value,
+            monthly_fee: document.getElementById('monthly_fee').value
+        };
+
+        try {
+            const response = await fetch('/api/transport/assign', {
+                method: 'POST',
+                headers: authHeaders,
+                body: JSON.stringify(formData)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                showStatus('Assignment Successful!', 'success');
+                setTimeout(() => {
+                    window.location.href = 'manage-transport.html'; // FIX: Redirect to manage-transport
+                }, 1500);
+            } else {
+                throw new Error(result.message || 'Assignment failed');
+            }
+        } catch (err) {
+             showStatus(err.message, 'error');
+        }
+    });
+
+    function showStatus(msg, type) {
+        const el = document.getElementById('status-box');
+        el.textContent = msg;
+        el.className = `status-message ${type}`;
+        el.style.display = 'block';
+    }
+
+    // Initialize
     window.onload = populateDropdowns;
 </script>
 </body>

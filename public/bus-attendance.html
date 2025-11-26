@@ -2,174 +2,184 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Bus Attendance</title>
-    <link rel="stylesheet" href="/css/style.css">
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-        .attendance-list { list-style: none; padding: 0; }
-        .student-item { display: flex; justify-content: space-between; align-items: center; padding: 15px 10px; border-bottom: 1px solid #eee; }
-        .student-name { font-size: 1.1em; }
-        .status-buttons button { padding: 8px 12px; margin-left: 5px; border: 1px solid; border-radius: 5px; cursor: pointer; }
-        .btn-board { background-color: #e7f3ff; border-color: #007bff; color: #007bff; }
-        .btn-alight { background-color: #fff0e7; border-color: #fd7e14; color: #fd7e14; }
-        .student-item.marked { background-color: #f8f9fa; color: #6c757d; }
-        .student-item.marked .student-name { text-decoration: line-through; }
-        .student-item.marked button { display: none; }
-        .marked-status { font-weight: bold; color: #28a745; }
-        .controls { display: flex; flex-direction: column; gap: 15px; margin-bottom: 20px; }
+        /* --- CLASSIC DESIGN STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 900px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+        }
+        h1 { 
+            color: #C0392B; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        .nav-links { margin-bottom: 20px; }
+        .nav-links a { color: #005A9C; text-decoration: none; font-weight: bold; }
+
+        /* Controls */
+        .controls { 
+            background: #eee; padding: 15px; margin-bottom: 20px; border: 1px solid #ccc; 
+        }
+        label { font-weight: bold; margin-right: 10px; }
+        select { padding: 8px; border: 1px solid #333; min-width: 200px; }
+        
+        /* Student List */
+        .student-list { list-style: none; padding: 0; }
+        .student-item { 
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 15px; border-bottom: 1px solid #ddd; background: #fff;
+        }
+        .student-item:hover { background-color: #f9f9f9; }
+        
+        .student-info strong { font-size: 1.1em; color: #000; }
+        .student-info span { color: #666; font-size: 0.9em; margin-left: 10px; }
+
+        /* Buttons */
+        .actions button {
+            padding: 8px 15px; margin-left: 5px; cursor: pointer;
+            border: 1px solid #333; font-weight: bold;
+        }
+        .btn-board { background-color: #2ECC71; color: white; }
+        .btn-alight { background-color: #E67E22; color: white; }
+        .btn-reset { background-color: #95A5A6; color: white; }
+        
+        /* Status Badges */
+        .status-badge {
+            padding: 5px 10px; border-radius: 4px; font-weight: bold; font-size: 0.8em; margin-right: 10px;
+        }
+        .status-Boarded { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-Alighted { background-color: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        
+        .empty-msg { text-align: center; color: #777; font-style: italic; padding: 20px; }
     </style>
 </head>
 <body>
-<script>
-    const token = localStorage.getItem('erp-token');
-    if (!token) window.location.href = '/login';
-</script>
 
 <div class="container">
     <h1>Bus Attendance</h1>
-    <div class="nav-links"><a href="/manage-transport.html">← Back to Transport Management</a></div>
-    
+    <div class="nav-links"><a href="manage-transport.html">← Back to Transport Management</a></div>
+
     <div class="controls">
         <label for="route-select">Select Route:</label>
-        <select id="route-select" required></select>
+        <select id="route-select" onchange="loadStudents()">
+            <option value="">-- Select Route --</option>
+        </select>
         
-        <label>Select Trip:</label>
-        <div>
-            <input type="radio" id="trip-to-school" name="trip_type" value="To School" checked>
-            <label for="trip-to-school">Morning (To School)</label>
-        </div>
-        <div>
-            <input type="radio" id="trip-from-school" name="trip_type" value="From School">
-            <label for="trip-from-school">Afternoon (From School)</label>
-        </div>
+        <span style="margin-left: 20px;">
+            <label>Trip:</label> 
+            <input type="radio" name="trip" value="pickup" checked> Pickup
+            <input type="radio" name="trip" value="drop"> Drop
+        </span>
     </div>
 
-    <ul id="attendance-list" class="attendance-list">
-        <p>Please select a route to see the student list.</p>
+    <ul id="student-list" class="student-list">
+        <li class="empty-msg">Please select a route to view students.</li>
     </ul>
 </div>
 
 <script>
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
-    const routeSelect = document.getElementById('route-select');
-    const attendanceList = document.getElementById('attendance-list');
-    const tripTypeRadios = document.querySelectorAll('input[name="trip_type"]');
+    const token = localStorage.getItem('erp-token');
+    if (!token) window.location.href = 'index.html';
 
-    async function populateRoutes() {
+    const authHeaders = { 
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+    };
+
+    // 1. Load Routes into Dropdown
+    async function loadRoutes() {
         try {
             const res = await fetch('/api/transport/routes', { headers: authHeaders });
             const routes = await res.json();
-            routeSelect.innerHTML = '<option value="">-- Select a Route --</option>';
+            const select = document.getElementById('route-select');
             routes.forEach(r => {
-                routeSelect.innerHTML += `<option value="${r.id}">${r.route_name}</option>`;
+                select.innerHTML += `<option value="${r.id}">${r.route_name}</option>`;
             });
         } catch (err) {
-            alert('Failed to load routes.');
+            console.error("Error loading routes", err);
         }
     }
 
-    async function loadAttendanceSheet() {
-        const routeId = routeSelect.value;
+    // 2. Load Students for Selected Route
+    async function loadStudents() {
+        const routeId = document.getElementById('route-select').value;
+        const list = document.getElementById('student-list');
+        
         if (!routeId) {
-            attendanceList.innerHTML = '<p>Please select a route to see the student list.</p>';
+            list.innerHTML = '<li class="empty-msg">Please select a route.</li>';
             return;
         }
 
-        attendanceList.innerHTML = '<p>Loading students...</p>';
+        list.innerHTML = '<li class="empty-msg">Loading students...</li>';
+
         try {
-            
             const res = await fetch(`/api/transport/routes/${routeId}/attendance-sheet`, { headers: authHeaders });
-            
-            if (!res.ok) {
-                 const errorBody = await res.json().catch(() => ({ message: `Server returned status ${res.status}` }));
-                 console.error("Attendance API Error:", errorBody);
-                 attendanceList.innerHTML = `<p style="color:red;">Error loading sheet: ${errorBody.message || 'Check Server Console (Error 500).'}</p>`;
-                 return;
-            }
-            
             const students = await res.json();
 
-            // FIX: Ensure students is an array before trying to iterate (prevents TypeError)
-            if (!Array.isArray(students)) {
-                console.error("Attendance API returned non-array data:", students);
-                attendanceList.innerHTML = '<p style="color:red;">Error: Invalid data format from server API. Check Server Console.</p>';
-                return;
-            }
-            
             if (students.length === 0) {
-                attendanceList.innerHTML = '<p>No students are assigned to this route.</p>';
+                list.innerHTML = '<li class="empty-msg">No students assigned to this route.</li>';
                 return;
             }
 
-            attendanceList.innerHTML = '';
-            students.forEach(student => {
-                // student.student_user_id is the user's UUID
-                const li = document.createElement('li');
-                li.className = 'student-item';
-                li.id = `student-${student.student_user_id}`;
-
-                let buttonsHTML = `
-                    <button class="btn-board" onclick="markAttendance('${student.student_user_id}', '${routeId}', 'Boarded')">Board</button>
-                    <button class="btn-alight" onclick="markAttendance('${student.student_user_id}', '${routeId}', 'Alighted')">Alight</button>
-                `;
-                
-                let statusText = '';
-                if(student.current_status) {
-                    li.classList.add('marked');
-                    buttonsHTML = ''; // Hide buttons if already marked
-                    statusText = `<span class="marked-status">${student.current_status}</span>`;
-                }
-
-                li.innerHTML = `
-                    <span class="student-name">${student.first_name} ${student.last_name}</span>
-                    <div class="status-buttons">
-                        ${statusText}
-                        ${buttonsHTML}
+            list.innerHTML = students.map(s => `
+                <li class="student-item">
+                    <div class="student-info">
+                        <strong>${s.student_name}</strong>
+                        <span>(Roll: ${s.roll_number || 'N/A'})</span>
                     </div>
-                `;
-                attendanceList.appendChild(li);
-            });
-
+                    <div class="actions">
+                        ${getStatusBadge(s.current_status)}
+                        <button class="btn-board" onclick="markAttendance('${s.student_id}', '${routeId}', 'Boarded')">Board</button>
+                        <button class="btn-alight" onclick="markAttendance('${s.student_id}', '${routeId}', 'Alighted')">Alight</button>
+                    </div>
+                </li>
+            `).join('');
+            
         } catch (err) {
             console.error(err);
-            attendanceList.innerHTML = '<p style="color:red;">Failed to load student list due to a network error.</p>';
+            list.innerHTML = '<li class="empty-msg">Error loading student list.</li>';
         }
     }
 
-    async function markAttendance(studentId, routeId, action) {
-        const tripType = document.querySelector('input[name="trip_type"]:checked').value;
-        const status = `${action} (${tripType})`;
+    // Helper: Badge HTML
+    function getStatusBadge(status) {
+        if (!status) return '';
+        return `<span class="status-badge status-${status}">${status}</span>`;
+    }
 
-        if (!studentId || !routeId) {
-            return alert('Error: Invalid Student ID or Route ID. Please refresh and select a valid route.');
-        }
-
+    // 3. Mark Attendance
+    async function markAttendance(studentId, routeId, status) {
         try {
             const res = await fetch('/api/transport/attendance', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders },
+                headers: authHeaders,
                 body: JSON.stringify({ student_id: studentId, route_id: routeId, status: status })
             });
 
             if (res.ok) {
-                const studentItem = document.getElementById(`student-${studentId}`);
-                studentItem.classList.add('marked');
-                const buttonContainer = studentItem.querySelector('.status-buttons');
-                buttonContainer.innerHTML = `<span class="marked-status">${status}</span>`;
+                // Reload list to show updated status
+                loadStudents();
             } else {
-                const errorText = await res.text();
-                alert('Failed to mark attendance. Server error: ' + errorText);
+                alert("Failed to mark attendance.");
             }
         } catch (err) {
-            alert('A network error occurred.');
+            console.error(err);
+            alert("Error connecting to server.");
         }
     }
 
-    routeSelect.addEventListener('change', loadAttendanceSheet);
-    tripTypeRadios.forEach(radio => radio.addEventListener('change', loadAttendanceSheet));
-
-    window.onload = populateRoutes;
+    // Initialize
+    window.onload = loadRoutes;
 </script>
+
 </body>
 </html>
