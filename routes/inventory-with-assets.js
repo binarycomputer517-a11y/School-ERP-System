@@ -28,7 +28,6 @@ const ASSET_VIEW_ROLES = ['Admin', 'Super Admin', 'Staff', 'Coordinator'];
 // =========================================================
 // HELPER FUNCTION: Resolve Location ID
 // =========================================================
-// This helper checks if the input is a UUID. If not, it assumes it's a name and looks up the UUID.
 async function resolveLocationId(client, inputId) {
     if (!inputId) return null;
 
@@ -64,7 +63,6 @@ router.post('/inventory/items', authenticateToken, authorize(INVENTORY_MANAGEMEN
     try {
         await client.query('BEGIN');
         
-        // FIX applied here
         const finalLocationId = await resolveLocationId(client, location_id);
 
         const initialStatus = (low_stock_threshold > 0) ? 'Out of Stock' : 'In Stock';
@@ -91,14 +89,15 @@ router.post('/inventory/items', authenticateToken, authorize(INVENTORY_MANAGEMEN
 
 router.get('/inventory/items', authenticateToken, async (req, res) => {
     try {
+        // FIX APPLIED: explicitly casting IDs to text (::text) to avoid type mismatch errors
         const query = `
             SELECT 
                 i.*, 
                 v.name AS vendor_name,
                 l.location_name
             FROM ${ITEMS_TABLE} i
-            LEFT JOIN ${VENDORS_TABLE} v ON i.vendor_id = v.id
-            LEFT JOIN ${LOCATIONS_TABLE} l ON i.location_id = l.id
+            LEFT JOIN ${VENDORS_TABLE} v ON i.vendor_id::text = v.id::text
+            LEFT JOIN ${LOCATIONS_TABLE} l ON i.location_id::text = l.id::text
             ORDER BY i.status, i.name;
         `;
         const result = await pool.query(query);
@@ -117,7 +116,6 @@ router.put('/inventory/items/:id', authenticateToken, authorize(INVENTORY_MANAGE
     try {
         await client.query('BEGIN');
 
-        // FIX applied here
         const finalLocationId = await resolveLocationId(client, location_id);
 
         const query = `
@@ -230,8 +228,8 @@ router.get('/inventory/movement/:itemId', authenticateToken, async (req, res) =>
                 m.notes, m.reference_id, m.recorded_by_id,
                 u.username AS recorded_by_name
             FROM ${MOVEMENT_TABLE} m
-            LEFT JOIN ${USERS_TABLE} u ON m.recorded_by_id = u.id
-            WHERE m.item_id = $1
+            LEFT JOIN ${USERS_TABLE} u ON m.recorded_by_id::text = u.id::text
+            WHERE m.item_id::text = $1::text
             ORDER BY m.created_at DESC;
         `;
         const result = await pool.query(query, [itemId]);
@@ -327,8 +325,8 @@ router.get('/inventory/purchase-order/history', authenticateToken, authorize(INV
                 v.name AS vendor_name,
                 u.username AS created_by_name
             FROM ${PO_TABLE} po
-            JOIN ${VENDORS_TABLE} v ON po.vendor_id = v.id
-            JOIN ${USERS_TABLE} u ON po.created_by_id = u.id
+            JOIN ${VENDORS_TABLE} v ON po.vendor_id::text = v.id::text
+            JOIN ${USERS_TABLE} u ON po.created_by_id::text = u.id::text
             ORDER BY po.created_at DESC;
         `;
         const result = await pool.query(query);
@@ -367,7 +365,7 @@ router.get('/inventory/analytics/stock-prediction', authenticateToken, authorize
                     ELSE 0
                 END AS suggested_po_qty
             FROM ${ITEMS_TABLE} i
-            LEFT JOIN UsageRate ur ON i.id = ur.item_id
+            LEFT JOIN UsageRate ur ON i.id::text = ur.item_id::text
             WHERE i.status != 'Discontinued'
             ORDER BY days_to_threshold ASC NULLS LAST;
         `;
@@ -398,7 +396,6 @@ router.post('/asset/register', authenticateToken, authorize(['Admin', 'Staff']),
     try {
         await client.query('BEGIN');
 
-        // FIX applied here
         const finalLocationId = await resolveLocationId(client, current_location_id);
 
         const query = `
@@ -430,6 +427,7 @@ router.post('/asset/register', authenticateToken, authorize(['Admin', 'Staff']),
 
 router.get('/asset/all', authenticateToken, authorize(ASSET_VIEW_ROLES), async (req, res) => {
     try {
+        // FIX APPLIED: explicitly casting IDs to text (::text) to avoid type mismatch errors
         const query = `
             SELECT 
                 a.*,
@@ -443,9 +441,9 @@ router.get('/asset/all', authenticateToken, authorize(ASSET_VIEW_ROLES), async (
                     (EXTRACT(epoch FROM (NOW() - a.purchase_date)) / 31536000) / a.useful_life_years
                 ), 2)) AS current_book_value
             FROM ${ASSETS_TABLE} a
-            LEFT JOIN ${LOCATIONS_TABLE} l ON a.current_location_id = l.id
-            LEFT JOIN ${ASSIGNMENT_TABLE} assign ON a.id = assign.asset_id AND assign.is_active = TRUE
-            LEFT JOIN ${USERS_TABLE} u ON assign.user_id = u.id
+            LEFT JOIN ${LOCATIONS_TABLE} l ON a.current_location_id::text = l.id::text
+            LEFT JOIN ${ASSIGNMENT_TABLE} assign ON a.id::text = assign.asset_id::text AND assign.is_active = TRUE
+            LEFT JOIN ${USERS_TABLE} u ON assign.user_id::text = u.id::text
             ORDER BY a.status, a.tag_number;
         `;
         const result = await pool.query(query);
@@ -465,7 +463,6 @@ router.post('/asset/assign', authenticateToken, authorize(['Admin', 'Staff']), a
     try {
         await client.query('BEGIN');
 
-        // FIX applied here
         const finalLocationId = await resolveLocationId(client, assigned_location_id);
 
         await client.query(`UPDATE ${ASSIGNMENT_TABLE} SET is_active = FALSE, returned_at = CURRENT_TIMESTAMP WHERE asset_id = $1 AND is_active = TRUE`, [asset_id]);
@@ -538,8 +535,8 @@ router.get('/asset/maintenance/log/:assetId', authenticateToken, async (req, res
             SELECT 
                 m.*, u.username AS requester_name
             FROM ${MAINTENANCE_TABLE} m
-            LEFT JOIN ${USERS_TABLE} u ON m.requested_by_id = u.id
-            WHERE m.asset_id = $1
+            LEFT JOIN ${USERS_TABLE} u ON m.requested_by_id::text = u.id::text
+            WHERE m.asset_id::text = $1::text
             ORDER BY m.scheduled_date DESC;
         `;
         const result = await pool.query(query, [assetId]);
