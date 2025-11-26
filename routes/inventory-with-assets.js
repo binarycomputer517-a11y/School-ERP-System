@@ -89,7 +89,7 @@ router.post('/inventory/items', authenticateToken, authorize(INVENTORY_MANAGEMEN
 
 router.get('/inventory/items', authenticateToken, async (req, res) => {
     try {
-        // FIX APPLIED: explicitly casting IDs to text (::text) to avoid type mismatch errors
+        // FIX: explicitly casting IDs to text (::text) to avoid type mismatch errors
         const query = `
             SELECT 
                 i.*, 
@@ -427,7 +427,7 @@ router.post('/asset/register', authenticateToken, authorize(['Admin', 'Staff']),
 
 router.get('/asset/all', authenticateToken, authorize(ASSET_VIEW_ROLES), async (req, res) => {
     try {
-        // FIX APPLIED: explicitly casting IDs to text (::text) to avoid type mismatch errors
+        // FIX: explicitly casting IDs to text (::text) to avoid type mismatch errors
         const query = `
             SELECT 
                 a.*,
@@ -556,6 +556,20 @@ router.get('/asset/locations', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Error fetching locations:', error);
         res.status(500).json({ message: 'Failed to retrieve locations.' });
+    }
+});
+
+// =========================================================
+// HELPER ROUTE: Get User List for Dropdowns
+// =========================================================
+router.get('/asset/users-list', authenticateToken, async (req, res) => {
+    try {
+        const query = `SELECT id, username, role FROM ${USERS_TABLE} WHERE role != 'Parent' ORDER BY username`;
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Error fetching user list:', error);
+        res.status(500).json({ message: 'Failed to retrieve users.' });
     }
 });
 
