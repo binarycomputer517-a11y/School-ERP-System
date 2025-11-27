@@ -3,1323 +3,662 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Cafeteria & Canteen Management</title>
-    <link rel="stylesheet" href="css/style.css"> 
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <title>School ERP - Cafeteria Module</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.4/moment.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #1e293b; /* Navy Blue */
+            --secondary: #3b82f6; /* Bright Blue */
+            --accent: #0ea5e9; /* Sky Blue */
+            --success: #10b981; /* Green */
+            --warning: #f59e0b; /* Amber */
+            --danger: #ef4444; /* Red */
+            --background: #f1f5f9; /* Light Gray */
+            --surface: #ffffff; /* White */
+            --text-main: #334155;
+            --text-light: #64748b;
+            --border: #e2e8f0;
+        }
+
+        * { box-sizing: border-box; outline: none; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--background); color: var(--text-main); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+
+        /* --- SIDEBAR --- */
+        .sidebar { width: 260px; background-color: var(--primary); color: white; display: flex; flex-direction: column; transition: 0.3s; }
+        .brand { padding: 20px; font-size: 1.2rem; font-weight: 600; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px; }
+        .brand i { color: var(--secondary); font-size: 1.4rem; }
+        
+        .nav-links { list-style: none; padding: 20px 10px; margin: 0; flex-grow: 1; }
+        .nav-item { margin-bottom: 5px; }
+        .nav-btn { width: 100%; padding: 12px 15px; border-radius: 6px; border: none; background: transparent; color: #94a3b8; text-align: left; font-size: 0.95rem; cursor: pointer; transition: 0.2s; display: flex; align-items: center; gap: 12px; }
+        .nav-btn:hover { background: rgba(255,255,255,0.05); color: white; }
+        .nav-btn.active { background: var(--secondary); color: white; font-weight: 500; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5); }
+        
+        .user-panel { padding: 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.85rem; color: #94a3b8; display: flex; justify-content: space-between; align-items: center; }
+        .logout-btn { color: var(--danger); cursor: pointer; font-weight: 600; }
+
+        /* --- MAIN CONTENT --- */
+        .main-content { flex-grow: 1; overflow-y: auto; padding: 30px; display: flex; flex-direction: column; }
+        
+        /* Header Area */
+        .top-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
+        .page-title h2 { margin: 0; font-size: 1.5rem; font-weight: 600; color: var(--primary); }
+        .page-title p { margin: 5px 0 0; color: var(--text-light); font-size: 0.9rem; }
+        
+        /* Tab Sections */
+        .tab-view { display: none; animation: fadeIn 0.4s ease-in-out; }
+        .tab-view.active { display: block; }
+
+        /* Cards */
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+        .card { background: var(--surface); border-radius: 12px; padding: 25px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); border: 1px solid var(--border); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border); }
+        .card-title { font-size: 1.1rem; font-weight: 600; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        
+        /* Forms & Inputs */
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--text-main); margin-bottom: 6px; }
+        .form-control { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 6px; font-family: inherit; font-size: 0.9rem; transition: 0.2s; background: #f8fafc; }
+        .form-control:focus { border-color: var(--secondary); background: white; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1); }
+        
+        .row-inputs { display: flex; gap: 15px; }
+        
+        /* Buttons */
+        .btn { padding: 10px 20px; border-radius: 6px; border: none; font-size: 0.9rem; font-weight: 500; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 8px; justify-content: center; }
+        .btn-primary { background-color: var(--primary); color: white; }
+        .btn-primary:hover { background-color: #334155; }
+        .btn-success { background-color: var(--success); color: white; }
+        .btn-success:hover { background-color: #059669; }
+        .btn-danger { background-color: var(--danger); color: white; }
+        .btn-danger:hover { background-color: #dc2626; }
+        .btn-ghost { background: transparent; color: var(--text-light); border: 1px solid var(--border); }
+        .btn-ghost:hover { background: #f1f5f9; color: var(--primary); }
+        
+        /* Data Tables */
+        .data-table-wrapper { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { background: #f8fafc; color: var(--text-light); font-weight: 600; text-align: left; padding: 12px 15px; border-bottom: 1px solid var(--border); }
+        td { padding: 12px 15px; border-bottom: 1px solid var(--border); color: var(--text-main); }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background: #fdfdfd; }
+
+        /* Badges */
+        .badge { padding: 4px 8px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+        .bg-veg { background: #dcfce7; color: #166534; }
+        .bg-nonveg { background: #fee2e2; color: #991b1b; }
+        
+        /* KDS Grid */
+        .kds-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px; }
+        .ticket-card { background: white; border-radius: 8px; border: 1px solid var(--border); overflow: hidden; display: flex; flex-direction: column; }
+        .ticket-header { background: var(--primary); color: white; padding: 10px 15px; font-size: 0.9rem; display: flex; justify-content: space-between; }
+        .ticket-body { padding: 15px; flex-grow: 1; }
+        .ticket-items { list-style: none; padding: 0; margin: 0; font-size: 0.9rem; }
+        .ticket-items li { padding: 5px 0; border-bottom: 1px dashed var(--border); display: flex; justify-content: space-between; }
+        .ticket-footer { padding: 10px; background: #f8fafc; border-top: 1px solid var(--border); text-align: center; }
+
+        /* Login Modal */
+        .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(4px); z-index: 50; display: flex; justify-content: center; align-items: center; }
+        .login-card { background: white; width: 400px; padding: 40px; border-radius: 16px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1); text-align: center; }
+        .hidden { display: none !important; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Cafeteria & Canteen Management</h1>
-        <p>Current User: <span id="user-role-display"><i class="fas fa-user-shield"></i> Loading...</span></p>
 
-        <div class="tab-menu">
-            <button class="tab-btn active" data-tab="operations-tab">Operations</button>
-            <button class="tab-btn" data-tab="menu-tab">Menu Management</button>
-            <button class="tab-btn" data-tab="scheduling-tab">Scheduling</button>
-            <button class="tab-btn" data-tab="reports-tab">Reports & History</button>
-        </div>
-
-        <div id="operations-tab" class="tab-content active">
-            <div class="grid-3-col"> 
-                <div class="card form-area">
-                    <h2>Account Management & Top-Up</h2>
-                    <form id="balance-lookup-form" class="form-group-inline"> 
-                        <input type="text" id="balance-user-id" placeholder="User ID (Staff/Student UUID)" required>
-                        <button type="submit">Check Balance</button>
-                    </form>
-                    
-                    <div style="margin-top: 20px;">
-                        <h3>Balance for <strong id="balance-user-name">...</strong>:</h3>
-                        <p id="current-balance-display" style="font-size: 1.5em; font-weight: bold; color: #005A9C;"></p>
-                    </div>
-
-                    <h3>Process Top-Up</h3>
-                    <form id="top-up-form">
-                        <input type="hidden" id="top-up-user-id">
-                        <div class="form-group-inline"> 
-                            <input type="number" id="top-up-amount" name="amount" min="1" step="0.01" placeholder="Amount (₹)" required>
-                            <select id="payment-method" name="payment_method" required>
-                                <option value="Cash">Cash</option>
-                                <option value="Card">Card</option>
-                                <option value="Transfer">Bank Transfer</option>
-                            </select>
-                        </div>
-                        <button type="submit">Complete Top-Up</button>
-                        <div id="top-up-message" class="edit-message" style="display:none;"></div>
-                    </form>
-                </div>
-
-                <div class="card table-area">
-                    <h2>Real-Time Order Processor</h2>
-                    <form id="order-processor-form">
-                        <input type="text" id="order-user-id" placeholder="Customer ID (UUID)" required>
-                        <button type="button" onclick="loadOrderMenu()">Load Menu</button>
-                        
-                        <div id="order-menu-display" style="margin-top: 15px; padding-top: 10px; border-top: 1px dashed #999;">
-                            <p>Select items below after loading the menu:</p>
-                            <select id="available-items-select"></select>
-                            <button type="button" id="add-to-order-btn">Add to Order</button>
-                        </div>
-                        
-                        <h3>Current Order</h3>
-                        <ul id="order-items-list" style="list-style: square; padding-left: 20px;"></ul> 
-
-                        <h3>Total Cost: ₹<span id="order-total-cost">0.00</span></h3>
-                        <input type="hidden" id="order-total-cost-input" name="total_cost">
-
-                        <button type="submit" id="process-order-btn">Process Order (Deduct Balance)</button>
-                        <div id="order-message" class="edit-message" style="display:none;"></div>
-                    </form>
-                </div>
+    <div id="login-overlay" class="modal-overlay hidden">
+        <div class="login-card">
+            <div style="margin-bottom: 25px;">
+                <i class="fas fa-utensils" style="font-size: 3rem; color: var(--primary);"></i>
+                <h2 style="margin: 15px 0 5px; color: var(--primary);">Cafeteria Login</h2>
+                <p style="color: var(--text-light); margin: 0;">Authorized Staff Only</p>
             </div>
+            <form id="login-form">
+                <div class="form-group">
+                    <input type="text" id="login-email" class="form-control" placeholder="Username (e.g. sudam)" required>
+                </div>
+                <div class="form-group">
+                    <input type="password" id="login-pass" class="form-control" placeholder="Password" required>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width: 100%;">Sign In to Dashboard</button>
+            </form>
+            <p id="login-error" style="color: var(--danger); font-size: 0.9rem; margin-top: 15px; display: none;"></p>
         </div>
+    </div>
+
+    <aside class="sidebar">
+        <div class="brand">
+            <i class="fas fa-school"></i>
+            <span>School ERP</span>
+        </div>
+        <ul class="nav-links">
+            <li class="nav-item">
+                <button class="nav-btn active" onclick="switchTab('ops', this)">
+                    <i class="fas fa-cash-register"></i> POS & Wallet
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-btn" onclick="switchTab('kds', this)">
+                    <i class="fas fa-fire"></i> Kitchen Display
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-btn" onclick="switchTab('menu', this)">
+                    <i class="fas fa-book-open"></i> Menu Manager
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-btn" onclick="switchTab('staff', this)">
+                    <i class="fas fa-users"></i> Staff & Shifts
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-btn" onclick="switchTab('reports', this)">
+                    <i class="fas fa-chart-line"></i> Reports
+                </button>
+            </li>
+        </ul>
+        <div class="user-panel">
+            <span><i class="fas fa-user-circle"></i> <span id="user-role-display">User</span></span>
+            <span class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i></span>
+        </div>
+    </aside>
+
+    <main class="main-content">
         
-        <div id="menu-tab" class="tab-content">
-            <div class="grid-3-col">
-                <div class="card form-area">
-                    <h2>Daily Menu Editor & Viewer</h2>
-                    <input type="date" id="menu-date-viewer">
-                    <button onclick="loadDailyMenu()">View Menu</button>
-                    <div id="daily-menu-results" style="margin-top: 15px;">
-                        <div class="edit-message" style="display: block; background-color: #e6e6fa; border: 1px solid #d8bfd8; color: #333;">Select a date to view the menu structure.</div>
-                    </div>
+        <div class="top-bar">
+            <div class="page-title">
+                <h2>Cafeteria Management</h2>
+                <p>Manage sales, kitchen orders, and inventory efficiently.</p>
+            </div>
+            <div>
+                <span class="badge" style="background: #e2e8f0; color: #475569; font-size: 0.9rem; padding: 8px 12px;">
+                    <i class="far fa-calendar-alt"></i> Today: <span id="current-date">...</span>
+                </span>
+            </div>
+        </div>
 
-                    <hr style="margin-top: 20px;">
-                    <h3>Daily Menu Editor</h3>
-                    <input type="date" id="daily-menu-date-editor" style="margin-bottom: 10px;">
-                    <button onclick="loadDailyMenuEditor()">Load Menu for Date</button>
-                    <div id="daily-menu-editor-message" class="edit-message" style="margin-top: 10px; display: none;"></div>
+        <div id="ops" class="tab-view active">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-wallet"></i> Student Wallet</div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Select Student / Staff</label>
+                        <select id="wallet-id" class="form-control cust-dropdown"><option>Loading...</option></select>
+                    </div>
+                    <button onclick="checkBal()" class="btn btn-ghost" style="width: 100%; margin-bottom: 20px;">Check Current Balance</button>
                     
-                    <div id="daily-menu-editor-area" style="margin-top: 20px; display: none; border: 1px solid #CCC; padding: 15px;">
-                        <h4>Assign Items</h4>
-                        <p style="font-style: italic; font-size: 0.9em;">Click items from the list below to add them to a meal type.</p>
-                        
-                        <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-                            <select id="editor-item-select" required style="flex-grow: 1; max-width: 250px;">
-                                <option value="">-- Select Permanent Item --</option>
-                            </select>
-                            <select id="editor-meal-type-select">
-                                <option value="Breakfast">Breakfast</option>
-                                <option value="Lunch">Lunch</option>
-                                <option value="Snack">Snack</option>
-                                <option value="Dinner">Dinner</option>
-                            </select>
-                            <button onclick="addItemToEditor()" style="background-color: #28a745; color: white;">Add Item to Meal</button>
-                        </div>
-                        
-                        <div id="daily-menu-meal-editor" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
-                            </div>
-
-                        <div style="margin-top: 25px; border-top: 1px dashed #CCC; padding-top: 15px;">
-                            <button onclick="saveDailyMenu()" style="background-color: #C0392B; color: white;">Save Daily Menu</button>
-                            <button onclick="deleteDailyMenu()" class="action-btn delete" style="margin-left: 10px;">Clear/Delete Menu</button>
-                        </div>
+                    <div style="background: #f1f5f9; border-radius: 8px; padding: 20px; text-align: center; margin-bottom: 20px;">
+                        <span style="color: var(--text-light); font-size: 0.9rem;">Available Funds</span>
+                        <div style="font-size: 2.5rem; font-weight: 700; color: var(--success);" id="bal-display">₹0.00</div>
                     </div>
+
+                    <div class="card-title" style="font-size: 1rem; margin-bottom: 10px;">Top Up Funds</div>
+                    <div class="row-inputs">
+                        <input type="number" id="topup-amt" class="form-control" placeholder="Amount (₹)">
+                        <select id="payment-method" class="form-control"><option>Cash</option><option>UPI</option></select>
+                    </div>
+                    <button onclick="topUp()" class="btn btn-success" style="width: 100%; margin-top: 15px;">
+                        <i class="fas fa-plus-circle"></i> Add Funds
+                    </button>
                 </div>
 
-                <div class="card table-area">
-                    <h2>Permanent Menu Items List</h2>
-                    <h3>Add Item to Permanent List</h3>
-                    <form id="add-item-form" class="form-group-inline"> 
-                        <input type="text" name="name" placeholder="Item Name (e.g., Chicken Curry)" required>
-                        <input type="number" name="price" min="0.01" step="0.01" placeholder="Price (₹)" required>
-                        <input type="text" name="category" placeholder="Category (e.g., Main, Snack)">
-                        <button type="submit">Add Item</button>
-                    </form>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><i class="fas fa-cash-register"></i> Point of Sale</div>
+                        <button onclick="loadDailyMenuPOS()" class="btn btn-ghost btn-sm"><i class="fas fa-sync"></i> Refresh Menu</button>
+                    </div>
                     
-                    <table id="permanent-menu-table" style="margin-top: 20px;">
-                        <thead>
-                            <tr>
-                                <th>Item Name</th>
-                                <th>Price (₹)</th>
-                                <th>Category</th>
-                                <th>Status</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="permanent-menu-tbody">
-                            <tr><td colspan="5">Click 'Load All Items' to view.</td></tr>
-                        </tbody>
-                    </table>
-                    <button type="button" onclick="loadPermanentMenuItems()">Load All Items</button>
-                    <div id="permanent-menu-message" class="edit-message" style="display:none;"></div>
+                    <div class="row-inputs" style="margin-bottom: 15px;">
+                        <select id="pos-items" class="form-control" style="flex-grow: 1;"><option>Select Item...</option></select>
+                        <button onclick="addToCart()" class="btn btn-primary"><i class="fas fa-plus"></i></button>
+                    </div>
+
+                    <div class="data-table-wrapper" style="height: 250px; overflow-y: auto; margin-bottom: 20px;">
+                        <table>
+                            <thead><tr><th>Item</th><th style="text-align: right;">Total</th><th></th></tr></thead>
+                            <tbody id="cart-list">
+                                <tr><td colspan="3" style="text-align: center; padding: 40px; color: var(--text-light);">Cart is empty</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 1.2rem; font-weight: 700; margin-bottom: 20px;">
+                        <span>Total Payable:</span>
+                        <span style="color: var(--primary);" id="cart-total">₹0.00</span>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Customer (Bill To)</label>
+                        <select id="order-user-id" class="form-control cust-dropdown"><option>Loading...</option></select>
+                    </div>
+
+                    <button onclick="placeOrder()" class="btn btn-danger" style="width: 100%;">
+                        <i class="fas fa-check-circle"></i> PROCESS ORDER
+                    </button>
                 </div>
             </div>
         </div>
 
-        <div id="scheduling-tab" class="tab-content">
-             <div class="grid-3-col">
-                 <div class="card form-area">
-                    <h2>Staff Shift Assignments</h2>
-                    <p>Schedule Date:</p>
-                    <input type="date" id="schedule-date-viewer">
-                    <button onclick="loadDailySchedule()">View Schedule</button>
-                    <div id="schedule-message" class="edit-message" style="margin-top: 10px; display: none;"></div>
-                    
-                    <h3 style="margin-top: 20px;">Assign Staff to Shift</h3>
-                    <form id="shift-assignment-form">
-                        <div class="form-group-inline" style="display: flex; gap: 10px;">
-                            <select id="staff-select" required style="flex-grow: 1;">
-                                <option value="">-- Select Staff Member --</option>
-                            </select>
-                            <select id="shift-type-select" required style="flex-grow: 1;">
-                                <option value="">-- Select Shift Type --</option>
-                            </select>
-                        </div>
-                        <input type="text" id="assignment-notes" placeholder="Notes (Optional)">
-                        <button type="submit">Assign Shift</button>
-                    </form>
+        <div id="kds" class="tab-view">
+            <div style="display: flex; justify-content: flex-end; margin-bottom: 15px;">
+                <button onclick="loadKDS()" class="btn btn-primary"><i class="fas fa-sync"></i> Refresh Orders</button>
+            </div>
+            <div id="kds-container" class="kds-container">
+                </div>
+        </div>
 
-                    <h3 style="margin-top: 30px;">Schedule for <span id="schedule-date-display">...</span></h3>
+        <div id="menu" class="tab-view">
+            <div class="grid-2">
+                <div class="card">
+                    <div class="card-header"><div class="card-title">Add New Item</div></div>
+                    <div class="form-group">
+                        <label class="form-label">Item Name</label>
+                        <input type="text" id="new-name" class="form-control">
+                    </div>
+                    <div class="row-inputs form-group">
+                        <div style="flex:1">
+                            <label class="form-label">Price (₹)</label>
+                            <input type="number" id="new-price" class="form-control">
+                        </div>
+                        <div style="flex:1">
+                            <label class="form-label">Type</label>
+                            <select id="new-type" class="form-control"><option>Veg</option><option>Non-Veg</option></select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Category</label>
+                        <input type="text" id="new-cat" class="form-control" placeholder="e.g. Snacks, Drinks">
+                    </div>
+                    <button onclick="addItem()" class="btn btn-success" style="width: 100%;">Save Item</button>
+                    
+                    <div style="margin-top: 25px; height: 300px; overflow-y: auto;" class="data-table-wrapper">
+                        <table id="item-table">
+                            <thead><tr><th>Name</th><th>Price</th><th>Action</th></tr></thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><div class="card-title">Daily Menu Planner</div></div>
+                    <div class="row-inputs form-group">
+                        <input type="date" id="planner-date" class="form-control">
+                        <button onclick="loadDailyEditor()" class="btn btn-primary">Load</button>
+                    </div>
+                    <hr style="border: 0; border-top: 1px solid var(--border); margin: 20px 0;">
+                    
+                    <div class="form-group">
+                        <label class="form-label">Select Item to Add</label>
+                        <select id="editor-item-select" class="form-control"><option>Select...</option></select>
+                    </div>
+                    <div class="row-inputs form-group">
+                        <select id="editor-meal-select" class="form-control" style="flex-grow:1"><option>Breakfast</option><option>Lunch</option><option>Snack</option></select>
+                        <button onclick="addToDaily()" class="btn btn-success">Add</button>
+                    </div>
+
+                    <div id="daily-list" style="background: #f8fafc; padding: 15px; border-radius: 6px; margin-top: 15px; font-size: 0.9rem;"></div>
+
+                    <div style="display: flex; gap: 10px; margin-top: 20px;">
+                        <button onclick="deleteDaily()" class="btn btn-danger" style="flex: 1;">Clear</button>
+                        <button onclick="saveDaily()" class="btn btn-warning" style="flex: 1; color: #fff;">Publish Menu</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="staff" class="tab-view">
+            <div class="card">
+                <div class="card-header"><div class="card-title">Shift Management</div></div>
+                <div class="row-inputs form-group" style="max-width: 400px;">
+                    <input type="date" id="shift-date" class="form-control">
+                    <button onclick="loadSchedule()" class="btn btn-primary">View Schedule</button>
+                </div>
+                
+                <div class="row-inputs form-group" style="align-items: flex-end;">
+                    <div style="flex:1">
+                        <label class="form-label">Staff Member</label>
+                        <select id="staff-select" class="form-control"><option>Loading...</option></select>
+                    </div>
+                    <div style="flex:1">
+                        <label class="form-label">Shift</label>
+                        <select id="shift-select" class="form-control"><option>Loading...</option></select>
+                    </div>
+                    <button onclick="assignShift()" class="btn btn-success">Assign</button>
+                </div>
+
+                <div class="data-table-wrapper">
                     <table id="schedule-table">
-                        <thead>
-                            <tr>
-                                <th>Shift</th>
-                                <th>Time</th>
-                                <th>Staff Member</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="schedule-tbody">
-                            <tr><td colspan="4">Select a date and click 'View Schedule'.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="card table-area">
-                    <h2>Manage Shift Types</h2>
-                    <h3>Add New Shift Type</h3>
-                    <form id="add-shift-type-form">
-                        <div style="display: flex; gap: 10px; margin-bottom: 10px;">
-                            <input type="text" name="shift_name" placeholder="Shift Name (e.g., Morning Prep)" required style="flex-grow: 2;">
-                            <input type="time" name="start_time" required title="Start Time" style="flex-grow: 1;">
-                            <input type="time" name="end_time" required title="End Time" style="flex-grow: 1;">
-                        </div>
-                        <button type="submit">Create Shift Type</button>
-                        <div id="shift-type-message" class="edit-message" style="margin-top: 10px; display: none;"></div>
-                    </form>
-
-                    <h3 style="margin-top: 30px;">Active Shift Types</h3>
-                    <table id="shift-types-table">
-                        <thead>
-                            <tr>
-                                <th>Name</th>
-                                <th>Time Span</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="shift-types-tbody">
-                            <tr><td colspan="3">Loading shift types...</td></tr>
-                        </tbody>
+                        <thead><tr><th>Shift Name</th><th>Staff Name</th><th>Time</th><th>Action</th></tr></thead>
+                        <tbody></tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <div id="reports-tab" class="tab-content">
-            <div class="grid-3-col"> 
-                
-                <div class="form-area">
-                    <div class="card" style="margin-bottom: 20px;">
-                        <h2>Transaction History Lookup</h2>
-                        <form id="history-lookup-form" class="form-group-inline"> 
-                            <input type="text" id="history-user-id" placeholder="User ID (UUID)" required>
-                            <button type="submit">View History</button>
-                        </form>
-                        <table id="history-table">
-                            <thead><tr><th>Date</th><th>Type</th><th>Amount (₹)</th><th>New Balance</th></tr></thead>
-                            <tbody id="history-tbody"></tbody>
-                        </table>
-                    </div>
-                    
-                    <div class="card">
-                        <h2>Report Parameters</h2>
-                        <form id="report-params-form" style="border: none; background: transparent; padding: 0;">
-                            <label for="report-start-date">Start Date:</label>
-                            <input type="date" id="report-start-date" required>
-                            <label for="report-end-date">End Date:</label>
-                            <input type="date" id="report-end-date" required>
-                            <button type="submit">Generate Reports</button>
-                        </form>
-                    </div>
+        <div id="reports" class="tab-view">
+            <div class="card">
+                <div class="card-header"><div class="card-title">Financial Reports</div></div>
+                <div class="row-inputs form-group" style="align-items: center; max-width: 600px;">
+                    <input type="date" id="rep-start" class="form-control">
+                    <span>to</span>
+                    <input type="date" id="rep-end" class="form-control">
+                    <button onclick="genReport()" class="btn btn-primary">Generate</button>
                 </div>
 
-                <div class="table-area">
-                    <div class="card" style="margin-bottom: 20px;">
-                        <h2>Financial Summary</h2>
-                        <div id="sales-summary-results">
-                            <p>Select dates and click Generate Reports.</p>
-                        </div>
+                <div class="grid-2">
+                    <div class="card" style="background: #f8fafc; border:none;">
+                        <h4 style="margin-top:0;">Summary</h4>
+                        <div id="rep-sales" style="font-size: 1.1rem; line-height: 1.8;">Select dates to view data.</div>
                     </div>
-
-                    <div class="card" style="margin-bottom: 20px;">
-                        <h2>Top Selling Menu Items (Top 5)</h2>
-                        <table id="top-selling-table">
-                            <thead>
-                                <tr><th>Item Name</th><th>Quantity Sold</th></tr>
-                            </thead>
-                            <tbody id="top-selling-tbody">
-                                <tr><td colspan="2">No data.</td></tr>
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="card">
-                        <h2>Staff Scheduled Hours</h2>
-                        <table id="staff-hours-table">
-                            <thead>
-                                <tr><th>Staff Member</th><th>Shifts</th><th>Total Hours</th></tr>
-                            </thead>
-                            <tbody id="staff-hours-tbody">
-                                <tr><td colspan="3">No data.</td></tr>
-                            </tbody>
+                    <div class="data-table-wrapper">
+                        <table id="rep-top-table">
+                            <thead><tr><th>Top Item</th><th>Qty Sold</th></tr></thead>
+                            <tbody></tbody>
                         </table>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <div id="edit-item-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: none; justify-content: center; align-items: center;">
-        <div style="background: white; padding: 25px; border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; width: 400px; max-width: 90%;">
-            <h2>Edit Permanent Menu Item</h2>
-            <form id="edit-item-form">
-                <input type="hidden" id="edit-item-id">
-                <label for="edit-name">Name:</label>
-                <input type="text" id="edit-name" name="name" required>
-                
-                <label for="edit-price">Price (₹):</label>
-                <input type="number" id="edit-price" name="price" min="0.01" step="0.01" required>
-                
-                <label for="edit-category">Category:</label>
-                <input type="text" id="edit-category" name="category">
-                
-                <button type="submit" style="margin-top: 20px; margin-right: 10px;">Save Changes</button>
-                <button type="button" onclick="document.getElementById('edit-item-modal').style.display='none'" class="action-btn delete" style="box-shadow: 2px 2px 0 #000; padding: 10px 15px; border: 2px solid #000;">Cancel</button>
-            </form>
-            <div id="edit-modal-message" class="edit-message" style="margin-top: 10px; display: none;"></div>
+    </main>
+
+    <div id="recipe-modal" class="modal-overlay hidden">
+        <div class="login-card" style="width: 500px; text-align: left;">
+            <h3 style="margin-top: 0; color: var(--primary);">Recipe: <span id="rec-item-name" style="color: var(--secondary);"></span></h3>
+            <input type="hidden" id="rec-id">
+            <p style="color: var(--text-light); font-size: 0.9rem;">Link inventory ingredients required to make 1 unit.</p>
+            
+            <div class="row-inputs form-group">
+                <select id="inv-select" class="form-control" style="flex: 2;"><option>Loading Inventory...</option></select>
+                <input type="number" id="inv-qty" class="form-control" placeholder="Qty" style="flex: 1;">
+                <button onclick="saveRecipe()" class="btn btn-success"><i class="fas fa-plus"></i></button>
+            </div>
+            
+            <ul id="rec-list" style="margin: 15px 0; padding-left: 20px; color: var(--text-main);"></ul>
+            <div style="text-align: right;">
+                <button onclick="document.getElementById('recipe-modal').classList.add('hidden')" class="btn btn-ghost">Close</button>
+            </div>
         </div>
     </div>
-    <div id="edit-shift-modal" style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; display: none; justify-content: center; align-items: center;">
-        <div style="background: white; padding: 25px; border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; width: 400px; max-width: 90%;">
-            <h2>Edit Shift Type</h2>
-            <form id="edit-shift-type-form">
-                <input type="hidden" id="edit-shift-id">
-                <label for="edit-shift-name">Shift Name:</label>
-                <input type="text" id="edit-shift-name" name="shift_name" required>
-                
-                <label for="edit-start-time">Start Time:</label>
-                <input type="time" id="edit-start-time" name="start_time" required>
-                
-                <label for="edit-end-time">End Time:</label>
-                <input type="time" id="edit-end-time" name="end_time" required>
-                
-                <button type="submit" style="margin-top: 20px; margin-right: 10px;">Save Changes</button>
-                <button type="button" onclick="document.getElementById('edit-shift-modal').style.display='none'" class="action-btn delete" style="box-shadow: 2px 2px 0 #000; padding: 10px 15px; border: 2px solid #000;">Cancel</button>
-            </form>
-            <div id="edit-shift-modal-message" class="edit-message" style="margin-top: 10px; display: none;"></div>
-        </div>
-    </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
-    <script>
-        const API_BASE = '/api/cafeteria';
-        const TOKEN = localStorage.getItem('erp-token');
-        const USER_ROLE = localStorage.getItem('user-role');
-        const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
-        
-        if (!TOKEN || (USER_ROLE !== 'Admin' && USER_ROLE !== 'Staff')) { 
-             // window.location.href = '/login'; 
+
+<script>
+    // --- CONFIG & STATE ---
+    const API = '/api/cafeteria';
+    const AUTH_API = '/api/auth';
+    const INVENTORY_API = '/api/inventory';
+    let TOKEN = localStorage.getItem('token');
+    let cart = [];
+    let dailyMenuTemp = {};
+
+    // --- INIT ---
+    document.addEventListener('DOMContentLoaded', () => {
+        const today = moment().format('YYYY-MM-DD');
+        document.getElementById('current-date').innerText = moment().format('MMM Do, YYYY');
+        document.querySelectorAll('input[type="date"]').forEach(i => i.value = today);
+
+        if (!TOKEN) {
+            document.getElementById('login-overlay').classList.remove('hidden');
+        } else {
+            initApp();
         }
 
-        // --- DOM Elements ---
-        const userRoleDisplay = document.getElementById('user-role-display');
-        const balanceUserIdInput = document.getElementById('balance-user-id');
-        const topUpUserIdInput = document.getElementById('top-up-user-id');
-        const balanceUserName = document.getElementById('balance-user-name');
-        const currentBalanceDisplay = document.getElementById('current-balance-display');
-        const orderUserIdInput = document.getElementById('order-user-id');
-        const orderTotalCostEl = document.getElementById('order-total-cost');
-        const orderTotalCostInput = document.getElementById('order-total-cost-input');
-        const orderItemsList = document.getElementById('order-items-list');
-        const availableItemsSelect = document.getElementById('available-items-select');
-        const dailyMenuResults = document.getElementById('daily-menu-results');
-        const menuDateViewer = document.getElementById('menu-date-viewer');
-        const permanentMenuTbody = document.getElementById('permanent-menu-tbody');
-        const permanentMenuMessage = document.getElementById('permanent-menu-message');
-        
-        const editItemModal = document.getElementById('edit-item-modal');
-        const editItemIdInput = document.getElementById('edit-item-id');
-        const editNameInput = document.getElementById('edit-name');
-        const editPriceInput = document.getElementById('edit-price');
-        const editCategoryInput = document.getElementById('edit-category');
-        const editModalMessage = document.getElementById('edit-modal-message');
-
-        // Daily Menu Editor Elements
-        const dailyMenuDateEditor = document.getElementById('daily-menu-date-editor');
-        const dailyMenuEditorMessage = document.getElementById('daily-menu-editor-message');
-        const dailyMenuEditorArea = document.getElementById('daily-menu-editor-area');
-        const dailyMenuMealEditor = document.getElementById('daily-menu-meal-editor');
-        const editorItemSelect = document.getElementById('editor-item-select');
-        const editorMealTypeSelect = document.getElementById('editor-meal-type-select');
-
-        // Scheduling Elements
-        const scheduleDateViewer = document.getElementById('schedule-date-viewer');
-        const scheduleDateDisplay = document.getElementById('schedule-date-display');
-        const scheduleTbody = document.getElementById('schedule-tbody');
-        const scheduleMessage = document.getElementById('schedule-message');
-        const staffSelect = document.getElementById('staff-select');
-        const shiftTypeSelect = document.getElementById('shift-type-select');
-        const assignmentNotes = document.getElementById('assignment-notes');
-        const shiftAssignmentForm = document.getElementById('shift-assignment-form');
-        
-        // Shift Type Management Elements
-        const addShiftTypeForm = document.getElementById('add-shift-type-form');
-        const shiftTypesTbody = document.getElementById('shift-types-tbody');
-        const shiftTypeMessage = document.getElementById('shift-type-message');
-        const editShiftModal = document.getElementById('edit-shift-modal');
-        const editShiftIdInput = document.getElementById('edit-shift-id');
-        const editShiftNameInput = document.getElementById('edit-shift-name');
-        const editStartTimeInput = document.getElementById('edit-start-time');
-        const editEndTimeInput = document.getElementById('edit-end-time');
-        const editShiftModalMessage = document.getElementById('edit-shift-modal-message');
-
-        // Reporting Elements
-        const reportParamsForm = document.getElementById('report-params-form');
-        const reportStartDate = document.getElementById('report-start-date');
-        const reportEndDate = document.getElementById('report-end-date');
-        const salesSummaryResults = document.getElementById('sales-summary-results');
-        const topSellingTbody = document.getElementById('top-selling-tbody');
-        const staffHoursTbody = document.getElementById('staff-hours-tbody');
-
-
-        // --- Global State ---
-        let currentBalance = 0;
-        let availableMenuItems = [];
-        let currentOrder = [];
-        let allPermanentItems = []; 
-        let currentDailyMenu = {}; 
-        let availableStaff = []; 
-        let availableShifts = []; 
-        let allActiveShifts = [];
-        const MEAL_TYPES = ["Breakfast", "Lunch", "Snack", "Dinner"]; 
-
-        
-        // --- Helper Functions ---
-        async function handleApi(url, options = {}) {
-            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
-            const response = await fetch(url, { ...options, headers: authHeaders });
-            
-            if (response.status === 401 || response.status === 403) {
-                localStorage.clear();
-                throw new Error('Unauthorized or session expired.');
-            }
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
-                throw new Error(errorBody.message || 'API call failed.');
-            }
-            if (response.status === 204) return {};
-            return response.json();
-        }
-        
-        function showMessage(element, text, type) {
-            element.textContent = text;
-            element.style.display = 'block';
-            let bgColor, borderColor, color;
-            
-            switch(type) {
-                case 'error':
-                    bgColor = '#dc3545';
-                    borderColor = '#C0392B';
-                    color = 'white';
-                    break;
-                case 'success':
-                    bgColor = '#28a745';
-                    borderColor = '#008000';
-                    color = 'white';
-                    break;
-                case 'info':
-                default:
-                    bgColor = '#ffc107';
-                    borderColor = '#ff9800';
-                    color = '#333';
-                    break;
-            }
-            element.style.backgroundColor = bgColor;
-            element.style.border = `1px solid ${borderColor}`;
-            element.style.color = color;
-        }
-        
-        // --- 1. Account & Top-Up Logic ---
-        document.getElementById('balance-lookup-form').addEventListener('submit', async (e) => {
+        // Login Handler
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const userId = balanceUserIdInput.value.trim();
-            balanceUserName.textContent = userId.slice(0, 8) + '...';
-
+            const u = document.getElementById('login-email').value;
+            const p = document.getElementById('login-pass').value;
             try {
-                const result = await handleApi(`${API_BASE}/balance/${userId}`);
-                currentBalance = parseFloat(result.current_balance);
+                const res = await fetch(`${AUTH_API}/login`, {
+                    method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:u, password:p})
+                });
+                const data = await res.json();
+                if(!res.ok) throw new Error(data.message);
                 
-                currentBalanceDisplay.textContent = `₹${currentBalance.toFixed(2)}`;
-                currentBalanceDisplay.style.color = currentBalance > 10 ? '#005A9C' : '#C0392B';
-                topUpUserIdInput.value = userId;
-                showMessage(document.getElementById('top-up-message'), '', '');
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('role', data.role);
+                TOKEN = data.token;
                 
-            } catch (error) {
-                currentBalanceDisplay.textContent = 'ERROR';
-                balanceUserName.textContent = 'Lookup Failed';
-                showMessage(document.getElementById('top-up-message'), `❌ Lookup Failed: ${error.message}`, 'error');
+                document.getElementById('login-overlay').classList.add('hidden');
+                initApp();
+            } catch(err) {
+                const el = document.getElementById('login-error');
+                el.innerText = err.message; el.style.display='block';
             }
         });
+    });
 
-        document.getElementById('top-up-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const userId = topUpUserIdInput.value;
-            const amount = parseFloat(document.getElementById('top-up-amount').value);
-            const method = document.getElementById('payment-method').value;
-            
-            if (!userId) {
-                showMessage(document.getElementById('top-up-message'), 'Please look up an account first.', 'error');
-                return;
-            }
-            
-            showMessage(document.getElementById('top-up-message'), 'Processing top-up...', 'info');
+    function logout() { localStorage.clear(); location.reload(); }
 
-            try {
-                const result = await handleApi(`${API_BASE}/top-up`, { 
-                    method: 'POST', 
-                    body: JSON.stringify({ user_id: userId, amount: amount, payment_method: method }) 
-                });
-                
-                currentBalance = parseFloat(result.new_balance);
-                currentBalanceDisplay.textContent = `₹${currentBalance.toFixed(2)}`;
-                showMessage(document.getElementById('top-up-message'), `✅ Top-up successful! New Balance: ₹${currentBalance.toFixed(2)}`, 'success');
-                form.reset();
+    function initApp() {
+        document.getElementById('user-role-display').innerText = localStorage.getItem('role') || 'User';
+        loadItems();
+        loadCustomers();
+        loadStaffAndShifts();
+        setInterval(() => { if(document.getElementById('kds').style.display === 'block') loadKDS(); }, 10000);
+    }
 
-            } catch (error) {
-                showMessage(document.getElementById('top-up-message'), `❌ Top-Up Failed: ${error.message}`, 'error');
-            }
-        });
-        
-        // --- 2. Order Processing Logic ---
-        async function loadOrderMenu() {
-            const today = moment().format('YYYY-MM-DD');
-            try {
-                const dailyMenu = await handleApi(`${API_BASE}/menu`); 
-                
-                availableMenuItems = [];
-                availableItemsSelect.innerHTML = '';
-
-                dailyMenu.forEach(meal => {
-                    availableItemsSelect.innerHTML += `<optgroup label="${meal.meal_type}">`;
-                    meal.items.forEach(item => {
-                        const price = parseFloat(item.price);
-                        availableItemsSelect.innerHTML += `<option value="${item.item_name}" data-price="${price}">${item.item_name} (₹${price.toFixed(2)})</option>`;
-                        availableMenuItems.push({ name: item.item_name, price: price });
-                    });
-                    availableItemsSelect.innerHTML += `</optgroup>`;
-                });
-                
-                showMessage(document.getElementById('order-message'), `Menu for ${today} loaded.`, 'info');
-
-            } catch (error) {
-                showMessage(document.getElementById('order-message'), `❌ Failed to load menu: ${error.message}`, 'error');
-            }
+    // --- API WRAPPER ---
+    async function api(url, opts={}) {
+        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+        const res = await fetch(url, { ...opts, headers });
+        const text = await res.text();
+        if(!res.ok) {
+            if(res.status===401 || res.status===403) { alert("Session expired."); logout(); throw new Error("Auth"); }
+            try { throw new Error(JSON.parse(text).message); } catch(e) { throw new Error(text); }
         }
-        
-        function updateOrderDisplay() {
-            let total = 0;
-            orderItemsList.innerHTML = '';
-            
-            currentOrder.forEach((item, index) => {
-                const cost = item.quantity * item.price;
-                total += cost;
-                orderItemsList.innerHTML += `
-                    <li>
-                        <span>${item.quantity} x ${item.name}</span>
-                        <span>
-                            <strong style="color: #C0392B;">₹${cost.toFixed(2)}</strong>
-                            <button type="button" onclick="removeItemFromOrder(${index})" class="action-btn delete" style="padding: 3px 6px; margin-left: 10px; margin-top: 0;">Remove</button>
-                        </span>
-                    </li>
-                `;
+        return text ? JSON.parse(text) : {};
+    }
+
+    function switchTab(id, btn) {
+        document.querySelectorAll('.tab-view').forEach(d => d.classList.remove('active'));
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        btn.classList.add('active');
+        if(id === 'kds') loadKDS();
+    }
+
+    // --- OPERATIONS ---
+    async function loadCustomers() {
+        try {
+            const users = await api(`${API}/customers`);
+            const opts = '<option value="">-- Select --</option>' + users.map(u => `<option value="${u.id}">${u.username} [${u.role}]</option>`).join('');
+            document.querySelectorAll('.cust-dropdown').forEach(s => s.innerHTML = opts);
+        } catch(e) {}
+    }
+
+    async function checkBal() {
+        const id = document.getElementById('wallet-id').value;
+        if(!id) return alert("Select User");
+        try { const r = await api(`${API}/balance/${id}`); document.getElementById('bal-display').innerText = `₹${r.current_balance}`; }
+        catch(e) { alert(e.message); }
+    }
+
+    async function topUp() {
+        const id = document.getElementById('wallet-id').value;
+        const amt = document.getElementById('topup-amt').value;
+        if(!id || !amt) return alert("Select User and Amount");
+        try {
+            await api(`${API}/top-up`, { method:'POST', body:JSON.stringify({
+                user_id: id, amount: amt, payment_method: document.getElementById('payment-method').value
+            })});
+            alert("Success"); checkBal();
+        } catch(e) { alert(e.message); }
+    }
+
+    async function loadDailyMenuPOS() {
+        const today = moment().format('YYYY-MM-DD');
+        const sel = document.getElementById('pos-items');
+        try {
+            const menu = await api(`${API}/menu/${today}`);
+            sel.innerHTML = '<option value="">Select Item</option>';
+            menu.forEach(grp => grp.items.forEach(i => {
+                const opt = document.createElement('option');
+                opt.value = i.menu_item_id; opt.text = `${i.item_name} (₹${i.price})`;
+                opt.dataset.price = i.price; opt.dataset.name = i.item_name;
+                sel.appendChild(opt);
+            }));
+        } catch(e) { alert("No menu found"); }
+    }
+
+    function addToCart() {
+        const sel = document.getElementById('pos-items');
+        const opt = sel.options[sel.selectedIndex];
+        if(!opt.value) return;
+        const ex = cart.find(x=>x.menu_item_id===opt.value);
+        if(ex) ex.quantity++; else cart.push({menu_item_id:opt.value, name:opt.text, price:parseFloat(opt.dataset.price), quantity:1});
+        renderCart();
+    }
+
+    function renderCart() {
+        const tb = document.getElementById('cart-list'); tb.innerHTML='';
+        let tot=0;
+        if(cart.length===0) tb.innerHTML='<tr><td colspan="3" style="text-align:center; padding:30px; color:#999">Cart is empty</td></tr>';
+        else cart.forEach((i,x) => {
+            tot += i.price*i.quantity;
+            tb.innerHTML += `<tr><td>${i.name} <br><small>x${i.quantity}</small></td><td style="text-align:right">₹${(i.price*i.quantity).toFixed(2)}</td><td><i onclick="cart.splice(${x},1);renderCart()" class="fas fa-trash" style="color:var(--danger); cursor:pointer;"></i></td></tr>`;
+        });
+        document.getElementById('cart-total').innerText = `₹${tot.toFixed(2)}`;
+    }
+
+    async function placeOrder() {
+        const uid = document.getElementById('order-user-id').value;
+        if(cart.length===0) return alert("Cart empty");
+        if(!uid) return alert("Select Customer");
+        try {
+            const tot = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            await api(`${API}/order`, { method:'POST', body:JSON.stringify({ user_id: uid, total_cost: tot, order_items: cart })});
+            alert("Order Sent to Kitchen!"); cart=[]; renderCart();
+        } catch(e) { alert(e.message); }
+    }
+
+    // --- KDS ---
+    async function loadKDS() {
+        const container = document.getElementById('kds-container');
+        try {
+            const orders = await api(`${API}/kds/live`);
+            if(orders.length === 0) { container.innerHTML = '<div style="color:#777; grid-column:1/-1; text-align:center;">No active orders</div>'; return; }
+            container.innerHTML = orders.map(o => {
+                const items = o.order_details_json.map(i => `<li><span>${i.quantity}x ${i.name}</span></li>`).join('');
+                const btn = o.order_status === 'PENDING' 
+                    ? `<button onclick="upStatus('${o.id}','PREPARING')" class="btn btn-warning" style="width:100%">Start</button>`
+                    : `<button onclick="upStatus('${o.id}','COMPLETED')" class="btn btn-success" style="width:100%">Ready</button>`;
+                return `<div class="ticket-card"><div class="ticket-header"><span>#${o.id.toString().slice(-4)}</span><span>${moment(o.created_at).format('h:mm A')}</span></div><div class="ticket-body"><ul class="ticket-items">${items}</ul></div><div class="ticket-footer">${btn}</div></div>`;
+            }).join('');
+        } catch(e) {}
+    }
+    async function upStatus(id, s) { await api(`${API}/kds/status/${id}`, {method:'PUT', body:JSON.stringify({status:s})}); loadKDS(); }
+
+    // --- MENU ---
+    async function loadItems() {
+        try {
+            const items = await api(`${API}/menu/items`);
+            const t = document.getElementById('item-table').querySelector('tbody');
+            const sel = document.getElementById('editor-item-select');
+            t.innerHTML = ''; sel.innerHTML = '<option value="">Select Item</option>';
+            items.forEach(i => {
+                const badge = i.food_type==='Veg'?'bg-veg':'bg-nonveg';
+                t.innerHTML += `<tr><td>${i.name} <span class="badge ${badge}">${i.food_type}</span></td><td>₹${i.price}</td><td><button onclick="openRec('${i.id}','${i.name}')" class="btn btn-ghost btn-sm">Recipe</button></td></tr>`;
+                sel.innerHTML += `<option value="${i.id}">${i.name}</option>`;
             });
-
-            orderTotalCostEl.textContent = total.toFixed(2);
-            orderTotalCostInput.value = total.toFixed(2);
-        }
-        
-        document.getElementById('add-to-order-btn').addEventListener('click', () => {
-            const select = availableItemsSelect;
-            const selectedOption = select.options[select.selectedIndex];
-            
-            if (!selectedOption || !selectedOption.value) return;
-
-            const name = selectedOption.value;
-            const price = parseFloat(selectedOption.dataset.price);
-
-            const existingItemIndex = currentOrder.findIndex(item => item.name === name);
-            if (existingItemIndex > -1) {
-                currentOrder[existingItemIndex].quantity += 1;
-            } else {
-                currentOrder.push({ name: name, price: price, quantity: 1 });
-            }
-            updateOrderDisplay();
-        });
-        
-        window.removeItemFromOrder = function(index) {
-            if (currentOrder[index].quantity > 1) {
-                currentOrder[index].quantity -= 1;
-            } else {
-                currentOrder.splice(index, 1);
-            }
-            updateOrderDisplay();
-        }
-
-        document.getElementById('order-processor-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const userId = orderUserIdInput.value.trim();
-            const totalCost = parseFloat(orderTotalCostInput.value);
-
-            if (currentOrder.length === 0) {
-                showMessage(document.getElementById('order-message'), '❌ Order is empty.', 'error');
-                return;
-            }
-            
-            showMessage(document.getElementById('order-message'), 'Processing order...', 'info');
-
-            try {
-                const result = await handleApi(`${API_BASE}/order`, { 
-                    method: 'POST', 
-                    body: JSON.stringify({ user_id: userId, total_cost: totalCost, order_items: currentOrder }) 
-                });
-                
-                showMessage(document.getElementById('order-message'), `✅ Order successful! New Balance: ₹${result.new_balance.toFixed(2)}`, 'success');
-                currentOrder = [];
-                updateOrderDisplay();
-                if (balanceUserIdInput.value === userId) {
-                    currentBalanceDisplay.textContent = `₹${result.new_balance.toFixed(2)}`;
-                }
-                
-            } catch (error) {
-                showMessage(document.getElementById('order-message'), `❌ Order Failed: ${error.message}`, 'error');
-            }
-        });
-
-        // --- 3. Menu Management Logic (Viewer) ---
-        async function loadDailyMenu() {
-            const selectedDate = menuDateViewer.value || moment().format('YYYY-MM-DD');
-            dailyMenuResults.innerHTML = '<div class="edit-message" style="display: block; background-color: #ffc107; color: #333;">Fetching menu details...</div>';
-
-            try {
-                const menu = await handleApi(`${API_BASE}/menu/${selectedDate}`);
-                
-                if (menu.length === 0) {
-                    dailyMenuResults.innerHTML = `<div class="edit-message" style="display: block; background-color: #dc3545; border: 1px solid #C0392B; color: white;">No menu defined for ${selectedDate}.</div>`;
-                    return;
-                }
-
-                let html = `<h3>Menu for ${selectedDate}</h3>`;
-                menu.forEach(meal => {
-                    html += `
-                        <h4>${meal.meal_type}</h4>
-                        <ul style="list-style: square; padding-left: 20px;">
-                            ${meal.items.map(item => `
-                                <li>
-                                    **${item.item_name}** <span style="float: right;">(₹${parseFloat(item.price).toFixed(2)})</span>
-                                </li>
-                            `).join('')}
-                        </ul>
-                    `;
-                });
-                dailyMenuResults.innerHTML = html;
-
-            } catch (error) {
-                dailyMenuResults.innerHTML = `<div class="edit-message" style="display: block; background-color: #dc3545; color: white;">Error loading menu: ${error.message}</div>`;
-            }
-        }
-        
-        document.getElementById('add-item-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const data = Object.fromEntries(new FormData(form));
-            
-            try {
-                const result = await handleApi(`${API_BASE}/menu/add-item`, { 
-                    method: 'POST', 
-                    body: JSON.stringify(data) 
-                });
-                alert(`Item added: ${result.message}`);
-                form.reset();
-                loadPermanentMenuItems(); 
-            } catch (error) {
-                alert(`Failed to add item: ${error.message}`);
-            }
-        });
-
-        // --- 4. Permanent Menu Item Management Logic (Load/Edit/Toggle) ---
-
-        async function loadPermanentMenuItems() {
-            permanentMenuTbody.innerHTML = '<tr><td colspan="5" style="background-color: #ffc107; color: #333;">Loading permanent menu items...</td></tr>';
-            showMessage(permanentMenuMessage, '', '');
-
-            try {
-                allPermanentItems = await handleApi(`${API_BASE}/menu/items`);
-
-                if (allPermanentItems.length === 0) {
-                    permanentMenuTbody.innerHTML = '<tr><td colspan="5">No permanent items found.</td></tr>';
-                    editorItemSelect.innerHTML = '<option value="">-- No Items Available --</option>';
-                    return;
-                }
-
-                // 1. Render the Permanent Items List Table
-                permanentMenuTbody.innerHTML = allPermanentItems.map(item => {
-                    const statusClass = item.is_available ? 'status-Active' : 'status-Cancelled';
-                    const statusText = item.is_available ? 'Available' : 'Unavailable';
-                    
-                    return `
-                        <tr>
-                            <td>${item.name}</td>
-                            <td>₹${parseFloat(item.price).toFixed(2)}</td>
-                            <td>${item.category || 'N/A'}</td>
-                            <td class="${statusClass}">${statusText}</td>
-                            <td>
-                                <button class="action-btn edit" data-id="${item.id}" onclick="showEditModal('${item.id}')">Edit</button>
-                                <button class="action-btn delete" data-id="${item.id}" onclick="toggleItemAvailability('${item.id}', ${item.is_available})">Toggle</button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-                
-                // 2. Populate the Daily Menu Editor dropdown with AVAILABLE items
-                editorItemSelect.innerHTML = '<option value="">-- Select Permanent Item --</option>';
-                allPermanentItems.filter(item => item.is_available).forEach(item => {
-                    editorItemSelect.innerHTML += `
-                        <option value="${item.id}" data-name="${item.name}" data-price="${parseFloat(item.price).toFixed(2)}">
-                            ${item.name} (₹${parseFloat(item.price).toFixed(2)})
-                        </option>
-                    `;
-                });
-                
-            } catch (error) {
-                permanentMenuTbody.innerHTML = '<tr><td colspan="5" style="background-color: #dc3545; color: white;">Error loading items.</td></tr>';
-                showMessage(permanentMenuMessage, `❌ Failed to load items: ${error.message}`, 'error');
-            }
-        }
-
-        window.showEditModal = function(itemId) {
-            const item = allPermanentItems.find(i => i.id === itemId);
-            if (!item) {
-                alert('Item data not found.');
-                return;
-            }
-            
-            editItemIdInput.value = item.id;
-            editNameInput.value = item.name;
-            editPriceInput.value = parseFloat(item.price);
-            editCategoryInput.value = item.category || '';
-            showMessage(editModalMessage, '', '');
-            editItemModal.style.display = 'flex';
-        }
-
-        document.getElementById('edit-item-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const itemId = editItemIdInput.value;
-            const data = {
-                name: editNameInput.value.trim(),
-                price: parseFloat(editPriceInput.value),
-                category: editCategoryInput.value.trim()
-            };
-            
-            showMessage(editModalMessage, 'Saving changes...', 'info');
-
-            try {
-                const result = await handleApi(`${API_BASE}/menu/edit-item/${itemId}`, { 
-                    method: 'PUT', 
-                    body: JSON.stringify(data) 
-                });
-
-                showMessage(editModalMessage, `✅ ${result.message}`, 'success');
-                
-                setTimeout(() => {
-                    editItemModal.style.display = 'none';
-                    loadPermanentMenuItems();
-                }, 800);
-                
-            } catch (error) {
-                showMessage(editModalMessage, `❌ Save Failed: ${error.message}`, 'error');
-            }
-        });
-        
-        window.toggleItemAvailability = async function(itemId, currentStatus) {
-            const actionText = currentStatus ? 'Deactivating' : 'Activating';
-            if (!confirm(`Are you sure you want to ${actionText.toLowerCase()} this item?`)) {
-                return;
-            }
-
-            showMessage(permanentMenuMessage, `${actionText} item...`, 'info');
-            
-            try {
-                const result = await handleApi(`${API_BASE}/menu/toggle-availability/${itemId}`, { 
-                    method: 'PUT',
-                });
-
-                showMessage(permanentMenuMessage, `✅ Item updated! New Status: ${result.is_available ? 'Available' : 'Unavailable'}.`, 'success');
-                loadPermanentMenuItems();
-
-            } catch (error) {
-                showMessage(permanentMenuMessage, `❌ Toggle Failed: ${error.message}`, 'error');
-            }
-        }
-
-        // --- 5. Daily Menu Editor Logic ---
-
-        window.loadDailyMenuEditor = async function() {
-            const selectedDate = dailyMenuDateEditor.value;
-            if (!selectedDate) {
-                showMessage(dailyMenuEditorMessage, 'Please select a date first.', 'error');
-                return;
-            }
-
-            showMessage(dailyMenuEditorMessage, 'Loading menu...', 'info');
-            dailyMenuEditorArea.style.display = 'block';
-            
-            try {
-                const menuData = await handleApi(`${API_BASE}/menu/daily-editable/${selectedDate}`);
-                
-                currentDailyMenu = menuData;
-                renderDailyMenuEditor();
-                showMessage(dailyMenuEditorMessage, `Menu for ${selectedDate} loaded. Found ${Object.keys(menuData).length} meal types.`, 'success');
-
-            } catch (error) {
-                if (error.message.includes('404') || error.message.includes('not found')) {
-                     currentDailyMenu = {};
-                     renderDailyMenuEditor();
-                     showMessage(dailyMenuEditorMessage, `No menu found for ${selectedDate}. Ready to create new menu.`, 'info');
-                } else {
-                    showMessage(dailyMenuEditorMessage, `❌ Error loading editor: ${error.message}`, 'error');
-                }
-            }
-        }
-
-        function renderDailyMenuEditor() {
-            dailyMenuMealEditor.innerHTML = ''; 
-
-            MEAL_TYPES.forEach(mealType => {
-                const items = currentDailyMenu[mealType] || []; 
-                const itemsHtml = items.map(item => `
-                    <li data-item-id="${item.item_id}" style="display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dotted #EEE;">
-                        <span>${item.item_name} (₹${item.price.toFixed(2)})</span>
-                        <button onclick="removeItemFromEditor('${mealType}', '${item.item_id}')" class="action-btn delete" style="padding: 2px 5px; font-size: 0.7em;">X</button>
-                    </li>
-                `).join('');
-
-                dailyMenuMealEditor.innerHTML += `
-                    <div style="border: 1px solid #005A9C; padding: 10px; background-color: #F5F9FF;">
-                        <h4 style="color: #005A9C; margin-top: 0; border-bottom: 1px solid #005A9C; padding-bottom: 5px;">${mealType} (${items.length} items)</h4>
-                        <ul id="list-${mealType}" style="list-style: none; padding: 0;">
-                            ${itemsHtml}
-                        </ul>
-                    </div>
-                `;
-            });
-        }
-
-        window.addItemToEditor = function() {
-            const select = editorItemSelect;
-            const mealType = editorMealTypeSelect.value;
-            const selectedOption = select.options[select.selectedIndex];
-            
-            if (!selectedOption || !selectedOption.value) {
-                showMessage(dailyMenuEditorMessage, 'Please select a permanent item to add.', 'error');
-                return;
-            }
-
-            const item_id = selectedOption.value;
-            const item_name = selectedOption.dataset.name;
-            const price = parseFloat(selectedOption.dataset.price);
-
-            if (!currentDailyMenu[mealType]) {
-                currentDailyMenu[mealType] = [];
-            }
-
-            if (currentDailyMenu[mealType].some(item => item.item_id === item_id)) {
-                showMessage(dailyMenuEditorMessage, `${item_name} is already in the ${mealType} menu.`, 'error');
-                return;
-            }
-
-            currentDailyMenu[mealType].push({ item_id, item_name, price });
-            showMessage(dailyMenuEditorMessage, `${item_name} added to ${mealType}.`, 'success');
-            renderDailyMenuEditor();
-        }
-
-        window.removeItemFromEditor = function(mealType, itemId) {
-            if (currentDailyMenu[mealType]) {
-                currentDailyMenu[mealType] = currentDailyMenu[mealType].filter(item => item.item_id !== itemId);
-                showMessage(dailyMenuEditorMessage, `Item removed from ${mealType}.`, 'success');
-                renderDailyMenuEditor();
-            }
-        }
-
-        window.saveDailyMenu = async function() {
-            const menu_date = dailyMenuDateEditor.value;
-            if (!menu_date) {
-                showMessage(dailyMenuEditorMessage, 'Please select a date before saving.', 'error');
-                return;
-            }
-
-            let menu_data = [];
-            for (const mealType of MEAL_TYPES) {
-                if (currentDailyMenu[mealType]) {
-                    currentDailyMenu[mealType].forEach(item => {
-                        menu_data.push({ meal_type: mealType, item_id: item.item_id });
-                    });
-                }
-            }
-            
-            if (menu_data.length === 0) {
-                if (!confirm('The menu is empty. Do you want to save an empty menu (clearing any existing menu for this date)?')) {
-                    return;
-                }
-            }
-
-            showMessage(dailyMenuEditorMessage, 'Saving menu to database...', 'info');
-
-            try {
-                const result = await handleApi(`${API_BASE}/menu/daily`, {
-                    method: 'POST',
-                    body: JSON.stringify({ menu_date, menu_data })
-                });
-
-                showMessage(dailyMenuEditorMessage, `✅ ${result.message}`, 'success');
-                loadDailyMenu(); 
-            } catch (error) {
-                showMessage(dailyMenuEditorMessage, `❌ Save Failed: ${error.message}`, 'error');
-            }
-        }
-
-        window.deleteDailyMenu = async function() {
-            const menu_date = dailyMenuDateEditor.value;
-            if (!menu_date) return;
-
-            if (!confirm(`Are you sure you want to permanently delete the menu for ${menu_date}?`)) {
-                return;
-            }
-
-            showMessage(dailyMenuEditorMessage, 'Deleting menu...', 'info');
-
-            try {
-                const result = await handleApi(`${API_BASE}/menu/daily/${menu_date}`, { method: 'DELETE' });
-                
-                showMessage(dailyMenuEditorMessage, `✅ ${result.message}`, 'success');
-                
-                currentDailyMenu = {};
-                renderDailyMenuEditor();
-                loadDailyMenu(); 
-                
-            } catch (error) {
-                showMessage(dailyMenuEditorMessage, `❌ Delete Failed: ${error.message}`, 'error');
-            }
-        }
-
-        // --- 6. Staff Shift Scheduling Logic ---
-
-        async function fetchStaffList() {
-            try {
-                const staff = await handleApi(`${API_BASE}/staff-list`); 
-                availableStaff = staff;
-                staffSelect.innerHTML = '<option value="">-- Select Staff Member --</option>';
-                availableStaff.forEach(s => {
-                    staffSelect.innerHTML += `<option value="${s.id}">${s.name} (${s.role})</option>`;
-                });
-            } catch (error) {
-                console.error("Failed to load staff list:", error.message);
-                showMessage(scheduleMessage, `❌ Could not load staff list for scheduling: ${error.message}`, 'error');
-            }
-        }
-
-        async function fetchShiftTypes() {
-            try {
-                const shifts = await handleApi(`${API_BASE}/shifts/type`);
-                availableShifts = shifts;
-                shiftTypeSelect.innerHTML = '<option value="">-- Select Shift Type --</option>';
-                availableShifts.forEach(s => {
-                    const startTime = moment(s.start_time, 'HH:mm:ss').format('h:mm A');
-                    const endTime = moment(s.end_time, 'HH:mm:ss').format('h:mm A');
-                    shiftTypeSelect.innerHTML += `<option value="${s.id}">${s.shift_name} (${startTime} - ${endTime})</option>`;
-                });
-            } catch (error) {
-                console.error("Failed to load shift types:", error.message);
-                showMessage(scheduleMessage, '❌ Could not load shift types.', 'error');
-            }
-        }
-
-        window.loadDailySchedule = async function() {
-            const selectedDate = scheduleDateViewer.value;
-            if (!selectedDate) return;
-
-            scheduleDateDisplay.textContent = selectedDate;
-            scheduleTbody.innerHTML = '<tr><td colspan="4" style="background-color: #ffc107; color: #333;">Loading schedule...</td></tr>';
-            showMessage(scheduleMessage, '', '');
-
-            try {
-                const schedule = await handleApi(`${API_BASE}/shifts/schedule/${selectedDate}`);
-                
-                if (schedule.length === 0) {
-                    scheduleTbody.innerHTML = '<tr><td colspan="4">No staff assigned for this date.</td></tr>';
-                    return;
-                }
-
-                scheduleTbody.innerHTML = schedule.map(item => {
-                    const time = `${moment(item.start_time, 'HH:mm:ss').format('h:mm A')} - ${moment(item.end_time, 'HH:mm:ss').format('h:mm A')}`;
-                    const deleteBtn = USER_ROLE === 'Admin' ? 
-                        `<button onclick="deleteAssignment('${item.assignment_id}')" class="action-btn delete" style="padding: 3px 6px;">Remove</button>` : 
-                        '';
-                    
-                    return `
-                        <tr>
-                            <td>${item.shift_name}</td>
-                            <td>${time}</td>
-                            <td>${item.staff_name}</td>
-                            <td>${deleteBtn}</td>
-                        </tr>
-                    `;
-                }).join('');
-            } catch (error) {
-                scheduleTbody.innerHTML = '<tr><td colspan="4" style="background-color: #dc3545; color: white;">Error loading schedule.</td></tr>';
-                showMessage(scheduleMessage, `❌ Failed to load schedule: ${error.message}`, 'error');
-            }
-        }
-
-        shiftAssignmentForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const shift_date = scheduleDateViewer.value;
-            const shift_id = shiftTypeSelect.value;
-            const staff_id = staffSelect.value;
-            const notes = assignmentNotes.value;
-
-            if (!shift_date) {
-                showMessage(scheduleMessage, 'Please select a date in the viewer above.', 'error');
-                return;
-            }
-
-            showMessage(scheduleMessage, 'Assigning shift...', 'info');
-
-            try {
-                const data = { shift_date, shift_id, staff_id, notes };
-                const result = await handleApi(`${API_BASE}/shifts/assign`, { method: 'POST', body: JSON.stringify(data) });
-                
-                showMessage(scheduleMessage, `✅ ${result.message}`, 'success');
-                shiftAssignmentForm.reset();
-                loadDailySchedule(); 
-            } catch (error) {
-                showMessage(scheduleMessage, `❌ Assignment Failed: ${error.message}`, 'error');
-            }
-        });
-
-        window.deleteAssignment = async function(assignmentId) {
-            if (USER_ROLE !== 'Admin') {
-                alert("You must be an Admin to delete shifts.");
-                return;
-            }
-            if (!confirm('Are you sure you want to remove this staff assignment?')) {
-                return;
-            }
-
-            showMessage(scheduleMessage, 'Removing assignment...', 'info');
-            try {
-                await handleApi(`${API_BASE}/shifts/assignment/${assignmentId}`, { method: 'DELETE' });
-                
-                showMessage(scheduleMessage, `✅ Assignment successfully removed.`, 'success');
-                loadDailySchedule(); 
-            } catch (error) {
-                showMessage(scheduleMessage, `❌ Deletion Failed: ${error.message}`, 'error');
-            }
-        }
-        
-        // --- 7. Shift Type Management Logic (Add/Edit/Toggle) ---
-        
-        async function loadShiftTypesTable() {
-            shiftTypesTbody.innerHTML = '<tr><td colspan="3" style="background-color: #ffc107; color: #333;">Fetching shift types...</td></tr>';
-            showMessage(shiftTypeMessage, '', '');
-
-            try {
-                const shifts = await handleApi(`${API_BASE}/shifts/type`);
-                allActiveShifts = shifts;
-                
-                if (shifts.length === 0) {
-                    shiftTypesTbody.innerHTML = '<tr><td colspan="3">No active shift types defined.</td></tr>';
-                    fetchShiftTypes();
-                    return;
-                }
-
-                shiftTypesTbody.innerHTML = shifts.map(s => {
-                    const startTime = moment(s.start_time, 'HH:mm:ss').format('h:mm A');
-                    const endTime = moment(s.end_time, 'HH:mm:ss').format('h:mm A');
-                    const timeSpan = `${startTime} - ${endTime}`;
-                    
-                    const actions = `
-                        <button class="action-btn edit" onclick="showEditShiftModal('${s.id}')">Edit</button>
-                        <button class="action-btn delete" onclick="toggleShiftStatus('${s.id}', true)">Deactivate</button>
-                    `;
-                    
-                    return `
-                        <tr>
-                            <td>${s.shift_name}</td>
-                            <td>${timeSpan}</td>
-                            <td>${actions}</td>
-                        </tr>
-                    `;
-                }).join('');
-
-                fetchShiftTypes();
-
-            } catch (error) {
-                shiftTypesTbody.innerHTML = '<tr><td colspan="3" style="background-color: #dc3545; color: white;">Error loading shifts.</td></tr>';
-                showMessage(shiftTypeMessage, `❌ Failed to load shifts: ${error.message}`, 'error');
-            }
-        }
-
-        addShiftTypeForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const data = Object.fromEntries(new FormData(form));
-
-            showMessage(shiftTypeMessage, 'Creating shift type...', 'info');
-
-            try {
-                const result = await handleApi(`${API_BASE}/shifts/type`, {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-
-                showMessage(shiftTypeMessage, `✅ Shift type "${result.shift.shift_name}" created!`, 'success');
-                form.reset();
-                loadShiftTypesTable(); 
-            } catch (error) {
-                showMessage(shiftTypeMessage, `❌ Creation Failed: ${error.message}`, 'error');
-            }
-        });
-        
-        window.showEditShiftModal = function(shiftId) {
-            const shift = allActiveShifts.find(s => s.id === shiftId);
-            if (!shift) {
-                alert('Shift data not found.');
-                return;
-            }
-            
-            editShiftIdInput.value = shift.id;
-            editShiftNameInput.value = shift.shift_name;
-            editStartTimeInput.value = shift.start_time.substring(0, 5); 
-            editEndTimeInput.value = shift.end_time.substring(0, 5);
-            
-            showMessage(editShiftModalMessage, '', '');
-            editShiftModal.style.display = 'flex';
-        }
-
-        document.getElementById('edit-shift-type-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const shiftId = editShiftIdInput.value;
-            const data = {
-                shift_name: editShiftNameInput.value.trim(),
-                start_time: editStartTimeInput.value,
-                end_time: editEndTimeInput.value
-            };
-            
-            showMessage(editShiftModalMessage, 'Saving changes...', 'info');
-
-            try {
-                const result = await handleApi(`${API_BASE}/shifts/type/${shiftId}`, { 
-                    method: 'PUT', 
-                    body: JSON.stringify(data) 
-                });
-
-                showMessage(editShiftModalMessage, `✅ ${result.message}`, 'success');
-                
-                setTimeout(() => {
-                    editShiftModal.style.display = 'none';
-                    loadShiftTypesTable(); 
-                }, 800);
-                
-            } catch (error) {
-                showMessage(editShiftModalMessage, `❌ Save Failed: ${error.message}`, 'error');
-            }
-        });
-
-
-        window.toggleShiftStatus = async function(shiftId, currentStatus) {
-            if (USER_ROLE !== 'Admin') {
-                alert("Only Administrators can change shift status.");
-                return;
-            }
-
-            const actionText = currentStatus ? 'Deactivating' : 'Activating';
-            if (!confirm(`Are you sure you want to ${actionText.toLowerCase()} this shift?`)) {
-                return;
-            }
-
-            showMessage(shiftTypeMessage, `${actionText} shift...`, 'info');
-            
-            try {
-                const result = await handleApi(`${API_BASE}/shifts/type/toggle/${shiftId}`, { 
-                    method: 'PUT',
-                });
-
-                showMessage(shiftTypeMessage, `✅ ${result.message}`, 'success');
-                loadShiftTypesTable();
-            } catch (error) {
-                showMessage(shiftTypeMessage, `❌ Toggle Failed: ${error.message}`, 'error');
-            }
-        }
-        
-        // --- 8. History Lookup Logic ---
-        document.getElementById('history-lookup-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const userId = document.getElementById('history-user-id').value.trim();
-            const historyTbody = document.getElementById('history-tbody');
-            historyTbody.innerHTML = '<tr><td colspan="4" style="background-color: #ffc107; color: #333;">Loading history...</td></tr>';
-
-            try {
-                const transactions = await handleApi(`${API_BASE}/transactions/${userId}`); 
-                
-                historyTbody.innerHTML = transactions.map(t => {
-                    const amountDisplay = t.type === 'TOP_UP' ? `+₹${t.amount.toFixed(2)}` : `-₹${t.amount.toFixed(2)}`;
-                    const typeClass = t.type === 'TOP_UP' ? 'status-Active' : 'status-Cancelled'; 
-                    
-                    return `
-                        <tr>
-                            <td>${new Date(t.created_at).toLocaleString()}</td>
-                            <td class="${typeClass}">${t.type.replace('_', ' ')}</td>
-                            <td>${amountDisplay}</td>
-                            <td>₹${t.current_balance_after.toFixed(2)}</td>
-                        </tr>
-                    `;
-                }).join('') || '<tr><td colspan="4">No transactions found.</td></tr>';
-            } catch (error) {
-                historyTbody.innerHTML = `<tr><td colspan="4" style="background-color: #dc3545; color: white;">Error loading history: ${error.message}</div>`;
-            }
-        });
-
-        // --- 9. Reporting Logic ---
-        reportParamsForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const startDate = reportStartDate.value;
-            const endDate = reportEndDate.value;
-            
-            if (moment(startDate).isAfter(moment(endDate))) {
-                alert("Start date cannot be after end date.");
-                return;
-            }
-
-            salesSummaryResults.innerHTML = '<p>Generating reports...</p>';
-            topSellingTbody.innerHTML = '<tr><td colspan="2">Loading...</td></tr>';
-            staffHoursTbody.innerHTML = '<tr><td colspan="3">Loading...</td></tr>';
-
-            await Promise.all([
-                fetchSalesSummary(startDate, endDate),
-                fetchTopSellingItems(startDate, endDate),
-                fetchStaffHours(startDate, endDate)
-            ]);
-        });
-
-
-        async function fetchSalesSummary(start_date, end_date) {
-            try {
-                const summary = await handleApi(`${API_BASE}/reports/sales-summary?start_date=${start_date}&end_date=${end_date}`);
-                
-                const salesTotal = summary.PURCHASE.total;
-                const topUpTotal = summary.TOP_UP.total;
-                
-                salesSummaryResults.innerHTML = `
-                    <p>Report Period: <strong>${start_date}</strong> to <strong>${end_date}</strong></p>
-                    <hr>
-                    <h4>💰 Total Sales (Purchases)</h4>
-                    <p style="font-size: 1.4em; color: #C0392B;">₹${salesTotal.toFixed(2)} (${summary.PURCHASE.count} transactions)</p>
-                    
-                    <h4>⬆️ Total Top-Ups Received</h4>
-                    <p style="font-size: 1.4em; color: #005A9C;">₹${topUpTotal.toFixed(2)} (${summary.TOP_UP.count} transactions)</p>
-                `;
-
-            } catch (error) {
-                salesSummaryResults.innerHTML = `<div class="edit-message" style="display: block; background-color: #dc3545; color: white;">Error fetching sales: ${error.message}</div>`;
-            }
-        }
-
-        async function fetchTopSellingItems(start_date, end_date) {
-            try {
-                const items = await handleApi(`${API_BASE}/reports/top-selling-items?start_date=${start_date}&end_date=${end_date}`);
-                
-                if (items.length === 0) {
-                    topSellingTbody.innerHTML = '<tr><td colspan="2">No purchase data in this period.</td></tr>';
-                    return;
-                }
-
-                topSellingTbody.innerHTML = items.map(item => `
-                    <tr>
-                        <td>${item.item_name}</td>
-                        <td>${parseInt(item.total_quantity_sold)}</td>
-                    </tr>
-                `).join('');
-
-            } catch (error) {
-                topSellingTbody.innerHTML = '<tr><td colspan="2" style="background-color: #dc3545; color: white;">Error fetching items.</td></tr>';
-            }
-        }
-
-        async function fetchStaffHours(start_date, end_date) {
-            try {
-                const hours = await handleApi(`${API_BASE}/reports/staff-hours?start_date=${start_date}&end_date=${end_date}`);
-                
-                if (hours.length === 0) {
-                    staffHoursTbody.innerHTML = '<tr><td colspan="3">No shifts scheduled in this period.</td></tr>';
-                    return;
-                }
-
-                staffHoursTbody.innerHTML = hours.map(h => `
-                    <tr>
-                        <td>${h.staff_name}</td>
-                        <td>${h.shifts_assigned}</td>
-                        <td>${parseFloat(h.total_hours_scheduled).toFixed(1)} hrs</td>
-                    </tr>
-                `).join('');
-
-            } catch (error) {
-                staffHoursTbody.innerHTML = '<tr><td colspan="3" style="background-color: #dc3545; color: white;">Error fetching hours.</td></tr>';
-            }
-        }
-
-        // --- 10. Initialization ---
-        document.addEventListener('DOMContentLoaded', () => {
-            // Tab switching logic
-            document.querySelectorAll('.tab-btn').forEach(button => {
-                button.addEventListener('click', () => {
-                    const tabId = button.dataset.tab;
-                    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-                    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-                    button.classList.add('active');
-                    document.getElementById(tabId).classList.add('active');
-
-                    if (tabId === 'reports-tab') {
-                        const today = moment().format('YYYY-MM-DD');
-                        reportEndDate.value = today;
-                        reportStartDate.value = moment().subtract(30, 'days').format('YYYY-MM-DD');
-                    }
-                });
-            });
-
-            userRoleDisplay.innerHTML = `<i class="fas fa-user-shield"></i> ${USER_ROLE}`;
-            
-            const today = moment().format('YYYY-MM-DD');
-            menuDateViewer.value = today;
-            dailyMenuDateEditor.value = today;
-            scheduleDateViewer.value = today;
-            
-            loadOrderMenu();
-            loadPermanentMenuItems();
-            fetchStaffList(); 
-            loadShiftTypesTable(); 
-            loadDailySchedule();
-        });
-    </script>
+        } catch(e) {}
+    }
+    async function addItem() {
+        await api(`${API}/menu/add-item`, { method:'POST', body:JSON.stringify({
+            name: document.getElementById('new-name').value,
+            price: document.getElementById('new-price').value,
+            category: document.getElementById('new-cat').value,
+            food_type: document.getElementById('new-type').value
+        })});
+        alert("Saved"); loadItems();
+    }
+    async function loadDailyEditor() {
+        const d = document.getElementById('planner-date').value;
+        try { dailyMenuTemp = await api(`${API}/menu/daily-editable/${d}`); renderDaily(); } catch(e) { dailyMenuTemp={}; renderDaily(); }
+    }
+    function addToDaily() {
+        const id = document.getElementById('editor-item-select').value;
+        const name = document.getElementById('editor-item-select').options[document.getElementById('editor-item-select').selectedIndex].text;
+        const meal = document.getElementById('editor-meal-select').value;
+        if(!id) return;
+        if(!dailyMenuTemp[meal]) dailyMenuTemp[meal]=[];
+        dailyMenuTemp[meal].push({item_id:id, item_name:name});
+        renderDaily();
+    }
+    function renderDaily() {
+        const d = document.getElementById('daily-list'); d.innerHTML='';
+        Object.keys(dailyMenuTemp).forEach(k => d.innerHTML += `<p><strong>${k}:</strong> ${dailyMenuTemp[k].map(i=>i.item_name).join(', ')}</p>`);
+    }
+    async function saveDaily() {
+        const d = document.getElementById('planner-date').value;
+        const arr = []; Object.keys(dailyMenuTemp).forEach(k => dailyMenuTemp[k].forEach(i => arr.push({meal_type:k, item_id:i.item_id})));
+        await api(`${API}/menu/daily`, { method:'POST', body:JSON.stringify({menu_date:d, menu_data:arr})}); alert("Published");
+    }
+    async function deleteDaily() { if(confirm("Clear?")) { await api(`${API}/menu/daily/${document.getElementById('planner-date').value}`, {method:'DELETE'}); dailyMenuTemp={}; renderDaily(); } }
+
+    // --- RECIPE ---
+    async function openRec(id, name) {
+        document.getElementById('recipe-modal').classList.remove('hidden');
+        document.getElementById('rec-id').value = id;
+        document.getElementById('rec-item-name').innerText = name;
+        const inv = await api(`${INVENTORY_API}/items`);
+        const sel = document.getElementById('inv-select'); sel.innerHTML='';
+        inv.forEach(i => sel.innerHTML += `<option value="${i.id}">${i.name} (${i.unit})</option>`);
+        loadRecList(id);
+    }
+    async function loadRecList(id) {
+        const d = await api(`${API}/recipe/${id}`);
+        document.getElementById('rec-list').innerHTML = d.map(x=>`<li><strong>${x.quantity_required} ${x.unit}</strong> ${x.ingredient_name}</li>`).join('');
+    }
+    async function saveRecipe() {
+        const qty = document.getElementById('inv-qty').value;
+        if(!qty) return alert("Enter Qty");
+        await api(`${API}/recipe`, { method:'POST', body:JSON.stringify({
+            menu_item_id: document.getElementById('rec-id').value,
+            inventory_item_id: document.getElementById('inv-select').value,
+            quantity: parseFloat(qty)
+        })});
+        loadRecList(document.getElementById('rec-id').value);
+    }
+
+    // --- STAFF ---
+    async function loadStaffAndShifts() {
+        try {
+            const staff = await api(`${API}/staff-list`);
+            const shifts = await api(`${API}/shifts/type`);
+            const ss = document.getElementById('staff-select'); ss.innerHTML='<option>Select</option>';
+            staff.forEach(s => ss.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+            const sh = document.getElementById('shift-select'); sh.innerHTML='<option>Select</option>';
+            shifts.forEach(s => sh.innerHTML += `<option value="${s.id}">${s.shift_name}</option>`);
+        } catch(e) {}
+    }
+    async function loadSchedule() {
+        const d = document.getElementById('shift-date').value;
+        const t = document.getElementById('schedule-table').querySelector('tbody');
+        try {
+            const data = await api(`${API}/shifts/schedule/${d}`);
+            t.innerHTML = data.map(s=>`<tr><td>${s.shift_name}</td><td>${s.staff_name}</td><td>${moment(s.start_time, 'HH:mm:ss').format('h:mm A')}</td><td><button onclick="delShift('${s.assignment_id}')" class="btn btn-danger btn-sm">X</button></td></tr>`).join('');
+        } catch(e) {}
+    }
+    async function assignShift() {
+        await api(`${API}/shifts/assign`, { method:'POST', body:JSON.stringify({
+            shift_date: document.getElementById('shift-date').value, staff_id: document.getElementById('staff-select').value, shift_id: document.getElementById('shift-select').value, notes:''
+        })}); loadSchedule();
+    }
+    async function delShift(id) { await api(`${API}/shifts/assignment/${id}`, {method:'DELETE'}); loadSchedule(); }
+
+    // --- REPORT ---
+    async function genReport() {
+        try {
+            const d = await api(`${API}/reports/sales-summary?start_date=${document.getElementById('rep-start').value}&end_date=${document.getElementById('rep-end').value}`);
+            document.getElementById('rep-sales').innerHTML = `Purchases: ₹${d.PURCHASE.total||0}<br>TopUps: ₹${d.TOP_UP.total||0}`;
+        } catch(e) { alert(e.message); }
+    }
+</script>
 </body>
 </html>
