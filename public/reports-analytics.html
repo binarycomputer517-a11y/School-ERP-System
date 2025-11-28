@@ -1,373 +1,322 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reports & Analytics Dashboard</title>
+    <title>Enterprise Analytics Dashboard | School ERP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f4f6f9; font-family: sans-serif; }
-        .container { max-width: 1300px; }
-        h1 { color: #003366; font-weight: bold; }
-        .info-box {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-            border-left: 5px solid;
-            /* Added for real-time visual feedback */
-            transition: all 0.2s ease-in-out;
-        }
-        .box-title { color: #6c757d; font-size: 0.9rem; margin-bottom: 5px; }
-        .box-value { font-size: 2rem; font-weight: bold; }
-        .chart-card {
-            background-color: #fff;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            height: 400px; /* Standard chart height */
-        }
-        /* Highlight class for live updates */
-        .live-update {
-            background-color: #e6ffed !important;
-            border-color: #28a745 !important;
+        :root { --primary-color: #4361ee; --bg-color: #f4f6f9; --card-bg: #ffffff; --text-color: #333; }
+        [data-bs-theme="dark"] { --primary-color: #4cc9f0; --bg-color: #0f172a; --card-bg: #1e293b; --text-color: #f8f9fa; }
+        
+        body { background-color: var(--bg-color); color: var(--text-color); font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s, color 0.3s; }
+        .card { background-color: var(--card-bg); border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; transition: background-color 0.3s; }
+        
+        /* KPI Cards */
+        .info-box { background-color: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid; transition: transform 0.2s; }
+        .info-box:hover { transform: translateY(-5px); }
+        .box-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
+        .box-value { font-size: 2.2rem; font-weight: 700; margin: 10px 0; }
+        
+        /* Charts */
+        .chart-card { height: 350px; position: relative; }
+        
+        /* Skeleton Animation */
+        .skeleton-text { height: 1rem; margin-bottom: 0.5rem; border-radius: 0.25rem; background: #e0e0e0; animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+        
+        @media print { 
+            .no-print { display: none !important; } 
+            .card { break-inside: avoid; border: 1px solid #ddd; box-shadow: none; }
         }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container mt-5">
-        <header class="mb-5 d-flex justify-content-between align-items-center">
-            <h1>📈 Academic & Financial Analytics</h1>
-            <a href="/admin-dashboard.html" class="btn btn-sm btn-outline-primary">← Back to Dashboard</a>
+    <div class="container-fluid px-4 mt-4">
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="fw-bold mb-0"><i class="fas fa-chart-pie text-primary me-2"></i>Analytics Dashboard</h1>
+                <p class="text-muted small mb-0">Real-time Academic & Financial Intelligence</p>
+            </div>
+            <div class="d-flex gap-2 no-print">
+                <button class="btn btn-outline-secondary" id="theme-toggle"><i class="fas fa-moon"></i></button>
+                <button class="btn btn-outline-secondary" onclick="window.print()"><i class="fas fa-print"></i></button>
+                <button class="btn btn-primary" onclick="initDashboard()"><i class="fas fa-sync-alt me-2"></i>Refresh</button>
+                <a href="/admin-dashboard.html" class="btn btn-dark">Exit</a>
+            </div>
         </header>
 
-        <section id="filter-controls" class="card p-4 mb-4 shadow-sm">
-            <h4 class="text-secondary mb-3">Data Filters</h4>
-            <div class="row g-3">
-                <div class="col-md-3">
-                    <label for="session-select" class="form-label small fw-bold">Academic Session</label>
-                    <select id="session-select" class="form-select"></select>
+        <section class="row mb-4">
+            <div class="col-md-3">
+                <div class="info-box border-primary">
+                    <div class="box-title text-primary">Total Students</div>
+                    <div id="kpi-students" class="box-value skeleton-text">...</div>
                 </div>
-                <div class="col-md-3">
-                    <label for="course-select" class="form-label small fw-bold">Course/Program</label>
-                    <select id="course-select" class="form-select"></select>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box border-success">
+                    <div class="box-title text-success">Total Collections</div>
+                    <div id="kpi-collection" class="box-value skeleton-text">...</div>
                 </div>
-                <div class="col-md-3">
-                    <label for="date-range-select" class="form-label small fw-bold">Date Range</label>
-                    <select id="date-range-select" class="form-select">
-                        <option value="current_month">Current Month</option>
-                        <option value="last_30_days">Last 30 Days</option>
-                        <option value="current_year" selected>Current Academic Year</option>
-                    </select>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box border-warning">
+                    <div class="box-title text-warning">Outstanding Dues</div>
+                    <div id="kpi-outstanding" class="box-value skeleton-text">...</div>
                 </div>
-                <div class="col-md-3 d-flex align-items-end">
-                    <button id="apply-filters-btn" class="btn btn-primary w-100">Apply Filters</button>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box border-info">
+                    <div class="box-title text-info">Attendance Avg</div>
+                    <div id="kpi-attendance" class="box-value skeleton-text">...</div>
                 </div>
             </div>
         </section>
 
-        <section id="kpi-summaries" class="row">
-            <div class="col-lg-3 col-md-6">
-                <div class="info-box" style="border-color: #007bff;">
-                    <div class="box-title">Total Students</div>
-                    <div id="total-students" class="box-value">...</div>
-                    <p class="small text-muted mb-0">Active enrollment count.</p>
+        <section class="row mb-4">
+            <div class="col-lg-8">
+                <div class="card p-3 h-100">
+                    <h5 class="card-title">💰 Fee Revenue Trend (Area Chart)</h5>
+                    <div class="chart-card"><canvas id="feesChart"></canvas></div>
                 </div>
             </div>
-            <div class="col-lg-3 col-md-6">
-                <div id="fees-collected-box" class="info-box" style="border-color: #28a745;">
-                    <div class="box-title">Total Fees Collected (₹)</div>
-                    <div id="fees-collected" class="box-value">...</div>
-                    <p class="small text-muted mb-0">Net fees received in selected period.</p>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="info-box" style="border-color: #ffc107;">
-                    <div class="box-title">Outstanding Fees (₹)</div>
-                    <div id="fees-outstanding" class="box-value text-warning">...</div>
-                    <p class="small text-muted mb-0">Total amount due across all students.</p>
-                </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-                <div class="info-box" style="border-color: #dc3545;">
-                    <div class="box-title">Enrollment Growth (%)</div>
-                    <div id="enrollment-growth" class="box-value">...</div>
-                    <p class="small text-muted mb-0">Growth rate vs. previous period.</p>
+            <div class="col-lg-4">
+                <div class="card p-3 h-100">
+                    <h5 class="card-title">📉 Income vs Expense (Multi-Line)</h5>
+                    <div class="chart-card"><canvas id="financeChart"></canvas></div>
                 </div>
             </div>
         </section>
 
-        <section id="data-visuals" class="row">
-            <h3 class="text-primary my-3 d-flex justify-content-between align-items-center">
-                Key Performance Indicators
-                <button id="export-csv-btn" class="btn btn-sm btn-outline-primary">Export Data (CSV)</button>
-            </h3>
-            <p id="loading-message" class="text-center text-muted">Initializing dashboard...</p>
-            
-            <div class="col-lg-6">
-                <div class="chart-card mb-4">
-                    <canvas id="enrollment-by-course"></canvas>
+        <section class="row mb-4">
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <h5 class="card-title">🏫 Enrollment (Polar Area)</h5>
+                    <div class="chart-card"><canvas id="enrollmentChart"></canvas></div>
                 </div>
             </div>
-            <div class="col-lg-6">
-                <div class="chart-card mb-4">
-                    <canvas id="fees-collection-monthly"></canvas>
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <h5 class="card-title">🚻 Gender Ratio (Doughnut)</h5>
+                    <div class="chart-card"><canvas id="genderChart"></canvas></div>
                 </div>
             </div>
-            <div class="col-12">
-                <div class="chart-card mb-4">
-                    <canvas id="student-performance-grade-distribution"></canvas>
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <h5 class="card-title">📝 Attendance Status (Pie)</h5>
+                    <div class="chart-card"><canvas id="attendanceChart"></canvas></div>
                 </div>
             </div>
         </section>
+
+        <section class="row mb-4">
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <h5 class="card-title">📚 Library Usage (Bar)</h5>
+                    <div class="chart-card"><canvas id="libraryChart"></canvas></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <h5 class="card-title">🎯 Performance (Scatter: Marks vs Attendance)</h5>
+                    <div class="chart-card"><canvas id="scatterChart"></canvas></div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card p-3">
+                    <h5 class="card-title">💡 Course ROI (Bubble: Fee vs Students)</h5>
+                    <div class="chart-card"><canvas id="bubbleChart"></canvas></div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="row mb-4">
+             <div class="col-md-6">
+                <div class="card p-3">
+                    <h5 class="card-title">💳 Payment Modes (Horizontal Bar)</h5>
+                    <div class="chart-card"><canvas id="paymentModeChart"></canvas></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card p-3">
+                    <h5 class="card-title">📊 Grade Distribution (Radar)</h5>
+                    <div class="chart-card"><canvas id="gradeChart"></canvas></div>
+                </div>
+            </div>
+        </section>
+
     </div>
-    
+
     <script>
-        // --- GLOBAL CONFIG ---
-        const TOKEN = localStorage.getItem('erp-token'); 
-        const API_BASE_REPORTS = '/api/reports'; 
-        const API_BASE_ACADEMICS = '/api/academicswithfees'; // Base for courses and sessions
-        let chartInstances = {}; // To manage Chart.js instances
+        const TOKEN = localStorage.getItem('erp-token');
+        if (!TOKEN) window.location.href = '/login.html';
         
-        if (!TOKEN) {
-             alert('Authorization required. Redirecting to login.');
-             window.location.href = '/login.html';
-        }
+        let charts = {}; // Store instances to destroy them before redrawing
 
-        // --- Helper function for authenticated API calls ---
-        
-        // Helper for Reports (uses API_BASE_REPORTS)
-        async function fetchReportData(endpoint, params = {}) {
-            const url = new URL(API_BASE_REPORTS + endpoint, window.location.origin);
-            Object.keys(params).forEach(key => url.searchParams.append(key, params[key]));
-            
-            const response = await fetch(url.toString(), {
-                headers: { 
-                    'Authorization': `Bearer ${TOKEN}`,
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(`Failed to fetch report data: ${response.status} - ${errorBody.message}`);
+        // --- Theme Toggle ---
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const html = document.documentElement;
+            html.setAttribute('data-bs-theme', html.getAttribute('data-bs-theme') === 'light' ? 'dark' : 'light');
+        });
+
+        // --- API Helper ---
+        async function apiCall(endpoint) {
+            try {
+                const res = await fetch('/api/reports' + endpoint, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+                return res.ok ? await res.json() : [];
+            } catch (e) {
+                console.error(`Error loading ${endpoint}`, e);
+                return [];
             }
-            return response.json();
         }
 
-        // Helper for Academics Dropdowns (uses API_BASE_ACADEMICS)
-        async function fetchAcademicsData(endpoint) {
-             const response = await fetch(API_BASE_ACADEMICS + endpoint, {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
-            });
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(`Failed to fetch academic data: ${response.status} - ${errorBody.message}`);
+        // --- Main Load Function ---
+        async function loadReports() {
+            // 1. KPI Summaries
+            const kpi = await apiCall('/summaries');
+            if (kpi && kpi.totalStudents !== undefined) {
+                document.getElementById('kpi-students').innerText = kpi.totalStudents;
+                document.getElementById('kpi-collection').innerText = '₹' + kpi.feesCollected.toLocaleString();
+                document.getElementById('kpi-outstanding').innerText = '₹' + kpi.feesOutstanding.toLocaleString();
+                document.getElementById('kpi-attendance').innerText = (kpi.avgAttendance || 0) + '%';
+                // Remove skeletons
+                document.querySelectorAll('.skeleton-text').forEach(el => el.classList.remove('skeleton-text'));
             }
-            return response.json();
+
+            // 2. Fetch All Data in Parallel
+            const [enroll, fees, gender, att, lib, scat, bub, fin, pay, grades] = await Promise.all([
+                apiCall('/enrollment-by-course'),
+                apiCall('/fees-collection-monthly'),
+                apiCall('/gender-ratio'),
+                apiCall('/attendance-stats'),   
+                apiCall('/library-stats'),      
+                apiCall('/performance-scatter'),
+                apiCall('/course-bubble'),      
+                apiCall('/finance-comparison'),
+                apiCall('/payment-modes'),
+                apiCall('/grade-distribution')
+            ]);
+
+            // 3. Render Charts
+            
+            // Financials
+            renderChart('feesChart', 'line', fees, 'amount', 'month', 'Revenue', { fill: true });
+            renderMultiLine('financeChart', fin.income, fin.expense);
+            renderChart('paymentModeChart', 'bar', pay, 'total', 'mode', 'Transactions', { indexAxis: 'y' });
+
+            // Demographics
+            renderChart('enrollmentChart', 'polarArea', enroll, 'count', 'course_name', 'Students');
+            renderChart('genderChart', 'doughnut', gender, 'count', 'gender', 'Students');
+            renderChart('attendanceChart', 'pie', att, 'count', 'status', 'Status');
+
+            // Advanced
+            renderChart('libraryChart', 'bar', lib, 'count', 'month', 'Books Issued');
+            renderChart('gradeChart', 'radar', grades, 'count', 'grade', 'Grade Dist.', { fill: true });
+            
+            // Scatter (Special Config)
+            renderSpecialChart('scatterChart', 'scatter', scat, 'Marks vs Attendance', 'Attendance', 'Marks');
+            
+            // Bubble (Special Config)
+            renderSpecialChart('bubbleChart', 'bubble', bub, 'Course ROI', 'Avg Fee', 'Students');
         }
 
+        // --- Generic Chart Renderer ---
+        function renderChart(id, type, data, valKey, labelKey, label, opts = {}) {
+            if (charts[id]) charts[id].destroy();
+            const ctx = document.getElementById(id).getContext('2d');
 
-        // --- Chart Rendering Functions (omitted for brevity) ---
-        
-        function destroyCharts() {
-            Object.values(chartInstances).forEach(chart => chart.destroy());
-            chartInstances = {};
-        }
+            // Conditional Scales to prevent crashes
+            let scales = {};
+            if (['line', 'bar'].includes(type)) {
+                scales = { 
+                    y: { beginAtZero: true }, 
+                    x: { grid: { display: false } } 
+                };
+            } else if (['radar', 'polarArea'].includes(type)) {
+                scales = { r: { ticks: { backdropColor: 'transparent' } } };
+            }
 
-        function renderEnrollmentByCourse(data) {
-            destroyCharts(); // Destroy existing charts before creating new ones
-            const ctx = document.getElementById('enrollment-by-course').getContext('2d');
-            chartInstances.enrollment = new Chart(ctx, {
-                type: 'doughnut',
+            // Create Gradient for Line charts
+            let bg = ['#4361ee', '#3a0ca3', '#f72585', '#4cc9f0', '#7209b7'];
+            if (type === 'line' && opts.fill) {
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(67, 97, 238, 0.5)');
+                gradient.addColorStop(1, 'rgba(67, 97, 238, 0.0)');
+                bg = gradient;
+            }
+
+            charts[id] = new Chart(ctx, {
+                type: type,
                 data: {
-                    labels: data.map(item => item.course_name),
+                    labels: data.map(d => d[labelKey]),
                     datasets: [{
-                        label: 'Students by Course',
-                        data: data.map(item => item.count),
-                        backgroundColor: [
-                            '#007bff', '#28a745', '#ffc107', '#dc3545', '#6f42c1', '#17a2b8'
-                        ],
-                        hoverOffset: 8
+                        label: label,
+                        data: data.map(d => d[valKey]),
+                        backgroundColor: bg,
+                        borderColor: '#4361ee',
+                        borderWidth: 1,
+                        tension: 0.4,
+                        ...opts
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, scales: scales, ...opts }
+            });
+        }
+
+        // --- Special Renderer for Scatter/Bubble (XY Data) ---
+        function renderSpecialChart(id, type, data, label, xLabel, yLabel) {
+            if (charts[id]) charts[id].destroy();
+            const ctx = document.getElementById(id).getContext('2d');
+
+            charts[id] = new Chart(ctx, {
+                type: type,
+                data: {
+                    datasets: [{
+                        label: label,
+                        data: data, // Expects {x, y} or {x, y, r} objects directly
+                        backgroundColor: '#f72585',
+                        borderColor: '#f72585'
                     }]
                 },
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: {
-                        title: { display: true, text: 'Enrollment Distribution by Course' }
+                    scales: {
+                        x: { title: { display: true, text: xLabel }, beginAtZero: true },
+                        y: { title: { display: true, text: yLabel }, beginAtZero: true }
                     }
                 }
             });
         }
-        
-        function renderFeesCollectionMonthly(data) {
-            const ctx = document.getElementById('fees-collection-monthly').getContext('2d');
-            chartInstances.fees = new Chart(ctx, {
+
+        // --- Multi-Line Renderer (Income vs Expense) ---
+        function renderMultiLine(id, income, expense) {
+            if (charts[id]) charts[id].destroy();
+            const ctx = document.getElementById(id).getContext('2d');
+            
+            // Normalize labels based on income data (assuming sorted)
+            const labels = income.map(d => d.month);
+
+            charts[id] = new Chart(ctx, {
                 type: 'line',
                 data: {
-                    labels: data.map(item => item.month), // e.g., ['Jan', 'Feb', 'Mar']
-                    datasets: [{
-                        label: 'Fees Collected (Monthly)',
-                        data: data.map(item => item.amount),
-                        borderColor: '#28a745',
-                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                        fill: true,
-                        tension: 0.3
-                    }]
+                    labels: labels,
+                    datasets: [
+                        { label: 'Income', data: income.map(d => d.total), borderColor: '#2ec4b6', tension: 0.4 },
+                        { label: 'Expense', data: expense.map(d => d.total), borderColor: '#e71d36', tension: 0.4 }
+                    ]
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { display: true, text: 'Monthly Fees Collection Trend' }
-                    },
-                    scales: { y: { beginAtZero: true } }
-                }
-            });
-        }
-        
-        function renderGradeDistribution(data) {
-            const ctx = document.getElementById('student-performance-grade-distribution').getContext('2d');
-            chartInstances.grades = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: data.map(item => item.grade), // e.g., ['A+', 'A', 'B+', 'F']
-                    datasets: [{
-                        label: 'Students by Final Grade',
-                        data: data.map(item => item.count),
-                        backgroundColor: data.map(item => {
-                            if (item.grade === 'F') return '#dc3545';
-                            if (item.grade.startsWith('A')) return '#28a745';
-                            return '#007bff';
-                        })
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { display: true, text: 'Overall Grade Distribution' }
-                    },
-                    scales: { y: { beginAtZero: true } }
-                }
+                options: { responsive: true, maintainAspectRatio: false }
             });
         }
 
-        // --- Main Loading Logic ---
-        
-        async function loadReports(filters = {}) {
-            // CRITICAL FIX: Reference the element once and check for its existence
-            const loadingMessageElement = document.getElementById('loading-message');
-            if (loadingMessageElement) {
-                loadingMessageElement.textContent = 'Loading and processing data...';
-                loadingMessageElement.style.display = 'block';
-            }
-            
-            // Show the main error container for subsequent errors
-            const errorMessageElement = document.getElementById('error-message');
-            errorMessageElement.style.display = 'none';
-
-            try {
-                // 1. Fetch KPI Summaries
-                const summaries = await fetchReportData('/summaries', filters);
-                
-                // Update KPI boxes
-                if (summaries) { 
-                    document.getElementById('total-students').textContent = summaries.totalStudents.toLocaleString();
-                    document.getElementById('fees-collected').textContent = `₹${summaries.feesCollected.toLocaleString()}`;
-                    document.getElementById('fees-outstanding').textContent = `₹${summaries.feesOutstanding.toLocaleString()}`;
-                    document.getElementById('enrollment-growth').textContent = `${summaries.enrollmentGrowth}%`;
-                }
-                
-                // 2. Fetch Detailed Data for Charts
-                const [enrollmentData, feesData, gradeData] = await Promise.all([
-                    fetchReportData('/enrollment-by-course', filters),
-                    fetchReportData('/fees-collection-monthly', filters),
-                    fetchReportData('/grade-distribution', filters)
-                ]);
-                
-                // 3. Render Charts
-                renderEnrollmentByCourse(enrollmentData);
-                renderFeesCollectionMonthly(feesData);
-                renderGradeDistribution(gradeData);
-
-                if (loadingMessageElement) {
-                    loadingMessageElement.style.display = 'none';
-                }
-
-            } catch (error) {
-                console.error('CRITICAL REPORT LOAD ERROR:', error);
-                if (loadingMessageElement) {
-                     loadingMessageElement.style.display = 'none';
-                }
-                errorMessageElement.textContent = `Could not load reports: ${error.message}`;
-                errorMessageElement.style.display = 'block';
-            }
-        }
-        
-        // --- Initialization and Event Handling ---
-        
-        function getFilterValues() {
-            return {
-                session: document.getElementById('session-select').value,
-                course: document.getElementById('course-select').value,
-                dateRange: document.getElementById('date-range-select').value,
-            };
-        }
-        
-        // DYNAMICALLY FETCH DROPDOWN DATA
-        async function populateDropdowns() {
-            const sessionSelect = document.getElementById('session-select');
-            const courseSelect = document.getElementById('course-select');
-            
-            try {
-                // Fetch Academic Sessions (from /api/academicswithfees/academic-sessions)
-                const sessions = await fetchAcademicsData('/academic-sessions');
-                sessionSelect.innerHTML = sessions.map(s => `
-                    <option value="${s.id}" ${s.is_active ? 'selected' : ''}>${s.session_name}</option>
-                `).join('');
-                
-                // Fetch Courses (from /api/academicswithfees/courses)
-                const courses = await fetchAcademicsData('/courses');
-                courseSelect.innerHTML = '<option value="">All Courses</option>';
-                courseSelect.innerHTML += courses.map(c => `
-                    <option value="${c.course_id}">${c.course_name}</option>
-                `).join('');
-
-            } catch (error) {
-                console.warn('Failed to populate filter dropdowns. Check backend academic routes.', error);
-                // Ensure selectors are NOT null if data fails, preventing crash
-                sessionSelect.innerHTML = '<option value="">N/A (Load Error)</option>';
-                courseSelect.innerHTML = '<option value="">All Courses</option>';
-            }
-        }
-        
-        function setupExportHandlers() {
-             document.getElementById('export-csv-btn').addEventListener('click', () => {
-                 alert("CSV export initiated. (Requires backend endpoint /api/reports/export/csv)");
-                 // Actual implementation would involve calling a specific backend export endpoint
-             });
+        function initDashboard() {
+            loadReports();
         }
 
-
-        document.addEventListener('DOMContentLoaded', () => {
-            populateDropdowns();
-            setupExportHandlers();
-            
-            // Wait for dropdowns to populate before loading initial reports
-            // This structure ensures loadReports is only called once the DOM is ready.
-            setTimeout(() => {
-                loadReports(getFilterValues());
-            }, 50); 
-            
-            document.getElementById('apply-filters-btn').addEventListener('click', () => {
-                loadReports(getFilterValues());
-            });
-        });
-
+        document.addEventListener('DOMContentLoaded', initDashboard);
     </script>
 </body>
 </html>

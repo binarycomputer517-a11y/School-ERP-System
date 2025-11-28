@@ -5,6 +5,8 @@
 // 1. IMPORTS & INITIALIZATION
 // ===================================
 const express = require('express');
+const http = require('http'); // [NEW] Required for Socket.io
+const { Server } = require('socket.io'); // [NEW] Import Socket.io
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
@@ -17,7 +19,6 @@ const { multerInstance } = require('./multerConfig');
 const { authenticateToken } = require('./authMiddleware'); // JWT Middleware
 
 // --- Constants & Setup ---
-// Define specific upload paths used by the routes (kept for startup checks)
 const TEACHERS_UPLOAD_DIR = path.join(__dirname, 'uploads', 'teachers'); 
 const TRANSPORT_UPLOAD_DIR = path.join(__dirname, 'uploads', 'transport'); 
 const DOCUMENTS_UPLOAD_DIR = path.join(__dirname, 'uploads', 'documents'); 
@@ -25,6 +26,18 @@ const MEDIA_UPLOAD_DIR = path.join(__dirname, 'uploads', 'media');
 
 const app = express();
 const port = process.env.PORT || 3005;
+
+// [NEW] Create HTTP Server & Socket.io Instance
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*", // Allow all origins (adjust for production)
+        methods: ["GET", "POST"]
+    }
+});
+
+// [NEW] Make 'io' accessible globally in routes via req.app.get('io')
+app.set('io', io);
 
 // ===================================
 // 2. CORE MIDDLEWARE
@@ -46,7 +59,24 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 app.set('upload', multerInstance); 
 
 // ===================================
-// 3. API ROUTE DEFINITIONS
+// 3. SOCKET.IO CONNECTION LOGIC
+// ===================================
+io.on('connection', (socket) => {
+    console.log('⚡ A user connected via Socket.io:', socket.id);
+
+    // Event: User joins a specific conversation (Room)
+    socket.on('join_conversation', (conversationId) => {
+        socket.join(conversationId);
+        console.log(`User ${socket.id} joined room: ${conversationId}`);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('User disconnected');
+    });
+});
+
+// ===================================
+// 4. API ROUTE DEFINITIONS
 // ===================================
 
 // --- Import Route Modules ---
@@ -63,7 +93,7 @@ const noticesRouter = require('./routes/notices');
 const transportRouter = require('./routes/transport'); 
 const payrollRouter = require('./routes/payroll');
 const libraryRouter = require('./routes/library');
-const feesRoutes = require('./routes/fees'); // Retain import for mount below
+const feesRoutes = require('./routes/fees'); 
 const subjectsRouter = require('./routes/subjects');
 const activitiesRouter = require('./routes/clubsEvents'); 
 const onlineLearningRouter = require('./routes/onlineLearning');
@@ -94,18 +124,18 @@ const vmsRouter = require('./routes/vms');
 const alumniRouter = require('./routes/alumni'); 
 const invoicesRouter = require('./routes/invoices');
 const reportsRoutes = require('./routes/reports');
-
+const academicSessionsRoutes = require('./routes/academic_sessions');
 // --- PUBLIC API ROUTES (NO AUTH REQUIRED) ---
 app.use('/api/auth', authRoutes); 
 app.use('/api/dashboard', dashboardRoutes); 
 app.use('/api/users', userRoutes); 
-app.use('/api/vms', vmsRouter); // Public routes before authentication
+app.use('/api/vms', vmsRouter); 
 
 
 // --- PROTECTED API ROUTES (JWT AUTH REQUIRED) ---
-app.use('/api', authenticateToken); // All routes below here require a valid token
+app.use('/api', authenticateToken); 
 
-// All routes mounted here require a valid token
+// Routes
 app.use('/api/students', studentsRoutes);
 app.use('/api/timetable', timetableRoutes);
 app.use('/api/marks', marksRoutes);
@@ -123,7 +153,6 @@ app.use('/api/messaging', messagingRouter);
 app.use('/api/library', libraryRouter);
 app.use('/api/staffhr', staffhrRouter);
 app.use('/api/reports', reportsRoutes);
-// FIX: Only one mount for feesRoutes is kept.
 app.use('/api/fees', feesRoutes); 
 app.use('/api/payments', paymentsRouter);
 app.use('/api/invoices', invoicesRouter);
@@ -147,10 +176,10 @@ app.use('/api/enquiries', enquiriesRouter);
 app.use('/api/hr/departments', departmentRoutes);
 app.use('/api/media', mediaRouter);
 app.use('/api/alumni', alumniRouter); 
-
-
+app.use('/api/messaging', messagingRouter);
+app.use('/api/academic-sessions', academicSessionsRoutes);
 // ===================================
-// 4. PAGE SERVING & SPA ROUTING 
+// 5. PAGE SERVING & SPA ROUTING 
 // ===================================
 app.get('/', (req, res) => res.redirect('/login'));
 app.get('/login', (req, res) => {
@@ -160,37 +189,26 @@ app.get('/exam-management.html', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'exam-management.html'));
 });
 
-// Catch-all route for Single Page Application (SPA) support.
+// Catch-all route for SPA
 app.use((req, res, next) => {
     const url = req.originalUrl;
-    
-    // 1. 404 for unmatched API calls
     if (url.startsWith('/api')) {
         return res.status(404).json({ message: "API Endpoint not found." });
     }
-    
-    // 2. Check for file extensions (like .css, .js, .png) that the static
-    //    middleware failed to find.
     if (url.includes('.') && !url.endsWith('.html')) {
-        console.warn('404: Static asset not found by middleware: %s', url);
         return res.status(404).send("Static file not found: " + url);
     }
-
-    // 3. Serve the dashboard.html for all other routes (SPA fallback)
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'), (err) => {
-        if (err) {
-            console.error("Dashboard file serving error:", err);
-            res.status(500).send("Error: Required client file is missing from public directory.");
-        }
+        if (err) res.status(500).send("Error: Client file missing.");
     });
 });
 
 // ===================================
-// 5. SERVER STARTUP LOGIC
+// 6. SERVER STARTUP LOGIC
 // ===================================
 async function startServer() {
     try {
-        // 1. File System Check (Updated to include all relevant dirs)
+        // 1. File System Check
         const uploadDirs = [
             TEACHERS_UPLOAD_DIR, 
             TRANSPORT_UPLOAD_DIR, 
@@ -208,20 +226,16 @@ async function startServer() {
         await initializeDatabase();
         console.log("Database initialized successfully.");
 
-        // 3. Start Express Server
-        app.listen(port, () => {
+        // 3. Start Server (USING server.listen, NOT app.listen)
+        server.listen(port, () => {
             console.log(`✅ Server is running on http://localhost:${port}`);
-            
-            // 4. Start background services
             startNotificationService();
         });
 
     } catch (error) {
-        // Catch critical errors, log them, and exit
-        console.error("🔥🔥 Failed to start server due to a critical error:", error.message);
+        console.error("🔥🔥 Failed to start server:", error.message);
         process.exit(1); 
     }
 }
 
-// Execute the startup function
 startServer();

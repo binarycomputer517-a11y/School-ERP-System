@@ -2,6 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
+// Assuming pool (database connection) and auth middleware are correctly defined and imported
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 const moment = require('moment');
@@ -24,7 +25,14 @@ const PTM_STATUSES = ['Scheduled', 'Completed', 'Canceled', 'Parent Absent'];
  * @access  Private (Admin, Teacher)
  */
 router.post('/schedule', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    // req.user.userId is set by the authenticateToken middleware (should be the UUID)
     const schedulerId = req.user.userId; 
+    
+    // 🛑 FIX: Prevent 500 Internal Server Error (NULL constraint violation on scheduled_by_id)
+    if (!schedulerId) {
+        // This catches cases where the token is bad or missing the UUID payload
+        return res.status(401).json({ message: 'Authentication failed: Scheduler ID missing from token. Please re-login.' });
+    }
     
     const { 
         teacher_id, 
@@ -39,9 +47,9 @@ router.post('/schedule', authenticateToken, authorize(['Admin', 'Teacher']), asy
     }
     
     // Calculate meeting end time for conflict detection
-    const meetingStart = moment(meeting_time);
     const duration = duration_minutes || 15;
-    const meetingEnd = meetingStart.add(duration, 'minutes').format();
+    const meetingStart = moment(meeting_time);
+    const meetingEnd = moment(meeting_time).add(duration, 'minutes').format();
 
     const client = await pool.connect();
     try {
@@ -73,7 +81,7 @@ router.post('/schedule', authenticateToken, authorize(['Admin', 'Teacher']), asy
             VALUES ($1, $2, $3, $4, $5, $6, $7, 'Scheduled')
             RETURNING id;
         `;
-        const result = await pool.query(scheduleQuery, [
+        const result = await client.query(scheduleQuery, [
             teacher_id, student_id, meeting_time, duration, meetingEnd,
             meeting_type || 'In-Person', schedulerId
         ]);
@@ -99,8 +107,9 @@ router.get('/teacher/:teacherId/slots', authenticateToken, async (req, res) => {
     const { teacherId } = req.params;
     const currentUserId = req.user.userId; 
     
-    // Security Check
+    // Security Check: Only Admin or the teacher themselves can view the schedule.
     if (req.user.role !== 'Admin' && currentUserId !== teacherId) {
+        // This is the source of the 403 Forbidden error.
         return res.status(403).json({ message: 'Forbidden: You can only view your own schedule.' });
     }
 
@@ -130,12 +139,17 @@ router.get('/teacher/:teacherId/slots', authenticateToken, async (req, res) => {
 
 /**
  * @route   POST /api/ptm/feedback/:scheduleId
- * @desc    Teacher submits structured feedback after the meeting.
- * @access  Private (Teacher)
+ * @desc    Teacher/Admin submits structured feedback after the meeting.
+ * @access  Private (Teacher, Admin)
  */
-router.post('/feedback/:scheduleId', authenticateToken, authorize(['Teacher']), async (req, res) => {
+router.post('/feedback/:scheduleId', authenticateToken, authorize(['Teacher', 'Admin']), async (req, res) => {
     const { scheduleId } = req.params;
     const teacherId = req.user.userId; 
+    
+    if (!teacherId) {
+        return res.status(401).json({ message: 'Authentication failed: Teacher ID missing from token.' });
+    }
+
     const { 
         meeting_status, 
         academic_score, 

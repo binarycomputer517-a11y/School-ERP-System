@@ -3,28 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parent-Teacher Meeting Scheduler & Feedback</title>
+    <title>Parent-Teacher Meeting Portal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        /* --- General Styles --- */
         body { font-family: sans-serif; padding: 2em; background-color: #f7f7f7; color: #333; }
         .container { max-width: 1200px; margin: auto; padding: 30px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
         h1 { color: #e91e63; border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
         h2 { color: #f06292; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; }
         
+        /* --- Layout --- */
         .grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
         .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
 
+        /* --- Form Elements --- */
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; }
         input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #f48fb1; border-radius: 4px; }
         button { background-color: #e91e63; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; transition: background-color 0.3s; }
         button:hover { background-color: #c2185b; }
         
         .card { padding: 20px; border: 1px solid #f8bbd0; border-radius: 6px; margin-top: 20px; background-color: #fffafa; }
+
+        /* --- Messaging --- */
         .message-box { padding: 15px; border-radius: 4px; margin-top: 10px; font-weight: bold; }
         .error { background-color: #ffcdd2; color: #c62828; border: 1px solid #ef9a9a; }
         .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .info { background-color: #fff3cd; color: #664d03; border: 1px solid #ffecb5; }
 
-        /* Table & Status Styles */
+        /* --- Table & Status Styles --- */
         table { width: 100%; border-collapse: collapse; margin-top: 15px; }
         th, td { padding: 10px; text-align: left; border: 1px solid #ddd; font-size: 0.9em; }
         th { background-color: #fce4ec; color: #e91e63; }
@@ -50,11 +56,11 @@
                             <div class="grid-form">
                                 <div>
                                     <label for="teacher-id">Teacher ID (Your ID):</label>
-                                    <input type="text" id="teacher-id" name="teacher_id" required placeholder="Teacher Name/UUID">
+                                    <input type="text" id="teacher-id" name="teacher_id" required placeholder="Type Name or UUID to find teacher">
                                 </div>
                                 <div>
                                     <label for="student-id">Student ID:</label>
-                                    <input type="text" id="student-id" name="student_id" required placeholder="Type Student Name or UUID">
+                                    <input type="text" id="student-id" name="student_id" required placeholder="Type Name or UUID to find student">
                                 </div>
                             </div>
 
@@ -93,7 +99,7 @@
                                 </tr>
                             </thead>
                             <tbody id="slots-tbody">
-                                <tr><td colspan="5">Enter your ID to view slots.</td></tr>
+                                <tr><td colspan="5" class="info">Initializing portal...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -150,14 +156,15 @@
         const API_BASE = '/api/ptm';
         const USERS_API = '/api/users/all-staff-students'; 
         
-        // Get constants from Local Storage globally
+        // --- Session Constants ---
         const TOKEN = localStorage.getItem('erp-token');
         const USER_ROLE = localStorage.getItem('user-role');
         const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id'); 
         
-        if (!TOKEN) { window.location.href = '/login'; }
+        // --- Regex for UUID Validation ---
+        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-        // DOM Elements
+        // --- DOM Elements ---
         const userRoleDisplay = document.getElementById('user-role-display');
         const staffView = document.getElementById('staff-view');
         const studentView = document.getElementById('student-view');
@@ -169,92 +176,103 @@
         const feedbackForm = document.getElementById('feedback-form');
         const reportLookupForm = document.getElementById('report-lookup-form');
         const reportResultsDiv = document.getElementById('report-results');
-
+        
         let allUsersForLookup = []; 
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 
         // --- Helper Functions ---
+
+        /** Authenticated API fetch handler. */
         async function handleApi(url, options = {}) {
+            if (!TOKEN) throw new Error('Session Expired: Please log in again.');
+
             const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
             const response = await fetch(url, { ...options, headers: authHeaders });
             
             if (response.status === 401 || response.status === 403) {
-                localStorage.clear();
+                // This handles the 403 Forbidden error and unauthorized errors
                 throw new Error('Unauthorized or session expired.');
             }
             if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error('API Endpoint or resource not found. Check the ID.');
-                }
                 const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
                 throw new Error(errorBody.message || 'API call failed.');
             }
             return response.json();
         }
         
+        /** Displays status messages (success, error, info). */
         function showMessage(element, text, type) {
             element.textContent = text;
             element.className = `message-box ${type}`;
             element.style.display = 'block';
         }
 
+        /** Loads all users for client-side name-to-UUID lookup. */
         async function loadAllUsersForLookup() {
             try {
+                // Assuming USERS_API returns a list of user objects with id, username, full_name
                 const users = await handleApi(USERS_API); 
                 allUsersForLookup = users.map(u => ({
                     id: u.id, 
-                    username: u.username.toLowerCase(),
+                    username: (u.username || '').toLowerCase(),
                     fullName: (u.full_name || '').toLowerCase()
                 }));
             } catch (error) {
-                console.warn("Failed to load user directory for lookup (using dummy data):", error);
+                // Mock data if user directory fetch fails (safe mode)
                 allUsersForLookup = [
-                    { id: "a0000000-0000-0000-0000-000000000001", username: "dsmith", fullName: "david smith" },
-                    { id: "b0000000-0000-0000-0000-000000000002", username: "sroy", fullName: "souvik roy" }
+                    { id: "39d5da2e-753e-4c9b-a87b-4494671e01bd", username: "3", fullName: "Debasis Das" },
+                    { id: "61d847fd-63d5-4b4d-96a6-fe117da5b9ad", username: "sudam", fullName: "Sudam Maity" },
+                    { id: "4f36c554-4e91-4b5f-a183-592fcce10948", username: "2", fullName: "Anita Pradhan" }
                 ];
+                console.warn("User directory lookup failed. Using mock data for lookup.");
             }
         }
 
+        /** Converts a typed name/username into a UUID if a match is found. */
         function lookupUserId(inputElement) {
             const query = inputElement.value.trim().toLowerCase();
             
-            // Allow name to be typed until 3 characters or it's a UUID
-            if (query.length < 3 && !uuidRegex.test(query)) {
-                 inputElement.placeholder = inputElement.getAttribute('placeholder').includes("Found:") ? inputElement.getAttribute('placeholder') : "Type Name or UUID";
-                 return; 
-            }
-
+            // 1. If it's a UUID, accept it and exit
             if (uuidRegex.test(query)) {
+                 inputElement.placeholder = `Valid UUID entered.`;
                  return;
             }
 
+            // 2. Require minimum characters for name lookup
+            if (query.length < 3) {
+                 inputElement.placeholder = inputElement.getAttribute('data-initial-placeholder') || "Type Name or UUID";
+                 return; 
+            }
+
+            // 3. Find match and replace input value with UUID
             const matchedUser = allUsersForLookup.find(user => 
                 (user.fullName.includes(query)) ||
                 (user.username.includes(query))
             );
 
             if (matchedUser) {
-                // ⭐ FIX: Replace the value with the UUID upon a successful lookup
-                inputElement.value = matchedUser.id;
+                // Replace text input value with the found UUID
+                inputElement.value = matchedUser.id; 
                 inputElement.placeholder = `Found: ${matchedUser.fullName || matchedUser.username}`;
+                // Dispatch 'change' to trigger teacher slot load or final validation
+                inputElement.dispatchEvent(new Event('change')); 
             } else {
-                 // If no match, keep the current text as the user may still be typing
                  inputElement.placeholder = `No match found. Enter the full Name or UUID.`;
             }
         }
         
-        // --- 1. Scheduling ---
+        // --- 1. Scheduling & Slots ---
         
+        /** Fetches and displays the teacher's schedule. */
         async function loadTeacherSlots(teacherId) {
-            // ⭐ CRITICAL FIX: Ensure Teacher ID is a valid UUID before sending the API request.
+            // CRITICAL CHECK: Ensure Teacher ID is a valid UUID
             if (!teacherId || !uuidRegex.test(teacherId)) {
-                slotsTbody.innerHTML = '<tr><td colspan="5" class="error">Error: Invalid Teacher ID format. Please ensure the input field contains a valid UUID.</td></tr>';
-                console.warn("loadTeacherSlots aborted: Invalid Teacher ID format.");
+                // If ID is invalid/missing, show neutral message instead of the harsh error
+                slotsTbody.innerHTML = '<tr><td colspan="5" class="info">Authentication data missing. Please search for yourself or re-login.</td></tr>';
                 return;
             }
 
-            slotsTbody.innerHTML = '<tr><td colspan="5">Loading your schedule...</td></tr>';
+            slotsTbody.innerHTML = '<tr><td colspan="5" class="info">Loading your schedule...</td></tr>';
             try {
                 const slots = await handleApi(`${API_BASE}/teacher/${teacherId}/slots`);
                 
@@ -267,6 +285,8 @@
                     const statusClass = `status-${s.status.replace(/\s/g, '_')}`;
                     const time = new Date(s.meeting_time).toLocaleString();
                     
+                    const isOverdue = s.status === 'Scheduled' && new Date(s.meeting_time) < new Date();
+                    
                     return `
                         <tr>
                             <td>${time}</td>
@@ -274,8 +294,8 @@
                             <td>${s.duration_minutes} min</td>
                             <td class="${statusClass}">${s.status}</td>
                             <td>
-                                ${s.status === 'Scheduled' && new Date(s.meeting_time) < new Date() 
-                                    ? `<button onclick="document.getElementById('schedule-id-feedback').value='${s.id}'" style="background-color: #4caf50;">Finalize</button>`
+                                ${isOverdue || s.status === 'Completed'
+                                    ? `<button onclick="document.getElementById('schedule-id-feedback').value='${s.id}'" style="background-color: ${isOverdue ? '#ff9800' : '#888'};" ${s.has_feedback ? 'disabled' : ''}>${s.has_feedback ? 'Feedback Done' : 'Finalize'}</button>`
                                     : 'N/A'
                                 }
                             </td>
@@ -285,6 +305,7 @@
 
             } catch (error) {
                 console.error("Error loading slots:", error);
+                // Display specific error message returned by handleApi (e.g., Forbidden)
                 slotsTbody.innerHTML = `<tr><td colspan="5" class="error">Failed to load schedule: ${error.message}</td></tr>`;
             }
         }
@@ -295,8 +316,7 @@
             const data = Object.fromEntries(new FormData(form));
             data.duration_minutes = parseInt(data.duration_minutes, 10);
             
-            // Final UUID check before submission
-            // We check BOTH teacher and student ID here for extra safety
+            // Final UUID validation before API call
             if (!uuidRegex.test(data.teacher_id) || !uuidRegex.test(data.student_id)) {
                 showMessage(document.getElementById('schedule-message'), '❌ Scheduling Failed: Both Teacher and Student IDs must be valid UUIDs.', 'error');
                 return;
@@ -319,7 +339,7 @@
             }
         });
 
-        // --- 2. Feedback ---
+        // --- 2. Feedback Submission ---
         
         feedbackForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -331,7 +351,6 @@
             try {
                 const scheduleId = data.schedule_id;
                 
-                // Endpoint: POST /api/ptm/feedback/:scheduleId
                 const result = await handleApi(`${API_BASE}/feedback/${scheduleId}`, { 
                     method: 'POST', 
                     body: JSON.stringify(data) 
@@ -354,18 +373,17 @@
             const studentId = document.getElementById('report-student-id').value.trim();
             
             if (!uuidRegex.test(studentId)) {
-                reportResultsDiv.innerHTML = '<p class="error">Report Failed: Student ID must be a valid UUID.</p>';
+                reportResultsDiv.innerHTML = '<p class="error message-box">Report Failed: Student ID must be a valid UUID.</p>';
                 return;
             }
             
-            reportResultsDiv.innerHTML = '<p class="info">Generating report...</p>';
+            reportResultsDiv.innerHTML = '<p class="info message-box">Generating report...</p>';
 
             try {
-                // Endpoint: GET /api/ptm/student/:studentId/report
                 const report = await handleApi(`${API_BASE}/student/${studentId}/report`);
                 
                 if (report.length === 0) {
-                     reportResultsDiv.innerHTML = '<p class="error">No PTM records found for this student.</p>';
+                     reportResultsDiv.innerHTML = '<p class="info message-box">No PTM records found for this student.</p>';
                      return;
                 }
 
@@ -384,60 +402,70 @@
                                 <strong>Behavior Score:</strong> <span class="report-score">${r.behavior_score || 'N/A'}/5</span></p>
                                 <p><strong>Goals:</strong> ${r.goals_discussed || 'None specified.'}</p>
                                 <p><strong>Parent Notes:</strong> ${r.parent_comments || 'N/A'}</p>
+                                <p style="font-size: 0.8em; color: #888;">Submitted: ${new Date(r.submitted_at).toLocaleString()}</p>
                             ` : '<p class="info">Feedback pending or meeting incomplete.</p>'}
                         </div>
                     `;
                 });
 
             } catch (error) {
-                reportResultsDiv.innerHTML = `<p class="error">Failed to generate report: ${error.message}</p>`;
+                reportResultsDiv.innerHTML = `<p class="error message-box">Failed to generate report: ${error.message}</p>`;
             }
         });
 
 
         // --- Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
-            const userIdFromLS = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
-
-            userRoleDisplay.textContent = USER_ROLE;
+            userRoleDisplay.textContent = USER_ROLE || 'Guest';
             
-            loadAllUsersForLookup(); // ⭐ Load user directory first
+            // 1. Load users for autocomplete
+            loadAllUsersForLookup();
 
-            // ⭐ FIX: Event Listeners for Autocomplete/Lookup - Now using 'change' for UUID replacement
+            // 2. Store initial placeholders for the lookup function
+            teacherIdInput.setAttribute('data-initial-placeholder', teacherIdInput.placeholder);
+            studentIdInputSchedule.setAttribute('data-initial-placeholder', studentIdInputSchedule.placeholder);
+            studentIdInputReport.setAttribute('data-initial-placeholder', studentIdInputReport.placeholder);
+
+
+            // 3. Setup Input Listeners for ID lookup/slot loading
             
-            // 1. Teacher ID Listener
+            // Teacher ID: Typing triggers lookup and change event (if found)
+            teacherIdInput.addEventListener('input', (e) => lookupUserId(e.target));
             teacherIdInput.addEventListener('change', (e) => {
-                lookupUserId(e.target);
                 if (uuidRegex.test(e.target.value)) {
                     loadTeacherSlots(e.target.value);
                 }
             });
-
-            // 2. Student ID Listeners
-            studentIdInputSchedule.addEventListener('change', (e) => lookupUserId(e.target));
-            studentIdInputReport.addEventListener('change', (e) => lookupUserId(e.target));
-
-
             
-            // Set default views based on role
+            // Student ID: Typing triggers lookup
+            studentIdInputSchedule.addEventListener('input', (e) => lookupUserId(e.target));
+            
+            // Report Student ID: Typing triggers lookup
+            studentIdInputReport.addEventListener('input', (e) => lookupUserId(e.target));
+
+
+            // 4. Role-based view logic
             if (USER_ROLE === 'Teacher' || USER_ROLE === 'Admin') {
                 staffView.style.display = 'block';
                 
-                if (userIdFromLS && uuidRegex.test(userIdFromLS)) {
-                    teacherIdInput.value = userIdFromLS; // Pre-fill teacher ID with own ID
-                    loadTeacherSlots(userIdFromLS); // Load own schedule automatically
+                if (USER_ID && uuidRegex.test(USER_ID)) {
+                    teacherIdInput.value = USER_ID;
+                    // Trigger slot loading automatically for authenticated users
+                    loadTeacherSlots(USER_ID); 
                 } else {
+                    // Renders the neutral message when Local Storage data is bad
                     teacherIdInput.value = '';
-                    slotsTbody.innerHTML = '<tr><td colspan="5" class="error">Authentication Error: Your User ID is missing or invalid. Please search for yourself or re-login.</td></tr>';
+                    slotsTbody.innerHTML = '<tr><td colspan="5" class="info">Authentication data missing. Please search for yourself or re-login.</td></tr>';
                 }
 
             } else if (USER_ROLE === 'Student' || USER_ROLE === 'Parent') {
                 studentView.style.display = 'block';
-                if (USER_ROLE === 'Student' && userIdFromLS && uuidRegex.test(userIdFromLS)) {
-                    document.getElementById('report-student-id').value = userIdFromLS;
-                    reportLookupForm.dispatchEvent(new Event('submit')); // Auto-load report
-                } else if (USER_ROLE === 'Student') {
-                    reportResultsDiv.innerHTML = '<p class="error">Authentication Error: Student ID is missing or invalid. Please search manually or re-login.</p>';
+                if (USER_ID && uuidRegex.test(USER_ID)) {
+                    // Auto-load report for self-viewing users
+                    document.getElementById('report-student-id').value = USER_ID;
+                    reportLookupForm.dispatchEvent(new Event('submit')); 
+                } else {
+                    reportResultsDiv.innerHTML = '<p class="error message-box">Authentication Error: User ID is missing or invalid. Please search manually or re-login.</p>';
                 }
             }
         });
