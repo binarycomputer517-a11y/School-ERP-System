@@ -3,157 +3,171 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Analytics Dashboard | School ERP</title>
+    <title>Command Center | School ERP</title>
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <style>
-        :root { --primary-color: #4361ee; --bg-color: #f4f6f9; --card-bg: #ffffff; --text-color: #333; }
-        [data-bs-theme="dark"] { --primary-color: #4cc9f0; --bg-color: #0f172a; --card-bg: #1e293b; --text-color: #f8f9fa; }
+        :root { --primary: #4361ee; --bg: #f4f6f9; --card: #ffffff; --text: #333; --ticker-bg: #1e293b; }
+        [data-bs-theme="dark"] { --primary: #4cc9f0; --bg: #0f172a; --card: #1e293b; --text: #f8f9fa; --ticker-bg: #4361ee; }
         
-        body { background-color: var(--bg-color); color: var(--text-color); font-family: 'Segoe UI', sans-serif; transition: background-color 0.3s, color 0.3s; }
-        .card { background-color: var(--card-bg); border: none; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 20px; transition: background-color 0.3s; }
+        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; transition: 0.3s; padding-top: 40px; }
+        .card { background-color: var(--card); border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; transition: 0.3s; }
         
+        /* Live Ticker */
+        #news-ticker { position: fixed; top: 0; left: 0; width: 100%; height: 40px; background: var(--ticker-bg); color: #fff; z-index: 1000; display: flex; align-items: center; overflow: hidden; white-space: nowrap; font-size: 0.9rem; font-weight: 500; }
+        .ticker-content { display: inline-block; padding-left: 100%; animation: ticker 30s linear infinite; }
+        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
         /* KPI Cards */
-        .info-box { background-color: var(--card-bg); padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid; transition: transform 0.2s; }
+        .info-box { background: var(--card); padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid; cursor: pointer; transition: transform 0.2s; }
         .info-box:hover { transform: translateY(-5px); }
-        .box-title { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; opacity: 0.7; }
         .box-value { font-size: 2.2rem; font-weight: 700; margin: 10px 0; }
         
         /* Charts */
-        .chart-card { height: 350px; position: relative; }
+        .chart-card { height: 320px; position: relative; }
         
-        /* Skeleton Animation */
-        .skeleton-text { height: 1rem; margin-bottom: 0.5rem; border-radius: 0.25rem; background: #e0e0e0; animation: pulse 1.5s infinite; }
+        /* Floating Actions */
+        .fab-container { position: fixed; bottom: 30px; right: 30px; z-index: 999; display: flex; flex-direction: column; gap: 10px; }
+        .fab-btn { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: 0.2s; }
+        .fab-btn:hover { transform: scale(1.1); }
+
+        /* Skeletons */
+        .skeleton-text { height: 1rem; background: #e0e0e0; border-radius: 4px; animation: pulse 1.5s infinite; }
         @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
-        
-        @media print { 
-            .no-print { display: none !important; } 
-            .card { break-inside: avoid; border: 1px solid #ddd; box-shadow: none; }
-        }
+
+        @media print { .no-print, #news-ticker, .fab-container { display: none !important; } body { padding-top: 0; } }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-    <div class="container-fluid px-4 mt-4">
-        <header class="d-flex justify-content-between align-items-center mb-4">
+
+    <div id="news-ticker">
+        <div class="ticker-content" id="ticker-text">🚀 System Online... Connecting to real-time analytics stream...</div>
+    </div>
+
+    <div class="container-fluid px-4" id="dashboard-content">
+        
+        <header class="d-flex justify-content-between align-items-center mb-4 mt-3">
             <div>
-                <h1 class="fw-bold mb-0"><i class="fas fa-chart-pie text-primary me-2"></i>Analytics Dashboard</h1>
-                <p class="text-muted small mb-0">Real-time Academic & Financial Intelligence</p>
+                <h2 class="fw-bold mb-0"><i class="fas fa-chart-line text-primary me-2"></i>Executive Command Center</h2>
+                <p class="text-muted small mb-0">360° View of Academic & Operational Health</p>
             </div>
             <div class="d-flex gap-2 no-print">
-                <button class="btn btn-outline-secondary" id="theme-toggle"><i class="fas fa-moon"></i></button>
-                <button class="btn btn-outline-secondary" onclick="window.print()"><i class="fas fa-print"></i></button>
+                <div class="form-check form-switch pt-2 me-2">
+                    <input class="form-check-input" type="checkbox" id="auto-refresh">
+                    <label class="form-check-label small" for="auto-refresh">Live Mode</label>
+                </div>
+                <button class="btn btn-outline-secondary" onclick="toggleFullScreen()" title="Full Screen"><i class="fas fa-expand"></i></button>
                 <button class="btn btn-primary" onclick="initDashboard()"><i class="fas fa-sync-alt me-2"></i>Refresh</button>
                 <a href="/admin-dashboard.html" class="btn btn-dark">Exit</a>
             </div>
         </header>
 
+        <section class="card p-3 mb-4 no-print">
+            <div class="row g-3">
+                <div class="col-md-3"><select id="session-select" class="form-select"><option value="">All Sessions</option></select></div>
+                <div class="col-md-3"><input type="date" id="start-date" class="form-control" title="Start"></div>
+                <div class="col-md-3"><input type="date" id="end-date" class="form-control" title="End"></div>
+                <div class="col-md-3"><button onclick="loadReports()" class="btn btn-primary w-100">Apply Filter</button></div>
+            </div>
+        </section>
+
         <section class="row mb-4">
             <div class="col-md-3">
                 <div class="info-box border-primary">
-                    <div class="box-title text-primary">Total Students</div>
+                    <div class="box-title text-primary">Active Students</div>
                     <div id="kpi-students" class="box-value skeleton-text">...</div>
+                    <small class="text-success"><i class="fas fa-user-graduate"></i> Currently Enrolled</small>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="info-box border-success">
-                    <div class="box-title text-success">Total Collections</div>
+                    <div class="box-title text-success">Total Revenue (YTD)</div>
                     <div id="kpi-collection" class="box-value skeleton-text">...</div>
+                    <small class="text-muted"><i class="fas fa-rupee-sign"></i> Verified Payments</small>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box border-danger">
+                    <div class="box-title text-danger">Pending Dues</div>
+                    <div id="kpi-outstanding" class="box-value skeleton-text">...</div>
+                    <small class="text-danger fw-bold">Action Required</small>
                 </div>
             </div>
             <div class="col-md-3">
                 <div class="info-box border-warning">
-                    <div class="box-title text-warning">Outstanding Dues</div>
-                    <div id="kpi-outstanding" class="box-value skeleton-text">...</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="info-box border-info">
-                    <div class="box-title text-info">Attendance Avg</div>
+                    <div class="box-title text-warning">Attendance Avg</div>
                     <div id="kpi-attendance" class="box-value skeleton-text">...</div>
+                    <small class="text-muted">Campus Wide</small>
                 </div>
             </div>
         </section>
 
         <section class="row mb-4">
             <div class="col-lg-8">
-                <div class="card p-3 h-100">
-                    <h5 class="card-title">💰 Fee Revenue Trend (Area Chart)</h5>
-                    <div class="chart-card"><canvas id="feesChart"></canvas></div>
-                </div>
+                <div class="card p-3 h-100"><h5 class="card-title">💰 Fee Revenue Trend (Area Chart)</h5><div class="chart-card"><canvas id="feesChart"></canvas></div></div>
             </div>
             <div class="col-lg-4">
-                <div class="card p-3 h-100">
-                    <h5 class="card-title">📉 Income vs Expense (Multi-Line)</h5>
-                    <div class="chart-card"><canvas id="financeChart"></canvas></div>
-                </div>
+                <div class="card p-3 h-100"><h5 class="card-title">📉 Income vs Expense (Multi-Line)</h5><div class="chart-card"><canvas id="financeChart"></canvas></div></div>
             </div>
         </section>
 
         <section class="row mb-4">
-            <div class="col-md-4">
-                <div class="card p-3">
-                    <h5 class="card-title">🏫 Enrollment (Polar Area)</h5>
-                    <div class="chart-card"><canvas id="enrollmentChart"></canvas></div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card p-3">
-                    <h5 class="card-title">🚻 Gender Ratio (Doughnut)</h5>
-                    <div class="chart-card"><canvas id="genderChart"></canvas></div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card p-3">
-                    <h5 class="card-title">📝 Attendance Status (Pie)</h5>
-                    <div class="chart-card"><canvas id="attendanceChart"></canvas></div>
-                </div>
-            </div>
+            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">🏫 Enrollment (Polar Area)</h5><div class="chart-card"><canvas id="enrollmentChart"></canvas></div></div></div>
+            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">🚻 Gender Ratio (Doughnut)</h5><div class="chart-card"><canvas id="genderChart"></canvas></div></div></div>
+            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">📝 Attendance Status (Pie)</h5><div class="chart-card"><canvas id="attendanceChart"></canvas></div></div></div>
         </section>
 
         <section class="row mb-4">
-            <div class="col-md-4">
-                <div class="card p-3">
-                    <h5 class="card-title">📚 Library Usage (Bar)</h5>
-                    <div class="chart-card"><canvas id="libraryChart"></canvas></div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card p-3">
-                    <h5 class="card-title">🎯 Performance (Scatter: Marks vs Attendance)</h5>
-                    <div class="chart-card"><canvas id="scatterChart"></canvas></div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card p-3">
-                    <h5 class="card-title">💡 Course ROI (Bubble: Fee vs Students)</h5>
-                    <div class="chart-card"><canvas id="bubbleChart"></canvas></div>
-                </div>
-            </div>
+            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">📚 Library Usage (Bar)</h5><div class="chart-card"><canvas id="libraryChart"></canvas></div></div></div>
+            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">🎯 Performance (Scatter)</h5><div class="chart-card"><canvas id="scatterChart"></canvas></div></div></div>
+            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">💡 Course ROI (Bubble)</h5><div class="chart-card"><canvas id="bubbleChart"></canvas></div></div></div>
         </section>
         
         <section class="row mb-4">
-             <div class="col-md-6">
+             <div class="col-md-6"><div class="card p-3"><h5 class="card-title">💳 Payment Modes (Horizontal Bar)</h5><div class="chart-card"><canvas id="paymentModeChart"></canvas></div></div></div>
+             <div class="col-md-6"><div class="card p-3"><h5 class="card-title">📊 Grade Distribution (Radar)</h5><div class="chart-card"><canvas id="gradeChart"></canvas></div></div></div>
+        </section>
+
+        <section class="row mb-4">
+            <div class="col-md-6"><div class="card p-3"><h5 class="card-title">👥 Visitor Purpose (Bar)</h5><div class="chart-card"><canvas id="visitorChart"></canvas></div></div></div>
+            <div class="col-md-6"><div class="card p-3"><h5 class="card-title">⚠️ Complaints Status (Pie)</h5><div class="chart-card"><canvas id="complaintChart"></canvas></div></div></div>
+        </section>
+
+        <section class="row">
+            <div class="col-12">
                 <div class="card p-3">
-                    <h5 class="card-title">💳 Payment Modes (Horizontal Bar)</h5>
-                    <div class="chart-card"><canvas id="paymentModeChart"></canvas></div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card p-3">
-                    <h5 class="card-title">📊 Grade Distribution (Radar)</h5>
-                    <div class="chart-card"><canvas id="gradeChart"></canvas></div>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title text-danger"><i class="fas fa-file-invoice-dollar me-2"></i>Fee Defaulters List</h5>
+                        <button class="btn btn-sm btn-success" onclick="exportToExcel()"><i class="fas fa-file-excel me-2"></i>Export Excel</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="defaulters-table">
+                            <thead class="table-light"><tr><th>Student</th><th>Roll</th><th>Course</th><th>Pending</th><th>Last Paid</th></tr></thead>
+                            <tbody id="defaulters-body"></tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </section>
+    </div>
 
+    <div class="fab-container no-print">
+        <button class="btn btn-primary fab-btn" onclick="window.scrollTo(0,0)" title="Top"><i class="fas fa-arrow-up"></i></button>
+        <button class="btn btn-secondary fab-btn" id="theme-toggle" title="Theme"><i class="fas fa-moon"></i></button>
+        <button class="btn btn-danger fab-btn" onclick="exportPDF()" title="Print PDF"><i class="fas fa-file-pdf"></i></button>
     </div>
 
     <script>
         const TOKEN = localStorage.getItem('erp-token');
         if (!TOKEN) window.location.href = '/login.html';
         
-        let charts = {}; // Store instances to destroy them before redrawing
+        let charts = {}, refreshInterval;
 
         // --- Theme Toggle ---
         document.getElementById('theme-toggle').addEventListener('click', () => {
@@ -161,10 +175,34 @@
             html.setAttribute('data-bs-theme', html.getAttribute('data-bs-theme') === 'light' ? 'dark' : 'light');
         });
 
-        // --- API Helper ---
+        // --- Utils ---
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else if (document.exitFullscreen) document.exitFullscreen();
+        }
+
+        document.getElementById('auto-refresh').addEventListener('change', (e) => {
+            if (e.target.checked) refreshInterval = setInterval(loadReports, 30000);
+            else clearInterval(refreshInterval);
+        });
+
+        function exportPDF() {
+            const element = document.getElementById('dashboard-content');
+            html2pdf().set({ margin: 0.3, filename: 'Analytics_Report.pdf', html2canvas: { scale: 2 } }).from(element).save();
+        }
+
+        function exportToExcel() {
+            const wb = XLSX.utils.table_to_book(document.getElementById("defaulters-table"));
+            XLSX.writeFile(wb, "Defaulters_List.xlsx");
+        }
+
+        // --- API Helper (FIXED FOR ROUTING) ---
         async function apiCall(endpoint) {
             try {
-                const res = await fetch('/api/reports' + endpoint, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+                // Fix: If endpoint starts with /api/, don't prepend /api/reports
+                let url = endpoint.startsWith('/api/') ? endpoint : '/api/reports' + endpoint;
+                
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
                 return res.ok ? await res.json() : [];
             } catch (e) {
                 console.error(`Error loading ${endpoint}`, e);
@@ -181,12 +219,14 @@
                 document.getElementById('kpi-collection').innerText = '₹' + kpi.feesCollected.toLocaleString();
                 document.getElementById('kpi-outstanding').innerText = '₹' + kpi.feesOutstanding.toLocaleString();
                 document.getElementById('kpi-attendance').innerText = (kpi.avgAttendance || 0) + '%';
-                // Remove skeletons
+                
+                document.getElementById('ticker-text').innerText = `📢 Live Updates: Total Revenue: ₹${kpi.feesCollected.toLocaleString()} | Active Students: ${kpi.totalStudents} | Attendance: ${kpi.avgAttendance}% | System Status: Optimal`;
+                
                 document.querySelectorAll('.skeleton-text').forEach(el => el.classList.remove('skeleton-text'));
             }
 
-            // 2. Fetch All Data in Parallel
-            const [enroll, fees, gender, att, lib, scat, bub, fin, pay, grades] = await Promise.all([
+            // 2. Fetch All Data in Parallel (Including new Visitor/Complaint routes)
+            const [enroll, fees, gender, att, lib, scat, bub, fin, pay, grades, visit, comp, def] = await Promise.all([
                 apiCall('/enrollment-by-course'),
                 apiCall('/fees-collection-monthly'),
                 apiCall('/gender-ratio'),
@@ -196,50 +236,49 @@
                 apiCall('/course-bubble'),      
                 apiCall('/finance-comparison'),
                 apiCall('/payment-modes'),
-                apiCall('/grade-distribution')
+                apiCall('/grade-distribution'),
+                apiCall('/visitor-stats'),      // New
+                apiCall('/complaint-stats'),    // New
+                apiCall('/defaulters')
             ]);
 
             // 3. Render Charts
-            
-            // Financials
             renderChart('feesChart', 'line', fees, 'amount', 'month', 'Revenue', { fill: true });
             renderMultiLine('financeChart', fin.income, fin.expense);
             renderChart('paymentModeChart', 'bar', pay, 'total', 'mode', 'Transactions', { indexAxis: 'y' });
 
-            // Demographics
             renderChart('enrollmentChart', 'polarArea', enroll, 'count', 'course_name', 'Students');
             renderChart('genderChart', 'doughnut', gender, 'count', 'gender', 'Students');
             renderChart('attendanceChart', 'pie', att, 'count', 'status', 'Status');
 
-            // Advanced
             renderChart('libraryChart', 'bar', lib, 'count', 'month', 'Books Issued');
             renderChart('gradeChart', 'radar', grades, 'count', 'grade', 'Grade Dist.', { fill: true });
             
-            // Scatter (Special Config)
+            // New Module Charts
+            renderChart('visitorChart', 'bar', visit, 'count', 'purpose', 'Visitors');
+            renderChart('complaintChart', 'pie', comp, 'count', 'status', 'Issues');
+
+            // Advanced
             renderSpecialChart('scatterChart', 'scatter', scat, 'Marks vs Attendance', 'Attendance', 'Marks');
-            
-            // Bubble (Special Config)
             renderSpecialChart('bubbleChart', 'bubble', bub, 'Course ROI', 'Avg Fee', 'Students');
+
+            // 4. Render Table
+            renderDefaulters(def);
         }
 
-        // --- Generic Chart Renderer ---
+        // --- Chart Renderers ---
         function renderChart(id, type, data, valKey, labelKey, label, opts = {}) {
             if (charts[id]) charts[id].destroy();
             const ctx = document.getElementById(id).getContext('2d');
 
-            // Conditional Scales to prevent crashes
             let scales = {};
             if (['line', 'bar'].includes(type)) {
-                scales = { 
-                    y: { beginAtZero: true }, 
-                    x: { grid: { display: false } } 
-                };
+                scales = { y: { beginAtZero: true }, x: { grid: { display: false } } };
             } else if (['radar', 'polarArea'].includes(type)) {
                 scales = { r: { ticks: { backdropColor: 'transparent' } } };
             }
 
-            // Create Gradient for Line charts
-            let bg = ['#4361ee', '#3a0ca3', '#f72585', '#4cc9f0', '#7209b7'];
+            let bg = ['#4361ee', '#3a0ca3', '#f72585', '#4cc9f0', '#7209b7', '#4895ef'];
             if (type === 'line' && opts.fill) {
                 const gradient = ctx.createLinearGradient(0, 0, 0, 400);
                 gradient.addColorStop(0, 'rgba(67, 97, 238, 0.5)');
@@ -265,40 +304,20 @@
             });
         }
 
-        // --- Special Renderer for Scatter/Bubble (XY Data) ---
         function renderSpecialChart(id, type, data, label, xLabel, yLabel) {
             if (charts[id]) charts[id].destroy();
             const ctx = document.getElementById(id).getContext('2d');
-
             charts[id] = new Chart(ctx, {
                 type: type,
-                data: {
-                    datasets: [{
-                        label: label,
-                        data: data, // Expects {x, y} or {x, y, r} objects directly
-                        backgroundColor: '#f72585',
-                        borderColor: '#f72585'
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: {
-                        x: { title: { display: true, text: xLabel }, beginAtZero: true },
-                        y: { title: { display: true, text: yLabel }, beginAtZero: true }
-                    }
-                }
+                data: { datasets: [{ label: label, data: data, backgroundColor: '#f72585', borderColor: '#f72585' }] },
+                options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: xLabel }, beginAtZero: true }, y: { title: { display: true, text: yLabel }, beginAtZero: true } } }
             });
         }
 
-        // --- Multi-Line Renderer (Income vs Expense) ---
         function renderMultiLine(id, income, expense) {
             if (charts[id]) charts[id].destroy();
             const ctx = document.getElementById(id).getContext('2d');
-            
-            // Normalize labels based on income data (assuming sorted)
             const labels = income.map(d => d.month);
-
             charts[id] = new Chart(ctx, {
                 type: 'line',
                 data: {
@@ -312,7 +331,20 @@
             });
         }
 
-        function initDashboard() {
+        function renderDefaulters(data) {
+            const tbody = document.getElementById('defaulters-body');
+            tbody.innerHTML = data.length ? '' : '<tr><td colspan="5" class="text-center text-muted">No Defaulters</td></tr>';
+            data.forEach(d => {
+                tbody.innerHTML += `<tr><td><b>${d.student_name}</b></td><td>${d.roll_number}</td><td>${d.course_name}</td><td class="text-danger fw-bold">₹${d.balance_due}</td><td>${d.last_payment_date ? new Date(d.last_payment_date).toLocaleDateString() : '-'}</td></tr>`;
+            });
+        }
+
+        async function initDashboard() {
+            try {
+                // Correctly calls the external API for sessions
+                const sessions = await apiCall('/api/academic-sessions');
+                if(sessions.length) document.getElementById('session-select').innerHTML = sessions.map(s => `<option value="${s.id}">${s.session_name}</option>`).join('');
+            } catch(e) {}
             loadReports();
         }
 
