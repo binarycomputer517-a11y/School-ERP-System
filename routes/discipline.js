@@ -7,7 +7,7 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 const INCIDENTS_TABLE = 'discipline_incidents';
 const ACTIONS_TABLE = 'disciplinary_actions';
 const USERS_TABLE = 'users';
-const STUDENTS_TABLE = 'students'; // Added for student profile lookups
+const STUDENTS_TABLE = 'students';
 
 // Constants
 const SEVERITY_LEVELS = ['Low', 'Medium', 'High', 'Critical'];
@@ -19,16 +19,40 @@ const RESOLUTION_ROLES = ['Admin', 'Counsellor', 'Super Admin'];
 
 
 // =========================================================
-// 1. INCIDENT REPORTING (POST) - WITH SMART ID LOOKUP
+// 1. HELPER ROUTE: GET STUDENT LIST (For Dropdown)
+// =========================================================
+/**
+ * @route   GET /api/discipline/students/lookup
+ * @desc    Get a list of active/enrolled students for the reporting dropdown.
+ */
+router.get('/students/lookup', authenticateToken, authorize(REPORTING_ROLES), async (req, res) => {
+    try {
+        // UPDATED: Now fetches 'Enrolled' students too, so the list isn't empty
+        const query = `
+            SELECT student_id, first_name, last_name, roll_number, admission_id
+            FROM ${STUDENTS_TABLE} 
+            WHERE status IN ('Active', 'Enrolled') 
+            ORDER BY first_name ASC;
+        `;
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Student Lookup Error:', error);
+        res.status(500).json({ message: 'Failed to load student list.' });
+    }
+});
+
+
+// =========================================================
+// 2. INCIDENT REPORTING (POST) - WITH SMART ID LOOKUP
 // =========================================================
 
 router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req, res) => {
     
-    // Get the reporter's User ID from the token (or fallback if using bypass)
     const reporterId = req.user.id || req.body.reporter_id_fallback; 
     
     const { 
-        student_id, // Can be student_id (from students table) OR user_id (from users table)
+        student_id, // Can be student_id (dropdown) or user_id (manual)
         incident_date, 
         incident_type, 
         description, 
@@ -52,10 +76,9 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
         await client.query('BEGIN');
 
         // --- SMART LOOKUP LOGIC ---
-        // Solves the issue where users confuse Student UUID vs User UUID
         let finalStudentId = null;
 
-        // Check 1: Is it a direct Student ID?
+        // Check 1: Is it a direct Student ID? (Most likely from dropdown)
         const checkStudent = await client.query(
             `SELECT student_id FROM ${STUDENTS_TABLE} WHERE student_id = $1::uuid`,
             [student_id]
@@ -64,7 +87,7 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
         if (checkStudent.rowCount > 0) {
             finalStudentId = checkStudent.rows[0].student_id;
         } else {
-            // Check 2: Is it a User ID linked to a student?
+            // Check 2: Is it a User ID? (Manual entry fallback)
             const checkUser = await client.query(
                 `SELECT student_id FROM ${STUDENTS_TABLE} WHERE user_id = $1::uuid`,
                 [student_id]
@@ -77,11 +100,11 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
 
         if (!finalStudentId) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Target student not found. Please provide a valid Student ID or User ID.' });
+            return res.status(404).json({ message: 'Target student not found. Please provide a valid Student ID.' });
         }
         // ---------------------------
 
-        // 2. Insert Incident Record
+        // Insert Incident Record
         const incidentQuery = `
             INSERT INTO ${INCIDENTS_TABLE} 
             (student_id, reported_by_id, incident_date, incident_type, description, location, severity, status)
@@ -117,7 +140,7 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
 
 
 // =========================================================
-// 2. ACTION & RESOLUTION (POST)
+// 3. ACTION & RESOLUTION (POST)
 // =========================================================
 
 router.post('/action/:incidentId', authenticateToken, authorize(RESOLUTION_ROLES), async (req, res) => {
@@ -172,12 +195,11 @@ router.post('/action/:incidentId', authenticateToken, authorize(RESOLUTION_ROLES
 });
 
 // =========================================================
-// 3. VIEWING ROUTES (GET)
+// 4. VIEWING ROUTES (GET)
 // =========================================================
 
 /**
  * Get all incidents awaiting resolution.
- * JOINs with STUDENTS table to get names correctly.
  */
 router.get('/incidents/pending', authenticateToken, authorize(RESOLUTION_ROLES), async (req, res) => {
     try {
@@ -202,17 +224,14 @@ router.get('/incidents/pending', authenticateToken, authorize(RESOLUTION_ROLES),
 
 /**
  * Get history for a student.
- * Supports lookup by Student ID OR User ID.
  */
 router.get('/history/:studentId', authenticateToken, async (req, res) => {
-    const { studentId } = req.params; // Can be Student UUID or User UUID
+    const { studentId } = req.params; 
     const userId = req.user.id; 
     const userRole = req.user.role;
 
-    // Basic Access Control
     if (userRole !== 'Admin' && userRole !== 'Counsellor' && userRole !== 'Super Admin' && studentId !== userId) {
-        // Strict check: if student is querying, they must query their OWN ID (User ID or Student ID)
-        // We'll let the query handle the "User ID vs Student ID" matching logic
+        // Access control logic
     }
 
     try {

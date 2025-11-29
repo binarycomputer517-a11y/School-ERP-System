@@ -81,8 +81,10 @@
                 <form id="incident-report-form">
                     <div class="form-grid">
                         <div>
-                            <label for="student-id">Student ID (UUID):</label>
-                            <input type="text" id="student-id" name="student_id" placeholder="e.g., UUID of Student User" required>
+                            <label for="student-select">Select Student:</label>
+                            <select id="student-select" name="student_id" required>
+                                <option value="" disabled selected>Loading students...</option>
+                            </select>
                         </div>
                         <div>
                             <label for="incident-date">Date & Time of Incident:</label>
@@ -210,7 +212,6 @@
         const USER_ROLE = localStorage.getItem('user-role') || 'Guest';
         const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
         
-        // --- Role Definitions for Control ---
         const APPROVER_ROLES = ['Super Admin', 'Admin', 'Counsellor'];
         const REPORTER_ROLES = ['Super Admin', 'Admin', 'Teacher'];
 
@@ -227,32 +228,24 @@
         const actionForm = document.getElementById('action-form');
         const modalIncidentTitle = document.getElementById('modal-incident-title');
         const reportingSection = document.getElementById('reporting-section');
+        const studentSelect = document.getElementById('student-select'); // New Element
 
         let currentIncidentId = null;
 
         // --- Helper Functions ---
         async function handleApi(url, options = {}) {
-            // CRITICAL FIX: Block API call if TOKEN is missing to prevent 401/403 errors
-            if (!TOKEN) {
-                 // Throwing error allows the calling function's catch block to display a message
-                 throw new Error('Unauthorized: Session token is missing. Please log in.');
-            }
+            if (!TOKEN) throw new Error('Unauthorized: Session token is missing. Please log in.');
             
             const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
-
             const response = await fetch(url, { ...options, headers: authHeaders });
             
-            // Handle 401/403 explicitly
             if (response.status === 401 || response.status === 403) {
                 localStorage.clear();
-                // window.location.href = '/login'; // Uncomment in production to redirect
-                throw new Error('Unauthorized: Session expired or privileges insufficient. Please log in.');
+                throw new Error('Unauthorized: Session expired or privileges insufficient.');
             }
             if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
-                // FIX: Add check for the specific 'Target student not found' message
-                const errorMessage = errorBody.message || `API call failed with status ${response.status}.`;
-                throw new Error(errorMessage);
+                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(errorBody.message || `API call failed with status ${response.status}.`);
             }
             return response.json();
         }
@@ -263,6 +256,26 @@
             element.style.display = 'block';
         }
 
+        // --- NEW: Populate Student Dropdown ---
+        async function loadStudentDropdown() {
+            try {
+                const students = await handleApi(`${API_BASE}/students/lookup`);
+                studentSelect.innerHTML = '<option value="" disabled selected>-- Select Student --</option>';
+                
+                students.forEach(s => {
+                    const option = document.createElement('option');
+                    option.value = s.student_id; // Set value to UUID
+                    // Display: Name (Admission ID / Roll)
+                    const label = `${s.first_name} ${s.last_name} (${s.admission_id || s.roll_number || 'No ID'})`;
+                    option.textContent = label;
+                    studentSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.error("Failed to load students:", error);
+                studentSelect.innerHTML = '<option value="" disabled>Error loading list</option>';
+            }
+        }
+
         // --- 1. Incident Reporting ---
         reportForm.addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -271,16 +284,13 @@
             submitBtn.disabled = true;
             showMessage(reportMessage, 'Submitting report...', 'info');
 
-            // CRITICAL FIX: Use optional chaining (?.) and nullish coalescing (?? '') 
-            // to safely access the value, preventing TypeError if an input field is missing.
             const formData = {
-                student_id: form.elements.student_id?.value ?? '',
-                incident_date: form.elements.incident_date?.value ?? '',
-                incident_type: form.elements.incident_type?.value ?? '',
-                description: form.elements.description?.value ?? '',
-                location: form.elements.location?.value ?? '',
-                severity: form.elements.severity?.value ?? '',
-                // MITIGATION: Send USER_ID as fallback for reported_by_id if JWT fails
+                student_id: form.elements.student_id.value, // Now gets value from Dropdown
+                incident_date: form.elements.incident_date.value,
+                incident_type: form.elements.incident_type.value,
+                description: form.elements.description.value,
+                location: form.elements.location.value,
+                severity: form.elements.severity.value,
                 reporter_id_fallback: USER_ID 
             };
 
@@ -292,12 +302,15 @@
                 
                 showMessage(reportMessage, `✅ Report submitted! Incident ID: ${result.incident_id}`, 'success');
                 form.reset();
+                
+                // Reset select placeholder
+                studentSelect.value = ""; 
+                
                 if (APPROVER_ROLES.includes(USER_ROLE)) {
-                    fetchPendingIncidents(); // Auto-refresh dashboard
+                    fetchPendingIncidents();
                 }
                 
             } catch (error) {
-                // Displaying the specific error message provided by the server
                 showMessage(reportMessage, `❌ Submission Failed: ${error.message}`, 'error');
             } finally {
                 submitBtn.disabled = false;
@@ -339,7 +352,7 @@
                 
                 alert(`✅ Action recorded: ${result.message}`);
                 actionModal.style.display = 'none';
-                fetchPendingIncidents(); // Refresh dashboard
+                fetchPendingIncidents();
                 
             } catch (error) {
                 alert(`❌ Action recording failed: ${error.message}`);
@@ -394,7 +407,6 @@
             historyTbody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading...</td></tr>';
             historyStudentName.textContent = '...';
 
-            // Security check: Role must be authorized for *any* record, otherwise must query self ID.
             const isAuthorizedViewer = APPROVER_ROLES.includes(USER_ROLE);
             if (!isAuthorizedViewer && studentId !== USER_ID) {
                  showMessage(historyMessage, '❌ Access Denied: Staff/Students can only view their own discipline records.', 'error');
@@ -402,9 +414,7 @@
                  return;
             }
 
-
             try {
-                // If not an authorized viewer, enforce that the query uses their own ID
                 const targetId = isAuthorizedViewer ? studentId : USER_ID;
                 const history = await handleApi(`${API_BASE}/history/${targetId}`);
                 
@@ -417,15 +427,11 @@
                 
                 historyStudentName.textContent = history[0].student_name || targetId; 
                 
-                // Group records by incident ID for display
                 const incidentsMap = new Map();
                 history.forEach(rec => {
                     const id = rec.incident_id;
                     if (!incidentsMap.has(id)) {
-                        incidentsMap.set(id, {
-                            ...rec,
-                            actions: []
-                        });
+                        incidentsMap.set(id, { ...rec, actions: [] });
                     }
                     if (rec.action_type) {
                         incidentsMap.get(id).actions.push(rec);
@@ -463,22 +469,20 @@
         document.addEventListener('DOMContentLoaded', () => {
             userRoleDisplay.textContent = USER_ROLE;
             
-            // 1. Determine visibility of Resolution Dashboard based on Super Admin/Admin/Counsellor roles
             if (APPROVER_ROLES.includes(USER_ROLE)) {
                 resolutionDashboard.style.display = 'block';
-                // Only attempt fetch if a token is present, otherwise, the catch block in fetchPendingIncidents handles it.
-                if (TOKEN) {
-                    fetchPendingIncidents();
-                } else {
-                     pendingTbody.innerHTML = '<tr><td colspan="7" class="error" style="text-align: center;">Session Expired. Please log in to view the dashboard.</td></tr>';
-                }
+                if (TOKEN) fetchPendingIncidents();
             }
             
-            // 2. Determine visibility of Reporting Section based on Super Admin/Admin/Teacher roles
-            if (!REPORTER_ROLES.includes(USER_ROLE)) {
+            if (REPORTER_ROLES.includes(USER_ROLE)) {
+                 // --- NEW: Load Students if authorized ---
+                 if (TOKEN) {
+                     loadStudentDropdown();
+                 } else {
+                     reportingSection.innerHTML = '<p class="error">Session expired. Please log in to submit a report.</p>';
+                 }
+            } else {
                  reportingSection.innerHTML = '<p class="error">You must be logged in as authorized staff (Admin or Teacher) to report an incident.</p>';
-            } else if (!TOKEN) { // Specific check for reporters whose session has expired
-                 reportingSection.innerHTML = '<p class="error">Session expired. Please log in to submit a report.</p>';
             }
         });
     </script>
