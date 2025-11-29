@@ -2,139 +2,110 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parent-Teacher Meeting Portal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>PTM Portal | Enterprise</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* --- General Styles --- */
-        body { font-family: sans-serif; padding: 2em; background-color: #f7f7f7; color: #333; }
-        .container { max-width: 1200px; margin: auto; padding: 30px; background-color: #ffffff; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h1 { color: #e91e63; border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-        h2 { color: #f06292; margin-top: 25px; border-bottom: 1px dashed #ddd; padding-bottom: 5px; }
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #EFEFEF; color: #333; }
+        .container { max-width: 1200px; margin: auto; padding: 40px; background-color: #FFFFFF; border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; }
+        h1 { color: #C0392B; text-align: center; border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 20px; letter-spacing: 1px; }
+        h2 { color: #005A9C; border-bottom: 2px solid #555; padding-bottom: 8px; margin-top: 0; font-size: 1.3em; }
         
-        /* --- Layout --- */
         .grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
-        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-
-        /* --- Form Elements --- */
-        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; }
-        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; border: 1px solid #f48fb1; border-radius: 4px; }
-        button { background-color: #e91e63; color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; margin-top: 15px; transition: background-color 0.3s; }
-        button:hover { background-color: #c2185b; }
+        .card { padding: 25px; border: 1px solid #005A9C; background-color: #f7faff; margin-bottom: 25px; box-shadow: 3px 3px 0 #ddd; }
         
-        .card { padding: 20px; border: 1px solid #f8bbd0; border-radius: 6px; margin-top: 20px; background-color: #fffafa; }
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9em; text-transform: uppercase; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #555; background: #FFF; font-family: 'Times New Roman', serif; border-radius: 0; box-sizing: border-box; }
+        
+        button { background-color: #005A9C; color: white; padding: 10px 20px; border: 2px solid #000; border-radius: 0; cursor: pointer; margin-top: 20px; box-shadow: 2px 2px 0 #000; font-weight: bold; text-transform: uppercase; }
+        button:hover { background-color: #003366; box-shadow: 1px 1px 0 #000; transform: translate(1px, 1px); }
+        button.btn-danger { background-color: #C0392B; }
+        button.btn-success { background-color: #28a745; }
+        button.btn-icon { padding: 5px 10px; margin: 0; }
 
-        /* --- Messaging --- */
-        .message-box { padding: 15px; border-radius: 4px; margin-top: 10px; font-weight: bold; }
-        .error { background-color: #ffcdd2; color: #c62828; border: 1px solid #ef9a9a; }
-        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .info { background-color: #fff3cd; color: #664d03; border: 1px solid #ffecb5; }
+        .stats-bar { display: flex; justify-content: space-around; background: #333; color: white; padding: 10px; margin-bottom: 20px; border: 2px solid #000; }
+        .stat-item { text-align: center; } .stat-val { font-size: 1.5em; font-weight: bold; color: #ffeb3b; }
 
-        /* --- Table & Status Styles --- */
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { padding: 10px; text-align: left; border: 1px solid #ddd; font-size: 0.9em; }
-        th { background-color: #fce4ec; color: #e91e63; }
-
-        .status-Scheduled { color: #2196f3; font-weight: bold; }
-        .status-Completed { color: #4caf50; font-weight: bold; }
-        .status-Canceled, .status-Parent_Absent { color: #ff9800; font-weight: bold; }
-
-        .report-score { font-weight: bold; font-size: 1.1em; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; border: 2px solid #333; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #999; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+        
+        .status-Open { color: #28a745; font-weight: bold; }
+        .status-Scheduled { color: #005A9C; font-weight: bold; }
+        .status-Completed { color: #555; text-decoration: underline; }
+        
+        .message-box { padding: 15px; margin-top: 20px; border: 2px solid #000; font-weight: bold; text-align: center; display: none; }
+        .success { background-color: #d4edda; color: #155724; } .error { background-color: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Parent-Teacher Meeting Portal</h1>
-        <p>Current Role: <strong id="user-role-display">Loading...</strong></p>
+        <p style="border-bottom: 1px solid #ccc; padding-bottom: 10px;">Role: <strong id="user-role-display" style="color: #005A9C;">...</strong></p>
 
         <div id="staff-view" style="display:none;">
+            <div class="stats-bar">
+                <div class="stat-item"><div class="stat-val" id="stat-open">0</div><small>Open</small></div>
+                <div class="stat-item"><div class="stat-val" id="stat-scheduled">0</div><small>Booked</small></div>
+                <div class="stat-item"><div class="stat-val" id="stat-completed">0</div><small>Done</small></div>
+            </div>
+
             <div class="grid-main">
                 <div>
                     <div class="card">
-                        <h2>Schedule a PTM</h2>
-                        <form id="schedule-form">
-                            <div class="grid-form">
-                                <div>
-                                    <label for="teacher-id">Teacher ID (Your ID):</label>
-                                    <input type="text" id="teacher-id" name="teacher_id" required placeholder="Type Name or UUID to find teacher">
-                                </div>
-                                <div>
-                                    <label for="student-id">Student ID:</label>
-                                    <input type="text" id="student-id" name="student_id" required placeholder="Type Name or UUID to find student">
-                                </div>
-                            </div>
-
-                            <div class="grid-form">
-                                <div>
-                                    <label for="meeting-time">Date & Time:</label>
-                                    <input type="datetime-local" id="meeting-time" name="meeting_time" required>
-                                </div>
-                                <div>
-                                    <label for="duration-minutes">Duration (Minutes):</label>
-                                    <input type="number" id="duration-minutes" name="duration_minutes" value="15" min="5" required>
-                                </div>
-                            </div>
-                            
-                            <label for="meeting-type">Meeting Type:</label>
-                            <select id="meeting-type" name="meeting_type">
-                                <option value="In-Person">In-Person (Room 101)</option>
-                                <option value="Virtual">Virtual (Online Link)</option>
+                        <h2>Bulk Availability Generator</h2>
+                        <form id="bulk-form">
+                            <label style="color:#C0392B;">Generate For:</label>
+                            <select id="bulk-teacher-select" name="teacher_id" required style="border: 2px solid #C0392B; background:#fff5f5;">
+                                <option value="">Loading Staff...</option>
                             </select>
 
-                            <button type="submit">Confirm Schedule</button>
-                            <div id="schedule-message" class="message-box" style="display:none;"></div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <div><label>Date:</label><input type="date" name="date" required></div>
+                                <div><label>Type:</label><select name="type"><option>In-Person</option><option>Virtual</option></select></div>
+                                <div><label>Start Time:</label><input type="time" name="start_time" value="09:00" required></div>
+                                <div><label>End Time:</label><input type="time" name="end_time" value="12:00" required></div>
+                            </div>
+                            <label>Duration (Min):</label><input type="number" name="duration" value="15" required>
+                            <label>Link (Optional):</label><input type="url" name="link" placeholder="https://zoom...">
+                            
+                            <button type="submit" class="btn-success">Generate Slots</button>
+                            <div id="bulk-message" class="message-box"></div>
                         </form>
                     </div>
 
-                    <div class="card" style="margin-top: 30px;">
-                        <h2>Your Upcoming Meeting Slots</h2>
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h2>Manage Slots</h2>
+                            <select id="view-teacher-select" style="width:200px; margin:0;" onchange="loadTeacherData(this.value)">
+                                <option value="">Select View...</option>
+                            </select>
+                        </div>
                         <table id="teacher-slots-table">
-                            <thead>
-                                <tr>
-                                    <th>Time</th>
-                                    <th>Student</th>
-                                    <th>Duration</th>
-                                    <th>Status</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="slots-tbody">
-                                <tr><td colspan="5" class="info">Initializing portal...</td></tr>
-                            </tbody>
+                            <thead><tr><th>Time</th><th>Student / Status</th><th>Type</th><th>Actions</th></tr></thead>
+                            <tbody id="slots-tbody"><tr><td colspan="4" style="text-align:center;">Select a teacher above to manage.</td></tr></tbody>
                         </table>
                     </div>
                 </div>
 
                 <div>
                     <div class="card">
-                        <h2>Submit Meeting Feedback</h2>
-                        <p style="font-size: 0.9em;">Use this form after the meeting to finalize the record.</p>
+                        <h2>Feedback & Close</h2>
                         <form id="feedback-form">
-                            <label for="schedule-id-feedback">Schedule ID (from slots list):</label>
-                            <input type="text" id="schedule-id-feedback" name="schedule_id" required placeholder="Meeting UUID">
-                            
-                            <label for="meeting-status">Final Meeting Status:</label>
-                            <select id="meeting-status" name="meeting_status" required>
+                            <label>Schedule ID:</label><input type="text" id="schedule-id-feedback" name="schedule_id" required readonly style="background:#eee;">
+                            <label>Status:</label>
+                            <select name="meeting_status" required>
                                 <option value="Completed">Completed</option>
                                 <option value="Parent Absent">Parent Absent</option>
-                                <option value="Canceled">Canceled</option>
                             </select>
-
-                            <h3 style="margin-top: 20px;">Structured Feedback (1-5 Scale)</h3>
-                            <label for="academic-score">Academic Performance (1=Poor, 5=Excellent):</label>
-                            <input type="number" id="academic-score" name="academic_score" min="1" max="5" required>
-
-                            <label for="behavior-score">Behavior & Engagement (1=Poor, 5=Excellent):</label>
-                            <input type="number" id="behavior-score" name="behavior_score" min="1" max="5" required>
-
-                            <label for="goals-discussed">Goals Discussed (for next term):</label>
-                            <textarea id="goals-discussed" name="goals_discussed" rows="3"></textarea>
-
-                            <label for="parent-comments">Parent Comments/Concerns:</label>
-                            <textarea id="parent-comments" name="parent_comments" rows="2"></textarea>
-
-                            <button type="submit">Finalize & Submit Feedback</button>
-                            <div id="feedback-message" class="message-box" style="display:none;"></div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+                                <div><label>Academic (1-5):</label><input type="number" id="ac-score" name="academic_score" min="1" max="5"></div>
+                                <div><label>Behavior (1-5):</label><input type="number" id="be-score" name="behavior_score" min="1" max="5"></div>
+                            </div>
+                            <label>Goals:</label><textarea name="goals_discussed" rows="3" id="goals-box"></textarea>
+                            <label>Notes:</label><textarea name="parent_comments" rows="2" id="notes-box"></textarea>
+                            <button type="button" class="btn-success" onclick="autoGenerateFeedback()" style="width:100%; margin-top:10px; font-size:0.8em;">✨ Auto-Fill Template</button>
+                            <button type="submit">Finalize</button>
+                            <div id="feedback-message" class="message-box"></div>
                         </form>
                     </div>
                 </div>
@@ -142,334 +113,215 @@
         </div>
 
         <div id="student-view" class="card" style="display:none;">
-            <h2>Student PTM History Report</h2>
-            <form id="report-lookup-form">
-                <input type="text" id="report-student-id" placeholder="Enter Student ID (UUID)" required>
-                <button type="submit">Generate Report</button>
-            </form>
-            <div id="report-results" style="margin-top: 20px;">
+            <div class="grid-main">
+                <div>
+                    <h2>Book an Appointment</h2>
+                    <form id="booking-lookup-form">
+                        <label>Select Teacher:</label>
+                        <select id="booking-teacher-select" onchange="loadOpenSlots(this.value)"><option>Loading...</option></select>
+                    </form>
+                    <div id="booking-slots" style="margin-top:20px;">
+                        <p style="color:#666; font-style:italic;">Select a teacher to view available times.</p>
+                    </div>
                 </div>
+                <div>
+                    <h2>My Bookings</h2>
+                    <div id="report-results"></div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
-        const API_BASE = '/api/ptm';
-        const USERS_API = '/api/users/all-staff-students'; 
-        
-        // --- Session Constants ---
+        const API = '/api/ptm';
         const TOKEN = localStorage.getItem('erp-token');
-        const USER_ROLE = localStorage.getItem('user-role');
-        const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id'); 
-        
-        // --- Regex for UUID Validation ---
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        const ROLE = localStorage.getItem('user-role');
+        const RAW_UID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
+        const UID = (RAW_UID && RAW_UID !== 'undefined' && RAW_UID !== 'null') ? RAW_UID : null;
 
-        // --- DOM Elements ---
-        const userRoleDisplay = document.getElementById('user-role-display');
-        const staffView = document.getElementById('staff-view');
-        const studentView = document.getElementById('student-view');
-        const teacherIdInput = document.getElementById('teacher-id');
-        const studentIdInputSchedule = document.getElementById('student-id'); 
-        const studentIdInputReport = document.getElementById('report-student-id'); 
-        const slotsTbody = document.getElementById('slots-tbody');
-        const scheduleForm = document.getElementById('schedule-form');
-        const feedbackForm = document.getElementById('feedback-form');
-        const reportLookupForm = document.getElementById('report-lookup-form');
-        const reportResultsDiv = document.getElementById('report-results');
-        
-        let allUsersForLookup = []; 
+        const els = {
+            bulkSelect: document.getElementById('bulk-teacher-select'),
+            viewSelect: document.getElementById('view-teacher-select'),
+            bookingSelect: document.getElementById('booking-teacher-select'),
+            tbody: document.getElementById('slots-tbody')
+        };
 
+        // --- Auth & Init ---
+        async function api(url, opts={}) {
+            if(!TOKEN) { alert("Please log in."); window.location.href='/login.html'; return; }
+            const res = await fetch(url, {...opts, headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${TOKEN}`}});
+            if(!res.ok) throw new Error((await res.json()).message || "Error");
+            return res.json();
+        }
 
-        // --- Helper Functions ---
-
-        /** Authenticated API fetch handler. */
-        async function handleApi(url, options = {}) {
-            if (!TOKEN) throw new Error('Session Expired: Please log in again.');
-
-            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
-            const response = await fetch(url, { ...options, headers: authHeaders });
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('user-role-display').innerText = ROLE || 'Guest';
             
-            if (response.status === 401 || response.status === 403) {
-                // This handles the 403 Forbidden error and unauthorized errors
-                throw new Error('Unauthorized or session expired.');
-            }
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
-                throw new Error(errorBody.message || 'API call failed.');
-            }
-            return response.json();
-        }
-        
-        /** Displays status messages (success, error, info). */
-        function showMessage(element, text, type) {
-            element.textContent = text;
-            element.className = `message-box ${type}`;
-            element.style.display = 'block';
-        }
-
-        /** Loads all users for client-side name-to-UUID lookup. */
-        async function loadAllUsersForLookup() {
+            // 1. Load Teachers List First
             try {
-                // Assuming USERS_API returns a list of user objects with id, username, full_name
-                const users = await handleApi(USERS_API); 
-                allUsersForLookup = users.map(u => ({
-                    id: u.id, 
-                    username: (u.username || '').toLowerCase(),
-                    fullName: (u.full_name || '').toLowerCase()
-                }));
-            } catch (error) {
-                // Mock data if user directory fetch fails (safe mode)
-                allUsersForLookup = [
-                    { id: "39d5da2e-753e-4c9b-a87b-4494671e01bd", username: "3", fullName: "Debasis Das" },
-                    { id: "61d847fd-63d5-4b4d-96a6-fe117da5b9ad", username: "sudam", fullName: "Sudam Maity" },
-                    { id: "4f36c554-4e91-4b5f-a183-592fcce10948", username: "2", fullName: "Anita Pradhan" }
-                ];
-                console.warn("User directory lookup failed. Using mock data for lookup.");
-            }
-        }
-
-        /** Converts a typed name/username into a UUID if a match is found. */
-        function lookupUserId(inputElement) {
-            const query = inputElement.value.trim().toLowerCase();
-            
-            // 1. If it's a UUID, accept it and exit
-            if (uuidRegex.test(query)) {
-                 inputElement.placeholder = `Valid UUID entered.`;
-                 return;
-            }
-
-            // 2. Require minimum characters for name lookup
-            if (query.length < 3) {
-                 inputElement.placeholder = inputElement.getAttribute('data-initial-placeholder') || "Type Name or UUID";
-                 return; 
-            }
-
-            // 3. Find match and replace input value with UUID
-            const matchedUser = allUsersForLookup.find(user => 
-                (user.fullName.includes(query)) ||
-                (user.username.includes(query))
-            );
-
-            if (matchedUser) {
-                // Replace text input value with the found UUID
-                inputElement.value = matchedUser.id; 
-                inputElement.placeholder = `Found: ${matchedUser.fullName || matchedUser.username}`;
-                // Dispatch 'change' to trigger teacher slot load or final validation
-                inputElement.dispatchEvent(new Event('change')); 
-            } else {
-                 inputElement.placeholder = `No match found. Enter the full Name or UUID.`;
-            }
-        }
-        
-        // --- 1. Scheduling & Slots ---
-        
-        /** Fetches and displays the teacher's schedule. */
-        async function loadTeacherSlots(teacherId) {
-            // CRITICAL CHECK: Ensure Teacher ID is a valid UUID
-            if (!teacherId || !uuidRegex.test(teacherId)) {
-                // If ID is invalid/missing, show neutral message instead of the harsh error
-                slotsTbody.innerHTML = '<tr><td colspan="5" class="info">Authentication data missing. Please search for yourself or re-login.</td></tr>';
-                return;
-            }
-
-            slotsTbody.innerHTML = '<tr><td colspan="5" class="info">Loading your schedule...</td></tr>';
-            try {
-                const slots = await handleApi(`${API_BASE}/teacher/${teacherId}/slots`);
+                const staff = await api(`${API}/lookup/teachers`);
+                const staffOpts = '<option value="">-- Select Teacher --</option>' + 
+                    staff.map(t => `<option value="${t.id}">${t.username} (${t.role})</option>`).join('');
                 
-                if (slots.length === 0) {
-                     slotsTbody.innerHTML = '<tr><td colspan="5">No upcoming meetings scheduled.</td></tr>';
-                     return;
+                // Populate all relevant dropdowns
+                if(els.bulkSelect) els.bulkSelect.innerHTML = staffOpts;
+                if(els.viewSelect) els.viewSelect.innerHTML = staffOpts;
+                if(els.bookingSelect) els.bookingSelect.innerHTML = staffOpts;
+
+                // 2. Setup View based on Role
+                if (ROLE === 'Teacher' || ROLE === 'Admin') {
+                    document.getElementById('staff-view').style.display = 'block';
+                    
+                    // If current user is in the list, auto-select them
+                    if(UID && staff.some(u => u.id === UID)) {
+                        els.bulkSelect.value = UID;
+                        els.viewSelect.value = UID;
+                        loadTeacherData(UID);
+                    }
+                } else {
+                    document.getElementById('student-view').style.display = 'block';
+                    loadStudentView();
                 }
-
-                slotsTbody.innerHTML = slots.map(s => {
-                    const statusClass = `status-${s.status.replace(/\s/g, '_')}`;
-                    const time = new Date(s.meeting_time).toLocaleString();
-                    
-                    const isOverdue = s.status === 'Scheduled' && new Date(s.meeting_time) < new Date();
-                    
-                    return `
-                        <tr>
-                            <td>${time}</td>
-                            <td><strong>${s.student_name}</strong></td>
-                            <td>${s.duration_minutes} min</td>
-                            <td class="${statusClass}">${s.status}</td>
-                            <td>
-                                ${isOverdue || s.status === 'Completed'
-                                    ? `<button onclick="document.getElementById('schedule-id-feedback').value='${s.id}'" style="background-color: ${isOverdue ? '#ff9800' : '#888'};" ${s.has_feedback ? 'disabled' : ''}>${s.has_feedback ? 'Feedback Done' : 'Finalize'}</button>`
-                                    : 'N/A'
-                                }
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-
-            } catch (error) {
-                console.error("Error loading slots:", error);
-                // Display specific error message returned by handleApi (e.g., Forbidden)
-                slotsTbody.innerHTML = `<tr><td colspan="5" class="error">Failed to load schedule: ${error.message}</td></tr>`;
-            }
-        }
-        
-        scheduleForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const data = Object.fromEntries(new FormData(form));
-            data.duration_minutes = parseInt(data.duration_minutes, 10);
-            
-            // Final UUID validation before API call
-            if (!uuidRegex.test(data.teacher_id) || !uuidRegex.test(data.student_id)) {
-                showMessage(document.getElementById('schedule-message'), '❌ Scheduling Failed: Both Teacher and Student IDs must be valid UUIDs.', 'error');
-                return;
-            }
-
-            showMessage(document.getElementById('schedule-message'), 'Confirming slot availability...', 'info');
-
-            try {
-                const result = await handleApi(`${API_BASE}/schedule`, { 
-                    method: 'POST', 
-                    body: JSON.stringify(data) 
-                });
-                
-                showMessage(document.getElementById('schedule-message'), `✅ ${result.message}`, 'success');
-                form.reset();
-                loadTeacherSlots(data.teacher_id);
-                
-            } catch (error) {
-                showMessage(document.getElementById('schedule-message'), `❌ Scheduling Failed: ${error.message}`, 'error');
-            }
+            } catch(e) { console.error("Init Error:", e); }
         });
 
-        // --- 2. Feedback Submission ---
-        
-        feedbackForm.addEventListener('submit', async (e) => {
+        // --- Teacher Logic ---
+        async function loadTeacherData(tid) {
+            if(!tid) return;
+            loadSlots(tid);
+            try {
+                const stats = await api(`${API}/stats/${tid}`);
+                document.getElementById('stat-open').innerText = stats.open_slots;
+                document.getElementById('stat-scheduled').innerText = stats.scheduled;
+                document.getElementById('stat-completed').innerText = stats.completed;
+            } catch(e) {}
+        }
+
+        async function loadSlots(tid) {
+            els.tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+            try {
+                const data = await api(`${API}/teacher/${tid}/slots`);
+                if(data.length === 0) { els.tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No slots found for this teacher.</td></tr>'; return; }
+                
+                els.tbody.innerHTML = data.map(r => `
+                    <tr style="${r.status==='Open'?'background:#f0fff4':''}">
+                        <td>${new Date(r.meeting_time).toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit'})}</td>
+                        <td>
+                            ${r.student_name ? `<strong>${r.student_name}</strong>` : '<span class="status-Open">-- OPEN SLOT --</span>'}<br>
+                            ${r.agenda ? `<small>Topic: ${r.agenda}</small>` : ''}
+                        </td>
+                        <td>${r.meeting_type}</td>
+                        <td>
+                            ${r.status === 'Open' ? `<button class="btn-danger btn-icon" onclick="cancelMeeting('${r.id}')"><i class="fas fa-trash"></i></button>` : ''}
+                            ${r.status === 'Scheduled' ? `<button onclick="document.getElementById('schedule-id-feedback').value='${r.id}'" class="btn-icon">📝</button>` : ''}
+                            ${r.has_feedback ? '✅' : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) { els.tbody.innerHTML = `<tr><td colspan="4" class="error">${e.message}</td></tr>`; }
+        }
+
+        // Bulk Generator
+        document.getElementById('bulk-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const form = e.target;
-            const data = Object.fromEntries(new FormData(form));
+            const msg = document.getElementById('bulk-message');
+            // ID comes from the new visible select box
+            const tid = els.bulkSelect.value;
             
-            showMessage(document.getElementById('feedback-message'), 'Submitting feedback...', 'info');
+            if(!tid) { msg.textContent = "Error: Please select a teacher above."; msg.style.display='block'; return; }
 
             try {
-                const scheduleId = data.schedule_id;
+                // Manually construct body to include the selected teacher_id
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData);
+                data.teacher_id = tid; // Ensure this is set from dropdown
+
+                const res = await api(`${API}/generate-slots`, { method:'POST', body:JSON.stringify(data) });
+                msg.textContent = `✅ ${res.message}`; msg.className = 'message-box success'; msg.style.display = 'block';
                 
-                const result = await handleApi(`${API_BASE}/feedback/${scheduleId}`, { 
-                    method: 'POST', 
-                    body: JSON.stringify(data) 
-                });
-                
-                showMessage(document.getElementById('feedback-message'), `✅ ${result.message}`, 'success');
-                form.reset();
-                loadTeacherSlots(teacherIdInput.value); // Refresh teacher's schedule
-                
-            } catch (error) {
-                showMessage(document.getElementById('feedback-message'), `❌ Submission Failed: ${error.message}`, 'error');
-            }
+                // Refresh view if viewing same teacher
+                if(els.viewSelect.value === tid) loadTeacherData(tid);
+                else {
+                    els.viewSelect.value = tid; // Switch view to target
+                    loadTeacherData(tid);
+                }
+            } catch(e) { msg.textContent = `❌ ${e.message}`; msg.className = 'message-box error'; msg.style.display = 'block'; }
         });
 
-
-        // --- 3. Report Lookup (Student/Parent View) ---
-
-        reportLookupForm.addEventListener('submit', async (e) => {
+        // Feedback
+        document.getElementById('feedback-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const studentId = document.getElementById('report-student-id').value.trim();
-            
-            if (!uuidRegex.test(studentId)) {
-                reportResultsDiv.innerHTML = '<p class="error message-box">Report Failed: Student ID must be a valid UUID.</p>';
-                return;
-            }
-            
-            reportResultsDiv.innerHTML = '<p class="info message-box">Generating report...</p>';
-
+            const msg = document.getElementById('feedback-message');
             try {
-                const report = await handleApi(`${API_BASE}/student/${studentId}/report`);
-                
-                if (report.length === 0) {
-                     reportResultsDiv.innerHTML = '<p class="info message-box">No PTM records found for this student.</p>';
-                     return;
-                }
+                await api(`${API}/feedback/${new FormData(e.target).get('schedule_id')}`, { method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+                msg.textContent = "✅ Saved!"; msg.className = 'message-box success'; msg.style.display = 'block'; e.target.reset();
+                if(els.viewSelect.value) loadTeacherData(els.viewSelect.value);
+            } catch(e) { msg.textContent = `❌ ${e.message}`; msg.className = 'message-box error'; msg.style.display = 'block'; }
+        });
 
-                reportResultsDiv.innerHTML = `<h3>Report for Student ID: ${studentId.slice(0, 8)}...</h3>`;
-                
-                report.forEach(r => {
-                    const statusClass = `status-${r.status.replace(/\s/g, '_')}`;
-                    const time = new Date(r.meeting_time).toLocaleDateString();
-                    
-                    reportResultsDiv.innerHTML += `
-                        <div class="card" style="margin-top: 10px;">
-                            <h4>Meeting on ${time} with ${r.teacher_name}</h4>
-                            <p><strong>Status:</strong> <span class="${statusClass}">${r.status}</span> (${r.meeting_type})</p>
-                            ${r.has_feedback ? `
-                                <p><strong>Academic Score:</strong> <span class="report-score">${r.academic_score || 'N/A'}/5</span> | 
-                                <strong>Behavior Score:</strong> <span class="report-score">${r.behavior_score || 'N/A'}/5</span></p>
-                                <p><strong>Goals:</strong> ${r.goals_discussed || 'None specified.'}</p>
-                                <p><strong>Parent Notes:</strong> ${r.parent_comments || 'N/A'}</p>
-                                <p style="font-size: 0.8em; color: #888;">Submitted: ${new Date(r.submitted_at).toLocaleString()}</p>
-                            ` : '<p class="info">Feedback pending or meeting incomplete.</p>'}
+        function autoGenerateFeedback() {
+            const ac = document.getElementById('ac-score').value;
+            const be = document.getElementById('be-score').value;
+            if(!ac || !be) return alert("Enter scores first!");
+            const txt = `Student demonstrates ${ac>3?'strong':'developing'} academic understanding. Behavior is ${be>3?'exemplary':'needs improvement'}.`;
+            document.getElementById('notes-box').value = txt;
+            document.getElementById('goals-box').value = "Consistency in homework.";
+        }
+
+        async function cancelMeeting(id) {
+            if(!confirm("Delete slot?")) return;
+            try { await api(`${API}/cancel/${id}`, {method:'POST', body:JSON.stringify({reason:'Removed'})}); loadTeacherData(els.viewSelect.value); } catch(e){ alert(e.message); }
+        }
+
+        // --- Student Logic ---
+        async function loadStudentView() {
+            if(!UID) return document.getElementById('report-results').innerHTML = '<p class="error">User ID missing.</p>';
+            
+            const div = document.getElementById('report-results');
+            div.innerHTML = 'Loading...';
+            
+            try {
+                const bookings = await api(`${API}/student/${UID}/report`);
+                div.innerHTML = bookings.length ? bookings.map(r => `
+                    <div class="card" style="padding:15px; margin-bottom:15px;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <h3 style="margin:0; color:#005A9C;">${new Date(r.meeting_time).toLocaleDateString()}</h3>
+                            <span class="status-${r.status}">${r.status}</span>
                         </div>
-                    `;
-                });
+                        <p><strong>Time:</strong> ${new Date(r.meeting_time).toLocaleTimeString()} (${r.teacher_name})</p>
+                        ${r.meeting_link ? `<a href="${r.meeting_link}" target="_blank">Join Link</a>` : ''}
+                        ${r.has_feedback ? `<p style="background:#eee; padding:5px;">Feedback: ${r.parent_comments}</p>` : ''}
+                    </div>
+                `).join('') : '<p>No bookings.</p>';
+            } catch(e) { div.innerHTML = e.message; }
+        }
 
-            } catch (error) {
-                reportResultsDiv.innerHTML = `<p class="error message-box">Failed to generate report: ${error.message}</p>`;
-            }
-        });
-
-
-        // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', () => {
-            userRoleDisplay.textContent = USER_ROLE || 'Guest';
-            
-            // 1. Load users for autocomplete
-            loadAllUsersForLookup();
-
-            // 2. Store initial placeholders for the lookup function
-            teacherIdInput.setAttribute('data-initial-placeholder', teacherIdInput.placeholder);
-            studentIdInputSchedule.setAttribute('data-initial-placeholder', studentIdInputSchedule.placeholder);
-            studentIdInputReport.setAttribute('data-initial-placeholder', studentIdInputReport.placeholder);
-
-
-            // 3. Setup Input Listeners for ID lookup/slot loading
-            
-            // Teacher ID: Typing triggers lookup and change event (if found)
-            teacherIdInput.addEventListener('input', (e) => lookupUserId(e.target));
-            teacherIdInput.addEventListener('change', (e) => {
-                if (uuidRegex.test(e.target.value)) {
-                    loadTeacherSlots(e.target.value);
-                }
-            });
-            
-            // Student ID: Typing triggers lookup
-            studentIdInputSchedule.addEventListener('input', (e) => lookupUserId(e.target));
-            
-            // Report Student ID: Typing triggers lookup
-            studentIdInputReport.addEventListener('input', (e) => lookupUserId(e.target));
-
-
-            // 4. Role-based view logic
-            if (USER_ROLE === 'Teacher' || USER_ROLE === 'Admin') {
-                staffView.style.display = 'block';
+        async function loadOpenSlots(tid) {
+            if(!tid) return;
+            const div = document.getElementById('booking-slots');
+            div.innerHTML = 'Loading...';
+            try {
+                const slots = await api(`${API}/teacher/${tid}/open`);
+                if(slots.length === 0) { div.innerHTML = "<p>No open slots.</p>"; return; }
                 
-                if (USER_ID && uuidRegex.test(USER_ID)) {
-                    teacherIdInput.value = USER_ID;
-                    // Trigger slot loading automatically for authenticated users
-                    loadTeacherSlots(USER_ID); 
-                } else {
-                    // Renders the neutral message when Local Storage data is bad
-                    teacherIdInput.value = '';
-                    slotsTbody.innerHTML = '<tr><td colspan="5" class="info">Authentication data missing. Please search for yourself or re-login.</td></tr>';
-                }
+                div.innerHTML = slots.map(s => `
+                    <div style="border:1px solid #ccc; padding:10px; margin-bottom:5px; background:#fff; display:flex; justify-content:space-between; align-items:center;">
+                        <span>${new Date(s.meeting_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} (${s.meeting_type})</span>
+                        <button onclick="bookSlot('${s.id}')" class="btn-success" style="margin:0; padding:5px 10px;">Book</button>
+                    </div>
+                `).join('');
+            } catch(e) { div.innerHTML = "Error."; }
+        }
 
-            } else if (USER_ROLE === 'Student' || USER_ROLE === 'Parent') {
-                studentView.style.display = 'block';
-                if (USER_ID && uuidRegex.test(USER_ID)) {
-                    // Auto-load report for self-viewing users
-                    document.getElementById('report-student-id').value = USER_ID;
-                    reportLookupForm.dispatchEvent(new Event('submit')); 
-                } else {
-                    reportResultsDiv.innerHTML = '<p class="error message-box">Authentication Error: User ID is missing or invalid. Please search manually or re-login.</p>';
-                }
-            }
-        });
+        async function bookSlot(slotId) {
+            const agenda = prompt("Topic:");
+            if(!agenda) return;
+            try {
+                await api(`${API}/book/${slotId}`, { method:'POST', body:JSON.stringify({ student_id: UID, agenda }) });
+                alert("✅ Booked!");
+                loadStudentView(); document.getElementById('booking-slots').innerHTML = "";
+            } catch(e) { alert(e.message); }
+        }
     </script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
 </body>
 </html>
