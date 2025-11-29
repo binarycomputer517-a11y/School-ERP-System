@@ -16,10 +16,9 @@ const SEVERITY_LEVELS = ['Low', 'Medium', 'High', 'Critical'];
 const ACTION_TYPES = ['Warning', 'Detention', 'Suspension', 'Expulsion', 'Counselling Referral'];
 
 // --- Role Definitions ---
-const MARKING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser'];
-const ROSTER_VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator'];
-const REPORT_VIEW_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
-const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee'];
+// Ensuring consistent role checking
+const REPORTING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser']; 
+const RESOLUTION_ROLES = ['Admin', 'Counsellor', 'Super Admin'];
 
 
 // =========================================================
@@ -31,11 +30,10 @@ const USER_REPORT_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'St
  * @desc    Submit a new behavioral incident report.
  * @access  Private (Teacher, Admin, Super Admin)
  */
-router.post('/report', authenticateToken, authorize(['Teacher', 'Admin', 'Super Admin']), async (req, res) => {
+router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req, res) => {
     
-    // CRITICAL FIX: Prioritize JWT user ID, but fall back to the ID sent from the client 
-    // if the token injection fails (i.e., req.user.userId is null/undefined).
-    const reporterId = req.user.userId || req.body.reporter_id_fallback; 
+    // FIX: Access ID correctly from token payload (req.user.id)
+    const reporterId = req.user.id || req.body.reporter_id_fallback; 
     
     const { 
         student_id, 
@@ -46,8 +44,8 @@ router.post('/report', authenticateToken, authorize(['Teacher', 'Admin', 'Super 
         severity 
     } = req.body;
 
-    if (!reporterId) { // Ensure that reporter ID is set
-        return res.status(401).json({ message: 'Authentication required: Reporter ID is missing from token and payload.' });
+    if (!reporterId) { 
+        return res.status(401).json({ message: 'Authentication required: Reporter ID is missing from token.' });
     }
 
     if (!student_id || !incident_date || !incident_type || !description || !severity) {
@@ -61,11 +59,16 @@ router.post('/report', authenticateToken, authorize(['Teacher', 'Admin', 'Super 
     try {
         await client.query('BEGIN');
 
-        // 1. Check if student exists (Check against the USERS table ID, as expected)
+        // 1. Check if student exists 
+        // Note: student_id here refers to the users.id (UUID) of the student
         const studentRes = await client.query(`SELECT id FROM ${USERS_TABLE} WHERE id = $1 AND role = 'Student'`, [student_id]);
+        
+        // If not found in users table with role 'Student', check if it's a raw UUID from the students table
         if (studentRes.rowCount === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Target student not found.' });
+             // Optional: logic to lookup user_id from students table if student_id param is actually students.student_id
+             // For now, assuming frontend sends user_id.
+             await client.query('ROLLBACK');
+             return res.status(404).json({ message: 'Target student user not found.' });
         }
 
         // 2. Insert Incident Record (Initial status 'Reported')
@@ -112,9 +115,9 @@ router.post('/report', authenticateToken, authorize(['Teacher', 'Admin', 'Super 
  * @desc    Record a disciplinary action and update incident status to 'Resolved'.
  * @access  Private (Admin, Counsellor, Super Admin)
  */
-router.post('/action/:incidentId', authenticateToken, authorize(['Admin', 'Counsellor', 'Super Admin']), async (req, res) => {
+router.post('/action/:incidentId', authenticateToken, authorize(RESOLUTION_ROLES), async (req, res) => {
     const { incidentId } = req.params;
-    const processorId = req.user.userId;
+    const processorId = req.user.id; // FIX: Use req.user.id
     
     const { action_type, action_details, effective_date, completion_date } = req.body;
 
@@ -138,7 +141,7 @@ router.post('/action/:incidentId', authenticateToken, authorize(['Admin', 'Couns
             action_type, 
             action_details, 
             effective_date, 
-            completion_date || null, // completion_date is optional/future
+            completion_date || null, 
             processorId
         ]);
         
@@ -172,7 +175,7 @@ router.post('/action/:incidentId', authenticateToken, authorize(['Admin', 'Couns
  * @desc    Get all incidents awaiting resolution ('Reported' status).
  * @access  Private (Admin, Counsellor, Super Admin)
  */
-router.get('/incidents/pending', authenticateToken, authorize(['Admin', 'Counsellor', 'Super Admin']), async (req, res) => {
+router.get('/incidents/pending', authenticateToken, authorize(RESOLUTION_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
@@ -196,11 +199,11 @@ router.get('/incidents/pending', authenticateToken, authorize(['Admin', 'Counsel
 /**
  * @route   GET /api/discipline/history/:studentId
  * @desc    Get all incidents and actions for a specific student.
- * @access  Private (Admin, Counsellor, Super Admin, Parent/Student - filtered by self ID)
+ * @access  Private (Admin, Counsellor, Super Admin, Parent/Student)
  */
 router.get('/history/:studentId', authenticateToken, async (req, res) => {
     const { studentId } = req.params;
-    const userId = req.user.userId;
+    const userId = req.user.id; // FIX: Use req.user.id
     const userRole = req.user.role;
 
     // Security check: Only Admins/Counsellors/Super Admin can view ANY record, others can only view their own.
@@ -225,45 +228,6 @@ router.get('/history/:studentId', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Student History Fetch Error:', error);
         res.status(500).json({ message: 'Failed to retrieve student discipline history.' });
-    }
-});
-
-
-// =================================================================
-// --- FILTER ENDPOINTS (Corrected for relative path use) ---
-// =================================================================
-
-/**
- * @route   GET /api/attendance/batches
- * @desc    Get a list of all active batches/classes for filter population.
- * @access  Private (Used by roles that need to view rosters)
- */
-router.get('/batches', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
-    try {
-        // Assuming 'id' and 'batch_name' are the correct columns for the batches table.
-        const query = `SELECT id, batch_name AS name FROM batches ORDER BY name;`; 
-        const { rows } = await pool.query(query);
-        res.status(200).json(rows);
-    } catch (err) {
-        console.error('Error fetching batches:', err); 
-        res.status(500).json({ message: 'Server error fetching batches. Check your database schema for the correct name column in the batches table.', error: err.message });
-    }
-});
-
-/**
- * @route   GET /api/attendance/subjects
- * @desc    Get a list of all active subjects for filter population.
- * @access  Private (Used by roles that need to view rosters)
- */
-router.get('/subjects', authenticateToken, authorize(ROSTER_VIEW_ROLES), async (req, res) => {
-    try {
-        // Assuming 'id' and 'subject_name' are the correct columns for the subjects table.
-        const query = `SELECT id, subject_name, subject_code FROM subjects ORDER BY subject_name;`;
-        const { rows } = await pool.query(query);
-        res.status(200).json(rows);
-    } catch (err) {
-        console.error('Error fetching all subjects:', err);
-        res.status(500).json({ message: 'Server error fetching subjects. Check column names (id, subject_name) in the subjects table.', error: err.message });
     }
 });
 
