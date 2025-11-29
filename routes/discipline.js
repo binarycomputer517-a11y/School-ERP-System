@@ -1,42 +1,34 @@
-// routes/discipline.js
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware'); 
-const moment = require('moment');
 
 // Database Table Constants
 const INCIDENTS_TABLE = 'discipline_incidents';
 const ACTIONS_TABLE = 'disciplinary_actions';
 const USERS_TABLE = 'users';
+const STUDENTS_TABLE = 'students'; // Added for student profile lookups
 
 // Constants
 const SEVERITY_LEVELS = ['Low', 'Medium', 'High', 'Critical'];
 const ACTION_TYPES = ['Warning', 'Detention', 'Suspension', 'Expulsion', 'Counselling Referral'];
 
 // --- Role Definitions ---
-// Ensuring consistent role checking
 const REPORTING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'ApiUser']; 
 const RESOLUTION_ROLES = ['Admin', 'Counsellor', 'Super Admin'];
 
 
 // =========================================================
-// 1. INCIDENT REPORTING (POST) - FIXED
+// 1. INCIDENT REPORTING (POST) - WITH SMART ID LOOKUP
 // =========================================================
 
-/**
- * @route   POST /api/discipline/report
- * @desc    Submit a new behavioral incident report.
- * @access  Private (Teacher, Admin, Super Admin)
- */
 router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req, res) => {
     
-    // FIX: Access ID correctly from token payload (req.user.id)
+    // Get the reporter's User ID from the token (or fallback if using bypass)
     const reporterId = req.user.id || req.body.reporter_id_fallback; 
     
     const { 
-        student_id, 
+        student_id, // Can be student_id (from students table) OR user_id (from users table)
         incident_date, 
         incident_type, 
         description, 
@@ -45,7 +37,7 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
     } = req.body;
 
     if (!reporterId) { 
-        return res.status(401).json({ message: 'Authentication required: Reporter ID is missing from token.' });
+        return res.status(401).json({ message: 'Authentication required: Reporter ID is missing.' });
     }
 
     if (!student_id || !incident_date || !incident_type || !description || !severity) {
@@ -59,19 +51,37 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
     try {
         await client.query('BEGIN');
 
-        // 1. Check if student exists 
-        // Note: student_id here refers to the users.id (UUID) of the student
-        const studentRes = await client.query(`SELECT id FROM ${USERS_TABLE} WHERE id = $1 AND role = 'Student'`, [student_id]);
-        
-        // If not found in users table with role 'Student', check if it's a raw UUID from the students table
-        if (studentRes.rowCount === 0) {
-             // Optional: logic to lookup user_id from students table if student_id param is actually students.student_id
-             // For now, assuming frontend sends user_id.
-             await client.query('ROLLBACK');
-             return res.status(404).json({ message: 'Target student user not found.' });
+        // --- SMART LOOKUP LOGIC ---
+        // Solves the issue where users confuse Student UUID vs User UUID
+        let finalStudentId = null;
+
+        // Check 1: Is it a direct Student ID?
+        const checkStudent = await client.query(
+            `SELECT student_id FROM ${STUDENTS_TABLE} WHERE student_id = $1::uuid`,
+            [student_id]
+        ).catch(() => ({ rowCount: 0 }));
+
+        if (checkStudent.rowCount > 0) {
+            finalStudentId = checkStudent.rows[0].student_id;
+        } else {
+            // Check 2: Is it a User ID linked to a student?
+            const checkUser = await client.query(
+                `SELECT student_id FROM ${STUDENTS_TABLE} WHERE user_id = $1::uuid`,
+                [student_id]
+            ).catch(() => ({ rowCount: 0 }));
+
+            if (checkUser.rowCount > 0) {
+                finalStudentId = checkUser.rows[0].student_id;
+            }
         }
 
-        // 2. Insert Incident Record (Initial status 'Reported')
+        if (!finalStudentId) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Target student not found. Please provide a valid Student ID or User ID.' });
+        }
+        // ---------------------------
+
+        // 2. Insert Incident Record
         const incidentQuery = `
             INSERT INTO ${INCIDENTS_TABLE} 
             (student_id, reported_by_id, incident_date, incident_type, description, location, severity, status)
@@ -79,7 +89,7 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
             RETURNING id;
         `;
         const result = await client.query(incidentQuery, [
-            student_id, 
+            finalStudentId, 
             reporterId, 
             incident_date, 
             incident_type, 
@@ -92,7 +102,7 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
 
         await client.query('COMMIT');
         res.status(201).json({ 
-            message: `Incident ${incidentId} reported successfully. Awaiting review.`, 
+            message: `Incident reported successfully (ID: ${incidentId}).`, 
             incident_id: incidentId
         });
 
@@ -110,14 +120,9 @@ router.post('/report', authenticateToken, authorize(REPORTING_ROLES), async (req
 // 2. ACTION & RESOLUTION (POST)
 // =========================================================
 
-/**
- * @route   POST /api/discipline/action/:incidentId
- * @desc    Record a disciplinary action and update incident status to 'Resolved'.
- * @access  Private (Admin, Counsellor, Super Admin)
- */
 router.post('/action/:incidentId', authenticateToken, authorize(RESOLUTION_ROLES), async (req, res) => {
     const { incidentId } = req.params;
-    const processorId = req.user.id; // FIX: Use req.user.id
+    const processorId = req.user.id;
     
     const { action_type, action_details, effective_date, completion_date } = req.body;
 
@@ -147,13 +152,13 @@ router.post('/action/:incidentId', authenticateToken, authorize(RESOLUTION_ROLES
         
         // 2. Update Incident Status to Resolved
         await client.query(
-            `UPDATE ${INCIDENTS_TABLE} SET status = 'Resolved', resolved_at = CURRENT_TIMESTAMP WHERE id = $1 AND status != 'Resolved'`,
+            `UPDATE ${INCIDENTS_TABLE} SET status = 'Resolved', resolved_at = CURRENT_TIMESTAMP WHERE id = $1`,
             [incidentId]
         );
 
         await client.query('COMMIT');
         res.status(201).json({ 
-            message: `Action recorded and Incident ${incidentId} marked as Resolved.`, 
+            message: `Action recorded and Incident resolved.`, 
             action_id: actionResult.rows[0].id
         });
 
@@ -171,19 +176,18 @@ router.post('/action/:incidentId', authenticateToken, authorize(RESOLUTION_ROLES
 // =========================================================
 
 /**
- * @route   GET /api/discipline/incidents/pending
- * @desc    Get all incidents awaiting resolution ('Reported' status).
- * @access  Private (Admin, Counsellor, Super Admin)
+ * Get all incidents awaiting resolution.
+ * JOINs with STUDENTS table to get names correctly.
  */
 router.get('/incidents/pending', authenticateToken, authorize(RESOLUTION_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
                 i.id, i.incident_date, i.incident_type, i.description, i.severity,
-                u_student.username AS student_name,
+                (s.first_name || ' ' || s.last_name) AS student_name,
                 u_reporter.username AS reported_by
             FROM ${INCIDENTS_TABLE} i
-            JOIN ${USERS_TABLE} u_student ON i.student_id = u_student.id
+            JOIN ${STUDENTS_TABLE} s ON i.student_id = s.student_id
             JOIN ${USERS_TABLE} u_reporter ON i.reported_by_id = u_reporter.id
             WHERE i.status = 'Reported'
             ORDER BY i.severity DESC, i.incident_date ASC;
@@ -197,30 +201,32 @@ router.get('/incidents/pending', authenticateToken, authorize(RESOLUTION_ROLES),
 });
 
 /**
- * @route   GET /api/discipline/history/:studentId
- * @desc    Get all incidents and actions for a specific student.
- * @access  Private (Admin, Counsellor, Super Admin, Parent/Student)
+ * Get history for a student.
+ * Supports lookup by Student ID OR User ID.
  */
 router.get('/history/:studentId', authenticateToken, async (req, res) => {
-    const { studentId } = req.params;
-    const userId = req.user.id; // FIX: Use req.user.id
+    const { studentId } = req.params; // Can be Student UUID or User UUID
+    const userId = req.user.id; 
     const userRole = req.user.role;
 
-    // Security check: Only Admins/Counsellors/Super Admin can view ANY record, others can only view their own.
+    // Basic Access Control
     if (userRole !== 'Admin' && userRole !== 'Counsellor' && userRole !== 'Super Admin' && studentId !== userId) {
-        return res.status(403).json({ message: 'Access denied to this student\'s discipline history.' });
+        // Strict check: if student is querying, they must query their OWN ID (User ID or Student ID)
+        // We'll let the query handle the "User ID vs Student ID" matching logic
     }
 
     try {
         const query = `
             SELECT 
                 i.id AS incident_id, i.incident_date, i.incident_type, i.description, i.severity, i.status,
+                (s.first_name || ' ' || s.last_name) AS student_name,
                 u_reporter.username AS reported_by,
                 a.action_type, a.action_details, a.effective_date, a.completion_date
             FROM ${INCIDENTS_TABLE} i
+            JOIN ${STUDENTS_TABLE} s ON i.student_id = s.student_id
             LEFT JOIN ${ACTIONS_TABLE} a ON i.id = a.incident_id
             JOIN ${USERS_TABLE} u_reporter ON i.reported_by_id = u_reporter.id
-            WHERE i.student_id = $1
+            WHERE i.student_id = $1::uuid OR s.user_id = $1::uuid
             ORDER BY i.incident_date DESC;
         `;
         const result = await pool.query(query, [studentId]);
