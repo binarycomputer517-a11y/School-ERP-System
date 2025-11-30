@@ -249,7 +249,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
 });
 
 // =========================================================
-// 5. DELETE: Soft Delete Student
+// 5. DELETE: Soft Delete Student (Updated to fix Foreign Key Error)
 // =========================================================
 router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const studentId = req.params.id;
@@ -269,21 +269,28 @@ router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res)
         }
         const userId = getRes.rows[0].user_id;
 
-        // 2. Delete Student (Hard delete)
-        await client.query(`DELETE FROM ${STUDENTS_TABLE} WHERE student_id = $1::uuid`, [safeStudentId]);
+        // 2. Soft Delete Student (Changed from DELETE to UPDATE)
+        // এটি ছাত্রকে মুছবে না, বরং 'Inactive' এবং 'deleted_at' সেট করবে
+        await client.query(
+            `UPDATE ${STUDENTS_TABLE} SET status = 'Inactive', deleted_at = CURRENT_TIMESTAMP WHERE student_id = $1::uuid`, 
+            [safeStudentId]
+        );
 
-        // 3. Soft Delete User
+        // 3. Soft Delete User Account (Deactivate login)
         if (userId) {
-            await client.query(`UPDATE ${USERS_TABLE} SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP WHERE id = $1::uuid`, [userId]);
+            await client.query(
+                `UPDATE ${USERS_TABLE} SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP WHERE id = $1::uuid`, 
+                [userId]
+            );
         }
 
         await client.query('COMMIT');
-        res.status(200).json({ message: 'Student deleted successfully.' });
+        res.status(200).json({ message: 'Student deactivated successfully.' });
 
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Student Deletion Error:', error);
-        res.status(500).json({ message: 'Failed to delete student.' });
+        res.status(500).json({ message: 'Failed to deactivate student.', error: error.message });
     } finally {
         client.release();
     }
