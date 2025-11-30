@@ -9,18 +9,17 @@
         body {
             font-family: var(--bs-body-font-family);
             margin: 0;
-            background-color: #f0f2f8; /* Light purple-grey background from target image */
+            background-color: #f0f2f8;
             color: #333;
             font-size: 14px;
         }
         
         .dashboard-container {
-            max-width: 1400px; /* Made wider */
+            max-width: 1400px;
             margin: 25px auto;
             padding: 30px;
-            background-color: #f0f2f8; /* Blends with body */
+            background-color: #f0f2f8;
             border-radius: 12px;
-            box-shadow: none; /* Removed outer shadow */
         }
 
         h1 {
@@ -37,10 +36,11 @@
             color: #dc3545;
             text-decoration: none;
             font-weight: bold;
+            cursor: pointer;
         }
         .logout-link:hover { text-decoration: underline; }
 
-        /* Purple welcome banner, inspired by target image */
+        /* Purple welcome banner */
         .profile-card {
             background: linear-gradient(135deg, #7a44f2 0%, #5e35b1 100%);
             border-radius: 12px;
@@ -50,7 +50,7 @@
         }
         .profile-label {
             font-weight: 500;
-            color: #d1c4e9; /* Light purple text */
+            color: #d1c4e9;
             font-size: 12px;
             display: block;
             text-transform: uppercase;
@@ -62,7 +62,7 @@
             font-weight: 600;
         }
 
-        /* Styling for summary cards in main content */
+        /* Summary cards */
         .summary-item {
             display: flex;
             justify-content: space-between;
@@ -86,11 +86,9 @@
         .notice-title { font-weight: 600; color: #003366; }
         .notice-date { font-size: 12px; color: #777; }
 
-        /* --- STYLES INSPIRED BY TARGET IMAGE --- */
-
-        /* 1. Purple Sidebar Navigation */
+        /* Sidebar Navigation */
         .col-md-3 .card {
-            background-color: #5e35b1; /* Dark purple from target */
+            background-color: #5e35b1;
             border: none;
             box-shadow: 0 4px 15px rgba(0,0,0,0.1);
             border-radius: 12px;
@@ -112,56 +110,46 @@
         }
         .col-md-3 .list-group-item {
             background-color: transparent;
-            color: #e8eaf6; /* Lighter text color */
+            color: #e8eaf6;
             border: none;
             padding: 12px 1rem;
             font-weight: 500;
         }
         .col-md-3 .list-group-item-action:hover,
         .col-md-3 .list-group-item-action:focus {
-            background-color: rgba(255, 255, 255, 0.1); /* Subtle hover */
+            background-color: rgba(255, 255, 255, 0.1);
             color: #ffffff;
         }
 
-        /* 2. White Content Cards */
+        /* Content Cards */
         .col-md-9 .card {
             background-color: #ffffff;
             border: none;
             border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05); /* Softer shadow */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
         .col-md-9 .list-group {
             border-radius: 12px;
             overflow: hidden;
         }
         .col-md-9 .card-header {
-            background-color: #f8f9fa; /* Clean header for white cards */
+            background-color: #f8f9fa;
             border-bottom: 1px solid #eee;
         }
-        .col-md-9 .card-header h5 {
-            color: #333; /* Override purple sidebar h5 color */
-        }
-        .col-md-9 .card-title {
-            color: #003366;
-        }
-        .col-md-9 h5.fw-bold { /* "My Teachers" title */
-             color: #333;
-        }
+        .col-md-9 .card-header h5 { color: #333; }
+        .col-md-9 .card-title { color: #003366; }
+        .col-md-9 h5.fw-bold { color: #333; }
 
-        /* --- [NEW] STYLES FOR COLLAPSE/HOVER --- */
-        .nav-card .card-header[data-bs-toggle="collapse"] {
-            cursor: pointer;
-        }
+        /* Collapse/Hover Logic */
+        .nav-card .card-header[data-bs-toggle="collapse"] { cursor: pointer; }
         .nav-card .card-header .menu-icon {
             transition: transform 0.2s ease-in-out;
             font-weight: bold;
         }
-        /* Rotates the '+' icon to an 'x' when expanded */
         .nav-card .card-header[aria-expanded="true"] .menu-icon {
             transform: rotate(45deg);
         }
         .nav-card .list-group {
-            /* Fixes a border-radius clipping issue */
             border-bottom-left-radius: 12px;
             border-bottom-right-radius: 12px;
             overflow: hidden;
@@ -169,122 +157,146 @@
     </style>
     <script>
         
+        // --- 1. Logout Function ---
         function logout() {
             localStorage.removeItem('erp-token');
             localStorage.removeItem('user-role');
             localStorage.removeItem('user-name');
-            localStorage.removeItem('profile-id'); // Use the universal key
+            localStorage.removeItem('profile-id');
+            localStorage.removeItem('active_session_id');
+            localStorage.removeItem('active_branch_id');
             window.location.href = '/login.html'; 
         }
 
+        // --- 2. Fetch Student Profile ---
         async function fetchStudentData() {
             const studentId = localStorage.getItem('profile-id'); 
             const token = localStorage.getItem('erp-token');
-            if (!studentId) {
-                console.warn("Student ID not found in localStorage. Displaying N/A.");
+            
+            if (!studentId || !token) {
+                window.location.href = '/login.html';
                 return;
             }
-            const apiUrl = `/api/students/${studentId}`; 
+
             try {
-                const response = await fetch(apiUrl, {
+                const response = await fetch(`/api/students/${studentId}`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
+                if (response.status === 403) throw new Error("Permission Denied. Check Backend Roles.");
                 if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                
                 const data = await response.json();
+                
+                // CRITICAL: Ensure we update the ID if the server returns a better one
+                if (data.student_id && data.student_id !== studentId) {
+                    localStorage.setItem('profile-id', data.student_id);
+                }
+
                 const fullName = `${data.first_name || ''} ${data.last_name || ''}`.trim();
 
                 document.getElementById('welcome-message').textContent = `Welcome, ${fullName || 'Student'}!`;
-                
-                // ⭐ CRITICAL UPDATE: If the data object has an ID, ensure it's saved to local storage
-                if (data.id && data.id !== localStorage.getItem('profile-id')) {
-                    localStorage.setItem('profile-id', data.id);
-                }
-                
-                document.getElementById('student-id').textContent = data.id || 'N/A'; 
-                
+                document.getElementById('student-id').textContent = data.enrollment_no || data.student_id || 'N/A'; 
                 document.getElementById('student-grade').textContent = data.course_name || 'N/A'; 
                 document.getElementById('student-section').textContent = data.batch_name || 'N/A';
-                
                 document.getElementById('student-roll').textContent = data.enrollment_no || 'N/A'; 
-                
                 document.getElementById('student-email').textContent = data.email || 'N/A';
 
-                if (data.profile_photo_path) {
-                    document.getElementById('student-photo').src = data.profile_photo_path;
+                if (data.profile_image_path) {
+                    document.getElementById('student-photo').src = data.profile_image_path;
                 }
 
             } catch (error) {
                 console.error('Failed to fetch student data:', error);
-                document.getElementById('welcome-message').textContent = 'Welcome! Error loading profile data.';
+                document.getElementById('welcome-message').textContent = 'Welcome! (Error loading profile)';
             }
         }
 
+        // --- 3. Fetch Fees (Corrected for Array Response) ---
         async function fetchFeeData() {
-            const studentId = localStorage.getItem('profile-id'); // FIX: Use profile-id
+            const studentId = localStorage.getItem('profile-id');
             const token = localStorage.getItem('erp-token');
             if (!studentId) return;
+
             try {
                 const response = await fetch(`/api/students/${studentId}/fees`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) throw new Error('Failed to fetch fee data');
                 const data = await response.json(); 
-                document.getElementById('fee-tuition').textContent = `₹${data.structure.tuition_fee || 0}`;
-                document.getElementById('fee-library').textContent = `₹${data.structure.library_fee || 0}`;
-                document.getElementById('fee-transport').textContent = `₹${data.structure.transport_fee || 0}`;
-                const totalDue = data.summary.total_due || 0;
-                const totalPaid = data.summary.total_paid || 0;
-                document.getElementById('fee-due').textContent = `₹${totalDue}`;
-                document.getElementById('fee-paid').textContent = `₹${totalPaid}`;
-                const balance = totalDue - totalPaid;
-                document.getElementById('fee-balance').textContent = `₹${balance}`;
-                if (balance > 0) {
-                    document.getElementById('fee-balance').classList.add('text-danger');
+
+                // FIX: Handle Array Response
+                if (Array.isArray(data) && data.length > 0) {
+                    const fee = data[0]; // Get most recent fee record
+
+                    const tuition = parseFloat(fee.tuition_fee || 0);
+                    const paid = parseFloat(fee.amount_paid || 0);
+                    const balance = tuition - paid;
+
+                    document.getElementById('fee-tuition').textContent = `₹${tuition}`;
+                    document.getElementById('fee-library').textContent = `₹0`; // Placeholder
+                    document.getElementById('fee-transport').textContent = `₹0`; // Placeholder
+                    
+                    document.getElementById('fee-due').textContent = `₹${tuition}`;
+                    document.getElementById('fee-paid').textContent = `₹${paid}`;
+                    
+                    const balEl = document.getElementById('fee-balance');
+                    balEl.textContent = `₹${balance}`;
+                    balEl.className = 'summary-item-value ' + (balance > 0 ? 'text-danger' : 'text-success');
                 } else {
-                    document.getElementById('fee-balance').classList.add('text-success');
+                    // Default / No Data
+                    document.getElementById('fee-tuition').textContent = '₹0';
+                    document.getElementById('fee-due').textContent = '₹0';
+                    document.getElementById('fee-paid').textContent = '₹0';
+                    document.getElementById('fee-balance').textContent = '₹0';
                 }
             } catch (error) {
-                console.error(error.message);
-                document.getElementById('fee-summary-card').innerHTML = '<div class="card-body"><p class="text-danger small">Could not load fee data.</p></div>';
+                console.error("Fee error:", error);
+                document.getElementById('fee-summary-card').innerHTML = '<div class="card-body"><p class="text-danger small">No fee records found.</p></div>';
             }
         }
 
+        // --- 4. Fetch Library (Corrected Logic) ---
         async function fetchLibraryData() {
-            const studentId = localStorage.getItem('profile-id'); // FIX: Use profile-id
+            const studentId = localStorage.getItem('profile-id');
             const token = localStorage.getItem('erp-token');
             if (!studentId) return;
+
             try {
                 const response = await fetch(`/api/students/${studentId}/library`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) throw new Error('Failed to fetch library data');
                 const data = await response.json();
-                document.getElementById('books-issued').textContent = data.books_issued || 0;
-                document.getElementById('library-fines').textContent = `₹${data.total_fine || 0}`;
-                if (data.total_fine > 0) {
-                    document.getElementById('library-fines').classList.add('text-danger');
-                }
+                
+                // Backend returns list of issued books
+                const issuedCount = Array.isArray(data) ? data.length : 0;
+                
+                document.getElementById('books-issued').textContent = issuedCount;
+                document.getElementById('library-fines').textContent = `₹0`; // Placeholder
+                
             } catch (error) {
-                console.error(error.message);
-                document.getElementById('library-summary-card').innerHTML = '<div class="card-body"><p class="text-danger small">Could not load library data.</p></div>';
+                console.error("Library error:", error);
             }
         }
 
+        // --- 5. Fetch Announcements ---
         async function fetchAnnouncements() {
             const token = localStorage.getItem('erp-token');
             const listElement = document.getElementById('notice-board-list');
             if (!listElement) return;
+
             try {
                 const response = await fetch(`/api/announcements/role/student`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) throw new Error('Failed to fetch announcements');
+                
                 const data = await response.json();
-                if (data.length === 0) {
+                
+                if (!Array.isArray(data) || data.length === 0) {
                     listElement.innerHTML = '<li class="list-group-item">No recent announcements.</li>';
                     return;
                 }
+                
                 listElement.innerHTML = ''; 
                 data.slice(0, 5).forEach(item => {
                     const li = document.createElement('li');
@@ -295,46 +307,56 @@
                             <span class="notice-title">${item.title}</span>
                             <span class="notice-date">${itemDate}</span>
                         </div>
-                        <p class="mb-0 small">${item.content ? item.content.substring(0, 100) + '...' : ''}</p>
+                        <p class="mb-0 small">${item.content ? item.content.substring(0, 80) + '...' : ''}</p>
                     `;
                     listElement.appendChild(li);
                 });
             } catch (error) {
-                console.error(error.message);
-                listElement.innerHTML = '<li class="list-group-item text-danger">Could not load announcements.</li>';
+                console.error("Announcements error:", error);
+                listElement.innerHTML = '<li class="list-group-item">No recent announcements.</li>';
             }
         }
 
+        // --- 6. Fetch Teachers (Corrected for 'full_name') ---
         async function fetchMyTeachers() {
-            const studentId = localStorage.getItem('profile-id'); // FIX: Use profile-id
+            const studentId = localStorage.getItem('profile-id');
             const token = localStorage.getItem('erp-token');
             const listElement = document.getElementById('my-teachers-list');
             if (!studentId || !listElement) return;
+
             try {
                 const response = await fetch(`/api/students/${studentId}/teachers`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                if (!response.ok) throw new Error('Failed to fetch teachers');
+                
                 const data = await response.json();
                 listElement.innerHTML = ''; 
+
+                if (!Array.isArray(data) || data.length === 0) {
+                    listElement.innerHTML = '<li class="list-group-item">No teachers assigned yet.</li>';
+                    return;
+                }
+
                 data.forEach(item => {
                     const li = document.createElement('li');
                     li.className = 'list-group-item d-flex justify-content-between align-items-center';
+                    // FIX: Using full_name to match DB
                     li.innerHTML = `
                         <span>
                             <strong class="text-primary">${item.subject_name}</strong>
-                            <span class="text-muted ms-2">${item.teacher_name}</span>
+                            <span class="text-muted ms-2">${item.full_name}</span>
                         </span>
-                        <a href="mailto:${item.teacher_email || ''}" class="btn btn-sm btn-outline-secondary">Contact</a>
+                        <a href="mailto:${item.email || ''}" class="btn btn-sm btn-outline-secondary">Contact</a>
                     `;
                     listElement.appendChild(li);
                 });
             } catch (error) {
-                console.error(error.message);
+                console.error("Teachers error:", error);
                 listElement.innerHTML = '<li class="list-group-item text-danger">Could not load teacher list.</li>';
             }
         }
 
+        // --- 7. Initialization ---
         document.addEventListener('DOMContentLoaded', () => {
             fetchStudentData(); 
             fetchFeeData();
@@ -342,33 +364,24 @@
             fetchAnnouncements();
             fetchMyTeachers();
 
-            // --- [NEW] Code for Hover-to-Show Menus ---
+            // Hover-to-Show Menus Logic
             const menuCards = document.querySelectorAll('.col-md-3 .nav-card');
-
             menuCards.forEach(card => {
                 const collapseElement = card.querySelector('.collapse');
                 const header = card.querySelector('.card-header');
-                
                 if (!collapseElement || !header) return;
 
-                // Initialize Bootstrap Collapse instance without toggling
-                const bsCollapse = new bootstrap.Collapse(collapseElement, {
-                    toggle: false 
-                });
+                const bsCollapse = new bootstrap.Collapse(collapseElement, { toggle: false });
 
-                // Show on mouse enter
                 card.addEventListener('mouseenter', () => {
                     bsCollapse.show();
-                    header.setAttribute('aria-expanded', 'true'); // Manually set for icon CSS
+                    header.setAttribute('aria-expanded', 'true');
                 });
-
-                // Hide on mouse leave
                 card.addEventListener('mouseleave', () => {
                     bsCollapse.hide();
-                    header.setAttribute('aria-expanded', 'false'); // Manually set for icon CSS
+                    header.setAttribute('aria-expanded', 'false');
                 });
             });
-            // --- [END NEW CODE] ---
         });
     </script>
 </head>
@@ -377,10 +390,10 @@
 
         <header class="d-flex justify-content-between align-items-center mb-3">
             <h1>Student Dashboard</h1>
-            <a href="#" class="logout-link" onclick="logout()">Logout</a>
+            <a class="logout-link" onclick="logout()">Logout</a>
         </header>
 
-        <p id="welcome-message" class="text-secondary mb-4" style="font-size: 18px; font-weight: 500;">Welcome, Loading...</p>
+        <p id="welcome-message" class="text-secondary mb-4" style="font-size: 18px; font-weight: 500;">Welcome...</p>
         
         <div class="profile-card">
             <div class="row g-3 align-items-center">
@@ -395,19 +408,19 @@
                     <div class="row g-3">
                         <div class="col-md-3 col-6">
                             <span class="profile-label">Student ID</span>
-                            <span class="profile-value" id="student-id">N/A</span>
+                            <span class="profile-value" id="student-id">...</span>
                         </div>
                         <div class="col-md-3 col-6">
                             <span class="profile-label">Grade / Class</span>
-                            <span class="profile-value" id="student-grade">N/A</span>
+                            <span class="profile-value" id="student-grade">...</span>
                         </div>
                         <div class="col-md-3 col-6">
                             <span class="profile-label">Section & Roll No.</span>
-                            <span class="profile-value"><span id="student-section">N/A</span> / <span id="student-roll">N/A</span></span>
+                            <span class="profile-value"><span id="student-section">...</span> / <span id="student-roll">...</span></span>
                         </div>
                         <div class="col-md-3 col-6">
                             <span class="profile-label">Email</span>
-                            <span class="profile-value" id="student-email">N/A</span>
+                            <span class="profile-value" id="student-email">...</span>
                         </div>
                     </div>
                 </div>
@@ -417,9 +430,8 @@
         <div class="row g-4 mt-3">
 
             <div class="col-md-3">
-                
                 <div class="card shadow-sm mb-3 nav-card">
-                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuAcademics" aria-expanded="false" aria-controls="menuAcademics">
+                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuAcademics">
                         <h5 class="mb-0 d-flex justify-content-between align-items-center">
                             Academics
                             <span class="menu-icon">+</span>
@@ -433,17 +445,15 @@
                             <a href="/my-assignments.html" class="list-group-item list-group-item-action">✍️ View/Submit Assignments</a>
                             <a href="/my-study-material.html" class="list-group-item list-group-item-action">📖 Download Study Material</a>
                             <a href="/my-quiz.html" class="list-group-item list-group-item-action">🖥️ Online Quiz Portal</a>
-                            <a href="/my-exams.html" class="list-group-item list-group-item-action">⭐ Exam </a>
                             <a href="/my-view-marks.html" class="list-group-item list-group-item-action">⭐ View Detailed Marks</a>
                             <a href="/my-view-attendance.html" class="list-group-item list-group-item-action">📊 View Detailed Attendance</a>
                             <a href="/my-report-card.html" class="list-group-item list-group-item-action">🎓 Download Report Card</a>
-                            <a href="/my-achievements.html" class="list-group-item list-group-item-action">🏆 My Achievements</a>
                         </div>
                     </div>
                 </div>
 
                 <div class="card shadow-sm mb-3 nav-card">
-                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuFinance" aria-expanded="false" aria-controls="menuFinance">
+                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuFinance">
                         <h5 class="mb-0 d-flex justify-content-between align-items-center">
                             Finance
                             <span class="menu-icon">+</span>
@@ -460,7 +470,7 @@
                 </div>
 
                 <div class="card shadow-sm mb-3 nav-card">
-                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuLibrary" aria-expanded="false" aria-controls="menuLibrary">
+                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuLibrary">
                         <h5 class="mb-0 d-flex justify-content-between align-items-center">
                             Library
                             <span class="menu-icon">+</span>
@@ -472,14 +482,13 @@
                             <a href="/library-issued.html" class="list-group-item list-group-item-action">📘 View Issued Books</a>
                             <a href="/library-history.html" class="list-group-item list-group-item-action">📖 View Reading History</a>
                             <a href="/library-fines.html" class="list-group-item list-group-item-action">View Library Fines</a>
-                            <a href="/library-reservations.html" class="list-group-item list-group-item-action">Reserve a Book</a>
                             <a href="/ebooks.html" class="list-group-item list-group-item-action">e-Library & Resources</a>
                         </div>
                     </div>
                 </div>
 
                 <div class="card shadow-sm mb-3 nav-card">
-                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuServices" aria-expanded="false" aria-controls="menuServices">
+                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuServices">
                         <h5 class="mb-0 d-flex justify-content-between align-items-center">
                             Services
                             <span class="menu-icon">+</span>
@@ -489,18 +498,16 @@
                         <div class="list-group list-group-flush">
                             <a href="/my-bus.html" class="list-group-item list-group-item-action">🚌 View Bus Route</a>
                             <a href="/bus-tracker.html" class="list-group-item list-group-item-action">📍 Track My Bus (Live)</a>
-                            <a href="/room-details.html" class="list-group-item list-group-item-action">🚪 View Room Details</a>
                             <a href="/mess-menu.html" class="list-group-item list-group-item-action">🍕 View Mess Menu</a>
                             <a href="/hostel-leave.html" class="list-group-item list-group-item-action">Apply for Hostel Leave</a>
-                            <a href="/transport-details.html" class="list-group-item list-group-item-action">View Transport Details</a>
                         </div>
                     </div>
                 </div>
 
                 <div class="card shadow-sm mb-3 nav-card">
-                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuProfile" aria-expanded="false" aria-controls="menuProfile">
+                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuProfile">
                         <h5 class="mb-0 d-flex justify-content-between align-items-center">
-                            Profile & Downloads
+                            Profile
                             <span class="menu-icon">+</span>
                         </h5>
                     </div>
@@ -511,13 +518,12 @@
                             <a href="/apply-leave.html" class="list-group-item list-group-item-action">📝 Apply for Leave</a>
                             <a href="/leave-status.html" class="list-group-item list-group-item-action">⏱️ View Leave Status</a>
                             <a href="/my-id-card.html" class="list-group-item list-group-item-action">💳 Download ID Card</a>
-                            <a href="/my-download-bonafide.html" class="list-group-item list-group-item-action">📜 Download Bonafide Certificate</a>
                         </div>
                     </div>
                 </div>
 
                 <div class="card shadow-sm mb-3 nav-card">
-                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuCommunication" aria-expanded="false" aria-controls="menuCommunication">
+                    <div class="card-header" data-bs-toggle="collapse" data-bs-target="#menuCommunication">
                         <h5 class="mb-0 d-flex justify-content-between align-items-center">
                             Communication
                             <span class="menu-icon">+</span>
@@ -532,11 +538,9 @@
                         </div>
                     </div>
                 </div>
-
             </div>
 
             <div class="col-md-9">
-                
                 <h5 class="mt-0 fw-bold">My Teachers</h5>
                 <ul class="list-group mb-4 shadow-sm" id="my-teachers-list">
                     <li class="list-group-item">Loading teachers...</li>
@@ -549,30 +553,29 @@
                                 <h5 class="card-title mb-3 fw-bold" style="color: #003366;">Fee Summary</h5>
                                 <div class="summary-item">
                                     <span class="summary-item-label">Tuition Fee</span>
-                                    <span class="summary-item-value" id="fee-tuition">Loading...</span>
+                                    <span class="summary-item-value" id="fee-tuition">...</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-item-label">Library Fee</span>
-                                    <span class="summary-item-value" id="fee-library">Loading...</span>
+                                    <span class="summary-item-value" id="fee-library">...</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-item-label">Transport Fee</span>
-                                    <span class="summary-item-value" id="fee-transport">Loading...</span>
+                                    <span class="summary-item-value" id="fee-transport">...</span>
                                 </div>
                                 <hr style="opacity: 0.1; margin: 10px 0;">
                                 <div class="summary-item">
                                     <span class="summary-item-label">Total Due</span>
-                                    <span class="summary-item-value" id="fee-due">Loading...</span>
+                                    <span class="summary-item-value" id="fee-due">...</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-item-label">Total Paid</span>
-                                    <span class="summary-item-value text-success" id="fee-paid">Loading...</span>
+                                    <span class="summary-item-value text-success" id="fee-paid">...</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-item-label">Balance</span>
-                                    <span class="summary-item-value" id="fee-balance">Loading...</span>
+                                    <span class="summary-item-value" id="fee-balance">...</span>
                                 </div>
-                                <a href="/payment-history.html" class="btn btn-primary btn-sm mt-3 w-100">View Payment History</a>
                             </div>
                         </div>
                     </div>
@@ -582,13 +585,13 @@
                                 <h5 class="card-title mb-3 fw-bold" style="color: #003366;">Library Summary</h5>
                                 <div class="summary-item">
                                     <span class="summary-item-label">Books Issued</span>
-                                    <span class="summary-item-value" id="books-issued">Loading...</span>
+                                    <span class="summary-item-value" id="books-issued">...</span>
                                 </div>
                                 <div class="summary-item">
                                     <span class="summary-item-label">Total Fines</span>
-                                    <span class="summary-item-value" id="library-fines">Loading...</span>
+                                    <span class="summary-item-value" id="library-fines">...</span>
                                 </div>
-                                <a href="/library-details.html" class="btn btn-primary btn-sm mt-3 w-100">Go to Library</a>
+                                <a href="/library-issued.html" class="btn btn-primary btn-sm mt-3 w-100">View Details</a>
                             </div>
                         </div>
                     </div>
