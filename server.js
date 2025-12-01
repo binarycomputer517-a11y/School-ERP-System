@@ -1,250 +1,223 @@
-// /server.js
-// A modular Express server for a Student Management System (SMS)
+/**
+ * SERVER.JS
+ * Entry point for the Student Management System (ERP)
+ * Structure: Imports -> Config -> Middleware -> Routes -> Error Handling -> Startup
+ */
 
 // ===================================
-// 1. IMPORTS & INITIALIZATION
+// 1. DEPENDENCIES & CONFIGURATION
 // ===================================
+require('dotenv').config();
 const express = require('express');
-const http = require('http'); 
-const { Server } = require('socket.io'); 
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-require('dotenv').config(); 
+const morgan = require('morgan'); // Request logger (install via: npm install morgan)
 
 // --- Custom Modules ---
-const { initializeDatabase } = require('./database');
+const { initializeDatabase, pool } = require('./database');
 const { startNotificationService } = require('./notificationService');
-const { multerInstance } = require('./multerConfig'); 
-const { authenticateToken } = require('./authMiddleware'); 
+const { multerInstance } = require('./multerConfig');
+const { authenticateToken } = require('./authMiddleware');
 
-// --- Upload Directories ---
-const TEACHERS_UPLOAD_DIR = path.join(__dirname, 'uploads', 'teachers'); 
-const TRANSPORT_UPLOAD_DIR = path.join(__dirname, 'uploads', 'transport'); 
-const DOCUMENTS_UPLOAD_DIR = path.join(__dirname, 'uploads', 'documents'); 
-const MEDIA_UPLOAD_DIR = path.join(__dirname, 'uploads', 'media'); 
+// --- Configuration Constants ---
+const PORT = process.env.PORT || 3005;
+const UPLOAD_DIRS = [
+    path.join(__dirname, 'uploads', 'teachers'),
+    path.join(__dirname, 'uploads', 'transport'),
+    path.join(__dirname, 'uploads', 'documents'),
+    path.join(__dirname, 'uploads', 'media')
+];
 
+// --- App Initialization ---
 const app = express();
-const port = process.env.PORT || 3005;
-
-// --- Server & Socket.io Setup ---
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: {
-        origin: "*", 
-        methods: ["GET", "POST"]
-    }
+    cors: { origin: "*", methods: ["GET", "POST"] }
 });
 
-// Make 'io' accessible globally
+// Make Socket.io accessible globally via req.app.get('io')
 app.set('io', io);
+app.set('upload', multerInstance);
 
 // ===================================
-// 2. CORE MIDDLEWARE
+// 2. GLOBAL MIDDLEWARE
 // ===================================
+
+// Logging (Optional: Remove if you don't want logs in console)
+app.use(morgan('dev'));
+
+// Security & Parsing
 app.use(cors());
 app.use(express.json({
-    verify: (req, res, buf) => { req.rawBody = buf.toString(); }
+    verify: (req, res, buf) => { req.rawBody = buf.toString(); } // Useful for Webhooks (Stripe etc.)
 }));
 app.use(express.urlencoded({ extended: true }));
 
-// Static Files
+// Static File Serving
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Attach Multer
-app.set('upload', multerInstance); 
-
 // ===================================
-// 3. SOCKET.IO LOGIC
+// 3. REAL-TIME SOCKET LOGIC
 // ===================================
 io.on('connection', (socket) => {
-    console.log('⚡ User connected (Socket):', socket.id);
+    // console.log(`⚡ Socket Connected: ${socket.id}`);
 
     socket.on('join_conversation', (conversationId) => {
         socket.join(conversationId);
-        console.log(`User ${socket.id} joined room: ${conversationId}`);
+        // console.log(`Socket ${socket.id} joined room: ${conversationId}`);
     });
 
-    socket.on('disconnect', () => console.log('User disconnected'));
+    socket.on('disconnect', () => {
+        // console.log(`Socket Disconnected: ${socket.id}`);
+    });
 });
 
 // ===================================
-// 4. API ROUTE IMPORTS
+// 4. API ROUTES
 // ===================================
 
-// Auth & Core
-const authRoutes = require('./routes/auth');
-const userRoutes = require('./routes/users');
-const dashboardRoutes = require('./routes/dashboard');
-const settingsRoutes = require('./routes/settings');
-const mediaRouter = require('./routes/media');
-const announcementsRoutes = require('./routes/announcements');
-const noticesRouter = require('./routes/notices'); 
+// --- A. PUBLIC ROUTES (No Token Required) ---
+app.use('/api/auth', require('./routes/auth'));
+app.use('/api/dashboard', require('./routes/dashboard')); // Dashboard stats usually public to logged in users via frontend check
+app.use('/api/users', require('./routes/users')); 
+app.use('/api/vms', require('./routes/vms')); // Visitor Management usually needs public access
 
-// Academics
-const studentsRoutes = require('./routes/students');
-const admissionRouter = require('./routes/admission');
-const teachersRoutes = require('./routes/teachers'); 
-const coursesRouter = require('./routes/courses'); 
-const subjectsRouter = require('./routes/subjects');
-const sectionsRoutes = require('./routes/sections');
-const academicSessionsRoutes = require('./routes/academic_sessions');
-const academicsWithFeesRouter = require('./routes/academicswithfees');
-const timetableRoutes = require('./routes/timetable');
-const attendanceRouter = require('./routes/attendance'); 
-const leaveRouter = require('./routes/leave'); 
+// --- B. PROTECTED ROUTES (JWT Token Required) ---
+// All routes mounted below this line require a valid Bearer Token
+app.use('/api', authenticateToken);
 
-// Exams & Results
-const examsRouter = require('./routes/exams'); 
-const onlineExamRoutes = require('./routes/onlineExam'); 
-const marksRoutes = require('./routes/marks');
-const reportCardRouter = require('./routes/reportcard');
-const certificatesRouter = require('./routes/certificates');
-const assignmentsRouter = require('./routes/assignments'); 
-const onlineLearningRouter = require('./routes/onlineLearning');
+// Core Modules
+app.use('/api/settings', require('./routes/settings'));
+app.use('/api/media', require('./routes/media'));
+app.use('/api/announcements', require('./routes/announcements'));
+app.use('/api/notices', require('./routes/notices'));
+app.use('/api/messaging', require('./routes/messaging'));
 
-// Finance
-const feesRoutes = require('./routes/fees'); 
-const paymentsRouter = require('./routes/payments');
-const invoicesRouter = require('./routes/invoices');
-const payrollRouter = require('./routes/payroll');
+// Academic Modules
+app.use('/api/students', require('./routes/students'));
+app.use('/api/admission', require('./routes/admission'));
+app.use('/api/teachers', require('./routes/teachers'));
+app.use('/api/courses', require('./routes/courses'));
+app.use('/api/subjects', require('./routes/subjects'));
+app.use('/api/sections', require('./routes/sections'));
+app.use('/api/academic-sessions', require('./routes/academic_sessions'));
+app.use('/api/academicswithfees', require('./routes/academicswithfees'));
+app.use('/api/timetable', require('./routes/timetable'));
+app.use('/api/attendance', require('./routes/attendance'));
+app.use('/api/leave', require('./routes/leave'));
+app.use('/api/ptm', require('./routes/ptm'));
 
-// HR & Staff
-const staffhrRouter = require('./routes/staffhr');
-const departmentRoutes = require('./routes/hr/departments');
+// Exam Modules
+app.use('/api/exams', require('./routes/exams'));
+app.use('/api/online-exam', require('./routes/onlineExam'));
+app.use('/api/marks', require('./routes/marks'));
+app.use('/api/report-card', require('./routes/reportcard'));
+app.use('/api/certificates', require('./routes/certificates'));
+app.use('/api/assignments', require('./routes/assignments'));
+app.use('/api/online-learning', require('./routes/onlineLearning'));
 
-// Operations & Facilities
-const transportRouter = require('./routes/transport'); 
-const hostelRouter = require('./routes/hostel'); 
-const cafeteriaRouter = require('./routes/cafeteria');
-const libraryRouter = require('./routes/library');
-const erpInventoryAssetRouter = require('./routes/inventory-with-assets'); 
-const vmsRouter = require('./routes/vms');
+// Finance Modules
+app.use('/api/fees', require('./routes/fees'));
+app.use('/api/payments', require('./routes/payments'));
+app.use('/api/invoices', require('./routes/invoices'));
+app.use('/api/payroll', require('./routes/payroll'));
 
-// Communication & Others
-const messagingRouter = require('./routes/messaging');
-const enquiriesRouter = require('./routes/enquiries');
-const activitiesRouter = require('./routes/clubsEvents'); 
-const alumniRouter = require('./routes/alumni'); 
-const disciplineRouter = require('./routes/discipline');
-const complianceRoutes = require('./routes/compliance');
-const reportsRoutes = require('./routes/reports');
-const ptmRoutes = require('./routes/ptm'); // <--- PTM Route
+// HR & Operations
+app.use('/api/staffhr', require('./routes/staffhr'));
+app.use('/api/hr/departments', require('./routes/hr/departments'));
+app.use('/api/transport', require('./routes/transport'));
+app.use('/api/hostel', require('./routes/hostel'));
+app.use('/api/cafeteria', require('./routes/cafeteria'));
+app.use('/api/library', require('./routes/library'));
+app.use('/api', require('./routes/inventory-with-assets'));
 
-// ===================================
-// 5. ROUTE MOUNTING
-// ===================================
-
-// --- Public Routes ---
-app.use('/api/auth', authRoutes); 
-app.use('/api/dashboard', dashboardRoutes); 
-app.use('/api/users', userRoutes); 
-app.use('/api/vms', vmsRouter); 
-
-// --- Protected Routes (JWT Required) ---
-app.use('/api', authenticateToken); 
-
-// Core
-app.use('/api/settings', settingsRoutes);
-app.use('/api/media', mediaRouter);
-app.use('/api/announcements', announcementsRoutes);
-app.use('/api/notices', noticesRouter);
-app.use('/api/messaging', messagingRouter);
-
-// Academic
-app.use('/api/students', studentsRoutes);
-app.use('/api/admission', admissionRouter);
-app.use('/api/teachers', teachersRoutes);
-app.use('/api/courses', coursesRouter);
-app.use('/api/subjects', subjectsRouter);
-app.use('/api/sections', sectionsRoutes);
-app.use('/api/academic-sessions', academicSessionsRoutes);
-app.use('/api/academicswithfees', academicsWithFeesRouter);
-app.use('/api/timetable', timetableRoutes);
-app.use('/api/attendance', attendanceRouter);
-app.use('/api/leave', leaveRouter);
-app.use('/api/ptm', ptmRoutes); // <--- Mounted PTM
-
-// Exams
-app.use('/api/exams', examsRouter);
-app.use('/api/online-exam', onlineExamRoutes);
-app.use('/api/marks', marksRoutes);
-app.use('/api/report-card', reportCardRouter);
-app.use('/api/certificates', certificatesRouter);
-app.use('/api/assignments', assignmentsRouter);
-app.use('/api/online-learning', onlineLearningRouter);
-
-// Finance
-app.use('/api/fees', feesRoutes);
-app.use('/api/payments', paymentsRouter);
-app.use('/api/invoices', invoicesRouter);
-app.use('/api/payroll', payrollRouter);
-
-// HR
-app.use('/api/staffhr', staffhrRouter);
-app.use('/api/hr/departments', departmentRoutes);
-
-// Facilities
-app.use('/api/transport', transportRouter);
-app.use('/api/hostel', hostelRouter);
-app.use('/api/cafeteria', cafeteriaRouter);
-app.use('/api/library', libraryRouter);
-app.use('/api', erpInventoryAssetRouter);
-
-// Other
-app.use('/api/enquiries', enquiriesRouter);
-app.use('/api/activities', activitiesRouter);
-app.use('/api/alumni', alumniRouter);
-app.use('/api/discipline', disciplineRouter);
-app.use('/api/compliance', complianceRoutes);
-app.use('/api/reports', reportsRoutes);
-
+// General Modules
+app.use('/api/enquiries', require('./routes/enquiries'));
+app.use('/api/activities', require('./routes/clubsEvents'));
+app.use('/api/alumni', require('./routes/alumni'));
+app.use('/api/discipline', require('./routes/discipline'));
+app.use('/api/compliance', require('./routes/compliance'));
+app.use('/api/reports', require('./routes/reports'));
 
 // ===================================
-// 6. FRONTEND SERVING
+// 5. FRONTEND ROUTING (SPA Support)
 // ===================================
+
+// Specific Static Pages
 app.get('/', (req, res) => res.redirect('/login'));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/exam-management.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'exam-management.html')));
 
-// Catch-all for SPA / Dashboard
-app.use((req, res) => {
+// Catch-all Handler (For SPA behavior or 404s)
+app.use((req, res, next) => {
     const url = req.originalUrl;
+    
+    // If it's an API request that wasn't handled above, return 404 JSON
     if (url.startsWith('/api')) {
-        return res.status(404).json({ message: "API Endpoint not found." });
+        return res.status(404).json({ success: false, message: "API Endpoint not found." });
     }
+
+    // If it looks like a file request (has extension) but missing, return 404
     if (url.includes('.') && !url.endsWith('.html')) {
-        return res.status(404).send("Static file not found");
+        return res.status(404).send("File not found");
     }
+
+    // Otherwise, serve the Dashboard (or 404 page if you prefer)
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
 // ===================================
-// 7. STARTUP
+// 6. GLOBAL ERROR HANDLER
+// ===================================
+app.use((err, req, res, next) => {
+    console.error("🔥 Global Error:", err.stack);
+    
+    const statusCode = err.status || 500;
+    res.status(statusCode).json({
+        success: false,
+        message: err.message || "Internal Server Error",
+        error: process.env.NODE_ENV === 'development' ? err : {}
+    });
+});
+
+// ===================================
+// 7. SERVER STARTUP & SHUTDOWN
 // ===================================
 async function startServer() {
     try {
-        // Create Directories
-        [TEACHERS_UPLOAD_DIR, TRANSPORT_UPLOAD_DIR, DOCUMENTS_UPLOAD_DIR, MEDIA_UPLOAD_DIR].forEach(dir => {
+        // 1. Initialize Directories
+        UPLOAD_DIRS.forEach(dir => {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         });
         
-        // Init DB
+        // 2. Connect Database
         await initializeDatabase();
-        console.log("✅ Database initialized.");
+        console.log("✅ Database initialized successfully.");
 
-        // Start Server
-        server.listen(port, () => {
-            console.log(`🚀 Server running on http://localhost:${port}`);
+        // 3. Start Server
+        server.listen(PORT, () => {
+            console.log(`🚀 Server running on http://localhost:${PORT}`);
+            
+            // 4. Start Background Services
             startNotificationService();
         });
 
     } catch (error) {
-        console.error("❌ Startup Failed:", error.message);
-        process.exit(1); 
+        console.error("❌ Critical Startup Failed:", error.message);
+        process.exit(1);
     }
 }
+
+// Handle Graceful Shutdown (Ctrl+C or Docker Stop)
+process.on('SIGINT', async () => {
+    console.log('\n🛑 Shutting down gracefully...');
+    await pool.end(); // Close DB connections
+    process.exit(0);
+});
 
 startServer();
