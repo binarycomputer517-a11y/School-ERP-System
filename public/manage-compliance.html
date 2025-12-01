@@ -1,53 +1,89 @@
 <!DOCTYPE html>
-<html lang="bn">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>উন্নত কমপ্লায়েন্স ম্যানেজমেন্ট পোর্টাল</title>
+    <title>Advanced Compliance Management Portal</title>
     <style>
-        body { font-family: sans-serif; margin: 20px; }
-        header { border-bottom: 2px solid #eee; padding-bottom: 10px; }
-        main { margin-top: 20px; }
-        section { margin-bottom: 30px; padding: 15px; border: 1px solid #ccc; border-radius: 8px; }
-        h1 { color: #333; }
-        h2 { color: #555; border-bottom: 1px solid #eee; padding-bottom: 5px;}
-        button { padding: 8px 12px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background-color: #0056b3; }
-        #score_gauge { font-size: 1.2em; }
-        .sensitive-data { background-color: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-family: monospace; }
-        #masking_status { color: #888; font-style: italic; }
+        body { font-family: 'Segoe UI', sans-serif; margin: 20px; background-color: #f9f9f9; }
+        header { border-bottom: 2px solid #e0e0e0; padding-bottom: 15px; margin-bottom: 20px; }
+        main { max-width: 800px; margin: 0 auto; }
+        section { background: white; margin-bottom: 30px; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        h1 { color: #2c3e50; margin: 0; }
+        h2 { color: #34495e; border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0; }
+        button { padding: 10px 15px; background-color: #0d6efd; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; transition: background 0.3s; }
+        button:hover { background-color: #0b5ed7; }
+        #score_gauge { font-size: 1.1em; margin: 15px 0; }
+        .sensitive-data { background-color: #e9ecef; padding: 4px 8px; border-radius: 4px; font-family: 'Courier New', monospace; letter-spacing: 1px; color: #495057; }
+        #masking_status { color: #6c757d; font-style: italic; margin-top: 10px; font-size: 0.9em; }
     </style>
 </head>
 <body>
     <header>
-        <h1>কমপ্লায়েন্স রিস্ক ড্যাশবোর্ড</h1>
+        <h1>Compliance Risk Dashboard</h1>
     </header>
 
     <main>
         <section id="risk_scorecard">
-            <h2>রিয়েল-টাইম ঝুঁকি স্কোর</h2>
+            <h2>Real-Time Risk Score</h2>
             <div id="score_gauge">
-                <p>সামগ্রিক ঝুঁকি: <span id="current_risk_level">...লোড হচ্ছে...</span></p>
+                <p>Overall Risk Level: <span id="current_risk_level" style="font-weight: bold; color: #dc3545;">...Loading...</span></p>
             </div>
-            <button id="refresh_score">স্কোর আপডেট করুন</button>
+            <button id="refresh_score" onclick="refreshRiskScore()">Refresh Score</button>
         </section>
 
         <section id="sensitive_data_view" data-record-id="12345">
-            <h2>সংবেদনশীল ডেটার ভিউ (PHI/PII)</h2>
-            <p>ডেটা সেট আইডি: 12345</p>
+            <h2>Sensitive Data View (PHI/PII)</h2>
+            <p class="text-muted">Dataset ID: <strong>12345</strong></p>
             
-            <p>রোগীর নাম: 
-                <span class="sensitive-data" data-field-id="patient_name">*********</span>
-            </p>
-            <p>সোশ্যাল সিকিউরিটি নম্বর: 
-                <span class="sensitive-data" data-field-id="ssn">***-**-****</span>
-            </p>
+            <div style="margin-bottom: 15px;">
+                <p><strong>Patient Name:</strong> <br>
+                    <span class="sensitive-data" id="field_patient_name" data-masked="*********">*********</span>
+                </p>
+                <p><strong>Social Security Number (SSN):</strong> <br>
+                    <span class="sensitive-data" id="field_ssn" data-masked="***-**-****">***-**-****</span>
+                </p>
+            </div>
             
-            <button id="unmask_data_btn">ডেটা উন্মোচন করুন (MFA প্রয়োজন)</button>
+            <button id="unmask_data_btn" onclick="unmaskData()">Unmask Data (MFA Required)</button>
             <p id="masking_status"></p>
         </section>
     </main>
     
-    <script src="/manage-compliance.js"></script> 
+    <script>
+        // 1. Refresh Score Logic
+        function refreshRiskScore() {
+            const scoreSpan = document.getElementById('current_risk_level');
+            scoreSpan.innerText = "Calculating...";
+            setTimeout(() => {
+                // Mock result
+                scoreSpan.innerText = "LOW (Safe)";
+                scoreSpan.style.color = "#198754"; // Green
+            }, 1000);
+        }
+
+        // 2. Unmask Data Logic
+        function unmaskData() {
+            const status = document.getElementById('masking_status');
+            const btn = document.getElementById('unmask_data_btn');
+            
+            // Simulation of MFA check
+            const mfaCode = prompt("Enter MFA Code to view sensitive data:");
+            
+            if (mfaCode === "1234") {
+                document.getElementById('field_patient_name').innerText = "John Doe";
+                document.getElementById('field_ssn').innerText = "123-45-6789";
+                
+                status.innerText = "Data unmasked successfully. This event has been logged.";
+                status.style.color = "green";
+                btn.style.display = 'none'; // Hide button after unmasking
+            } else {
+                alert("Incorrect MFA Code!");
+                status.innerText = "Access Denied.";
+                status.style.color = "red";
+            }
+        }
+    </script> 
+    <script src="js/global-config.js"></script>
 </body>
 </html>

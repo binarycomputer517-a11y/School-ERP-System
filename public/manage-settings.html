@@ -3,270 +3,587 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced System Settings - ERP Control</title>
+    <title>Enterprise ERP Control Panel</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --primary-color: #003366;
-            --accent-color: #8e44ad;
-            --danger-color: #dc3545;
+            --classic-dark: #1a252f; /* Deep Navy Charcoal */
+            --classic-gold: #c0a375; /* Premium Gold */
+            --classic-bg: #eef2f5;
+            --sidebar-width: 260px;
         }
-        body { background-color: #f4f7f6; font-family: 'Poppins', sans-serif; }
-        .container { max-width: 900px; padding: 30px; background-color: white; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
-        h1 { color: var(--primary-color); border-bottom: 3px solid var(--accent-color); padding-bottom: 10px; margin-bottom: 25px; font-weight: 600; }
-        .card { border-left: 5px solid var(--accent-color); margin-bottom: 20px; }
-        .card-header { background-color: #f0f3f6; color: var(--primary-color); font-weight: 600; }
-        .form-group { margin-bottom: 15px; }
-        label { font-weight: 500; color: #333; margin-bottom: 5px; }
-        .form-control, .form-select { border-color: #ddd; }
-        .setting-description { font-size: 0.85em; color: #777; margin-top: 5px; }
-        #save-settings-btn { background-color: var(--primary-color); }
-        #save-settings-btn:hover { background-color: #0056b3; }
-        .danger-zone { border: 2px solid var(--danger-color); background-color: #ffe8e8; padding: 20px; border-radius: 8px; margin-top: 30px; }
+
+        body {
+            background-color: var(--classic-bg);
+            font-family: 'Segoe UI', sans-serif;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+            color: var(--classic-dark);
+        }
+
+        /* Layout */
+        .wrapper { display: flex; width: 100%; align-items: stretch; min-height: 100vh; }
+
+        /* Sidebar Styling */
+        #sidebar {
+            min-width: var(--sidebar-width);
+            max-width: var(--sidebar-width);
+            background: var(--classic-dark);
+            color: #fff;
+            box-shadow: 2px 0 15px rgba(0,0,0,0.1);
+            position: fixed; height: 100vh; overflow-y: auto; z-index: 999;
+        }
+        #sidebar .sidebar-header { padding: 20px; background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        #sidebar ul.components { padding: 10px 0; }
+        #sidebar ul li a {
+            padding: 12px 20px; font-size: 0.9rem; display: block; color: rgba(255,255,255,0.7);
+            text-decoration: none; transition: 0.3s; border-left: 4px solid transparent;
+        }
+        #sidebar ul li a:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        #sidebar ul li a.active {
+            color: #fff; background: rgba(192, 163, 117, 0.15); border-left: 4px solid var(--classic-gold);
+        }
+        #sidebar ul li a i { margin-right: 10px; width: 20px; text-align: center; color: var(--classic-gold); }
+
+        /* Content Area */
+        #content {
+            width: 100%; padding: 30px; margin-left: var(--sidebar-width);
+            transition: all 0.3s;
+        }
+        
+        /* Card Styling */
+        .classic-card {
+            background: #fff; border: none; border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 25px;
+            border-top: 3px solid var(--classic-gold);
+        }
+        .classic-card-header {
+            background: transparent; border-bottom: 1px solid #eee;
+            padding: 15px 25px; font-weight: 700; color: var(--classic-dark); font-size: 1.05rem;
+        }
+        .classic-card-body { padding: 25px; }
+
+        /* Form Controls */
+        .form-label { font-weight: 600; color: #555; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-control, .form-select {
+            border-radius: 4px; border: 1px solid #dde2e7; padding: 10px 12px; font-size: 0.95rem;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--classic-gold); box-shadow: 0 0 0 0.2rem rgba(192, 163, 117, 0.25);
+        }
+        
+        /* Switches */
+        .form-switch .form-check-input {
+            width: 3em; height: 1.5em; margin-left: -3em; cursor: pointer;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%280, 0, 0, 0.25%29'/%3e%3c/svg%3e");
+        }
+        .form-switch .form-check-input:checked {
+            background-color: var(--classic-gold); border-color: var(--classic-gold);
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+        }
+
+        /* Top Bar */
+        .action-bar {
+            background: white; padding: 15px 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; position: sticky; top: 10px; z-index: 900;
+        }
+        .btn-classic-gold {
+            background-color: var(--classic-gold); color: #fff; border: none; padding: 10px 30px; font-weight: 600; letter-spacing: 0.5px;
+        }
+        .btn-classic-gold:hover { background-color: #a3885d; color: #fff; }
+        .btn-classic-gold:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        .adv-badge { background: var(--classic-dark); color: var(--classic-gold); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; margin-left: 5px; vertical-align: middle;}
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <header class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Advanced System Configuration</h1>
-            <a href="/admin-dashboard.html" class="btn btn-outline-secondary">← Back to Dashboard</a>
-        </header>
-
-        <p id="system-status" class="alert alert-info text-center">Loading current settings...</p>
-        
-        <form id="advanced-settings-form">
-            <h2 class="h4 mb-3">Governance & Financial Defaults</h2>
-            
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    
-                    <div class="row">
-                        <div class="col-md-6 form-group">
-                            <label for="active_session_id">Active Academic Session *</label>
-                            <select id="active_session_id" name="active_session_id" class="form-select" required>
-                                <option value="">Loading Sessions...</option>
-                            </select>
-                            <small class="setting-description">Sets the default session ID for all new student enrollment and exams.</small>
-                        </div>
-                        
-                        <div class="col-md-6 form-group">
-                            <label for="default_branch_id">Default Branch ID *</label>
-                            <select id="default_branch_id" name="default_branch_id" class="form-select" required>
-                                <option value="">Loading Branches...</option>
-                            </select>
-                            <small class="setting-description">The default branch for new staff and primary system operations.</small>
-                        </div>
-                    </div>
-
-                    <div class="row">
-                         <div class="col-md-6 form-group">
-                            <label for="default_pay_frequency">Default Pay Frequency</label>
-                            <select id="default_pay_frequency" name="default_pay_frequency" class="form-select">
-                                <option value="Monthly">Monthly</option>
-                                <option value="Bi-Weekly">Bi-Weekly</option>
-                                <option value="Annual">Annual</option>
-                            </select>
-                            <small class="setting-description">Default setting for new payroll records.</small>
-                        </div>
-                        <div class="col-md-6 form-group">
-                            <label for="library_fine_per_day">Library Fine Rate (₹/Day)</label>
-                            <input type="number" step="0.01" id="library_fine_per_day" name="library_fine_per_day" class="form-control" value="5.00">
-                            <small class="setting-description">Fine applied per day for overdue books.</small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <h2 class="h4 mb-3">Security & Application Toggles</h2>
-            
-            <div class="card shadow-sm">
-                <div class="card-body">
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" id="enable_self_registration" name="enable_self_registration" checked>
-                        <label class="form-check-label" for="enable_self_registration">Enable Student Self-Registration (Public Access)</label>
-                        <small class="setting-description d-block">If disabled, only Admin can create Student accounts.</small>
-                    </div>
-                    
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" id="enforce_otp_login" name="enforce_otp_login">
-                        <label class="form-check-label" for="enforce_otp_login">Enforce OTP/MFA Login for Staff</label>
-                        <small class="setting-description d-block">Requires all Teacher/Admin roles to authenticate via a second factor.</small>
-                    </div>
-
-                    <div class="form-check form-switch mb-3">
-                        <input class="form-check-input" type="checkbox" id="allow_online_fee_payment" name="allow_online_fee_payment" checked>
-                        <label class="form-check-label" for="allow_online_fee_payment">Allow Online Fee Payments</label>
-                        <small class="setting-description d-block">Controls visibility and functionality of the external payment gateway.</small>
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-center mt-4">
-                <button type="submit" id="save-settings-btn" class="btn btn-primary btn-lg">Save All Advanced Settings</button>
-            </div>
-            <p id="error-msg" class="text-danger text-center mt-3" style="min-height: 1.5em;"></p>
-        </form>
-
-        <div class="danger-zone">
-            <h2 class="h4 text-danger mb-3">DANGER ZONE: System Actions</h2>
-            <button class="btn btn-danger me-3" onclick="confirmSystemAction('archive')">Archive Current Academic Year</button>
-            <button class="btn btn-warning" onclick="confirmSystemAction('reset_cache')">Clear System Cache</button>
-            <small class="d-block mt-2 text-danger">⚠️ These actions are irreversible and affect all users. Proceed with extreme caution.</small>
+<div class="wrapper">
+    <nav id="sidebar">
+        <div class="sidebar-header">
+            <h5 class="mb-0 text-white"><i class="fas fa-university text-gold me-2"></i>School ERP</h5>
         </div>
 
-    </div> 
+        <ul class="list-unstyled components nav nav-pills flex-column" id="v-pills-tab" role="tablist">
+            <li class="nav-item"><a href="#general" class="nav-link active" data-bs-toggle="pill"><i class="fas fa-globe"></i> General Config</a></li>
+            <li class="nav-item"><a href="#email-carrier" class="nav-link" data-bs-toggle="pill"><i class="fas fa-server"></i> Email Carrier</a></li>
+            <li class="nav-item"><a href="#email-templates" class="nav-link" data-bs-toggle="pill"><i class="fas fa-envelope-open-text"></i> Email Templates</a></li>
+            <li class="nav-item"><a href="#firebase" class="nav-link" data-bs-toggle="pill"><i class="fab fa-google"></i> Firebase Cloud</a></li>
+            <li class="nav-item"><a href="#sms-carrier" class="nav-link" data-bs-toggle="pill"><i class="fas fa-mobile-alt"></i> SMS Carrier</a></li>
+            <li class="nav-item"><a href="#sms-templates" class="nav-link" data-bs-toggle="pill"><i class="fas fa-comment-dots"></i> SMS Templates</a></li>
+            <li class="nav-item"><a href="#payment" class="nav-link" data-bs-toggle="pill"><i class="fas fa-credit-card"></i> Payment Methods</a></li>
+            <li class="nav-item"><a href="#inquiry" class="nav-link" data-bs-toggle="pill"><i class="fas fa-headset"></i> CRM & Inquiry</a></li>
+            <li class="nav-item"><a href="#registration" class="nav-link" data-bs-toggle="pill"><i class="fas fa-user-plus"></i> Registration</a></li>
+            <li class="nav-item"><a href="#dashboard" class="nav-link" data-bs-toggle="pill"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="#shortcodes" class="nav-link" data-bs-toggle="pill"><i class="fas fa-code"></i> Shortcodes</a></li>
+            <li class="nav-item"><a href="#charts" class="nav-link" data-bs-toggle="pill"><i class="fas fa-chart-pie"></i> Charts</a></li>
+            <li class="nav-item"><a href="#live-classes" class="nav-link" data-bs-toggle="pill"><i class="fas fa-video"></i> Live Classes</a></li>
+            <li class="nav-item"><a href="#qr-code" class="nav-link" data-bs-toggle="pill"><i class="fas fa-qrcode"></i> QR & Security</a></li>
+            <li class="nav-item"><a href="#cards-bg" class="nav-link" data-bs-toggle="pill"><i class="fas fa-id-badge"></i> ID Cards</a></li>
+            <li class="nav-item"><a href="#logging" class="nav-link" data-bs-toggle="pill"><i class="fas fa-history"></i> Audit Logs</a></li>
+            <li class="nav-item"><a href="#lessons" class="nav-link" data-bs-toggle="pill"><i class="fas fa-book-reader"></i> LMS & Lessons</a></li>
+        </ul>
+    </nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        const API_URL = '/api/settings';
-        const TOKEN = localStorage.getItem('erp-token');
-        const USER_ROLE = localStorage.getItem('user-role');
-        const settingsForm = document.getElementById('advanced-settings-form');
-        const statusMessage = document.getElementById('system-status');
-        const errorMsg = document.getElementById('error-msg');
+    <div id="content">
+        <form id="settingsForm">
+            <div class="action-bar">
+                <div>
+                    <h3 class="mb-0">System Configuration</h3>
+                    <small class="text-muted">Manage global settings, integrations, and logic.</small>
+                </div>
+                <button type="submit" id="saveBtn" class="btn btn-classic-gold shadow-sm">
+                    <i class="fas fa-save me-2"></i> Save Changes
+                </button>
+            </div>
 
-        // Security check
-        if (!TOKEN || (USER_ROLE !== 'Admin' && USER_ROLE !== 'Super Admin')) {
-            window.location.href = '/login.html';
-        }
-
-        // --- Auth Fetch Helper ---
-        async function fetchWithAuth(url, options = {}) {
-            const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
-            const response = await fetch(url, { ...options, headers });
-            if (response.status === 401 || response.status === 403) {
-                localStorage.clear();
-                alert('Session expired. Redirecting.');
-                window.location.href = '/login.html';
-                throw new Error('Unauthorized');
-            }
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(errorBody.message || 'Server error');
-            }
-            return response.json();
-        }
-
-        // --- Data Population ---
-
-        async function loadDropdowns() {
-            try {
-                // 1. Fetch Sessions
-                const sessionRes = await fetchWithAuth(`${API_URL}/academic-sessions/all`);
-                const sessionSelect = document.getElementById('active_session_id');
-                sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
+            <div class="tab-content" id="v-pills-tabContent">
                 
-                sessionRes.forEach(s => {
-                    // FIX: Safer handling for date substring and uses s.name
-                    const startDate = s.start_date ? s.start_date.substring(0,4) : 'N/A';
-                    const endDate = s.end_date ? s.end_date.substring(0,4) : 'N/A';
-                    
-                    // Uses s.name (which comes from the 'session_name AS name' alias in the backend)
-                    sessionSelect.innerHTML += `<option value="${s.id}">${s.name} (${startDate} - ${endDate})</option>`;
-                });
+                <div class="tab-pane fade show active" id="general">
+                    <div class="classic-card">
+                        <div class="classic-card-header">System Localization & Logic</div>
+                        <div class="classic-card-body">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label">System Currency</label>
+                                    <select class="form-select mb-3" name="currency">
+                                        <option value="INR">INR (₹) - Indian Rupee</option>
+                                        <option value="USD">USD ($) - US Dollar</option>
+                                        <option value="EUR">EUR (€) - Euro</option>
+                                    </select>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="ai_exchange_rate_update">
+                                        <label class="form-check-label">AI-Driven Exchange Rate Updates <span class="adv-badge">Smart</span></label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">School Logo Path</label>
+                                    <input type="text" class="form-control mb-3" name="school_logo_path" placeholder="/uploads/logo.png">
 
-                // 2. Fetch Branches
-                const branchRes = await fetchWithAuth(`${API_URL}/branches/all`);
-                const branchSelect = document.getElementById('default_branch_id');
-                branchSelect.innerHTML = '<option value="">-- Select Branch --</option>';
-                
-                branchRes.forEach(b => {
-                    // FIX: Uses b.name (which comes from the 'branch_name AS name' alias in the backend)
-                    branchSelect.innerHTML += `<option value="${b.id}">${b.name}</option>`;
-                });
+                                    <div class="form-check form-switch mb-2">
+                                        <input class="form-check-input" type="checkbox" name="auto_promote_session">
+                                        <label class="form-check-label">Auto-Promote Academic Session</label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="multi_tenant_mode">
+                                        <label class="form-check-label">Multi-Tenant Isolation Mode</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-            } catch (err) {
-                statusMessage.className = 'alert alert-danger';
-                statusMessage.textContent = `Error loading configurations: ${err.message}`;
+                <div class="tab-pane fade" id="email-carrier">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Mail Server Infrastructure</div>
+                        <div class="classic-card-body">
+                            <div class="row g-4">
+                                <div class="col-md-4">
+                                    <label class="form-label">Primary Driver</label>
+                                    <select class="form-select" name="mail_driver">
+                                        <option value="smtp">SMTP</option>
+                                        <option value="ses">Amazon SES</option>
+                                        <option value="mailgun">Mailgun</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Failover Backup</label>
+                                    <select class="form-select" name="mail_failover_driver">
+                                        <option value="php">PHP Mail (Local)</option>
+                                        <option value="sendgrid">SendGrid</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Trigger Condition</label>
+                                    <select class="form-select" name="failover_trigger">
+                                        <option value="3_fails">After 3 Failed Attempts</option>
+                                        <option value="latency">High Latency (>2s)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">SMTP Hostname</label>
+                                    <input type="text" class="form-control" name="smtp_host" placeholder="smtp.gmail.com">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="email-templates">
+                    <div class="classic-card">
+                        <div class="classic-card-header">AI Content Builder</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="ai_content_optimize">
+                                <label class="form-check-label">AI Subject Line Optimization <span class="adv-badge">GPT-4</span></label>
+                                <small class="d-block text-muted">Automatically rewrites email subjects for higher open rates.</small>
+                            </div>
+                            <label class="form-label">Global HTML Footer</label>
+                            <textarea class="form-control" name="email_global_footer" rows="3" placeholder="<div class='footer'>School Address...</div>"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="firebase">
+                    <div class="classic-card">
+                        <div class="classic-card-header">FCM Cloud Messaging</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Service Account JSON</label>
+                            <textarea class="form-control font-monospace" name="firebase_service_account" rows="5" placeholder="{ 'type': 'service_account', 'project_id': '...' }"></textarea>
+                            <div class="mt-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="firebase_geo_fencing">
+                                    <label class="form-check-label">Enable Geo-Fencing Triggers (Entry/Exit)</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="sms-carrier">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Gateway & DLT Compliance</div>
+                        <div class="classic-card-body">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label">SMS Provider</label>
+                                    <select class="form-select" name="sms_provider">
+                                        <option value="twilio">Twilio (Global)</option>
+                                        <option value="msg91">Msg91 (India DLT)</option>
+                                        <option value="textlocal">TextLocal</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">DLT Entity ID</label>
+                                    <input type="text" class="form-control" name="dlt_entity_id" placeholder="1001XXXXXXXXX">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="sms-templates">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Template Management</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Default Attendance Template ID</label>
+                            <input type="text" class="form-control mb-3" name="sms_attendance_template_id">
+                            
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="sms_unicode_support">
+                                <label class="form-check-label">Enable Unicode (Hindi/Bengali/Arabic Support)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="payment">
+                    <div class="classic-card">
+                        <div class="classic-card-header">FinTech Configuration</div>
+                        <div class="classic-card-body">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <h6 class="text-muted border-bottom pb-2 mb-3">Stripe Configuration</h6>
+                                    <label class="form-label">Publishable Key</label>
+                                    <input type="text" class="form-control mb-2" name="stripe_publishable_key">
+                                    <label class="form-label">Secret Key</label>
+                                    <input type="password" class="form-control" name="stripe_secret_key">
+                                </div>
+                                <div class="col-md-6">
+                                    <h6 class="text-muted border-bottom pb-2 mb-3">Advanced Features</h6>
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" name="enable_emi_payments">
+                                        <label class="form-check-label">Enable EMI / Partial Payments</label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="auto_switch_gateway">
+                                        <label class="form-check-label">Smart Gateway Switching (If Primary Fails)</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="inquiry">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Lead Management & AI CRM</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">WhatsApp API Key</label>
+                            <input type="text" class="form-control mb-3" name="whatsapp_api_key">
+                            
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="crm_sentiment_analysis">
+                                <label class="form-check-label">AI Sentiment Analysis (Detect Angry Parents)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="registration">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Digital Onboarding</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="kyc_ocr_enabled">
+                                <label class="form-check-label">Document OCR (Auto-Fill from ID Card Image)</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="registration_face_match">
+                                <label class="form-check-label">Biometric Face Match Verification</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="dashboard">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Analytics & UX</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Cache Refresh Rate (Minutes)</label>
+                            <input type="number" class="form-control mb-3" name="dashboard_cache_time" value="15">
+                            
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="dashboard_predictive_analytics">
+                                <label class="form-check-label">Enable Predictive Revenue Trends <span class="adv-badge">AI</span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="shortcodes">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Dynamic Logic Variables</div>
+                        <div class="classic-card-body">
+                            <div class="alert alert-light border">
+                                <strong>Logic Supported:</strong><br>
+                                <code>[if fee_due > 0] Please pay immediately [else] Thank you [/if]</code>
+                            </div>
+                            <label class="form-label">Custom Variable Map (JSON)</label>
+                            <textarea class="form-control font-monospace" name="custom_shortcodes" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="charts">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Visualization Engine</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Library</label>
+                            <select class="form-select mb-3" name="chart_library">
+                                <option value="apex">ApexCharts (Interactive)</option>
+                                <option value="chartjs">Chart.js (Lightweight)</option>
+                            </select>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="chart_drilldown">
+                                <label class="form-check-label">Enable Data Drill-down on Click</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="live-classes">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Virtual Classroom</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Zoom JWT / SDK Key</label>
+                            <input type="password" class="form-control mb-3" name="zoom_api_key">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="live_class_ai_attendance">
+                                <label class="form-check-label">AI Attentiveness Tracking (Face Detection)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="qr-code">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Security & Encryption</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="qr_dynamic_rotation">
+                                <label class="form-check-label">Rotate QR Codes every 60 seconds (Anti-Copy)</label>
+                            </div>
+                            <label class="form-label">Encryption Key (AES-256)</label>
+                            <input type="password" class="form-control" name="qr_encryption_key">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="cards-bg">
+                    <div class="classic-card">
+                        <div class="classic-card-header">ID Card Design</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="id_card_hologram">
+                                <label class="form-check-label">Apply Digital Hologram Overlay</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="logging">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Forensic Audit & Blockchain</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="blockchain_logging">
+                                <label class="form-check-label">Immutable Audit Logs (Private Blockchain)</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="ip_geo_lock">
+                                <label class="form-check-label">Geo-Lock Admin Login (Country Restriction)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="lessons">
+                    <div class="classic-card">
+                        <div class="classic-card-header">LMS Configuration</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Content Standard</label>
+                            <select class="form-select mb-3" name="lms_standard">
+                                <option value="scorm">SCORM 1.2</option>
+                                <option value="xapi">Tin Can (xAPI)</option>
+                            </select>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="lms_adaptive_learning">
+                                <label class="form-check-label">Adaptive Learning (Adjust Difficulty Automatically)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div> </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const API_URL = '/api/settings';
+    const CONFIG_ID = '1'; 
+    const TOKEN = localStorage.getItem('token'); 
+
+    // 1. Initialize
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!TOKEN) {
+            alert('Authentication Error: Please login first.');
+            // window.location.href = '/login.html'; // Uncomment in production
+            return;
+        }
+        await loadSettings();
+    });
+
+    // 2. Fetch Settings
+    async function loadSettings() {
+        try {
+            const response = await fetch(`${API_URL}/config/current`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            
+            if (!response.ok) throw new Error('Failed to fetch settings');
+            
+            const data = await response.json();
+            populateForm(data);
+        } catch (error) {
+            console.error('Load Error:', error);
+        }
+    }
+
+    // 3. Populate Form Fields
+    function populateForm(data) {
+        // Iterate through all data keys
+        for (const [key, value] of Object.entries(data)) {
+            // Find input by name attribute
+            const input = document.querySelector(`[name="${key}"]`);
+            
+            if (input) {
+                if (input.type === 'checkbox') {
+                    // Checkbox handling (true/false/1/0/"true")
+                    input.checked = (value === true || value === 'true' || value === 1);
+                } else if (input.type === 'radio') {
+                    // Radio handling
+                    if (input.value == value) input.checked = true;
+                } else {
+                    // Standard inputs
+                    input.value = value;
+                }
             }
         }
+    }
+
+    // 4. Save Settings
+    document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
         
-        async function loadCurrentSettings() {
-            statusMessage.textContent = 'Fetching current configurations...';
-            try {
-                // Fetch the current system configuration record (e.g., ID 1)
-                const settings = await fetchWithAuth(`${API_URL}/config/current`);
+        const btn = document.getElementById('saveBtn');
+        const originalContent = btn.innerHTML;
+        
+        // UI Feedback
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin me-2"></i> Saving...';
+        btn.disabled = true;
 
-                // Map fetched values to form fields
-                document.getElementById('active_session_id').value = settings.active_session_id || '';
-                document.getElementById('default_branch_id').value = settings.default_branch_id || '';
-                document.getElementById('default_pay_frequency').value = settings.default_pay_frequency || 'Monthly';
-                document.getElementById('library_fine_per_day').value = settings.library_fine_per_day || 5.00;
-                
-                // Set toggles
-                document.getElementById('enable_self_registration').checked = settings.enable_self_registration === true;
-                document.getElementById('enforce_otp_login').checked = settings.enforce_otp_login === true;
-                document.getElementById('allow_online_fee_payment').checked = settings.allow_online_fee_payment === true;
+        // Gather Data
+        const payload = {};
+        const formElements = e.target.elements;
 
-                statusMessage.className = 'alert alert-success';
-                statusMessage.textContent = 'Settings loaded successfully.';
-
-            } catch (err) {
-                statusMessage.className = 'alert alert-warning';
-                statusMessage.textContent = `Configuration record missing or error: ${err.message}`;
+        for (let i = 0; i < formElements.length; i++) {
+            const el = formElements[i];
+            if (el.name && !el.disabled) {
+                if (el.type === 'checkbox') {
+                    payload[el.name] = el.checked; // Send true/false explicitly
+                } else if (el.type === 'radio') {
+                    if (el.checked) payload[el.name] = el.value;
+                } else {
+                    payload[el.name] = el.value;
+                }
             }
         }
 
-        // --- Form Submission (Saving Settings) ---
+        try {
+            const response = await fetch(`${API_URL}/config/${CONFIG_ID}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${TOKEN}`
+                },
+                body: JSON.stringify(payload)
+            });
 
-        settingsForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            errorMsg.textContent = '';
-            const saveBtn = document.getElementById('save-settings-btn');
-            saveBtn.disabled = true;
-            
-            const formData = new FormData(e.target);
-            const data = Object.fromEntries(formData.entries());
+            const result = await response.json();
 
-            // Process booleans and numbers correctly
-            data.enable_self_registration = data.enable_self_registration === 'on';
-            data.enforce_otp_login = data.enforce_otp_login === 'on';
-            data.allow_online_fee_payment = data.allow_online_fee_payment === 'on';
-            data.library_fine_per_day = parseFloat(data.library_fine_per_day);
-            
-            // NOTE: Assuming this is a PUT request to update the single configuration record (ID 1)
-            try {
-                const result = await fetchWithAuth(`${API_URL}/config/1`, {
-                    method: 'PUT',
-                    body: JSON.stringify(data)
-                });
-
-                errorMsg.className = 'text-success';
-                errorMsg.textContent = 'Configuration saved successfully!';
+            if (response.ok) {
+                // Show success feedback
+                btn.innerHTML = '<i class="fas fa-check me-2"></i> Saved!';
+                btn.classList.replace('btn-classic-gold', 'btn-success');
                 
-            } catch (err) {
-                errorMsg.className = 'text-danger';
-                errorMsg.textContent = `Saving failed: ${err.message}`;
-            } finally {
-                saveBtn.disabled = false;
+                // Also update local storage cache immediately
+                localStorage.setItem('erp_settings', JSON.stringify(payload));
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.classList.replace('btn-success', 'btn-classic-gold');
+                    btn.disabled = false;
+                }, 2000);
+            } else {
+                throw new Error(result.message || 'Save failed');
             }
-        });
-
-
-        // --- Danger Zone Actions ---
-
-        window.confirmSystemAction = function(action) {
-            let message = '';
-            if (action === 'archive') {
-                message = "WARNING: This will close the current academic session, archive all student data, and prepare for a new year. Are you absolutely sure you want to proceed?";
-            } else if (action === 'reset_cache') {
-                message = "WARNING: This will clear all calculated system caches (reports, aggregates). It will not delete core data. Proceed?";
-            }
-
-            if (confirm(message)) {
-                // Assuming POST /api/settings/actions/:action endpoint exists
-                alert(`Executing action: ${action}. Check server console for status.`);
-                // fetchWithAuth(`${API_URL}/actions/${action}`, { method: 'POST' }); // Placeholder for server call
-            }
+        } catch (error) {
+            console.error('Save Error:', error);
+            alert(`Error: ${error.message}`);
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
         }
-
-        // --- Initialization ---
-
-        window.onload = async () => {
-            await loadDropdowns();
-            await loadCurrentSettings();
-        };
-    </script>
+    });
+</script>
+<script src="js/global-config.js"></script>
 </body>
 </html>
