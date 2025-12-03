@@ -1,257 +1,330 @@
-// certificate-generator.js
+/**
+ * certificate-generator.js
+ * Production Ready - Connects to Real Backend APIs
+ * Handles: Data Fetching, Real-time Preview, Design Studio, and PDF Generation
+ */
 
+const API_BASE = '/api';
+const authToken = localStorage.getItem('erp-token');
+const authHeaders = { 'Authorization': `Bearer ${authToken}` };
+
+// Security: Redirect if not logged in
+if (!authToken) window.location.href = '/login.html';
+
+// ==========================================
+// 1. INITIALIZATION
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // --- Get DOM Elements ---
-    const form = document.getElementById('certificate-form');
-    const templateSelect = document.getElementById('template-select');
+    // 1. Load Classes for Dropdown from DB
+    loadClasses();
+    
+    // 2. Set Default Date to Today
+    const dateInput = document.getElementById('issue-date');
+    if (dateInput) dateInput.valueAsDate = new Date();
+    
+    // 3. Initialize Event Listeners
+    setupEventListeners();
+    
+    // 4. Render Initial Preview
+    updatePreview();
+});
+
+// ==========================================
+// 2. DATA LOADING (REAL DB CONNECTION)
+// ==========================================
+
+/**
+ * Fetch Classes/Sections from Database
+ * Route: GET /api/sections
+ */
+async function loadClasses() {
+    const classSelect = document.getElementById('class-select');
+    try {
+        const response = await fetch(`${API_BASE}/sections`, { headers: authHeaders });
+        
+        if (!response.ok) throw new Error('Failed to fetch classes');
+        
+        const classes = await response.json();
+        
+        classSelect.innerHTML = '<option value="">-- Select Class --</option>';
+        classes.forEach(cls => {
+            // cls.id is the UUID of the batch/section
+            classSelect.innerHTML += `<option value="${cls.id}">${cls.class_name} - ${cls.section_name}</option>`;
+        });
+    } catch (error) {
+        console.error('Error loading classes:', error);
+        classSelect.innerHTML = '<option value="">Error loading data</option>';
+    }
+}
+
+/**
+ * Auto-populate Students when Class is selected
+ * Route: GET /api/students?batch_id=UUID
+ */
+async function loadStudents(batchId) {
     const studentSelect = document.getElementById('student-select');
-    const bulkToggle = document.getElementById('bulk-generate-toggle');
-    const studentNameInput = document.getElementById('student-name');
-    const courseEventInput = document.getElementById('course-event');
-    const issueDateInput = document.getElementById('issue-date');
-    const signatoryInput = document.getElementById('signatory');
-    const includeQrCheckbox = document.getElementById('include-qr');
-    const includeSignatureCheckbox = document.getElementById('include-signature');
-    const previewButton = document.getElementById('preview-btn');
-    const generateButton = document.getElementById('generate-btn');
-    const emailButton = document.getElementById('email-btn');
-    const previewContainer = document.getElementById('certificate-preview-container');
-    const previewQrCode = document.getElementById('preview-qr-code');
+    studentSelect.innerHTML = '<option value="">Loading students...</option>';
 
-    // --- State Variables ---
-    let selectedStudentData = null; // Store fetched student details
+    try {
+        // Fetch real students filtered by the selected batch_id
+        const response = await fetch(`${API_BASE}/students?batch_id=${batchId}`, { 
+            headers: authHeaders 
+        });
 
-    // --- Helper Functions ---
+        if (!response.ok) throw new Error('Failed to fetch students');
 
-    /**
-     * Fetches student/class list from the API and populates the dropdown.
-     */
-    async function populateStudentSelect() {
-        const authToken = localStorage.getItem('erp-token');
-        if (!authToken) {
-            console.error("Authentication token not found.");
-            alert("Error: You must be logged in to fetch student data.");
+        const students = await response.json();
+
+        studentSelect.innerHTML = '<option value="">-- All Students in Class --</option>';
+        
+        if (students.length === 0) {
+            studentSelect.innerHTML += '<option value="" disabled>No students found</option>';
             return;
         }
 
+        students.forEach(std => {
+            // Value is student_id, Text is Name + Roll
+            studentSelect.innerHTML += `<option value="${std.student_id}">${std.first_name} ${std.last_name} (${std.roll_number || 'N/A'})</option>`;
+        });
+
+    } catch (error) {
+        console.error('Error loading students:', error);
+        studentSelect.innerHTML = '<option value="">Error loading students</option>';
+    }
+}
+
+// ==========================================
+// 3. EVENT LISTENERS
+// ==========================================
+function setupEventListeners() {
+    // A. Class Selection Logic
+    const classSelect = document.getElementById('class-select');
+    if (classSelect) {
+        classSelect.addEventListener('change', (e) => {
+            const batchId = e.target.value;
+            if (batchId) {
+                loadStudents(batchId);
+            } else {
+                document.getElementById('student-select').innerHTML = '<option value="">-- Select Class First --</option>';
+            }
+        });
+    }
+
+    // B. Live Preview Triggers (Text Inputs)
+    const inputs = ['cert-title', 'course-event', 'issue-date', 'cert-body', 'sig1-name', 'sig2-name'];
+    inputs.forEach(id => {
+        document.getElementById(id)?.addEventListener('input', updatePreview);
+    });
+
+    // C. Design Studio Triggers
+    document.getElementById('font-family')?.addEventListener('change', updatePreview);
+    document.getElementById('accent-color')?.addEventListener('input', updatePreview);
+    document.getElementById('orientation')?.addEventListener('change', changeOrientation);
+}
+
+// ==========================================
+// 4. PREVIEW & DESIGN LOGIC
+// ==========================================
+
+/**
+ * Updates the visual preview based on form inputs
+ */
+function updatePreview() {
+    const val = (id) => document.getElementById(id)?.value || '';
+
+    // 1. Text Replacement Logic (Visual Only)
+    // The backend handles the real replacement for every student PDF.
+    let bodyText = val('cert-body');
+    const selectedClass = document.getElementById('class-select').selectedOptions[0]?.text || '[Class Name]';
+    
+    // Replace placeholders with visual examples
+    bodyText = bodyText
+        .replace(/{{StudentName}}/g, '<span style="border-bottom:1px dashed #666; font-weight:bold;">[Student Name]</span>')
+        .replace(/{{Class}}/g, selectedClass)
+        .replace(/{{Event}}/g, val('course-event'))
+        .replace(/{{Date}}/g, val('issue-date'));
+
+    // 2. Update DOM Elements
+    setText('prev-title', val('cert-title'));
+    setText('prev-course', val('course-event'));
+    setText('prev-date-text', val('issue-date'));
+    setText('prev-sig1-name', val('sig1-name'));
+    setText('prev-sig2-name', val('sig2-name'));
+    
+    const bodyContainer = document.getElementById('prev-body');
+    if (bodyContainer) bodyContainer.innerHTML = bodyText;
+
+    // 3. Apply Styles (Font & Color)
+    const box = document.getElementById('certificate-preview-container');
+    if (box) {
+        box.style.fontFamily = val('font-family');
+        // The border color is handled by CSS classes mostly, but we can override:
+        // box.style.borderColor = val('accent-color'); 
+    }
+
+    // 4. Apply Accent Colors to Text
+    const color = val('accent-color');
+    setStyleColor('prev-title', color); // Fallback if background-clip not supported
+    setStyleColor('prev-student-name', color);
+}
+
+// Helpers
+function setText(id, text) { const el = document.getElementById(id); if(el) el.innerText = text; }
+function setStyleColor(id, color) { const el = document.getElementById(id); if(el) el.style.color = color; }
+
+/**
+ * Inserts variables like {{StudentName}} into the textarea
+ */
+function insertVar(variable) {
+    const textarea = document.getElementById('cert-body');
+    if (textarea) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        textarea.value = text.substring(0, start) + variable + text.substring(end);
+        updatePreview();
+        textarea.focus();
+    }
+}
+
+function changeOrientation() {
+    const orient = document.getElementById('orientation').value;
+    const box = document.getElementById('certificate-preview-container');
+    if (box) {
+        box.classList.remove('landscape', 'portrait');
+        box.classList.add(orient);
+    }
+}
+
+// ==========================================
+// 5. GLOBAL WINDOW FUNCTIONS (For HTML onclick)
+// ==========================================
+
+// Tab Switching
+window.switchTab = function(id) {
+    // Hide all content
+    document.querySelectorAll('.tab-content').forEach(d => d.style.display = 'none');
+    document.querySelectorAll('.tab-content').forEach(d => d.classList.remove('active')); // Important for detection
+    
+    // Show selected
+    const selected = document.getElementById(id);
+    selected.style.display = 'block';
+    selected.classList.add('active'); // Add active class for form logic
+    
+    // Update buttons
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    if(event && event.target) event.target.closest('button').classList.add('active');
+};
+
+// Modal Logic
+window.openPreviewModal = function() {
+    updatePreview();
+    document.getElementById('previewModal').style.display = 'block';
+    document.body.style.overflow = 'hidden'; 
+};
+
+window.closePreviewModal = function() {
+    document.getElementById('previewModal').style.display = 'none';
+    document.body.style.overflow = 'auto';
+};
+
+// File Loaders
+window.loadBackground = function(event) {
+    const reader = new FileReader();
+    reader.onload = function() { 
+        document.getElementById('certificate-preview-container').style.backgroundImage = `url(${reader.result})`; 
+    };
+    if (event.target.files[0]) reader.readAsDataURL(event.target.files[0]);
+};
+
+window.loadSignature = function(event, num) {
+    const reader = new FileReader();
+    reader.onload = function() {
+        const img = document.getElementById(`prev-sig${num}-img`);
+        if (img) {
+            img.src = reader.result;
+            img.style.display = 'block';
+        }
+    };
+    if (event.target.files[0]) reader.readAsDataURL(event.target.files[0]);
+};
+
+// ==========================================
+// 6. GENERATION (SUBMIT TO BACKEND)
+// ==========================================
+const certForm = document.getElementById('certificate-form');
+if (certForm) {
+    certForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const btn = document.getElementById('generate-btn');
+        const originalText = btn.innerHTML;
+
         try {
-            // 📝 TODO: Replace with your actual API endpoint for students/classes
-            const response = await fetch('/api/students?fields=id,first_name,last_name', {
-                headers: { 'Authorization': `Bearer ${authToken}` }
-            });
-            if (!response.ok) throw new Error(`HTTP error! Status: ${response.status}`);
-            const students = await response.json();
+            // 1. Determine Data Source
+            // Check which tab has the 'active' class (set by switchTab)
+            const activeTab = document.querySelector('.tab-content.active') || document.getElementById('db-source');
+            const sourceMode = (activeTab.id === 'db-source') ? 'database' : 'csv';
+            
+            const classId = document.getElementById('class-select').value;
 
-            studentSelect.innerHTML = '<option value="">-- Select Student --</option>'; // Clear existing options
-            students.forEach(student => {
-                const option = document.createElement('option');
-                option.value = student.id; // Assuming 'id' is the student's unique ID
-                option.textContent = `${student.first_name} ${student.last_name}`;
-                option.dataset.name = `${student.first_name} ${student.last_name}`; // Store name for easy access
-                studentSelect.appendChild(option);
-            });
-             console.log("Student list populated.");
+            // 2. Validation
+            if (sourceMode === 'database' && !classId) {
+                alert('Please select a Class/Batch from the dropdown.');
+                return;
+            }
 
-        } catch (error) {
-            console.error("Error fetching students:", error);
-            alert("Failed to load student list. Please check the console.");
-        }
-    }
+            // 3. UI Feedback
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
-    /**
-     * Updates the student name input when a student is selected.
-     */
-    function handleStudentSelect() {
-        const selectedOption = studentSelect.options[studentSelect.selectedIndex];
-        if (selectedOption && selectedOption.value) {
-            studentNameInput.value = selectedOption.dataset.name || ''; // Use stored name
-            selectedStudentData = { id: selectedOption.value, name: studentNameInput.value };
-            // In a real app, you might fetch more details here if needed
-        } else {
-            studentNameInput.value = ''; // Clear if "-- Select Student --" is chosen
-            selectedStudentData = null;
-        }
-        updatePreview(); // Update preview when student changes
-    }
+            // 4. Prepare FormData
+            const formData = new FormData(e.target);
+            
+            // Explicitly set the data source so backend knows what to do
+            formData.set('dataSource', sourceMode);
+            formData.set('classId', classId); // Ensure classId is sent
 
-    /**
-     * Updates the certificate preview area based on form inputs.
-     * This is a basic text-based preview. A WYSIWYG preview would involve canvas or SVG.
-     */
-    function updatePreview() {
-        // Clear previous preview
-        previewContainer.innerHTML = '';
+            // Handle file inputs manually (safeguard for FormData quirks)
+            const bg = document.getElementById('bg-upload');
+            if(bg?.files[0]) formData.set('backgroundImage', bg.files[0]);
+            
+            const sig1 = document.getElementById('sig1-upload');
+            if(sig1?.files[0]) formData.set('signature1', sig1.files[0]);
 
-        // Get current form values
-        const templateName = templateSelect.options[templateSelect.selectedIndex].text;
-        const studentName = studentNameInput.value || "[Student Name]";
-        const courseEvent = courseEventInput.value || "[Course/Event Name]";
-        const issueDate = issueDateInput.value ? new Date(issueDateInput.value).toLocaleDateString() : "[Date]";
-        const signatory = signatoryInput.value || "[Issuing Authority]";
+            const sig2 = document.getElementById('sig2-upload');
+            if(sig2?.files[0]) formData.set('signature2', sig2.files[0]);
 
-        // Basic HTML structure for preview
-        const previewHTML = `
-            <h3 style="text-align: center; margin-bottom: 20px;">${templateName} Certificate</h3>
-            <p style="text-align: center;">This certifies that</p>
-            <h4 style="text-align: center; font-size: 1.5em; margin: 10px 0;">${studentName}</h4>
-            <p style="text-align: center;">has successfully completed/participated in</p>
-            <p style="text-align: center; font-style: italic;">${courseEvent}</p>
-            <p style="text-align: center; margin-top: 20px;">Issued on: ${issueDate}</p>
-            <p style="text-align: right; margin-top: 30px; padding-right: 20px;">Signed:</p>
-            <p style="text-align: right; padding-right: 20px;"><i>${signatory}</i></p>
-            ${includeSignatureCheckbox.checked ? '<p style="position: absolute; bottom: 40px; right: 20px; font-family: cursive; font-size: 1.2em;">[Signature Img]</p>' : ''}
-        `;
-
-        previewContainer.innerHTML = previewHTML;
-
-        // Show/hide QR code placeholder in preview
-        previewQrCode.style.display = includeQrCheckbox.checked ? 'block' : 'none';
-        if(includeQrCheckbox.checked){
-            previewContainer.appendChild(previewQrCode); // Ensure QR is inside if shown
-        }
-        console.log("Preview updated.");
-    }
-
-    /**
-     * Handles the form submission to generate the PDF via API call.
-     */
-    async function handleGenerate(event) {
-        event.preventDefault(); // Prevent default form submission
-        generateButton.disabled = true;
-        generateButton.textContent = 'Generating...';
-
-        const authToken = localStorage.getItem('erp-token');
-        if (!authToken) {
-            alert("Error: Authentication token missing. Please log in again.");
-            generateButton.disabled = false;
-            generateButton.textContent = 'Generate & Download PDF';
-            return;
-        }
-
-        const formData = new FormData(form);
-        const data = Object.fromEntries(formData.entries());
-
-        // Add selected student ID if not bulk
-        if (!data.isBulk && selectedStudentData) {
-            data.studentId = selectedStudentData.id;
-        } else if (data.isBulk) {
-            // 📝 TODO: Handle bulk generation logic - maybe get class ID from studentSelect?
-             console.warn("Bulk generation logic not fully implemented.");
-             // For now, let's assume studentId holds classId if bulk is checked
-             data.classId = studentSelect.value;
-             delete data.studentId; // Remove single student ID
-        }
-
-        console.log("Submitting data for PDF generation:", data);
-
-        try {
-            // 📝 TODO: Replace with your actual certificate generation API endpoint
-            const response = await fetch('/api/certificates/generate', {
+            // 5. Send to Backend
+            const response = await fetch(`${API_BASE}/certificates/generate`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                },
-                body: JSON.stringify(data)
+                headers: { 'Authorization': `Bearer ${authToken}` },
+                body: formData
             });
 
             if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `Server error: ${response.status}`);
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || 'Server error during generation');
             }
 
-            // Expecting PDF blob or a link to the PDF
+            // 6. Download ZIP
             const blob = await response.blob();
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
-            a.style.display = 'none';
             a.href = url;
-            // Create a dynamic filename
-            const filename = `Certificate-${data.studentName || 'Bulk'}-${data.courseEvent}.pdf`;
-            a.download = filename;
+            a.download = `Certificates_${new Date().toISOString().slice(0,10)}.zip`;
             document.body.appendChild(a);
             a.click();
             window.URL.revokeObjectURL(url);
-            a.remove();
-
-            alert('Certificate generated and downloaded successfully!');
-             emailButton.style.display = 'inline-block'; // Show email button after successful generation (optional)
+            
+            alert('Success! Certificates generated and downloaded.');
 
         } catch (error) {
-            console.error("Error generating certificate:", error);
-            alert(`Failed to generate certificate: ${error.message}`);
+            console.error(error);
+            alert('Generation Failed: ' + error.message);
         } finally {
-            generateButton.disabled = false;
-            generateButton.textContent = 'Generate & Download PDF';
+            btn.disabled = false;
+            btn.innerHTML = originalText;
         }
-    }
-
-     /**
-     * Handles emailing the certificate (requires last generated data or fetching).
-     * NOTE: This is a basic example; emailing usually happens server-side.
-     */
-    async function handleEmail() {
-        if (!selectedStudentData) {
-            alert("Please select a student first.");
-            return;
-        }
-
-        const authToken = localStorage.getItem('erp-token');
-         if (!authToken) {
-            alert("Error: Authentication token missing.");
-            return;
-        }
-
-        emailButton.disabled = true;
-        emailButton.textContent = 'Sending...';
-
-        try {
-            // 📝 TODO: Replace with your actual email sending API endpoint
-            // This might need the generated certificate ID or resend generation data
-            const response = await fetch('/api/certificates/email', {
-                 method: 'POST',
-                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authToken}`
-                 },
-                 body: JSON.stringify({
-                    studentId: selectedStudentData.id,
-                    // Include necessary details like templateId, courseEvent etc.
-                    // Or ideally, the ID of the already generated certificate.
-                    templateId: templateSelect.value,
-                    courseEvent: courseEventInput.value,
-                    issueDate: issueDateInput.value
-                 })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || `Server error: ${response.status}`);
-            }
-
-            alert(`Certificate emailed successfully to ${selectedStudentData.name}!`);
-
-        } catch (error) {
-             console.error("Error emailing certificate:", error);
-             alert(`Failed to email certificate: ${error.message}`);
-        } finally {
-            emailButton.disabled = false;
-            emailButton.textContent = 'Email to Student';
-        }
-    }
-
-
-    // --- Event Listeners ---
-    studentSelect.addEventListener('change', handleStudentSelect);
-    previewButton.addEventListener('click', updatePreview);
-    form.addEventListener('submit', handleGenerate);
-    emailButton.addEventListener('click', handleEmail);
-
-    // Update preview dynamically on input changes
-    form.addEventListener('input', updatePreview); // Update preview on any form input change
-
-    // --- Initial Setup ---
-    populateStudentSelect(); // Load student list on page load
-    updatePreview(); // Show initial blank preview
-
-}); // End DOMContentLoaded
+    });
+}

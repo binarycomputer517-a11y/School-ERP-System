@@ -1,27 +1,30 @@
-// /routes/sections.js
-
 const express = require('express');
 const router = express.Router();
-const pool = require('../database').pool;
+const { pool } = require('../database');
+const { authenticateToken } = require('../authMiddleware');
 
-// --- GET: একটি নির্দিষ্ট ক্লাসের সমস্ত সেকশন ---
-// পাথ: GET /api/sections/by-class/:classId
-router.get('/by-class/:classId', async (req, res) => {
+// GET /api/sections
+// Fetches Courses and Batches to populate the "Class/Section" dropdown
+router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { classId } = req.params;
-        // এই কোয়েরিটি পরিবর্তন করা হয়েছে
+        // We select the Batch ID as 'id' because that's what we need to filter students later.
+        // We map 'course_name' to 'class_name' and 'batch_name' to 'section_name'
+        // so the frontend javascript works without changes.
         const query = `
-            SELECT id, section_name 
-            FROM sections 
-            WHERE class_id = $1
-            ORDER BY section_name;
+            SELECT 
+                b.id, 
+                c.course_name AS class_name, 
+                b.batch_name AS section_name 
+            FROM batches b
+            JOIN courses c ON b.course_id = c.id
+            ORDER BY c.course_name ASC, b.batch_name ASC
         `;
         
-        const { rows } = await pool.query(query, [classId]);
-        res.status(200).json(rows);
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
     } catch (err) {
-        console.error('Error fetching sections by class:', err);
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error fetching sections (batches):', err);
+        res.status(500).json({ error: 'Server error fetching class data' });
     }
 });
 
