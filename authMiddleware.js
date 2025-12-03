@@ -1,5 +1,9 @@
 const jwt = require('jsonwebtoken');
 
+// 1. IMPORT THE CENTRALIZED SECRET KEY
+// This ensures that Login and Verify use the EXACT same key, preventing auto-logout.
+const { secret } = require('./config/jwtSecret'); 
+
 /**
  * Middleware to verify the JWT from the Authorization header or the URL query string.
  * This version extracts the UUID core ID and performs role normalization.
@@ -19,9 +23,11 @@ function authenticateToken(req, res, next) {
         return res.sendStatus(401); 
     }
 
-    // JWT_SECRET is accessed via environment variables, ensuring security
-    jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    // 3. VERIFY TOKEN USING THE CENTRAL SECRET
+    // We use the imported 'secret' variable instead of process.env directly
+    jwt.verify(token, secret, (err, user) => {
         if (err) {
+            console.error("Token Verification Failed:", err.message);
             // Token is invalid, expired, or malformed
             return res.sendStatus(403); // 403: Forbidden
         }
@@ -35,17 +41,16 @@ function authenticateToken(req, res, next) {
              return res.status(403).json({ message: 'Forbidden: Token payload missing core user ID (UUID).' });
         }
         
-        // --- FIX 1: ROLE NORMALIZATION ---
-        // Convert the role to lowercase here. This makes authorization case-insensitive,
-        // solving the common local vs. server 'Admin' vs. 'admin' problem.
+        // --- ROLE NORMALIZATION ---
+        // Convert the role to lowercase here. This makes authorization case-insensitive.
         const userRole = user.role ? user.role.toLowerCase() : null; 
         
         // 4. Attach IDs and data to the request object.
         req.user = {
-            // FIX: Primary UUID for database operations (e.g., attendance.marked_by)
+            // Primary UUID for database operations
             id: coreUUID, 
             
-            // Secondary/Legacy ID (null if not in token, but kept for compatibility)
+            // Secondary/Legacy ID (null if not in token)
             userId: user.reference_id || null, 
             
             // The normalized (lowercase) role
@@ -56,6 +61,7 @@ function authenticateToken(req, res, next) {
         next();
     });
 }
+
 // -------------------------------------------------------------------------------------------------
 
 /**
@@ -66,7 +72,7 @@ function authorize(roles = []) {
         roles = [roles];
     }
 
-    // FIX 2: Convert the list of required roles to lowercase for comparison
+    // Convert the list of required roles to lowercase for comparison
     const allowedRoles = roles.map(r => r.toLowerCase());
 
     return (req, res, next) => {

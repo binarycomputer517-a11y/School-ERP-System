@@ -513,21 +513,25 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    // --- 1. CONFIGURATION CONSTANTS (MUST BE AT THE TOP) ---
     const API_URL = '/api/settings';
     const CONFIG_ID = '1'; 
-    const TOKEN = localStorage.getItem('token'); 
+    
+    // FIX: Define TOKEN here properly using the correct key 'erp-token'
+    const TOKEN = localStorage.getItem('erp-token'); 
 
-    // 1. Initialize
+    // --- 2. INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', async () => {
+        // Check if token exists immediately
         if (!TOKEN) {
-            // alert('Authentication Error: Please login first.');
+            console.warn("No authentication token found. Redirecting to login.");
             window.location.href = '/login.html'; 
             return;
         }
         await loadSettings();
     });
 
-    // 2. Fetch Settings
+    // --- 3. FETCH SETTINGS FUNCTION ---
     async function loadSettings() {
         try {
             const response = await fetch(`${API_URL}/config/current`, {
@@ -536,6 +540,7 @@
             
             // Handle Auth Error Gracefully
             if (response.status === 401 || response.status === 403) {
+                console.error("Token invalid or expired.");
                 window.location.href = '/login.html';
                 return;
             }
@@ -549,7 +554,7 @@
         }
     }
 
-    // 3. Populate Form Fields
+    // --- 4. POPULATE FORM FIELDS ---
     function populateForm(data) {
         for (const [key, value] of Object.entries(data)) {
             const input = document.querySelector(`[name="${key}"]`);
@@ -565,7 +570,7 @@
         }
     }
 
-    // 4. Save Settings
+    // --- 5. SAVE SETTINGS FUNCTION ---
     document.getElementById('settingsForm').addEventListener('submit', async (e) => {
         e.preventDefault();
         
@@ -622,9 +627,6 @@
                     btn.innerHTML = originalContent;
                     btn.classList.replace('btn-success', 'btn-classic-gold');
                     btn.disabled = false;
-                    
-                    // Optional: Reload to reflect logo changes
-                    // window.location.reload(); 
                 }, 1500);
             } else {
                 throw new Error(result.message || 'Save failed');
@@ -637,8 +639,9 @@
         }
     });
 
-    // 5. Logout Function
+    // --- 6. LOGOUT FUNCTION ---
     function logout() {
+        localStorage.removeItem('erp-token'); // Clear specific token
         localStorage.clear();
         window.location.href = '/login.html';
     }

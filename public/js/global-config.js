@@ -1,13 +1,11 @@
 /**
  * Global Configuration Loader (Enterprise ERP)
  * ---------------------------------------------
- * This script runs on EVERY page load.
- * It fetches settings from LocalStorage (fast) or Server (slow)
- * and applies branding, currency, school info, and logic globally.
+ * Final Version: Fixed Token Key Mismatch ('erp-token')
+ * This script runs on EVERY page load to apply settings globally.
  */
 
 const SETTINGS_CACHE_KEY = 'erp_settings';
-// Unique variable name to prevent conflicts with other scripts
 const GLOBAL_CONFIG_API = '/api/settings/config/current'; 
 
 // Run immediately when DOM is ready
@@ -20,7 +18,8 @@ async function initGlobalSettings() {
     
     // 1. If Cache Miss (First time load or Cache Cleared)
     if (!settings) {
-        const token = localStorage.getItem('token');
+        // FIX: Changed 'token' to 'erp-token' to match your Login System
+        const token = localStorage.getItem('erp-token');
         
         // Only fetch if user is logged in
         if (token) {
@@ -29,9 +28,11 @@ async function initGlobalSettings() {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
+                // --- SECURITY UPDATE: PREVENT AUTO LOGOUT ---
                 if (res.status === 401) {
-                    console.warn("Session expired or invalid token.");
-                    // Optional: window.location.href = '/login.html'; 
+                    console.warn("Session warning: Server returned 401.");
+                    // We DO NOT redirect here automatically to prevent issues during server restarts
+                    // window.location.href = '/login.html'; 
                     return;
                 }
 
@@ -105,19 +106,14 @@ function applySettingsToUI(config) {
     }
 
     // --- E. Feature Toggles (Hide/Show Modules) ---
-    
-    // Multi-Tenant Mode
     if (config.multi_tenant_mode === false) {
         document.querySelectorAll('.module-tenant-switch').forEach(el => el.style.display = 'none');
     }
-
-    // SMS Panel (Hide if provider not configured)
     if (!config.sms_provider) {
         document.querySelectorAll('.module-sms-panel').forEach(el => el.style.display = 'none');
     }
 
     // --- F. Theme Colors (Advanced CSS Variables) ---
-    // If you add a 'theme_color' field in DB later, this will work automatically
     if (config.theme_primary_color) {
         document.documentElement.style.setProperty('--primary-color', config.theme_primary_color);
         document.documentElement.style.setProperty('--classic-gold', config.theme_secondary_color);
@@ -126,7 +122,6 @@ function applySettingsToUI(config) {
 
 /**
  * Helper: Force Reload Settings
- * Call this function after saving settings in Admin Panel to refresh cache immediately.
  */
 function refreshGlobalSettings() {
     localStorage.removeItem(SETTINGS_CACHE_KEY);

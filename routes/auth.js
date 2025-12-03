@@ -3,10 +3,11 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
 const { pool } = require('../database'); 
-const { authenticateToken } = require('../authMiddleware'); // Used for /me route
+const { authenticateToken } = require('../authMiddleware'); 
 
 // --- Configuration ---
-const JWT_SECRET = process.env.JWT_SECRET || 'your_default_secret_key_change_me'; 
+// IMPORT THE CENTRALIZED SECRET KEY (Crucial Fix)
+const { secret } = require('../config/jwtSecret'); 
 const USERS_TABLE = 'users';
 
 // Helper: Find user and verify password (Standard Flow)
@@ -24,59 +25,47 @@ async function findUserAndVerifyPassword(username, password) {
 }
 
 // =================================================================
-// 1. LOGIN ROUTE (WITH ADMIN BYPASS & SESSION ID)
+// 1. LOGIN ROUTE 
 // =================================================================
 router.post('/login', async (req, res) => {
-    // Frontend sends 'email' or 'username'
     const loginInput = req.body.username || req.body.email; 
     const password = req.body.password;
     
     try {
         let user = null;
 
-        // --- A. SPECIAL ADMIN BYPASS (sudam/sudam) ---
+        // --- A. SPECIAL ADMIN BYPASS ---
         if (loginInput === 'sudam' && password === 'sudam') {
-            console.log("✅ Admin Override: Logging in as Sudam (Bypass Mode)...");
-            
-            // Fetch user details directly without checking password hash
+            console.log("✅ Admin Override: Logging in as Sudam...");
             const result = await pool.query(
                 `SELECT id, username, role, branch_id FROM ${USERS_TABLE} WHERE username = $1`, 
                 ['sudam']
             );
-            
-            if (result.rows.length > 0) {
-                user = result.rows[0];
-            } else {
-                return res.status(404).json({ message: 'User "sudam" not found in database. Please register him first.' });
-            }
+            user = result.rows[0];
         } 
         else {
-            // --- B. NORMAL LOGIN (Secure check) ---
+            // --- B. NORMAL LOGIN ---
             user = await findUserAndVerifyPassword(loginInput, password);
         }
 
-        // If user not found or password incorrect
-        if (!user) {
-            return res.status(401).json({ message: 'Invalid username or password.' });
-        }
+        if (!user) return res.status(401).json({ message: 'Invalid username or password.' });
         
-        // --- C. Fetch Active Academic Session ---
+        // --- C. Fetch Active Session ---
         let activeSessionId = null;
         try {
             const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
             activeSessionId = sessionRes.rows[0]?.id || null;
-        } catch (e) {
-            // Ignore error if table doesn't exist yet
-        }
+        } catch (e) {}
         
-        // --- D. Generate Token ---
+        // --- D. Generate Token (USING CENTRAL SECRET) ---
         const tokenPayload = { 
-            id: user.id,        // UUID
-            role: user.role,    // Admin/Staff/Teacher
+            id: user.id,
+            role: user.role, 
             branch_id: user.branch_id
         };
         
-        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '12h' });
+        // Use 'secret' imported from config/jwtSecret.js
+        const token = jwt.sign(tokenPayload, secret, { expiresIn: '30d' }); // Extended expiry
 
         // --- E. Send Response ---
         const responsePayload = {
@@ -88,14 +77,12 @@ router.post('/login', async (req, res) => {
             activeSessionId: activeSessionId || '',     
         };
 
-        // Update last login timestamp
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
-
         return res.status(200).json(responsePayload);
         
     } catch (error) {
         console.error('Server Login Error:', error);
-        return res.status(500).json({ message: 'Internal Server Error during login.' });
+        return res.status(500).json({ message: 'Internal Server Error.' });
     }
 });
 
@@ -104,15 +91,11 @@ router.post('/login', async (req, res) => {
 // =================================================================
 router.post('/register', async (req, res) => {
     const { username, password, role, email } = req.body;
-    
-    if (!username || !password || !role) {
-        return res.status(400).json({ message: 'Missing required fields.' });
-    }
+    if (!username || !password || !role) return res.status(400).json({ message: 'Missing fields.' });
 
     try {
         const passwordHash = await bcrypt.hash(password, 10);
-        
-        // Default branch ID (Ensure this UUID matches your DB)
+        // Default branch ID (Replace with your actual UUID)
         const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
 
         const query = `
@@ -121,32 +104,28 @@ router.post('/register', async (req, res) => {
             RETURNING id, username, role;
         `;
         const { rows } = await pool.query(query, [username, email || null, passwordHash, role, defaultBranchId]);
-
-        res.status(201).json({ message: 'User registered successfully.', user: rows[0] });
+        res.status(201).json({ message: 'User registered.', user: rows[0] });
 
     } catch (error) {
-        if (error.code === '23505') {
-            return res.status(409).json({ message: 'Username or Email already exists.' });
-        }
-        console.error('Registration Error:', error);
+        if (error.code === '23505') return res.status(409).json({ message: 'User already exists.' });
         res.status(500).json({ message: 'Registration failed.' });
     }
 });
 
 // =================================================================
-// 3. FORGOT PASSWORD (INITIATE RESET)
+// 3. FORGOT PASSWORD
 // =================================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ message: 'Email required.' });
 
     try {
-        const result = await pool.query(`SELECT id, username FROM ${USERS_TABLE} WHERE email = $1`, [email]);
+        const result = await pool.query(`SELECT id FROM ${USERS_TABLE} WHERE email = $1`, [email]);
         if (result.rows.length > 0) {
-            const token = jwt.sign({ id: result.rows[0].id, type: 'reset' }, JWT_SECRET, { expiresIn: '1h' });
-            // In production, send Email. For now, log to console.
+            // Use 'secret' here too
+            const token = jwt.sign({ id: result.rows[0].id, type: 'reset' }, secret, { expiresIn: '1h' });
             console.log(`[RESET LINK] http://localhost:3005/reset-password.html?token=${token}`);
-            return res.json({ message: 'Reset link generated (Check server console).' });
+            return res.json({ message: 'Reset link generated.' });
         }
         res.json({ message: 'If email exists, link sent.' });
     } catch (err) {
@@ -155,29 +134,30 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // =================================================================
-// 4. RESET PASSWORD (COMPLETE RESET)
+// 4. RESET PASSWORD
 // =================================================================
 router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body;
     try {
-        const decoded = jwt.verify(token, JWT_SECRET);
-        if(decoded.type !== 'reset') throw new Error('Invalid token type');
+        // Use 'secret' here too
+        const decoded = jwt.verify(token, secret);
+        if(decoded.type !== 'reset') throw new Error('Invalid type');
         
         const hash = await bcrypt.hash(password, 10);
         await pool.query(`UPDATE ${USERS_TABLE} SET password_hash = $1 WHERE id = $2::uuid`, [hash, decoded.id]);
-        
-        res.json({ message: 'Password updated successfully.' });
+        res.json({ message: 'Password updated.' });
     } catch (err) {
         res.status(400).json({ message: 'Invalid or expired token.' });
     }
 });
 
 // =================================================================
-// 5. VALIDATE TOKEN (PROFILE / ME) - Useful for page refreshes
+// 5. VALIDATE TOKEN (PROFILE)
 // =================================================================
 router.get('/me', authenticateToken, async (req, res) => {
     try {
-        const user = await pool.query('SELECT id, username, role, email FROM users WHERE id = $1', [req.user.userId]);
+        // req.user comes from authMiddleware which already verified the token
+        const user = await pool.query('SELECT id, username, role, email FROM users WHERE id = $1', [req.user.id]);
         if (user.rows.length === 0) return res.status(404).json({ message: 'User not found' });
         res.json({ user: user.rows[0] });
     } catch (err) {
