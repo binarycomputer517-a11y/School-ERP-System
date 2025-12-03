@@ -2,71 +2,309 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alumni Management</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        /* Base Styles */
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; }
+        .container { max-width: 1000px; margin: 30px auto; padding: 25px; background: #fff; box-shadow: 0 4px 15px rgba(0,0,0,0.1); border-radius: 10px; }
+        
+        /* Stats Dashboard */
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 30px; }
+        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-card h3 { font-size: 2.5em; margin: 0; }
+        .stat-card p { margin: 5px 0 0; opacity: 0.9; font-size: 0.9em; text-transform: uppercase; letter-spacing: 1px; }
+        .stat-card:nth-child(2) { background: linear-gradient(135deg, #2af598 0%, #009efd 100%); }
+        .stat-card:nth-child(3) { background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%); color: #333; }
+
+        /* Form Styling */
+        form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; background: #f9f9f9; padding: 25px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 30px; }
+        form label { font-weight: 600; color: #555; margin-bottom: 5px; display: block; }
+        form .full-width { grid-column: span 2; }
+        input, select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; box-sizing: border-box; }
+        button[type="submit"] { grid-column: span 2; background-color: #4CAF50; color: white; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; font-weight: bold; transition: background 0.3s; }
+        button[type="submit"]:hover { background-color: #45a049; }
+
+        /* Controls Bar */
+        .controls-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+        .search-box { position: relative; width: 60%; }
+        .search-box input { padding-left: 35px; }
+        .search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #aaa; }
+        .btn-export { background-color: #008CBA; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; cursor: pointer; border: none; }
+
+        /* Table Styling */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border-bottom: 1px solid #eee; padding: 12px; text-align: left; }
+        th { background-color: #f8f8f8; color: #333; font-weight: 600; }
+        tr:hover { background-color: #f1f1f1; }
+        .action-btn { background: none; border: none; cursor: pointer; color: #666; transition: 0.2s; margin: 0 5px; font-size: 1.1em; }
+        .action-btn.delete:hover { color: #e74c3c; transform: scale(1.2); }
+        .action-btn.id-card:hover { color: #3498db; transform: scale(1.2); }
+        .linkedin-link { color: #0077b5; font-size: 1.2em; }
+        
+        .nav-links a { text-decoration: none; color: #666; font-size: 0.9em; display: inline-block; margin-bottom: 20px; }
+
+        /* --- NEW: ID CARD MODAL STYLES --- */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fff; margin: 10% auto; padding: 0; width: 400px; border-radius: 15px; overflow: hidden; position: relative; box-shadow: 0 5px 25px rgba(0,0,0,0.2); animation: slideDown 0.3s ease; }
+        @keyframes slideDown { from {top: -50px; opacity: 0;} to {top: 0; opacity: 1;} }
+        
+        .id-card-design { width: 400px; height: 250px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; position: relative; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; }
+        .id-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.3); padding-bottom: 10px; }
+        .school-name { font-size: 18px; font-weight: bold; letter-spacing: 1px; }
+        .id-badge { background: #ffd700; color: #333; padding: 3px 8px; border-radius: 10px; font-size: 10px; font-weight: bold; text-transform: uppercase; }
+        
+        .id-body { display: flex; margin-top: 15px; align-items: center; }
+        .id-photo { width: 80px; height: 80px; background: #ddd; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #888; margin-right: 20px; overflow: hidden;}
+        .id-photo img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .id-details h2 { margin: 0; font-size: 20px; }
+        .id-details p { margin: 3px 0; font-size: 13px; opacity: 0.9; }
+        .id-footer { font-size: 10px; text-align: center; opacity: 0.7; margin-top: 10px; }
+        
+        .close-modal { position: absolute; right: 15px; top: 10px; font-size: 20px; color: #fff; cursor: pointer; z-index: 10; }
+        .print-btn { display: block; width: 100%; padding: 15px; background: #333; color: white; text-align: center; border: none; cursor: pointer; font-size: 16px; }
+        .print-btn:hover { background: #555; }
+    </style>
 </head>
 <body>
+
 <script>
     const token = localStorage.getItem('erp-token');
-    if (!token || localStorage.getItem('user-role') !== 'Admin') window.location.href = '/login';
+    if (!token) window.location.href = '/login.html';
 </script>
+
 <div class="container">
-    <h1>Alumni Management</h1>
-    <div class="nav-links"><a href="/admin-dashboard.html">Back to Dashboard</a></div>
-    <h2>Add Student to Alumni Network</h2>
+    <div class="nav-links"><a href="/admin-dashboard.html"><i class="fas fa-arrow-left"></i> Back to Dashboard</a></div>
+    
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h1><i class="fas fa-user-graduate"></i> Alumni Management</h1>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3 id="stat-total">0</h3>
+            <p>Total Alumni</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="stat-year">0</h3>
+            <p>Graduated This Year</p>
+        </div>
+        <div class="stat-card">
+            <h3 id="stat-profession">-</h3>
+            <p>Top Profession</p>
+        </div>
+    </div>
+
+    <h2>Add New Alumni</h2>
     <form id="alumni-form">
-        <label for="student-select">Select Graduated Student:</label>
-        <select id="student-select" name="student_id" required></select>
-        <label for="passing_year">Passing Year:</label>
-        <input type="number" id="passing_year" name="passing_year" placeholder="e.g., 2024" required>
-        <label for="current_profession">Current Profession:</label>
-        <input type="text" id="current_profession" name="current_profession">
-        <button type="submit">Add to Alumni</button>
+        <div class="full-width">
+            <label>Select Graduated Student</label>
+            <select id="student-select" name="student_id" required>
+                <option value="">Loading students...</option>
+            </select>
+        </div>
+        <div>
+            <label>Passing Year</label>
+            <input type="number" name="passing_year" placeholder="YYYY" required>
+        </div>
+        <div>
+            <label>Current Profession</label>
+            <input type="text" name="current_profession" placeholder="e.g. Engineer">
+        </div>
+        <div>
+            <label>Current Company</label>
+            <input type="text" name="current_company" placeholder="e.g. Google">
+        </div>
+        <div>
+            <label>LinkedIn Profile URL</label>
+            <input type="url" name="linkedin_profile" placeholder="https://linkedin.com/in/...">
+        </div>
+        <button type="submit"><i class="fas fa-plus-circle"></i> Add to Network</button>
     </form>
-    <h2 style="margin-top: 40px;">Alumni List</h2>
+
+    <div class="controls-bar">
+        <div class="search-box">
+            <i class="fas fa-search"></i>
+            <input type="text" id="search-input" placeholder="Search by name, company or year..." onkeyup="filterTable()">
+        </div>
+        <button onclick="exportToCSV()" class="btn-export"><i class="fas fa-file-csv"></i> Export CSV</button>
+    </div>
+
     <table>
-        <thead><tr><th>Student Name</th><th>Passing Year</th><th>Profession</th></tr></thead>
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Year</th>
+                <th>Profession & Company</th>
+                <th>Network</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
         <tbody id="alumni-list-body"></tbody>
     </table>
 </div>
+
+<div id="idCardModal" class="modal">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal()">&times;</span>
+        <div id="card-to-print" class="id-card-design">
+            <div class="id-header">
+                <span class="school-name"><i class="fas fa-university"></i> SCHOOL ERP</span>
+                <span class="id-badge">ALUMNI</span>
+            </div>
+            <div class="id-body">
+                <div class="id-photo" id="card-photo">
+                    <i class="fas fa-user"></i>
+                </div>
+                <div class="id-details">
+                    <h2 id="card-name">Student Name</h2>
+                    <p><b>Batch:</b> <span id="card-year">2024</span></p>
+                    <p><b>Profession:</b> <span id="card-prof">Engineer</span></p>
+                    <p><b>ID No:</b> <span id="card-id">ALU-001</span></p>
+                </div>
+            </div>
+            <div class="id-footer">
+                Authorized Alumni Member Card<br>Valid Forever
+            </div>
+        </div>
+        <button class="print-btn" onclick="printCard()"><i class="fas fa-print"></i> Print ID Card</button>
+    </div>
+</div>
+
 <script>
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+    let alumniData = []; 
 
-    async function loadDropdownsAndList() {
+    async function loadData() {
         try {
-            // Fetch and populate students
-            const studentSelect = document.getElementById('student-select');
-            // Check for success status before parsing JSON
-            const studentRes = await fetch('/api/students', { headers: authHeaders });
-            if (!studentRes.ok) throw new Error(`Failed to fetch students: ${studentRes.status}`);
-            const students = await studentRes.json();
-
-            studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
+            // Fetch Candidates
+            const candRes = await fetch('/api/alumni/candidates', { headers: { 'Authorization': `Bearer ${token}` } });
+            const candidates = await candRes.json();
+            const select = document.getElementById('student-select');
             
-            // FIX: Filter out students with null/undefined ID and use first_name/last_name for display
-            studentSelect.innerHTML += students
-                .filter(s => s.id) 
-                .map(s => 
-                    `<option value="${s.id}">${s.first_name} ${s.last_name}</option>`
-                ).join('');
+            if (candidates.length > 0) {
+                select.innerHTML = '<option value="">-- Select Student --</option>' + 
+                    candidates.map(s => `<option value="${s.student_id}">${s.first_name} ${s.last_name} (${s.enrollment_no || 'N/A'})</option>`).join('');
+            } else {
+                select.innerHTML = '<option value="">No eligible students found</option>';
+            }
 
-            // Fetch and display alumni
-            const alumniRes = await fetch('/api/alumni', { headers: authHeaders });
-            // Check for success status 
-            if (!alumniRes.ok) throw new Error(`Failed to fetch alumni: ${alumniRes.status}`);
+            // Fetch Alumni List
+            const alumRes = await fetch('/api/alumni', { headers: { 'Authorization': `Bearer ${token}` } });
+            alumniData = await alumRes.json();
+            
+            renderTable(alumniData);
+            updateStats(alumniData);
 
-            const alumni = await alumniRes.json();
-            const tableBody = document.getElementById('alumni-list-body');
-            tableBody.innerHTML = '';
-            // student_name field is expected from the updated backend query (alumni.js)
-            alumni.forEach(alum => {
-                tableBody.innerHTML += `<tr><td>${alum.student_name}</td><td>${alum.passing_year}</td><td>${alum.current_profession || 'N/A'}</td></tr>`;
-            });
         } catch (err) {
-            console.error("Failed to load data:", err);
-            // Alert uses the error message to provide more context
-            alert("Could not load page data. Please try again. Details: " + err.message);
+            console.error("Error:", err);
         }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('alumni-list-body');
+        tbody.innerHTML = '';
+        
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px;">No records found</td></tr>';
+            return;
+        }
+
+        data.forEach(item => {
+            const company = item.current_company ? ` at <b>${item.current_company}</b>` : '';
+            const profession = item.current_profession || 'Not Specified';
+            const linkedin = item.linkedin_profile 
+                ? `<a href="${item.linkedin_profile}" target="_blank" class="linkedin-link"><i class="fab fa-linkedin"></i></a>` 
+                : '<span style="color:#ccc"><i class="fab fa-linkedin"></i></span>';
+
+            tbody.innerHTML += `
+                <tr>
+                    <td><b>${item.student_name}</b></td>
+                    <td>${item.passing_year}</td>
+                    <td>${profession}${company}</td>
+                    <td style="text-align:center;">${linkedin}</td>
+                    <td>
+                        <button class="action-btn id-card" onclick="openIDCard('${item.student_name}', '${item.passing_year}', '${item.current_profession || 'N/A'}', '${item.id}')" title="Generate ID Card">
+                            <i class="fas fa-id-card"></i>
+                        </button>
+                        <button class="action-btn delete" onclick="deleteAlumni(${item.id})" title="Delete">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    // --- ID CARD FUNCTIONS ---
+    function openIDCard(name, year, profession, id) {
+        document.getElementById('card-name').innerText = name;
+        document.getElementById('card-year').innerText = year;
+        document.getElementById('card-prof').innerText = profession;
+        document.getElementById('card-id').innerText = 'ALU-' + String(id).padStart(4, '0');
+        
+        // Show Modal
+        document.getElementById('idCardModal').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.getElementById('idCardModal').style.display = 'none';
+    }
+
+    function printCard() {
+        const printContent = document.getElementById('card-to-print').outerHTML;
+        const win = window.open('', '', 'width=500,height=400');
+        win.document.write('<html><head><title>Print ID Card</title>');
+        // Re-inject simplistic styles for printing
+        win.document.write('<style>body{margin:0; padding:20px; display:flex; justify-content:center;} .id-card-design { width: 400px; height: 250px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; font-family: sans-serif; border-radius:10px; -webkit-print-color-adjust: exact; } .id-header{border-bottom:1px solid #ccc; padding-bottom:10px; display:flex; justify-content:space-between;} .id-photo{width:80px; height:80px; background:#ddd; border-radius:50%; float:left; margin-right:20px;} .id-badge{background:gold; color:black; padding:2px 5px; border-radius:5px; font-size:10px; font-weight:bold;} </style>');
+        win.document.write('</head><body>');
+        win.document.write(printContent);
+        win.document.write('</body></html>');
+        win.document.close();
+        win.print();
+    }
+    // ------------------------
+
+    function updateStats(data) {
+        document.getElementById('stat-total').innerText = data.length;
+        const currentYear = new Date().getFullYear();
+        document.getElementById('stat-year').innerText = data.filter(d => d.passing_year == currentYear).length;
+        const professions = data.map(d => d.current_profession).filter(Boolean);
+        if(professions.length > 0) {
+            const mode = professions.sort((a,b) => professions.filter(v => v===a).length - professions.filter(v => v===b).length).pop();
+            document.getElementById('stat-profession').innerText = mode;
+        }
+    }
+
+    function filterTable() {
+        const term = document.getElementById('search-input').value.toLowerCase();
+        const filtered = alumniData.filter(item => 
+            item.student_name.toLowerCase().includes(term) || 
+            (item.current_company && item.current_company.toLowerCase().includes(term))
+        );
+        renderTable(filtered);
+    }
+
+    async function deleteAlumni(id) {
+        if(!confirm('Are you sure you want to remove this record?')) return;
+        try {
+            const res = await fetch(`/api/alumni/${id}`, { method: 'DELETE', headers: authHeaders });
+            if(res.ok) loadData();
+        } catch(e) { console.error(e); }
+    }
+
+    function exportToCSV() {
+        let csv = "data:text/csv;charset=utf-8,Name,Year,Profession,Company,LinkedIn\n";
+        alumniData.forEach(row => {
+            csv += `${row.student_name},${row.passing_year},${row.current_profession},${row.current_company},${row.linkedin_profile}\n`;
+        });
+        const link = document.createElement("a");
+        link.setAttribute("href", encodeURI(csv));
+        link.setAttribute("download", "alumni_data.csv");
+        document.body.appendChild(link);
+        link.click();
     }
 
     document.getElementById('alumni-form').addEventListener('submit', function(e) {
@@ -74,24 +312,15 @@
         const data = Object.fromEntries(new FormData(e.target).entries());
         fetch('/api/alumni', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
+            headers: authHeaders,
             body: JSON.stringify(data)
         }).then(res => {
-            if (res.ok) {
-                alert('Alumni record added!');
-                this.reset();
-                loadDropdownsAndList(); // Reload everything
-            } else {
-                // Handle JSON error response from the fixed backend
-                res.json().then(json => alert('Error: ' + (json.error || json.details))).catch(() => {
-                    res.text().then(text => alert('Error: ' + text));
-                });
-            }
+            if (res.ok) { alert('Added!'); e.target.reset(); loadData(); }
+            else alert('Error!');
         });
     });
 
-    window.onload = loadDropdownsAndList;
+    window.onload = loadData;
 </script>
-<script src="js/global-config.js"></script>
 </body>
 </html>
