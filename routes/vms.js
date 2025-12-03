@@ -3,21 +3,47 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 
-// NOTE: This route assumes you have a 'visitor_log' table created in your database.
+// ==========================================
+// 1. PUBLIC: Host Lookup (Autocomplete)
+// This is critical for the search bar to work
+// ==========================================
+router.get('/hosts', async (req, res) => {
+    const searchQuery = req.query.query || '';
 
-// Route for visitor check-in (POST /api/vms/checkin)
-// This route is deliberately left PUBLIC in server.js for visitor access.
+    // Don't search if the user hasn't typed enough characters
+    if (searchQuery.length < 3) return res.json([]);
+
+    try {
+        // Search for Teachers, Admins, or Staff whose name matches the input
+        // Returns ID (UUID), Name, and Email
+        const query = `
+            SELECT id, first_name || ' ' || last_name as name, email 
+            FROM users 
+            WHERE (role = 'Teacher' OR role = 'Admin' OR role = 'Staff')
+            AND (first_name ILIKE $1 OR last_name ILIKE $1)
+            LIMIT 5
+        `;
+        const result = await pool.query(query, [`%${searchQuery}%`]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Host lookup error:', err);
+        res.status(500).json({ error: 'Search failed' });
+    }
+});
+
+// ==========================================
+// 2. PUBLIC: Visitor Check-In
+// ==========================================
 router.post('/checkin', async (req, res) => {
     const { visitor_name, company, purpose, host_id, badge_type, scanned_id } = req.body;
     
-    // Validation: The frontend ensures host_id is a UUID, but we check if it's present.
+    // Validation
     if (!visitor_name || !host_id || !purpose) {
-        return res.status(400).json({ message: 'Missing required visitor information (name, host ID, purpose).' });
+        return res.status(400).json({ message: 'Missing required visitor information.' });
     }
 
     try {
-        // Log the visitor check-in to the visitor_log table
-        // This query expects host_id to be a valid UUID.
+        // Insert into visitor_log table
         await pool.query(
             `INSERT INTO visitor_log 
             (visitor_name, company, purpose, host_id, badge_type, scanned_id, check_in_time) 
@@ -25,7 +51,7 @@ router.post('/checkin', async (req, res) => {
             [visitor_name, company, purpose, host_id, badge_type, scanned_id]
         );
 
-        console.log(`[VMS] Visitor Check-in: ${visitor_name} to see Host ID ${host_id}`);
+        console.log(`[VMS] Visitor Check-in: ${visitor_name} visiting Host ID ${host_id}`);
 
         res.status(200).json({ 
             message: 'Visitor successfully checked in and host notified.',
@@ -34,11 +60,10 @@ router.post('/checkin', async (req, res) => {
 
     } catch (err) {
         console.error('Error processing VMS check-in:', err);
-        // Respond with JSON error
-        // The front-end expects a specific response if the host_id (UUID) is invalid.
+        // Handle Invalid UUID error specific to Postgres
         if (err.code === '22P02') {
             return res.status(400).json({ 
-                message: 'Invalid Host ID format (must be UUID). Host selection may have failed.',
+                message: 'Invalid Host ID format. Please select a valid host from the list.',
                 details: err.message 
             });
         }

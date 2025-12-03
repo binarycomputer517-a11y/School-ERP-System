@@ -1,7 +1,6 @@
 /**
  * SERVER.JS
- * Entry point for the Student Management System (ERP)
- * Structure: Imports -> Config -> Middleware -> Routes -> Error Handling -> Startup
+ * Entry point for the School ERP System
  */
 
 // ===================================
@@ -14,7 +13,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
-const morgan = require('morgan'); // Request logger (install via: npm install morgan)
+const morgan = require('morgan'); 
 
 // --- Custom Modules ---
 const { initializeDatabase, pool } = require('./database');
@@ -46,13 +45,13 @@ app.set('upload', multerInstance);
 // 2. GLOBAL MIDDLEWARE
 // ===================================
 
-// Logging (Optional: Remove if you don't want logs in console)
+// Logging
 app.use(morgan('dev'));
 
 // Security & Parsing
 app.use(cors());
 app.use(express.json({
-    verify: (req, res, buf) => { req.rawBody = buf.toString(); } // Useful for Webhooks (Stripe etc.)
+    verify: (req, res, buf) => { req.rawBody = buf.toString(); } 
 }));
 app.use(express.urlencoded({ extended: true }));
 
@@ -65,15 +64,8 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 // 3. REAL-TIME SOCKET LOGIC
 // ===================================
 io.on('connection', (socket) => {
-    // console.log(`⚡ Socket Connected: ${socket.id}`);
-
     socket.on('join_conversation', (conversationId) => {
         socket.join(conversationId);
-        // console.log(`Socket ${socket.id} joined room: ${conversationId}`);
-    });
-
-    socket.on('disconnect', () => {
-        // console.log(`Socket Disconnected: ${socket.id}`);
     });
 });
 
@@ -83,9 +75,9 @@ io.on('connection', (socket) => {
 
 // --- A. PUBLIC ROUTES (No Token Required) ---
 app.use('/api/auth', require('./routes/auth'));
-app.use('/api/dashboard', require('./routes/dashboard')); // Dashboard stats usually public to logged in users via frontend check
+app.use('/api/dashboard', require('./routes/dashboard')); 
 app.use('/api/users', require('./routes/users')); 
-app.use('/api/vms', require('./routes/vms')); // Visitor Management usually needs public access
+app.use('/api/vms', require('./routes/vms')); 
 
 // --- B. PROTECTED ROUTES (JWT Token Required) ---
 // All routes mounted below this line require a valid Bearer Token
@@ -134,7 +126,12 @@ app.use('/api/transport', require('./routes/transport'));
 app.use('/api/hostel', require('./routes/hostel'));
 app.use('/api/cafeteria', require('./routes/cafeteria'));
 app.use('/api/library', require('./routes/library'));
-app.use('/api', require('./routes/inventory-with-assets'));
+
+// ✅ FIXED: Changed from '/api' to '/api/inventory' to prevent blocking other routes
+app.use('/api/inventory', require('./routes/inventory-with-assets'));
+
+// ✅ NEW: IT Helpdesk Route
+app.use('/api/it-helpdesk', require('./routes/it-helpdesk'));
 
 // General Modules
 app.use('/api/enquiries', require('./routes/enquiries'));
@@ -151,23 +148,22 @@ app.use('/api/reports', require('./routes/reports'));
 // Specific Static Pages
 app.get('/', (req, res) => res.redirect('/login'));
 app.get('/login', (req, res) => res.sendFile(path.join(__dirname, 'public', 'login.html')));
-app.get('/exam-management.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'exam-management.html')));
 
-// Catch-all Handler (For SPA behavior or 404s)
+// Catch-all Handler
 app.use((req, res, next) => {
     const url = req.originalUrl;
     
-    // If it's an API request that wasn't handled above, return 404 JSON
+    // API 404
     if (url.startsWith('/api')) {
         return res.status(404).json({ success: false, message: "API Endpoint not found." });
     }
 
-    // If it looks like a file request (has extension) but missing, return 404
+    // Missing Files
     if (url.includes('.') && !url.endsWith('.html')) {
         return res.status(404).send("File not found");
     }
 
-    // Otherwise, serve the Dashboard (or 404 page if you prefer)
+    // Default to Dashboard
     res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
@@ -176,7 +172,6 @@ app.use((req, res, next) => {
 // ===================================
 app.use((err, req, res, next) => {
     console.error("🔥 Global Error:", err.stack);
-    
     const statusCode = err.status || 500;
     res.status(statusCode).json({
         success: false,
@@ -186,24 +181,22 @@ app.use((err, req, res, next) => {
 });
 
 // ===================================
-// 7. SERVER STARTUP & SHUTDOWN
+// 7. SERVER STARTUP
 // ===================================
 async function startServer() {
     try {
-        // 1. Initialize Directories
+        // Initialize Directories
         UPLOAD_DIRS.forEach(dir => {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         });
         
-        // 2. Connect Database
+        // Connect Database
         await initializeDatabase();
         console.log("✅ Database initialized successfully.");
 
-        // 3. Start Server
+        // Start Server
         server.listen(PORT, () => {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
-            
-            // 4. Start Background Services
             startNotificationService();
         });
 
@@ -213,10 +206,10 @@ async function startServer() {
     }
 }
 
-// Handle Graceful Shutdown (Ctrl+C or Docker Stop)
+// Graceful Shutdown
 process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down gracefully...');
-    await pool.end(); // Close DB connections
+    await pool.end();
     process.exit(0);
 });
 

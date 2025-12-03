@@ -6,15 +6,17 @@
     <title>Intelligent Visitor Management System (VMS)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    
+    <script type="text/javascript" src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+
     <style>
         body { background-color: #f8f9fa; font-family: sans-serif; }
         .vms-container { max-width: 900px; margin-top: 50px; }
         .card-checkin { border-radius: 15px; box-shadow: 0 8px 16px rgba(0,0,0,0.1); }
         .form-checkin h3 { color: #004d99; margin-bottom: 20px; font-weight: bold; }
         .form-control, .form-select { border-radius: 8px; }
-        .alert-status { border-radius: 8px; }
         
-        /* Advanced features styling */
+        /* Scanner Styles */
         #qr-scanner-view {
             border: 2px dashed #ccc;
             height: 250px;
@@ -25,11 +27,13 @@
             color: #6c757d;
             cursor: pointer;
             border-radius: 8px;
+            background: #fdfdfd;
+            overflow: hidden; 
+            position: relative;
         }
-        .scanner-active { border: 2px solid #28a745 !important; background-color: #f1fff6; }
-        .btn-toggle { transition: background-color 0.3s; }
+        .scanner-active { border: 2px solid #28a745 !important; background-color: #000 !important; }
+        video { width: 100%; height: 100%; object-fit: cover; }
 
-        /* Style for Autocomplete Suggestions */
         .host-suggestions {
             list-style: none;
             padding: 0;
@@ -44,15 +48,12 @@
             background: white;
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
-        .host-suggestions li {
-            padding: 8px 12px;
-            cursor: pointer;
-        }
-        .host-suggestions li:hover {
-            background-color: #e9ecef;
-        }
+        .host-suggestions li { padding: 8px 12px; cursor: pointer; }
+        .host-suggestions li:hover { background-color: #e9ecef; }
+        
+        /* Error highlighting */
+        .is-invalid-tab { color: #dc3545 !important; border-bottom: 2px solid #dc3545; }
     </style>
-    <script src="https://cdn.jsdelivr.net/npm/@zxing/library@0.19.1"></script>
 </head>
 <body>
     <div class="container vms-container">
@@ -63,71 +64,67 @@
 
         <div class="card card-checkin p-4">
             <div class="card-body">
-                <form id="checkin-form" class="form-checkin">
+                <form id="checkin-form" class="form-checkin" novalidate>
                     <h3 class="text-center mb-4">Visitor Information</h3>
 
                     <ul class="nav nav-tabs mb-4" id="entryTabs" role="tablist">
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link active" id="manual-tab" data-bs-toggle="tab" data-bs-target="#manual-entry" type="button" role="tab" aria-controls="manual-entry" aria-selected="true">
-                                <i class="fas fa-keyboard me-2"></i>Manual Entry
-                            </button>
+                            <button class="nav-link active" id="manual-tab" data-bs-toggle="tab" data-bs-target="#manual-entry" type="button" role="tab"><i class="fas fa-keyboard me-2"></i>Manual Entry</button>
                         </li>
                         <li class="nav-item" role="presentation">
-                            <button class="nav-link" id="scan-tab" data-bs-toggle="tab" data-bs-target="#scan-entry" type="button" role="tab" aria-controls="scan-entry" aria-selected="false">
-                                <i class="fas fa-qrcode me-2"></i>QR / ID Scan
-                            </button>
+                            <button class="nav-link" id="scan-tab" data-bs-toggle="tab" data-bs-target="#scan-entry" type="button" role="tab"><i class="fas fa-qrcode me-2"></i>QR / ID Scan</button>
                         </li>
                     </ul>
 
                     <div class="tab-content">
-                        <div class="tab-pane fade show active" id="manual-entry" role="tabpanel" aria-labelledby="manual-tab">
+                        <div class="tab-pane fade show active" id="manual-entry" role="tabpanel">
                             <div class="row g-3">
                                 <div class="col-md-6">
-                                    <label for="visitor-name" class="form-label">Full Name</label>
+                                    <label class="form-label">Full Name</label>
                                     <input type="text" class="form-control" id="visitor-name" name="visitor_name" required>
                                 </div>
                                 <div class="col-md-6">
-                                    <label for="visitor-company" class="form-label">Company/Organization</label>
-                                    <input type="text" class="form-control" id="visitor-company" name="visitor_company" required>
+                                    <label class="form-label">Company/Organization</label>
+                                    <input type="text" class="form-control" id="visitor-company" name="company" required>
                                 </div>
                                 <div class="col-12">
-                                    <label for="visitor-purpose" class="form-label">Purpose of Visit</label>
-                                    <textarea class="form-control" id="visitor-purpose" name="visitor_purpose" rows="2" required></textarea>
+                                    <label class="form-label">Purpose of Visit</label>
+                                    <textarea class="form-control" id="visitor-purpose" name="purpose" rows="2" required></textarea>
                                 </div>
                             </div>
                         </div>
 
-                        <div class="tab-pane fade" id="scan-entry" role="tabpanel" aria-labelledby="scan-tab">
+                        <div class="tab-pane fade" id="scan-entry" role="tabpanel">
                             <div class="d-grid gap-2 mb-3">
                                 <div id="qr-scanner-view" onclick="startScanner()">
                                     Click here to activate QR/Camera Scan (ID/Pre-registration)
                                 </div>
-                                <div id="scan-result" class="text-success small fw-bold mt-2" style="display:none;"></div>
+                                <div id="scan-result" class="text-success small fw-bold mt-2 text-center" style="display:none;"></div>
                             </div>
                         </div>
                     </div>
 
                     <hr class="my-4">
+                    
                     <div class="row g-3">
                         <div class="col-md-6 position-relative">
-                            <label for="host-id" class="form-label">Host Name or ID (Notification Target)</label>
-                            <input type="text" class="form-control" id="host-id" placeholder="Search and select host..." required>
+                            <label class="form-label">Host Name or ID</label>
+                            <input type="text" class="form-control" id="host-id" name="host_id" placeholder="Search host..." required autocomplete="off">
                             <ul id="host-suggestions" class="host-suggestions" style="display:none;"></ul>
                         </div>
                         
                         <div class="col-md-6">
-                            <label for="badge-type" class="form-label">Badge/Credential Type</label>
-                            <select class="form-select" id="badge-type">
+                            <label class="form-label">Badge Type</label>
+                            <select class="form-select" id="badge-type" name="badge_type">
                                 <option value="digital">Digital Pass (Email/SMS)</option>
                                 <option value="physical">Physical Badge</option>
                             </select>
                         </div>
                         <div class="col-12 mt-4">
                             <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="waiver-check" required>
+                                <input class="form-check-input" type="checkbox" id="waiver-check" name="waiver" required>
                                 <label class="form-check-label small" for="waiver-check">
-                                    I confirm my details are accurate and agree to the site's <a href="#" onclick="alert('Display full safety waiver/NDA policy here.')">Safety & NDA Policy</a>.
-                                    <i class="fas fa-signature text-secondary ms-2"></i>
+                                    I confirm details are accurate and agree to Policy.
                                 </label>
                             </div>
                         </div>
@@ -140,7 +137,6 @@
                     </div>
 
                     <div id="status-display" class="alert mt-3 alert-status text-center" style="display:none;"></div>
-
                 </form>
             </div>
         </div>
@@ -150,7 +146,7 @@
 
     <script>
         const API_CHECKIN_URL = '/api/vms/checkin'; 
-        const API_HOST_LOOKUP = '/api/users/hosts'; // Endpoint for host name lookup
+        const API_HOST_LOOKUP = '/api/vms/hosts'; 
 
         const checkinForm = document.getElementById('checkin-form');
         const checkinBtn = document.getElementById('checkin-btn');
@@ -160,181 +156,160 @@
         const hostInput = document.getElementById('host-id');
         const hostSuggestionsList = document.getElementById('host-suggestions');
         
-        let codeReader; // Global variable for ZXing CodeReader instance
-        let currentHostId = null; // Stores the selected host's ID
-        let currentHostTimeout; // For throttling host lookups
+        let codeReader = null;
+        let currentHostId = null; 
+        let currentHostTimeout;
 
-        // --- Utility Functions ---
         function displayStatus(message, className) {
             statusDisplay.textContent = message;
             statusDisplay.className = `alert mt-3 alert-status ${className}`;
             statusDisplay.style.display = 'block';
+            setTimeout(() => { statusDisplay.style.display = 'none'; }, 5000);
         }
 
-        function handleCheckinSuccess(visitorName) {
-            displayStatus(`Welcome, ${visitorName}! Host notified successfully.`, 'alert-success');
-            checkinForm.reset();
-            stopScanner();
-            localStorage.removeItem('scanned_data');
-            // Reset complex fields
-            hostInput.value = '';
-            currentHostId = null;
-        }
-
-        // --- Host Autocomplete Logic ---
+        // --- Host Autocomplete ---
         hostInput.addEventListener('input', () => {
             clearTimeout(currentHostTimeout);
             const query = hostInput.value.trim();
             hostSuggestionsList.style.display = 'none';
 
             if (query.length < 3) {
-                hostSuggestionsList.innerHTML = '';
-                currentHostId = null; // Clear ID if user types less than 3 chars
+                currentHostId = null;
                 return;
             }
 
-            // Throttle API calls
-            currentHostTimeout = setTimeout(() => fetchHostSuggestions(query), 300);
+            currentHostTimeout = setTimeout(async () => {
+                try {
+                    const res = await fetch(`${API_HOST_LOOKUP}?query=${encodeURIComponent(query)}`);
+                    const hosts = await res.json();
+                    
+                    hostSuggestionsList.innerHTML = '';
+                    if (hosts.length > 0) {
+                        hosts.forEach(host => {
+                            const li = document.createElement('li');
+                            li.textContent = `${host.name} (${host.email})`;
+                            li.onclick = () => {
+                                hostInput.value = host.name;
+                                currentHostId = host.id;
+                                hostSuggestionsList.style.display = 'none';
+                            };
+                            hostSuggestionsList.appendChild(li);
+                        });
+                        hostSuggestionsList.style.display = 'block';
+                    }
+                } catch (e) { console.error(e); }
+            }, 300);
         });
 
-        hostSuggestionsList.addEventListener('click', (e) => {
-            const listItem = e.target.closest('li');
-            if (listItem) {
-                hostInput.value = listItem.textContent.trim();
-                currentHostId = listItem.dataset.hostId; // Store the critical ID (UUID)
-                hostSuggestionsList.style.display = 'none';
-            }
-        });
-
-        async function fetchHostSuggestions(query) {
-            try {
-                // The 401 Unauthorized error is fixed by making this endpoint public in server.js
-                const response = await fetch(`${API_HOST_LOOKUP}?query=${encodeURIComponent(query)}`);
-                
-                if (!response.ok) {
-                    // This handles the case where the 401 error returns non-JSON (like "Unauthorized")
-                    throw new Error(`Host lookup failed: Server status ${response.status}`);
-                }
-
-                const hosts = await response.json();
-                
-                hostSuggestionsList.innerHTML = '';
-                if (hosts.length > 0) {
-                    hosts.forEach(host => {
-                        const li = document.createElement('li');
-                        // Assuming host object has id, name, and email fields
-                        li.textContent = `${host.name} (${host.email})`;
-                        li.dataset.hostId = host.id; // Store the critical ID
-                        hostSuggestionsList.appendChild(li);
-                    });
-                    hostSuggestionsList.style.display = 'block';
-                } else {
-                    hostSuggestionsList.innerHTML = '<li>No hosts found.</li>';
-                    hostSuggestionsList.style.display = 'block';
-                }
-
-            } catch (error) {
-                console.error('Host lookup failed:', error);
-                hostSuggestionsList.innerHTML = `<li>Error loading hosts.</li>`;
-                hostSuggestionsList.style.display = 'block';
-            }
-        }
-
-
-        // --- Check-in Submission ---
+        // --- Form Submission with Manual Validation (Fixes 'name' error) ---
         checkinForm.addEventListener('submit', async (e) => {
             e.preventDefault();
-            
-            if (!document.getElementById('waiver-check').checked) {
-                 displayStatus('Please agree to the Safety & NDA Policy.', 'alert-warning');
-                 return;
+
+            // Manually validate because we used 'novalidate'
+            if (!checkinForm.checkValidity()) {
+                e.stopPropagation();
+                
+                // If the error is in the hidden "Manual" tab, switch to it automatically
+                const visitorName = document.getElementById('visitor-name');
+                if (!visitorName.checkValidity()) {
+                    const manualTab = new bootstrap.Tab(document.querySelector('#manual-tab'));
+                    manualTab.show();
+                    setTimeout(() => visitorName.focus(), 100); 
+                }
+                
+                checkinForm.classList.add('was-validated'); 
+                displayStatus('Please fill in all required fields.', 'alert-danger');
+                return;
             }
             
-            // FIX: Validate that a Host ID (UUID) was actually selected
             if (!currentHostId) {
-                 displayStatus('Please search for and select a verified Host from the suggestions list.', 'alert-warning');
-                 checkinBtn.disabled = false;
+                 displayStatus('Please search and select a verified Host.', 'alert-warning');
                  return;
             }
 
             checkinBtn.disabled = true;
-            displayStatus('Processing check-in and notifying host...', 'alert-info');
+            checkinBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
             const payload = {
                 visitor_name: document.getElementById('visitor-name').value,
                 company: document.getElementById('visitor-company').value,
                 purpose: document.getElementById('visitor-purpose').value,
-                // CRITICAL: Use the verified UUID stored in currentHostId
-                host_id: currentHostId, 
+                host_id: currentHostId,
                 badge_type: document.getElementById('badge-type').value,
                 scanned_id: localStorage.getItem('scanned_data') || null 
             };
-            
 
             try {
-                // 1. Send Data to Backend
                 const response = await fetch(API_CHECKIN_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(payload)
                 });
                 
-                const data = await response.json().catch(() => ({ message: 'Server responded without JSON.' })); // Handle non-JSON response
+                const data = await response.json();
 
-                if (!response.ok) {
-                    displayStatus(data.message || 'Check-in failed due to server error. Status: ' + response.status, 'alert-danger');
-                    return;
+                if (response.ok) {
+                    displayStatus(`Welcome, ${payload.visitor_name}! Notification sent.`, 'alert-success');
+                    checkinForm.reset();
+                    checkinForm.classList.remove('was-validated');
+                    stopScanner();
+                    currentHostId = null;
+                } else {
+                    displayStatus(data.message || 'Check-in failed.', 'alert-danger');
                 }
-
-                // 2. Success
-                handleCheckinSuccess(payload.visitor_name);
-
             } catch (error) {
-                console.error('Check-in network error:', error);
-                displayStatus('A critical network error occurred. Could not connect to the server.', 'alert-danger');
+                displayStatus('Network Error. Please try again.', 'alert-danger');
             } finally {
                 checkinBtn.disabled = false;
+                checkinBtn.innerHTML = '<i class="fas fa-sign-in-alt me-2"></i>Sign In & Notify Host';
             }
         });
 
-        // --- Advanced Feature: QR Scanner Logic ---
-        
+        // --- QR Scanner (Fixed Video Playing Error) ---
         function startScanner() {
             if (typeof ZXing === 'undefined') {
-                 displayStatus('Scanner library not loaded. Cannot activate camera.', 'alert-danger');
+                 displayStatus('Scanner library failed to load.', 'alert-danger');
                  return;
             }
 
-            scannerView.innerHTML = '<video id="scanner-video" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;"></video>';
+            // ✅ FIX 3: Force reset to prevent "Already playing" error
+            if (codeReader) {
+                codeReader.reset();
+                codeReader = null;
+            }
+
             scannerView.classList.add('scanner-active');
-            scanResultElement.style.display = 'none';
-
+            scannerView.innerHTML = ''; // Clear previous elements
+            
+            const videoElem = document.createElement('video');
+            videoElem.id = 'video';
+            videoElem.style.width = '100%';
+            videoElem.style.height = '100%';
+            scannerView.appendChild(videoElem);
+            
             codeReader = new ZXing.BrowserMultiFormatReader();
-            const videoElement = document.getElementById('scanner-video');
-
-            codeReader.listVideoInputDevices()
-                .then((videoInputDevices) => {
-                    if (videoInputDevices.length > 0) {
-                        const deviceId = videoInputDevices[0].deviceId; 
-                        
-                        codeReader.decodeFromVideoDevice(deviceId, videoElement, (result, err) => {
-                            if (result) {
-                                console.log('Scanned Data:', result.text);
-                                handleScannedData(result.text);
-                                stopScanner();
-                            }
-                            // Note: No error handling here unless the camera fails completely
-                        });
-                    } else {
-                        displayStatus('No camera devices found.', 'alert-danger');
-                        stopScanner();
-                    }
-                })
-                .catch((err) => {
-                    console.error('Camera initialization failed:', err);
-                    displayStatus('Camera permission denied or device error.', 'alert-danger');
+            
+            codeReader.decodeFromVideoDevice(null, 'video', (result, err) => {
+                if (result) {
+                    console.log(result);
+                    // Mock: Fill form with scanned data
+                    document.getElementById('visitor-name').value = "Scanned Visitor"; 
+                    document.getElementById('visitor-company').value = "Scanned Company";
+                    
+                    scanResultElement.textContent = "✅ Scanned: " + result.text;
+                    scanResultElement.style.display = 'block';
+                    localStorage.setItem('scanned_data', result.text);
+                    
                     stopScanner();
-                });
+                    
+                    // Switch to manual tab to review details
+                    new bootstrap.Tab(document.querySelector('#manual-tab')).show();
+                }
+                // Suppress benign noise errors
+                if (err && !(err instanceof ZXing.NotFoundException)) {
+                    console.warn(err);
+                }
+            });
         }
 
         function stopScanner() {
@@ -342,43 +317,16 @@
                 codeReader.reset();
                 codeReader = null;
             }
-            scannerView.innerHTML = 'Click here to activate QR/Camera Scan (ID/Pre-registration)';
             scannerView.classList.remove('scanner-active');
-            scanResultElement.style.display = 'none';
+            scannerView.innerHTML = 'Click here to activate QR/Camera Scan (ID/Pre-registration)';
         }
-
-        function handleScannedData(data) {
-            // MOCK: Simulate parsing the scanned data to pre-fill the form (ID Scanning / OCR)
-            localStorage.setItem('scanned_data', data); 
-            
-            // Logic to derive name/company/purpose from complex data structure 'data'
-            document.getElementById('visitor-name').value = "Ms. Jane Doe (Verified)";
-            document.getElementById('visitor-company').value = "Tech Solutions Inc.";
-            document.getElementById('visitor-purpose').value = "QR Verified - Scheduled Board Meeting";
-            
-            scanResultElement.textContent = `✅ Data captured from QR/ID. Ready to sign in.`;
-            scanResultElement.style.display = 'block';
-
-            // Switch back to manual entry tab to review/submit
-            var tabEl = document.querySelector('#manual-tab')
-            var tab = new bootstrap.Tab(tabEl)
-            tab.show();
-        }
-
-        // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', () => {
-            // Ensure Bootstrap's tab functionality is initialized
-            const entryTabs = document.getElementById('entryTabs');
-            if (entryTabs) {
-                 entryTabs.addEventListener('shown.bs.tab', function (event) {
-                    // Stop scanner if manual tab is selected
-                    if (event.target.id === 'manual-tab') {
-                        stopScanner();
-                    }
-                });
+        
+        // Stop scanner if user switches tab manually
+        document.getElementById('entryTabs').addEventListener('shown.bs.tab', (e) => {
+            if (e.target.id === 'manual-tab') {
+                stopScanner();
             }
         });
     </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>
