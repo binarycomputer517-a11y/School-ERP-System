@@ -25,7 +25,6 @@
         }
         .content { padding: 30px; text-align: center; }
         .badge-valid { background: #d4edda; color: #155724; padding: 5px 15px; border-radius: 20px; font-weight: bold; display: inline-block; margin-bottom: 20px; }
-        .badge-invalid { background: #f8d7da; color: #721c24; padding: 5px 15px; border-radius: 20px; font-weight: bold; }
         
         .detail-row { display: flex; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid #eee; font-size: 0.95rem; }
         .detail-row:last-child { border-bottom: none; }
@@ -72,6 +71,10 @@
                         <span class="label">Issue Date</span>
                         <span class="value" id="v-date">...</span>
                     </div>
+                    <div class="detail-row">
+                        <span class="label">Status</span>
+                        <span class="value text-success">Active & Valid</span>
+                    </div>
                 </div>
             </div>
             <div class="footer">
@@ -82,24 +85,23 @@
         <div id="error-view">
             <i class="fas fa-times-circle text-danger" style="font-size: 60px;"></i>
             <h3 class="mt-3 text-danger">Invalid Certificate</h3>
-            <p class="text-muted">The certificate ID provided does not exist in our system or has been revoked.</p>
+            <p class="text-muted" id="error-msg">The certificate ID provided does not exist in our system or has been revoked.</p>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', async () => {
-            // 1. Get ID from URL (e.g., ?id=CERT-2025-TEST01)
             const params = new URLSearchParams(window.location.search);
             const uid = params.get('id');
 
             if (!uid) {
-                showError();
+                showError("No Certificate ID provided.");
                 return;
             }
 
             try {
-                // 2. Call the Public API
-                const response = await fetch(`/api/certificates/verify/${uid}`);
+                // ✅ CRITICAL FIX: Changed URL to Public API
+                const response = await fetch(`/api/public/verify/${uid}`);
                 
                 if (response.ok) {
                     const data = await response.json();
@@ -115,21 +117,32 @@
 
         function showSuccess(data) {
             document.getElementById('loading').style.display = 'none';
+
+            // Handle Revoked Certificates
+            if(data.status === 'Revoked') {
+                showError("This certificate has been REVOKED.");
+                const msg = document.getElementById('error-msg');
+                msg.innerHTML = `Reason: <strong>${data.revoked_reason}</strong>`;
+                msg.classList.add('text-danger');
+                return;
+            }
+
             document.getElementById('success-view').style.display = 'block';
             
             document.getElementById('v-uid').innerText = data.certificate_uid;
             document.getElementById('v-name').innerText = data.student_name;
             document.getElementById('v-course').innerText = data.course_name;
-            // Format Date
+            
             const date = new Date(data.issue_date);
             document.getElementById('v-date').innerText = date.toLocaleDateString('en-US', { 
                 year: 'numeric', month: 'long', day: 'numeric' 
             });
         }
 
-        function showError() {
+        function showError(message) {
             document.getElementById('loading').style.display = 'none';
             document.getElementById('error-view').style.display = 'block';
+            if(message) document.getElementById('error-msg').innerText = message;
         }
     </script>
 </body>
