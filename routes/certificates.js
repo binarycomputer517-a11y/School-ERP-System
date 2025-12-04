@@ -72,6 +72,8 @@ router.post('/generate', authenticateToken, upload.fields([
 
     try {
         let students = [];
+        
+        // 1. Fetch Actual Data
         if (dataSource === 'database' && classId) {
             const query = `
                 SELECT s.student_id, s.first_name, s.last_name, s.email, s.roll_number,
@@ -83,14 +85,13 @@ router.post('/generate', authenticateToken, upload.fields([
             `;
             const result = await pool.query(query, [classId]);
             students = result.rows;
-        } else {
-            students = [{ first_name: 'External', last_name: 'User', student_id: null, email: null }];
-        }
+        } 
+        // Note: Removed "External User" mock data. If no DB data, students array stays empty.
 
         if (students.length === 0) {
             const doc = new PDFDocument();
             archive.append(doc, { name: 'error.pdf' });
-            doc.text('No students found.');
+            doc.text('No students found in the selected class.');
             doc.end();
         }
 
@@ -136,10 +137,12 @@ router.post('/generate', authenticateToken, upload.fields([
             // --- B. TOP HEADER ELEMENTS (QR & ID) ---
             
             // 1. Certificate No (Top Left)
+            // Position: X=40, Y=50
             doc.fontSize(9).fillColor('#333').font('Helvetica-Bold')
                .text(`Certificate No: ${uid}`, 40, 50, { align: 'left' });
 
             // 2. QR Code (Top Right)
+            // Position: X=Width-110, Y=40
             doc.image(qrBuffer, w - 110, 40, { width: 60 });
             doc.fontSize(7).fillColor('#555')
                .text("Scan to Verify", w - 110, 105, { width: 60, align: 'center' });
@@ -175,6 +178,8 @@ router.post('/generate', authenticateToken, upload.fields([
             doc.font(bodyFont).fontSize(13).fillColor('#333')
                .text(body, 80, doc.y, { align: 'center', width: w-160 });
 
+            // Date (Removed from here, moved to footer as per request)
+            
             // --- E. FOOTER SIGNATURES ---
             const fy = h - 120;
             const leftX = 100;
