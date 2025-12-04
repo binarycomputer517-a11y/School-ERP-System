@@ -3,152 +3,263 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Command Center | School ERP</title>
+    <title>Analytics Command Center | School ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-3d.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/cylinder.js"></script>
+    <script src="https://code.highcharts.com/modules/funnel3d.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
-        :root { --primary: #4361ee; --bg: #f4f6f9; --card: #ffffff; --text: #333; --ticker-bg: #1e293b; }
-        [data-bs-theme="dark"] { --primary: #4cc9f0; --bg: #0f172a; --card: #1e293b; --text: #f8f9fa; --ticker-bg: #4361ee; }
+        :root { 
+            --primary-grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-grad: linear-gradient(135deg, #2af598 0%, #009efd 100%);
+            --danger-grad: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #feada6 100%);
+            --warning-grad: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            --dark-grad: linear-gradient(135deg, #232526 0%, #414345 100%);
+            --bg-color: #f0f2f5;
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-color: #2d3748;
+            --shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        [data-bs-theme="dark"] {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.95);
+            --text-color: #f8fafc;
+            --shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
         
-        body { background-color: var(--bg); color: var(--text); font-family: 'Segoe UI', sans-serif; transition: 0.3s; padding-top: 40px; }
-        .card { background-color: var(--card); border: none; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 20px; transition: 0.3s; }
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            font-family: 'Poppins', sans-serif; 
+            transition: 0.3s; 
+            padding-top: 50px; 
+            background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+
+        /* --- Glassmorphism Cards --- */
+        .card { 
+            background: var(--card-bg); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            border-radius: 16px; 
+            box-shadow: var(--shadow); 
+            margin-bottom: 25px; 
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.12); }
         
-        /* Live Ticker */
-        #news-ticker { position: fixed; top: 0; left: 0; width: 100%; height: 40px; background: var(--ticker-bg); color: #fff; z-index: 1000; display: flex; align-items: center; overflow: hidden; white-space: nowrap; font-size: 0.9rem; font-weight: 500; }
-        .ticker-content { display: inline-block; padding-left: 100%; animation: ticker 30s linear infinite; }
+        .card-title {
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem;
+            color: var(--text-color); opacity: 0.8; margin-bottom: 20px; border-left: 4px solid #764ba2; padding-left: 10px;
+        }
+
+        /* --- Live Ticker --- */
+        #news-ticker { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 45px; 
+            background: var(--dark-grad); 
+            color: #fff; z-index: 1000; display: flex; align-items: center; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-weight: 500; letter-spacing: 0.5px;
+        }
+        .ticker-content { display: inline-block; padding-left: 100%; animation: ticker 40s linear infinite; }
         @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
 
-        /* KPI Cards */
-        .info-box { background: var(--card); padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-left: 5px solid; cursor: pointer; transition: transform 0.2s; }
-        .info-box:hover { transform: translateY(-5px); }
-        .box-value { font-size: 2.2rem; font-weight: 700; margin: 10px 0; }
+        /* --- Premium KPI Boxes --- */
+        .info-box { 
+            padding: 25px; border-radius: 16px; color: white; position: relative; overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15); transition: 0.3s; cursor: pointer;
+        }
+        .info-box:hover { transform: scale(1.03); }
+        .info-box.primary { background: var(--primary-grad); }
+        .info-box.success { background: var(--success-grad); }
+        .info-box.danger { background: var(--danger-grad); color: #5a3a3a; }
+        .info-box.warning { background: var(--warning-grad); color: #5a4a3a; }
+
+        .box-title { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; opacity: 0.9; }
+        .box-value { font-size: 2.5rem; font-weight: 700; margin: 5px 0; letter-spacing: -1px; }
+        .box-icon { position: absolute; right: 20px; bottom: 20px; font-size: 4rem; opacity: 0.2; transform: rotate(-15deg); }
+
+        /* --- Charts --- */
+        .chart-container { height: 420px; width: 100%; border-radius: 12px; overflow: hidden; }
+
+        /* --- Table --- */
+        .table-responsive { border-radius: 12px; overflow: hidden; }
+        .table thead { background: var(--dark-grad); color: white; }
+        .table th { font-weight: 500; border: none; padding: 15px; }
+        .table td { padding: 15px; border-bottom: 1px solid rgba(0,0,0,0.05); vertical-align: middle; }
         
-        /* Charts */
-        .chart-card { height: 320px; position: relative; }
-        
+        /* --- Buttons --- */
+        .btn-glow {
+            background: var(--primary-grad); color: white; border: none; border-radius: 30px;
+            padding: 10px 25px; font-weight: 600; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
+            transition: 0.3s;
+        }
+        .btn-glow:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(118, 75, 162, 0.6); color: white; }
+
         /* Floating Actions */
-        .fab-container { position: fixed; bottom: 30px; right: 30px; z-index: 999; display: flex; flex-direction: column; gap: 10px; }
-        .fab-btn { width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2); transition: 0.2s; }
-        .fab-btn:hover { transform: scale(1.1); }
+        .fab-container { position: fixed; bottom: 30px; right: 30px; z-index: 999; display: flex; flex-direction: column; gap: 15px; }
+        .fab-btn { 
+            width: 55px; height: 55px; border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3); transition: 0.3s; border: none; font-size: 1.2rem;
+        }
+        .fab-btn.up { background: var(--primary-grad); color: white; }
+        .fab-btn.theme { background: var(--dark-grad); color: white; }
+        .fab-btn.pdf { background: var(--danger-grad); color: white; }
+        .fab-btn:hover { transform: scale(1.1) rotate(10deg); }
 
         /* Skeletons */
-        .skeleton-text { height: 1rem; background: #e0e0e0; border-radius: 4px; animation: pulse 1.5s infinite; }
+        .skeleton-text { height: 1.5rem; background: rgba(255,255,255,0.3); border-radius: 4px; animation: pulse 1.5s infinite; width: 60%; }
         @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
 
-        @media print { .no-print, #news-ticker, .fab-container { display: none !important; } body { padding-top: 0; } }
+        @media print { .no-print, #news-ticker, .fab-container { display: none !important; } body { padding-top: 0; background: white; } }
     </style>
 </head>
 <body>
 
     <div id="news-ticker">
-        <div class="ticker-content" id="ticker-text">🚀 System Online... Connecting to real-time analytics stream...</div>
+        <div class="ticker-content" id="ticker-text">
+            <i class="fas fa-satellite-dish me-2 text-warning"></i> ANALYTICS COMMAND CENTER ONLINE | REAL-TIME DATA STREAM ACTIVE
+        </div>
     </div>
 
     <div class="container-fluid px-4" id="dashboard-content">
         
-        <header class="d-flex justify-content-between align-items-center mb-4 mt-3">
+        <header class="d-flex justify-content-between align-items-center mb-5 mt-4 text-white">
             <div>
-                <h2 class="fw-bold mb-0"><i class="fas fa-chart-line text-primary me-2"></i>Executive Command Center</h2>
-                <p class="text-muted small mb-0">360° View of Academic & Operational Health</p>
+                <h1 class="fw-bold mb-1" style="text-shadow: 0 2px 10px rgba(0,0,0,0.5);">
+                    <i class="fas fa-chart-pie me-2"></i>Analytics & Reports
+                </h1>
+                <p class="mb-0 opacity-75">360° View of Academic & Operational Health</p>
             </div>
-            <div class="d-flex gap-2 no-print">
-                <div class="form-check form-switch pt-2 me-2">
-                    <input class="form-check-input" type="checkbox" id="auto-refresh">
-                    <label class="form-check-label small" for="auto-refresh">Live Mode</label>
+            <div class="d-flex gap-3 no-print align-items-center bg-dark bg-opacity-50 p-2 rounded-pill ps-4">
+                <div class="form-check form-switch pt-1">
+                    <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                    <label class="form-check-label small text-white" for="auto-refresh">Live Sync</label>
                 </div>
-                <button class="btn btn-outline-secondary" onclick="toggleFullScreen()" title="Full Screen"><i class="fas fa-expand"></i></button>
-                <button class="btn btn-primary" onclick="initDashboard()"><i class="fas fa-sync-alt me-2"></i>Refresh</button>
-                <a href="/admin-dashboard.html" class="btn btn-dark">Exit</a>
+                <button class="btn btn-sm btn-outline-light rounded-circle" onclick="toggleFullScreen()"><i class="fas fa-expand"></i></button>
+                <button class="btn btn-glow btn-sm" onclick="initDashboard()"><i class="fas fa-sync-alt me-2"></i>Refresh Data</button>
+                <a href="/admin-dashboard.html" class="btn btn-sm btn-light rounded-pill px-3 fw-bold">Exit</a>
             </div>
         </header>
 
-        <section class="card p-3 mb-4 no-print">
-            <div class="row g-3">
-                <div class="col-md-3"><select id="session-select" class="form-select"><option value="">All Sessions</option></select></div>
-                <div class="col-md-3"><input type="date" id="start-date" class="form-control" title="Start"></div>
-                <div class="col-md-3"><input type="date" id="end-date" class="form-control" title="End"></div>
-                <div class="col-md-3"><button onclick="loadReports()" class="btn btn-primary w-100">Apply Filter</button></div>
+        <section class="card p-4 mb-5 no-print border-0">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="small text-muted fw-bold mb-1">ACADEMIC SESSION</label>
+                    <select id="session-select" class="form-select bg-light border-0"><option value="">Loading Sessions...</option></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="small text-muted fw-bold mb-1">FROM DATE</label>
+                    <input type="date" id="start-date" class="form-control bg-light border-0">
+                </div>
+                <div class="col-md-3">
+                    <label class="small text-muted fw-bold mb-1">TO DATE</label>
+                    <input type="date" id="end-date" class="form-control bg-light border-0">
+                </div>
+                <div class="col-md-3">
+                    <button onclick="loadReports()" class="btn btn-dark w-100 py-2"><i class="fas fa-filter me-2"></i>Apply Filters</button>
+                </div>
             </div>
         </section>
 
-        <section class="row mb-4">
+        <section class="row mb-5 g-4">
             <div class="col-md-3">
-                <div class="info-box border-primary">
-                    <div class="box-title text-primary">Active Students</div>
+                <div class="info-box primary">
+                    <div class="box-title">Total Active Students</div>
                     <div id="kpi-students" class="box-value skeleton-text">...</div>
-                    <small class="text-success"><i class="fas fa-user-graduate"></i> Currently Enrolled</small>
+                    <small><i class="fas fa-check-circle me-1"></i> Verified Enrollments</small>
+                    <i class="fas fa-user-graduate box-icon"></i>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="info-box border-success">
-                    <div class="box-title text-success">Total Revenue (YTD)</div>
+                <div class="info-box success">
+                    <div class="box-title">Revenue Collected (YTD)</div>
                     <div id="kpi-collection" class="box-value skeleton-text">...</div>
-                    <small class="text-muted"><i class="fas fa-rupee-sign"></i> Verified Payments</small>
+                    <small><i class="fas fa-arrow-up me-1"></i> 12% vs Last Year</small>
+                    <i class="fas fa-wallet box-icon"></i>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="info-box border-danger">
-                    <div class="box-title text-danger">Pending Dues</div>
+                <div class="info-box danger">
+                    <div class="box-title">Outstanding Dues</div>
                     <div id="kpi-outstanding" class="box-value skeleton-text">...</div>
-                    <small class="text-danger fw-bold">Action Required</small>
+                    <small><b>Action:</b> Send Reminders</small>
+                    <i class="fas fa-exclamation-triangle box-icon"></i>
                 </div>
             </div>
             <div class="col-md-3">
-                <div class="info-box border-warning">
-                    <div class="box-title text-warning">Attendance Avg</div>
+                <div class="info-box warning">
+                    <div class="box-title">Avg. Attendance</div>
                     <div id="kpi-attendance" class="box-value skeleton-text">...</div>
-                    <small class="text-muted">Campus Wide</small>
+                    <small><i class="fas fa-clock me-1"></i> Today's Status</small>
+                    <i class="fas fa-users box-icon"></i>
                 </div>
             </div>
         </section>
 
         <section class="row mb-4">
             <div class="col-lg-8">
-                <div class="card p-3 h-100"><h5 class="card-title">💰 Fee Revenue Trend (Area Chart)</h5><div class="chart-card"><canvas id="feesChart"></canvas></div></div>
+                <div class="card p-4">
+                    <h5 class="card-title">💰 Financial Growth Trajectory (3D)</h5>
+                    <div id="feesChart" class="chart-container"></div>
+                </div>
             </div>
             <div class="col-lg-4">
-                <div class="card p-3 h-100"><h5 class="card-title">📉 Income vs Expense (Multi-Line)</h5><div class="chart-card"><canvas id="financeChart"></canvas></div></div>
+                <div class="card p-4">
+                    <h5 class="card-title">⚖️ Income vs Expense</h5>
+                    <div id="financeChart" class="chart-container"></div>
+                </div>
             </div>
         </section>
 
         <section class="row mb-4">
-            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">🏫 Enrollment (Polar Area)</h5><div class="chart-card"><canvas id="enrollmentChart"></canvas></div></div></div>
-            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">🚻 Gender Ratio (Doughnut)</h5><div class="chart-card"><canvas id="genderChart"></canvas></div></div></div>
-            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">📝 Attendance Status (Pie)</h5><div class="chart-card"><canvas id="attendanceChart"></canvas></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">🏫 Enrollment Distribution</h5><div id="enrollmentChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">🚻 Gender Demographics</h5><div id="genderChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">📝 Daily Attendance</h5><div id="attendanceChart" class="chart-container"></div></div></div>
         </section>
 
         <section class="row mb-4">
-            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">📚 Library Usage (Bar)</h5><div class="chart-card"><canvas id="libraryChart"></canvas></div></div></div>
-            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">🎯 Performance (Scatter)</h5><div class="chart-card"><canvas id="scatterChart"></canvas></div></div></div>
-            <div class="col-md-4"><div class="card p-3"><h5 class="card-title">💡 Course ROI (Bubble)</h5><div class="chart-card"><canvas id="bubbleChart"></canvas></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">📚 Library Circulation</h5><div id="libraryChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">🎯 Academic Performance</h5><div id="scatterChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">💡 Course ROI Analysis</h5><div id="bubbleChart" class="chart-container"></div></div></div>
         </section>
         
         <section class="row mb-4">
-             <div class="col-md-6"><div class="card p-3"><h5 class="card-title">💳 Payment Modes (Horizontal Bar)</h5><div class="chart-card"><canvas id="paymentModeChart"></canvas></div></div></div>
-             <div class="col-md-6"><div class="card p-3"><h5 class="card-title">📊 Grade Distribution (Radar)</h5><div class="chart-card"><canvas id="gradeChart"></canvas></div></div></div>
+             <div class="col-md-6"><div class="card p-4"><h5 class="card-title">💳 Payment Gateways</h5><div id="paymentModeChart" class="chart-container"></div></div></div>
+             <div class="col-md-6"><div class="card p-4"><h5 class="card-title">📊 Grade Analysis</h5><div id="gradeChart" class="chart-container"></div></div></div>
         </section>
 
-        <section class="row mb-4">
-            <div class="col-md-6"><div class="card p-3"><h5 class="card-title">👥 Visitor Purpose (Bar)</h5><div class="chart-card"><canvas id="visitorChart"></canvas></div></div></div>
-            <div class="col-md-6"><div class="card p-3"><h5 class="card-title">⚠️ Complaints Status (Pie)</h5><div class="chart-card"><canvas id="complaintChart"></canvas></div></div></div>
+        <section class="row mb-5">
+            <div class="col-md-6"><div class="card p-4"><h5 class="card-title">👥 Visitor Analytics</h5><div id="visitorChart" class="chart-container"></div></div></div>
+            <div class="col-md-6"><div class="card p-4"><h5 class="card-title">⚠️ Grievance Status</h5><div id="complaintChart" class="chart-container"></div></div></div>
         </section>
 
-        <section class="row">
+        <section class="row pb-5">
             <div class="col-12">
-                <div class="card p-3">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="card-title text-danger"><i class="fas fa-file-invoice-dollar me-2"></i>Fee Defaulters List</h5>
-                        <button class="btn btn-sm btn-success" onclick="exportToExcel()"><i class="fas fa-file-excel me-2"></i>Export Excel</button>
+                <div class="card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="card-title text-danger mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Critical Fee Defaulters</h5>
+                        <button class="btn btn-success btn-sm rounded-pill px-3" onclick="exportToExcel()"><i class="fas fa-file-excel me-2"></i>Export CSV</button>
                     </div>
                     <div class="table-responsive">
-                        <table class="table table-hover" id="defaulters-table">
-                            <thead class="table-light"><tr><th>Student</th><th>Roll</th><th>Course</th><th>Pending</th><th>Last Paid</th></tr></thead>
+                        <table class="table table-hover align-middle mb-0" id="defaulters-table">
+                            <thead class="table-dark"><tr><th>Student Name</th><th>Roll No</th><th>Course</th><th>Amount Due</th><th>Last Payment</th></tr></thead>
                             <tbody id="defaulters-body"></tbody>
                         </table>
                     </div>
@@ -158,24 +269,42 @@
     </div>
 
     <div class="fab-container no-print">
-        <button class="btn btn-primary fab-btn" onclick="window.scrollTo(0,0)" title="Top"><i class="fas fa-arrow-up"></i></button>
-        <button class="btn btn-secondary fab-btn" id="theme-toggle" title="Theme"><i class="fas fa-moon"></i></button>
-        <button class="btn btn-danger fab-btn" onclick="exportPDF()" title="Print PDF"><i class="fas fa-file-pdf"></i></button>
+        <button class="fab-btn up" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Scroll Top"><i class="fas fa-arrow-up"></i></button>
+        <button class="fab-btn theme" id="theme-toggle" title="Toggle Theme"><i class="fas fa-moon"></i></button>
+        <button class="fab-btn pdf" onclick="exportPDF()" title="Download PDF"><i class="fas fa-file-pdf"></i></button>
     </div>
 
     <script>
         const TOKEN = localStorage.getItem('erp-token');
         if (!TOKEN) window.location.href = '/login.html';
         
-        let charts = {}, refreshInterval;
+        let refreshInterval;
 
-        // --- Theme Toggle ---
-        document.getElementById('theme-toggle').addEventListener('click', () => {
-            const html = document.documentElement;
-            html.setAttribute('data-bs-theme', html.getAttribute('data-bs-theme') === 'light' ? 'dark' : 'light');
-        });
+        // --- GLOBAL HIGHCHARTS THEME (PREMIUM LOOK) ---
+        Highcharts.theme = {
+            colors: ['#764ba2', '#009efd', '#ff9a9e', '#f6d365', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4'],
+            chart: { backgroundColor: null, style: { fontFamily: "'Poppins', sans-serif" } },
+            title: { style: { color: '#333', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '16px' } },
+            subtitle: { style: { color: '#666666', font: 'bold 12px "Trebuchet MS", Verdana, sans-serif' } },
+            legend: { itemStyle: { font: '9pt Trebuchet MS, Verdana, sans-serif', color: 'black' }, itemHoverStyle:{ color: 'gray' } }
+        };
+        Highcharts.setOptions(Highcharts.theme);
 
         // --- Utils ---
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-bs-theme') === 'dark';
+            html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
+            
+            // Update Charts Text Color based on theme
+            const textColor = isDark ? '#333' : '#fff';
+            Highcharts.charts.forEach(chart => {
+                if(chart) {
+                    chart.update({ title: { style: { color: textColor } }, legend: { itemStyle: { color: textColor } } });
+                }
+            });
+        });
+
         function toggleFullScreen() {
             if (!document.fullscreenElement) document.documentElement.requestFullscreen();
             else if (document.exitFullscreen) document.exitFullscreen();
@@ -188,20 +317,19 @@
 
         function exportPDF() {
             const element = document.getElementById('dashboard-content');
-            html2pdf().set({ margin: 0.3, filename: 'Analytics_Report.pdf', html2canvas: { scale: 2 } }).from(element).save();
+            const opt = { margin: 0.2, filename: 'Executive_Report.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a3', orientation: 'portrait' } };
+            html2pdf().set(opt).from(element).save();
         }
 
         function exportToExcel() {
             const wb = XLSX.utils.table_to_book(document.getElementById("defaulters-table"));
-            XLSX.writeFile(wb, "Defaulters_List.xlsx");
+            XLSX.writeFile(wb, "Global_Defaulters_List.xlsx");
         }
 
-        // --- API Helper (FIXED FOR ROUTING) ---
+        // --- API Helper ---
         async function apiCall(endpoint) {
             try {
-                // Fix: If endpoint starts with /api/, don't prepend /api/reports
                 let url = endpoint.startsWith('/api/') ? endpoint : '/api/reports' + endpoint;
-                
                 const res = await fetch(url, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
                 return res.ok ? await res.json() : [];
             } catch (e) {
@@ -219,13 +347,11 @@
                 document.getElementById('kpi-collection').innerText = '₹' + kpi.feesCollected.toLocaleString();
                 document.getElementById('kpi-outstanding').innerText = '₹' + kpi.feesOutstanding.toLocaleString();
                 document.getElementById('kpi-attendance').innerText = (kpi.avgAttendance || 0) + '%';
-                
-                document.getElementById('ticker-text').innerText = `📢 Live Updates: Total Revenue: ₹${kpi.feesCollected.toLocaleString()} | Active Students: ${kpi.totalStudents} | Attendance: ${kpi.avgAttendance}% | System Status: Optimal`;
-                
+                document.getElementById('ticker-text').innerHTML = `<i class="fas fa-broadcast-tower me-2 text-success"></i> LIVE STREAM: Revenue Collected ₹${kpi.feesCollected.toLocaleString()} | Outstanding: ₹${kpi.feesOutstanding.toLocaleString()} | Active Students: ${kpi.totalStudents} | System Health: 100%`;
                 document.querySelectorAll('.skeleton-text').forEach(el => el.classList.remove('skeleton-text'));
             }
 
-            // 2. Fetch All Data in Parallel (Including new Visitor/Complaint routes)
+            // 2. Fetch Data
             const [enroll, fees, gender, att, lib, scat, bub, fin, pay, grades, visit, comp, def] = await Promise.all([
                 apiCall('/enrollment-by-course'),
                 apiCall('/fees-collection-monthly'),
@@ -237,98 +363,114 @@
                 apiCall('/finance-comparison'),
                 apiCall('/payment-modes'),
                 apiCall('/grade-distribution'),
-                apiCall('/visitor-stats'),      // New
-                apiCall('/complaint-stats'),    // New
+                apiCall('/visitor-stats'),      
+                apiCall('/complaint-stats'),    
                 apiCall('/defaulters')
             ]);
 
-            // 3. Render Charts
-            renderChart('feesChart', 'line', fees, 'amount', 'month', 'Revenue', { fill: true });
-            renderMultiLine('financeChart', fin.income, fin.expense);
-            renderChart('paymentModeChart', 'bar', pay, 'total', 'mode', 'Transactions', { indexAxis: 'y' });
-
-            renderChart('enrollmentChart', 'polarArea', enroll, 'count', 'course_name', 'Students');
-            renderChart('genderChart', 'doughnut', gender, 'count', 'gender', 'Students');
-            renderChart('attendanceChart', 'pie', att, 'count', 'status', 'Status');
-
-            renderChart('libraryChart', 'bar', lib, 'count', 'month', 'Books Issued');
-            renderChart('gradeChart', 'radar', grades, 'count', 'grade', 'Grade Dist.', { fill: true });
+            // 3. Render Highcharts 3D
             
-            // New Module Charts
-            renderChart('visitorChart', 'bar', visit, 'count', 'purpose', 'Visitors');
-            renderChart('complaintChart', 'pie', comp, 'count', 'status', 'Issues');
+            // Fee Trend (Area Spline 3D)
+            Highcharts.chart('feesChart', {
+                chart: { type: 'areaspline', options3d: { enabled: true, alpha: 10, beta: 0 } },
+                title: { text: null },
+                xAxis: { categories: fees.map(d => d.month) },
+                yAxis: { title: { text: 'Amount' } },
+                plotOptions: { areaspline: { fillOpacity: 0.5 } },
+                series: [{ name: 'Revenue Stream', data: fees.map(d => parseInt(d.amount)), color: '#764ba2' }]
+            });
 
-            // Advanced
-            renderSpecialChart('scatterChart', 'scatter', scat, 'Marks vs Attendance', 'Attendance', 'Marks');
-            renderSpecialChart('bubbleChart', 'bubble', bub, 'Course ROI', 'Avg Fee', 'Students');
+            // Income vs Expense (3D Column)
+            Highcharts.chart('financeChart', {
+                chart: { type: 'column', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+                title: { text: null },
+                xAxis: { categories: fin.income.map(d => d.month) },
+                yAxis: { title: { text: 'Amount' } },
+                plotOptions: { column: { depth: 40, grouping: false, shadowing: false, borderWidth: 0 } },
+                series: [
+                    { name: 'Income', data: fin.income.map(d => parseInt(d.total)), color: '#009efd' },
+                    { name: 'Expense', data: fin.expense.map(d => parseInt(d.total)), color: '#ff9a9e' }
+                ]
+            });
+
+            // Enrollment (3D Pie)
+            Highcharts.chart('enrollmentChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45, beta: 0 } },
+                title: { text: null },
+                plotOptions: { pie: { depth: 45, allowPointSelect: true, cursor: 'pointer', dataLabels: { enabled: true, format: '{point.name}: {point.percentage:.1f} %' } } },
+                series: [{ name: 'Students', data: enroll.map(d => [d.course_name, parseInt(d.count)]) }]
+            });
+
+            // Gender (3D Donut)
+            Highcharts.chart('genderChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
+                title: { text: null },
+                plotOptions: { pie: { innerSize: 100, depth: 45 } },
+                series: [{ name: 'Count', data: gender.map(d => [d.gender, parseInt(d.count)]) }]
+            });
+
+            // Attendance (3D Pie)
+            Highcharts.chart('attendanceChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
+                title: { text: null },
+                series: [{ name: 'Status', data: att.map(d => [d.status, parseInt(d.count)]) }]
+            });
+
+            // Library (3D Cylinder)
+            Highcharts.chart('libraryChart', {
+                chart: { type: 'cylinder', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+                title: { text: null },
+                xAxis: { categories: lib.map(d => d.month) },
+                series: [{ name: 'Books Issued', data: lib.map(d => parseInt(d.count)), color: '#f6d365' }]
+            });
+
+            // Payment Modes (3D Cylinder)
+            Highcharts.chart('paymentModeChart', {
+                chart: { type: 'cylinder', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+                title: { text: null },
+                xAxis: { categories: pay.map(d => d.mode) },
+                series: [{ name: 'Transactions', data: pay.map(d => parseInt(d.total)), color: '#24CBE5' }]
+            });
+
+            // Grades (3D Area)
+            Highcharts.chart('gradeChart', {
+                chart: { type: 'area', options3d: { enabled: true, alpha: 15, beta: 30, depth: 200 } },
+                title: { text: null },
+                xAxis: { categories: grades.map(d => d.grade) },
+                series: [{ name: 'Count', data: grades.map(d => parseInt(d.count)), color: '#64E572' }]
+            });
+
+            // Visitors (3D Column)
+            Highcharts.chart('visitorChart', {
+                chart: { type: 'column', options3d: { enabled: true, alpha: 10, beta: 25, depth: 70 } },
+                title: { text: null },
+                xAxis: { categories: visit.map(d => d.purpose) },
+                series: [{ name: 'Visitors', data: visit.map(d => parseInt(d.count)), color: '#FF9655' }]
+            });
+
+            // Complaints (3D Donut)
+            Highcharts.chart('complaintChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
+                title: { text: null },
+                plotOptions: { pie: { innerSize: 80, depth: 35 } },
+                series: [{ name: 'Issues', data: comp.map(d => [d.status, parseInt(d.count)]) }]
+            });
+
+            // Scatter & Bubble
+            Highcharts.chart('scatterChart', {
+                chart: { type: 'scatter', options3d: { enabled: true, alpha: 10, beta: 30, depth: 250, viewDistance: 5, fitToPlot: false } },
+                title: { text: null },
+                series: [{ name: 'Student Data', colorByPoint: true, data: scat.map(s => [s.x, s.y, s.z]) }]
+            });
+
+            Highcharts.chart('bubbleChart', {
+                chart: { type: 'bubble', options3d: { enabled: true, alpha: 10, beta: 30, depth: 250 } },
+                title: { text: null },
+                series: [{ data: bub.map(b => ({ x: b.x, y: b.y, z: b.r, name: b.label })) }]
+            });
 
             // 4. Render Table
             renderDefaulters(def);
-        }
-
-        // --- Chart Renderers ---
-        function renderChart(id, type, data, valKey, labelKey, label, opts = {}) {
-            if (charts[id]) charts[id].destroy();
-            const ctx = document.getElementById(id).getContext('2d');
-
-            let scales = {};
-            if (['line', 'bar'].includes(type)) {
-                scales = { y: { beginAtZero: true }, x: { grid: { display: false } } };
-            } else if (['radar', 'polarArea'].includes(type)) {
-                scales = { r: { ticks: { backdropColor: 'transparent' } } };
-            }
-
-            let bg = ['#4361ee', '#3a0ca3', '#f72585', '#4cc9f0', '#7209b7', '#4895ef'];
-            if (type === 'line' && opts.fill) {
-                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
-                gradient.addColorStop(0, 'rgba(67, 97, 238, 0.5)');
-                gradient.addColorStop(1, 'rgba(67, 97, 238, 0.0)');
-                bg = gradient;
-            }
-
-            charts[id] = new Chart(ctx, {
-                type: type,
-                data: {
-                    labels: data.map(d => d[labelKey]),
-                    datasets: [{
-                        label: label,
-                        data: data.map(d => d[valKey]),
-                        backgroundColor: bg,
-                        borderColor: '#4361ee',
-                        borderWidth: 1,
-                        tension: 0.4,
-                        ...opts
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, scales: scales, ...opts }
-            });
-        }
-
-        function renderSpecialChart(id, type, data, label, xLabel, yLabel) {
-            if (charts[id]) charts[id].destroy();
-            const ctx = document.getElementById(id).getContext('2d');
-            charts[id] = new Chart(ctx, {
-                type: type,
-                data: { datasets: [{ label: label, data: data, backgroundColor: '#f72585', borderColor: '#f72585' }] },
-                options: { responsive: true, maintainAspectRatio: false, scales: { x: { title: { display: true, text: xLabel }, beginAtZero: true }, y: { title: { display: true, text: yLabel }, beginAtZero: true } } }
-            });
-        }
-
-        function renderMultiLine(id, income, expense) {
-            if (charts[id]) charts[id].destroy();
-            const ctx = document.getElementById(id).getContext('2d');
-            const labels = income.map(d => d.month);
-            charts[id] = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [
-                        { label: 'Income', data: income.map(d => d.total), borderColor: '#2ec4b6', tension: 0.4 },
-                        { label: 'Expense', data: expense.map(d => d.total), borderColor: '#e71d36', tension: 0.4 }
-                    ]
-                },
-                options: { responsive: true, maintainAspectRatio: false }
-            });
         }
 
         function renderDefaulters(data) {
@@ -341,7 +483,6 @@
 
         async function initDashboard() {
             try {
-                // Correctly calls the external API for sessions
                 const sessions = await apiCall('/api/academic-sessions');
                 if(sessions.length) document.getElementById('session-select').innerHTML = sessions.map(s => `<option value="${s.id}">${s.session_name}</option>`).join('');
             } catch(e) {}
