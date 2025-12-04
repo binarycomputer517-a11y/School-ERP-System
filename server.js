@@ -74,10 +74,15 @@ io.on('connection', (socket) => {
 // ===================================
 
 // --- A. PUBLIC ROUTES (No Token Required) ---
+// These routes are accessible to everyone (Login, Visitor Kiosk, Verification)
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/dashboard', require('./routes/dashboard')); 
 app.use('/api/users', require('./routes/users')); 
 app.use('/api/vms', require('./routes/vms')); 
+
+// ✅ NEW: Public Certificate Verification (Fixes "Invalid Certificate" on Scan)
+app.use('/api/public/verify', require('./routes/verify'));
+
 
 // --- B. PROTECTED ROUTES (JWT Token Required) ---
 // All routes mounted below this line require a valid Bearer Token
@@ -109,7 +114,7 @@ app.use('/api/exams', require('./routes/exams'));
 app.use('/api/online-exam', require('./routes/onlineExam'));
 app.use('/api/marks', require('./routes/marks'));
 app.use('/api/report-card', require('./routes/reportcard'));
-app.use('/api/certificates', require('./routes/certificates'));
+app.use('/api/certificates', require('./routes/certificates')); // Protected generation route
 app.use('/api/assignments', require('./routes/assignments'));
 app.use('/api/online-learning', require('./routes/onlineLearning'));
 
@@ -127,10 +132,10 @@ app.use('/api/hostel', require('./routes/hostel'));
 app.use('/api/cafeteria', require('./routes/cafeteria'));
 app.use('/api/library', require('./routes/library'));
 
-// ✅ FIXED: Changed from '/api' to '/api/inventory' to prevent blocking other routes
+// Inventory (Fixed Path)
 app.use('/api/inventory', require('./routes/inventory-with-assets'));
 
-// ✅ NEW: IT Helpdesk Route
+// IT Helpdesk
 app.use('/api/it-helpdesk', require('./routes/it-helpdesk'));
 
 // General Modules
