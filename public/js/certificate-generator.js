@@ -1,330 +1,108 @@
-/**
- * certificate-generator.js
- * Production Ready - Connects to Real Backend APIs
- * Handles: Data Fetching, Real-time Preview, Design Studio, and PDF Generation
- */
-
 const API_BASE = '/api';
 const authToken = localStorage.getItem('erp-token');
-const authHeaders = { 'Authorization': `Bearer ${authToken}` };
 
-// Security: Redirect if not logged in
-if (!authToken) window.location.href = '/login.html';
-
-// ==========================================
-// 1. INITIALIZATION
-// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 1. Load Classes for Dropdown from DB
     loadClasses();
-    
-    // 2. Set Default Date to Today
-    const dateInput = document.getElementById('issue-date');
-    if (dateInput) dateInput.valueAsDate = new Date();
-    
-    // 3. Initialize Event Listeners
-    setupEventListeners();
-    
-    // 4. Render Initial Preview
+    document.getElementById('issue-date').valueAsDate = new Date();
     updatePreview();
 });
 
-// ==========================================
-// 2. DATA LOADING (REAL DB CONNECTION)
-// ==========================================
-
-/**
- * Fetch Classes/Sections from Database
- * Route: GET /api/sections
- */
 async function loadClasses() {
-    const classSelect = document.getElementById('class-select');
+    const select = document.getElementById('class-select');
     try {
-        const response = await fetch(`${API_BASE}/sections`, { headers: authHeaders });
-        
-        if (!response.ok) throw new Error('Failed to fetch classes');
-        
-        const classes = await response.json();
-        
-        classSelect.innerHTML = '<option value="">-- Select Class --</option>';
-        classes.forEach(cls => {
-            // cls.id is the UUID of the batch/section
-            classSelect.innerHTML += `<option value="${cls.id}">${cls.class_name} - ${cls.section_name}</option>`;
+        const res = await fetch(`${API_BASE}/sections`, { headers: { 'Authorization': `Bearer ${authToken}` } });
+        const data = await res.json();
+        select.innerHTML = '<option value="">-- Select Class --</option>';
+        data.forEach(c => {
+            select.innerHTML += `<option value="${c.id}">${c.class_name} - ${c.section_name}</option>`;
         });
-    } catch (error) {
-        console.error('Error loading classes:', error);
-        classSelect.innerHTML = '<option value="">Error loading data</option>';
-    }
+    } catch (e) { console.error(e); }
 }
 
-/**
- * Auto-populate Students when Class is selected
- * Route: GET /api/students?batch_id=UUID
- */
-async function loadStudents(batchId) {
-    const studentSelect = document.getElementById('student-select');
-    studentSelect.innerHTML = '<option value="">Loading students...</option>';
-
-    try {
-        // Fetch real students filtered by the selected batch_id
-        const response = await fetch(`${API_BASE}/students?batch_id=${batchId}`, { 
-            headers: authHeaders 
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch students');
-
-        const students = await response.json();
-
-        studentSelect.innerHTML = '<option value="">-- All Students in Class --</option>';
-        
-        if (students.length === 0) {
-            studentSelect.innerHTML += '<option value="" disabled>No students found</option>';
-            return;
-        }
-
-        students.forEach(std => {
-            // Value is student_id, Text is Name + Roll
-            studentSelect.innerHTML += `<option value="${std.student_id}">${std.first_name} ${std.last_name} (${std.roll_number || 'N/A'})</option>`;
-        });
-
-    } catch (error) {
-        console.error('Error loading students:', error);
-        studentSelect.innerHTML = '<option value="">Error loading students</option>';
-    }
-}
-
-// ==========================================
-// 3. EVENT LISTENERS
-// ==========================================
-function setupEventListeners() {
-    // A. Class Selection Logic
-    const classSelect = document.getElementById('class-select');
-    if (classSelect) {
-        classSelect.addEventListener('change', (e) => {
-            const batchId = e.target.value;
-            if (batchId) {
-                loadStudents(batchId);
-            } else {
-                document.getElementById('student-select').innerHTML = '<option value="">-- Select Class First --</option>';
-            }
-        });
-    }
-
-    // B. Live Preview Triggers (Text Inputs)
-    const inputs = ['cert-title', 'course-event', 'issue-date', 'cert-body', 'sig1-name', 'sig2-name'];
-    inputs.forEach(id => {
-        document.getElementById(id)?.addEventListener('input', updatePreview);
-    });
-
-    // C. Design Studio Triggers
-    document.getElementById('font-family')?.addEventListener('change', updatePreview);
-    document.getElementById('accent-color')?.addEventListener('input', updatePreview);
-    document.getElementById('orientation')?.addEventListener('change', changeOrientation);
-}
-
-// ==========================================
-// 4. PREVIEW & DESIGN LOGIC
-// ==========================================
-
-/**
- * Updates the visual preview based on form inputs
- */
 function updatePreview() {
+    // Get values
     const val = (id) => document.getElementById(id)?.value || '';
+    const primaryColor = val('accent-color');
+    const secondaryColor = val('ribbon-color');
+    const font = val('font-family');
 
-    // 1. Text Replacement Logic (Visual Only)
-    // The backend handles the real replacement for every student PDF.
-    let bodyText = val('cert-body');
-    const selectedClass = document.getElementById('class-select').selectedOptions[0]?.text || '[Class Name]';
-    
-    // Replace placeholders with visual examples
-    bodyText = bodyText
-        .replace(/{{StudentName}}/g, '<span style="border-bottom:1px dashed #666; font-weight:bold;">[Student Name]</span>')
-        .replace(/{{Class}}/g, selectedClass)
-        .replace(/{{Event}}/g, val('course-event'))
-        .replace(/{{Date}}/g, val('issue-date'));
+    // Update Text
+    document.getElementById('prev-title').innerText = val('cert-title');
+    document.getElementById('prev-student-name').innerText = "JOHN DOE";
+    document.getElementById('prev-date-text').innerText = val('issue-date');
+    document.getElementById('prev-sig1-name').innerText = val('sig1-name');
+    document.getElementById('prev-sig2-name').innerText = val('sig2-name');
 
-    // 2. Update DOM Elements
-    setText('prev-title', val('cert-title'));
-    setText('prev-course', val('course-event'));
-    setText('prev-date-text', val('issue-date'));
-    setText('prev-sig1-name', val('sig1-name'));
-    setText('prev-sig2-name', val('sig2-name'));
-    
-    const bodyContainer = document.getElementById('prev-body');
-    if (bodyContainer) bodyContainer.innerHTML = bodyText;
+    // Update Body logic
+    let body = val('cert-body')
+        .replace('{{StudentName}}', '<b>JOHN DOE</b>')
+        .replace('{{Class}}', '[Class Name]')
+        .replace('{{Event}}', val('course-event'));
+    document.getElementById('prev-body').innerHTML = body;
 
-    // 3. Apply Styles (Font & Color)
+    // --- APPLY DESIGN ---
+    // 1. Font Family
     const box = document.getElementById('certificate-preview-container');
-    if (box) {
-        box.style.fontFamily = val('font-family');
-        // The border color is handled by CSS classes mostly, but we can override:
-        // box.style.borderColor = val('accent-color'); 
-    }
+    if (font === 'Times') box.style.fontFamily = "'Times New Roman', serif";
+    if (font === 'Helvetica') box.style.fontFamily = "'Arial', sans-serif";
+    if (font === 'Courier') box.style.fontFamily = "'Courier New', monospace";
 
-    // 4. Apply Accent Colors to Text
-    const color = val('accent-color');
-    setStyleColor('prev-title', color); // Fallback if background-clip not supported
-    setStyleColor('prev-student-name', color);
-}
-
-// Helpers
-function setText(id, text) { const el = document.getElementById(id); if(el) el.innerText = text; }
-function setStyleColor(id, color) { const el = document.getElementById(id); if(el) el.style.color = color; }
-
-/**
- * Inserts variables like {{StudentName}} into the textarea
- */
-function insertVar(variable) {
-    const textarea = document.getElementById('cert-body');
-    if (textarea) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        const text = textarea.value;
-        textarea.value = text.substring(0, start) + variable + text.substring(end);
-        updatePreview();
-        textarea.focus();
-    }
-}
-
-function changeOrientation() {
-    const orient = document.getElementById('orientation').value;
-    const box = document.getElementById('certificate-preview-container');
-    if (box) {
-        box.classList.remove('landscape', 'portrait');
-        box.classList.add(orient);
-    }
-}
-
-// ==========================================
-// 5. GLOBAL WINDOW FUNCTIONS (For HTML onclick)
-// ==========================================
-
-// Tab Switching
-window.switchTab = function(id) {
-    // Hide all content
-    document.querySelectorAll('.tab-content').forEach(d => d.style.display = 'none');
-    document.querySelectorAll('.tab-content').forEach(d => d.classList.remove('active')); // Important for detection
+    // 2. Colors
+    document.getElementById('prev-title').style.color = primaryColor;
+    document.getElementById('prev-student-name').style.color = primaryColor;
+    document.getElementById('prev-sig1-name').style.color = primaryColor;
+    document.getElementById('prev-sig2-name').style.color = primaryColor;
     
-    // Show selected
-    const selected = document.getElementById(id);
-    selected.style.display = 'block';
-    selected.classList.add('active'); // Add active class for form logic
-    
-    // Update buttons
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    if(event && event.target) event.target.closest('button').classList.add('active');
+    document.getElementById('prev-ribbon').style.backgroundColor = secondaryColor;
+    box.style.borderColor = primaryColor;
+}
+
+// Global functions
+window.openPreviewModal = () => { updatePreview(); document.getElementById('previewModal').style.display = 'block'; };
+window.closePreviewModal = () => document.getElementById('previewModal').style.display = 'none';
+window.updatePreview = updatePreview;
+
+window.loadBackground = (e) => {
+    const r = new FileReader();
+    r.onload = () => document.getElementById('certificate-preview-container').style.backgroundImage = `url(${r.result})`;
+    r.readAsDataURL(e.target.files[0]);
+};
+window.loadSignature = (e, n) => {
+    const r = new FileReader();
+    r.onload = () => { document.getElementById(`prev-sig${n}-img`).src=r.result; document.getElementById(`prev-sig${n}-img`).style.display='block'; };
+    r.readAsDataURL(e.target.files[0]);
 };
 
-// Modal Logic
-window.openPreviewModal = function() {
-    updatePreview();
-    document.getElementById('previewModal').style.display = 'block';
-    document.body.style.overflow = 'hidden'; 
-};
+document.getElementById('certificate-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true; btn.innerHTML = 'Processing...';
 
-window.closePreviewModal = function() {
-    document.getElementById('previewModal').style.display = 'none';
-    document.body.style.overflow = 'auto';
-};
-
-// File Loaders
-window.loadBackground = function(event) {
-    const reader = new FileReader();
-    reader.onload = function() { 
-        document.getElementById('certificate-preview-container').style.backgroundImage = `url(${reader.result})`; 
-    };
-    if (event.target.files[0]) reader.readAsDataURL(event.target.files[0]);
-};
-
-window.loadSignature = function(event, num) {
-    const reader = new FileReader();
-    reader.onload = function() {
-        const img = document.getElementById(`prev-sig${num}-img`);
-        if (img) {
-            img.src = reader.result;
-            img.style.display = 'block';
-        }
-    };
-    if (event.target.files[0]) reader.readAsDataURL(event.target.files[0]);
-};
-
-// ==========================================
-// 6. GENERATION (SUBMIT TO BACKEND)
-// ==========================================
-const certForm = document.getElementById('certificate-form');
-if (certForm) {
-    certForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
+    try {
+        const formData = new FormData(e.target);
+        formData.append('dataSource', 'database');
         
-        const btn = document.getElementById('generate-btn');
-        const originalText = btn.innerHTML;
+        const bg = document.getElementById('bg-upload');
+        if(bg.files[0]) formData.set('backgroundImage', bg.files[0]);
+        const s1 = document.getElementById('sig1-upload');
+        if(s1.files[0]) formData.set('signature1', s1.files[0]);
+        const s2 = document.getElementById('sig2-upload');
+        if(s2.files[0]) formData.set('signature2', s2.files[0]);
+        
+        const emailCheck = document.getElementById('sendEmail');
+        formData.set('sendEmail', emailCheck.checked ? 'true' : 'false');
 
-        try {
-            // 1. Determine Data Source
-            // Check which tab has the 'active' class (set by switchTab)
-            const activeTab = document.querySelector('.tab-content.active') || document.getElementById('db-source');
-            const sourceMode = (activeTab.id === 'db-source') ? 'database' : 'csv';
-            
-            const classId = document.getElementById('class-select').value;
+        const res = await fetch(`${API_BASE}/certificates/generate`, {
+            method: 'POST', headers: {'Authorization': `Bearer ${authToken}`}, body: formData
+        });
 
-            // 2. Validation
-            if (sourceMode === 'database' && !classId) {
-                alert('Please select a Class/Batch from the dropdown.');
-                return;
-            }
-
-            // 3. UI Feedback
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
-
-            // 4. Prepare FormData
-            const formData = new FormData(e.target);
-            
-            // Explicitly set the data source so backend knows what to do
-            formData.set('dataSource', sourceMode);
-            formData.set('classId', classId); // Ensure classId is sent
-
-            // Handle file inputs manually (safeguard for FormData quirks)
-            const bg = document.getElementById('bg-upload');
-            if(bg?.files[0]) formData.set('backgroundImage', bg.files[0]);
-            
-            const sig1 = document.getElementById('sig1-upload');
-            if(sig1?.files[0]) formData.set('signature1', sig1.files[0]);
-
-            const sig2 = document.getElementById('sig2-upload');
-            if(sig2?.files[0]) formData.set('signature2', sig2.files[0]);
-
-            // 5. Send to Backend
-            const response = await fetch(`${API_BASE}/certificates/generate`, {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${authToken}` },
-                body: formData
-            });
-
-            if (!response.ok) {
-                const errData = await response.json().catch(() => ({}));
-                throw new Error(errData.error || 'Server error during generation');
-            }
-
-            // 6. Download ZIP
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `Certificates_${new Date().toISOString().slice(0,10)}.zip`;
-            document.body.appendChild(a);
-            a.click();
-            window.URL.revokeObjectURL(url);
-            
-            alert('Success! Certificates generated and downloaded.');
-
-        } catch (error) {
-            console.error(error);
-            alert('Generation Failed: ' + error.message);
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = originalText;
-        }
-    });
-}
+        if(!res.ok) throw new Error('Generation Failed');
+        const blob = await res.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = 'Certificates.zip';
+        document.body.appendChild(a); a.click();
+        
+        alert('Certificates Generated!');
+    } catch(err) { alert(err.message); }
+    finally { btn.disabled = false; btn.innerHTML = 'GENERATE & DOWNLOAD'; }
+});

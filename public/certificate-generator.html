@@ -4,113 +4,139 @@
     <meta charset="UTF-8">
     <title>Enterprise Certificate Suite</title>
     <link rel="stylesheet" href="/css/certificate-style.css">
-    <link rel="stylesheet" href="/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
 </head>
 <body>
 <script>
-    const token = localStorage.getItem('erp-token');
-    if (!token) window.location.href = '/login.html';
+    if (!localStorage.getItem('erp-token')) window.location.href = '/login.html';
 </script>
 
-    <header class="erp-header">
-        <h1><i class="fas fa-medal"></i> Enterprise Certificate Suite</h1>
-        <div class="header-actions"><a href="/admin-dashboard.html" class="secondary-btn small">Dashboard</a></div>
-    </header>
+<div class="erp-container">
+    <div class="erp-header">
+        <h1><i class="fas fa-medal"></i> Premium Certificate Generator</h1>
+        <a href="/admin-dashboard.html" style="color:white; text-decoration:none;">Dashboard</a>
+    </div>
 
-    <main class="erp-container">
-        <form id="certificate-form" class="erp-form">
-            <section class="form-section">
-                <h2><i class="fas fa-database"></i> 1. Recipient Source</h2>
-                <div class="tabs">
-                    <button type="button" class="tab-btn active" onclick="switchTab('db-source')">School Database</button>
-                    <button type="button" class="tab-btn" onclick="switchTab('csv-source')">External CSV</button>
+    <form id="certificate-form">
+        <section class="form-section">
+            <h2><i class="fas fa-users"></i> 1. Recipient & Design</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Class/Batch</label>
+                    <select id="class-select" name="classId" required><option value="">Loading...</option></select>
                 </div>
-                <div id="db-source" class="tab-content active">
-                    <div class="form-grid">
-                        <div><label>Class/Batch</label><select id="class-select" name="classId"><option value="">Loading...</option></select></div>
-                        <div><label>Specific Student</label><select id="student-select" name="studentId"><option value="">-- All --</option></select></div>
-                    </div>
+                <div>
+                    <label>Background (Floral Template)</label>
+                    <input type="file" id="bg-upload" name="backgroundImage" accept="image/*" onchange="loadBackground(event)">
                 </div>
-                <div id="csv-source" class="tab-content">
-                    <div class="full-width"><label>Upload CSV</label><input type="file" id="csv-file" accept=".csv"></div>
-                </div>
-            </section>
-
-            <section class="form-section">
-                <h2><i class="fas fa-pen-fancy"></i> 2. Content</h2>
-                <div class="form-grid">
-                    <div><label>Title</label><input type="text" id="cert-title" name="certTitle" value="Certificate of Appreciation" oninput="updatePreview()"></div>
-                    <div><label>Event Name</label><input type="text" id="course-event" name="courseEvent" value="Annual Sports Day" oninput="updatePreview()"></div>
-                    <div><label>Issue Date</label><input type="date" id="issue-date" name="issueDate" onchange="updatePreview()"></div>
-                </div>
-                <div class="full-width" style="margin-top:10px;">
-                    <label>Body Template</label>
-                    <div class="variable-chips">
-                        <span class="chip" onclick="insertVar('{{StudentName}}')">+ Name</span>
-                        <span class="chip" onclick="insertVar('{{Class}}')">+ Class</span>
-                        <span class="chip" onclick="insertVar('{{Event}}')">+ Event</span>
-                        <span class="chip" onclick="insertVar('{{Date}}')">+ Date</span>
-                    </div>
-                    <textarea id="cert-body" name="certBody" rows="3" oninput="updatePreview()">This is to certify that {{StudentName}} of {{Class}} has successfully participated in the {{Event}}.</textarea>
-                </div>
-            </section>
-
-            <section class="form-section">
-                <h2><i class="fas fa-palette"></i> 3. Design Studio</h2>
-                <div class="design-studio">
-                    <div class="form-grid">
-                        <div><label>Orientation</label><select id="orientation" name="orientation" onchange="changeOrientation()"><option value="landscape">Landscape</option><option value="portrait">Portrait</option></select></div>
-                        <div><label>Font</label><select id="font-family" name="fontFamily" onchange="updatePreview()"><option value="'Cinzel', serif">Cinzel</option><option value="'Great Vibes', cursive">Great Vibes</option></select></div>
-                        <div><label>Color</label><input type="color" id="accent-color" name="accentColor" value="#d4af37" oninput="updatePreview()"></div>
-                        <div><label>Background</label><input type="file" id="bg-upload" name="backgroundImage" onchange="loadBackground(event)"></div>
-                    </div>
-                </div>
-            </section>
-
-            <section class="form-section">
-                <h2><i class="fas fa-signature"></i> 4. Authority</h2>
-                <div class="form-grid">
-                    <div>
-                        <label>Signatory 1</label><input type="text" id="sig1-name" name="sig1Name" value="Principal" oninput="updatePreview()">
-                        <input type="file" id="sig1-upload" name="signature1" onchange="loadSignature(event, 1)">
-                    </div>
-                    <div>
-                        <label>Signatory 2</label><input type="text" id="sig2-name" name="sig2Name" value="Director" oninput="updatePreview()">
-                        <input type="file" id="sig2-upload" name="signature2" onchange="loadSignature(event, 2)">
-                    </div>
-                </div>
-            </section>
-
-            <div class="action-buttons sticky-footer">
-                <button type="button" onclick="openPreviewModal()" class="secondary-btn"><i class="fas fa-eye"></i> Live Preview</button>
-                <button type="submit" id="generate-btn" class="primary-btn"><i class="fas fa-print"></i> Generate PDF</button>
             </div>
-        </form>
+        </section>
 
-        <button class="floating-preview-btn" onclick="openPreviewModal()"><i class="fas fa-eye"></i></button>
+        <section class="form-section" style="background:#fcfcfc; border:1px dashed #ccc;">
+            <h2><i class="fas fa-palette"></i> 2. Design Studio</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Primary Color (Title/Name)</label>
+                    <input type="color" id="accent-color" name="accentColor" value="#8B0000" oninput="updatePreview()">
+                </div>
+                <div>
+                    <label>Ribbon Color</label>
+                    <input type="color" id="ribbon-color" name="ribbonColor" value="#E65100" oninput="updatePreview()">
+                </div>
+                <div>
+                    <label>Font Style</label>
+                    <select id="font-family" name="fontFamily" onchange="updatePreview()">
+                        <option value="Times">Serif (Classic)</option>
+                        <option value="Helvetica">Sans-Serif (Modern)</option>
+                        <option value="Courier">Monospace (Typewriter)</option>
+                    </select>
+                </div>
+            </div>
+        </section>
 
-        <div id="previewModal" class="modal-overlay">
-            <div class="modal-content-wrapper">
-                <span class="close-modal-btn" onclick="closePreviewModal()">&times;</span>
-                <div id="certificate-preview-container" class="preview-box">
-                    <div style="z-index:2; width:100%;">
-                        <h1 id="prev-title">Certificate of Appreciation</h1>
-                        <p class="prev-subtitle">IS HEREBY AWARDED TO</p>
-                        <h2 id="prev-student-name" class="student-script">John Doe</h2>
-                        <p id="prev-body" style="font-size:1.2rem; margin:20px auto; max-width:80%;">Text body here...</p>
-                        <p id="prev-date" style="margin-top:10px;">Date: <span id="prev-date-text"></span></p>
+        <section class="form-section">
+            <h2><i class="fas fa-pen-nib"></i> 3. Content Details</h2>
+            <div class="form-grid">
+                <div><label>Title</label><input type="text" id="cert-title" name="certTitle" value="CERTIFICATE" oninput="updatePreview()"></div>
+                <div><label>Event Name</label><input type="text" id="course-event" name="courseEvent" value="Thinking Skills Program" oninput="updatePreview()"></div>
+                <div><label>Date</label><input type="date" id="issue-date" name="issueDate" onchange="updatePreview()"></div>
+            </div>
+            <div style="margin-top:15px;">
+                <label>Body Text</label>
+                <textarea id="cert-body" name="certBody" rows="3" style="width:100%" oninput="updatePreview()">From School ERP has participated in the {{Event}} organized by {{Class}}.</textarea>
+            </div>
+        </section>
+
+        <section class="form-section">
+            <h2><i class="fas fa-signature"></i> 4. Signatures</h2>
+            <div class="form-grid">
+                <div>
+                    <label>Left Signatory</label><input type="text" id="sig1-name" name="sig1Name" value="PROF. NAME" oninput="updatePreview()">
+                    <input type="file" id="sig1-upload" name="signature1" onchange="loadSignature(event, 1)">
+                </div>
+                <div>
+                    <label>Right Signatory</label><input type="text" id="sig2-name" name="sig2Name" value="DR. NAME" oninput="updatePreview()">
+                    <input type="file" id="sig2-upload" name="signature2" onchange="loadSignature(event, 2)">
+                </div>
+            </div>
+        </section>
+
+        <div style="background:#f9f9f9; padding:20px; border-top:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+                <input type="checkbox" id="sendEmail" name="sendEmail" value="true">
+                <label for="sendEmail"><strong>Email PDF to Students</strong></label>
+            </div>
+            <div>
+                <button type="button" onclick="openPreviewModal()" class="secondary-btn"><i class="fas fa-eye"></i> Live Preview</button>
+                <button type="submit" id="generate-btn" class="primary-btn"><i class="fas fa-print"></i> Generate & Download</button>
+            </div>
+        </div>
+    </form>
+
+    <div id="previewModal" class="modal-overlay">
+        <div class="modal-content-wrapper">
+            <span class="close-modal-btn" onclick="closePreviewModal()">&times;</span>
+            
+            <div id="certificate-preview-container" class="preview-box">
+                <div style="z-index:2; width:100%;">
+                    <h1 id="prev-title">CERTIFICATE</h1>
+                    
+                    <div id="prev-ribbon" class="prev-subtitle">OF PARTICIPATION</div>
+                    
+                    <p style="font-size:0.9rem;">This is to certify that</p>
+                    
+                    <h2 id="prev-student-name" class="student-script">JOHN DOE</h2>
+                    
+                    <p id="prev-body" style="font-size:1.1rem; margin:15px auto; max-width:85%;">Content...</p>
+                    
+                    <p id="prev-date" style="margin-top:15px; font-weight:bold;">Date: <span id="prev-date-text"></span></p>
+                </div>
+
+                <div class="signatures">
+                    <div class="sig-block">
+                        <img id="prev-sig1-img" style="display:none; height:50px; margin:auto;">
+                        <div class="sig-line"></div>
+                        <span id="prev-sig1-name">PROF. NAME</span>
                     </div>
-                    <div class="signatures">
-                        <div class="sig-block"><img id="prev-sig1-img" style="display:none; height:60px; margin:auto;"><div class="sig-line"></div><span id="prev-sig1-name">Principal</span></div>
+                    
+                    <div style="text-align:center;">
                         <div class="gold-seal">OFFICIAL<br>AWARD</div>
-                        <div class="sig-block"><img id="prev-sig2-img" style="display:none; height:60px; margin:auto;"><div class="sig-line"></div><span id="prev-sig2-name">Director</span></div>
+                        <div style="margin-top:10px; font-size:40px; color:#555;"><i class="fas fa-qrcode"></i></div>
+                        <small style="color:#777;">Certificate No: CERT-2025-XXXX</small>
+                    </div>
+
+                    <div class="sig-block">
+                        <img id="prev-sig2-img" style="display:none; height:50px; margin:auto;">
+                        <div class="sig-line"></div>
+                        <span id="prev-sig2-name">DR. NAME</span>
                     </div>
                 </div>
             </div>
         </div>
-    </main>
-    <script src="/js/certificate-generator.js"></script>
-    <script src="/js/global-config.js"></script>
+    </div>
+</div>
+
+<script src="/js/certificate-generator.js"></script>
+<script src="/js/global-config.js"></script>
 </body>
 </html>

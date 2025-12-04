@@ -7,29 +7,64 @@ const PDFDocument = require('pdfkit');
 const archiver = require('archiver');
 const crypto = require('crypto');
 const QRCode = require('qrcode');
+const nodemailer = require('nodemailer');
 
-// Memory storage for uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
-// Helper: Format Date
+// --- EMAIL CONFIG ---
+const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+        user: 'your-email@gmail.com', // REPLACE
+        pass: 'your-app-password'     // REPLACE
+    }
+});
+
 function formatDate(dateString) {
     if (!dateString) return new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
-// POST /api/certificates/generate
+async function sendCertificateEmail(studentEmail, studentName, pdfBuffer, courseName) {
+    if (!studentEmail) return;
+    try {
+        await transporter.sendMail({
+            from: '"University Admin" <no-reply@school.com>',
+            to: studentEmail,
+            subject: `Certificate of Participation - ${courseName}`,
+            html: `<p>Dear ${studentName},<br>Please find your certificate attached.</p>`,
+            attachments: [{ filename: `${studentName}_Certificate.pdf`, content: pdfBuffer }]
+        });
+        console.log(`✅ Email sent to ${studentEmail}`);
+    } catch (e) { console.error(`❌ Email error: ${e.message}`); }
+}
+
+// --- GENERATE ROUTE ---
 router.post('/generate', authenticateToken, upload.fields([
     { name: 'backgroundImage', maxCount: 1 },
     { name: 'signature1', maxCount: 1 },
     { name: 'signature2', maxCount: 1 }
 ]), async (req, res) => {
 
-    console.log("📝 Certificate Request Body:", req.body); // Debug log
+    const { 
+        classId, certTitle, courseEvent, issueDate, certBody, 
+        dataSource, sendEmail, sig1Name, sig2Name,
+        accentColor, ribbonColor, fontFamily 
+    } = req.body;
+    
+    // Defaults
+    const primaryColor = accentColor || '#8B0000'; // Maroon
+    const secondaryColor = ribbonColor || '#E65100'; // Orange
+    const titleText = certTitle || "CERTIFICATE";
+    const subTitleText = "OF PARTICIPATION";
 
-    const { classId, certTitle, courseEvent, issueDate, certBody, orientation, dataSource } = req.body;
+    // Fonts
+    let titleFont = 'Times-Bold';
+    let bodyFont = 'Times-Roman';
+    if(fontFamily === 'Courier') { titleFont = 'Courier-Bold'; bodyFont = 'Courier'; }
+    if(fontFamily === 'Helvetica') { titleFont = 'Helvetica-Bold'; bodyFont = 'Helvetica'; }
 
-    // Stream Setup
     const archive = archiver('zip', { zlib: { level: 9 } });
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename=certificates.zip');
@@ -37,18 +72,10 @@ router.post('/generate', authenticateToken, upload.fields([
 
     try {
         let students = [];
-
-        // 1. Fetch Data
-        // Logic: If classId is provided, we assume Database mode, regardless of dataSource flag to be safe.
-        if (classId && classId !== "undefined" && classId !== "") {
-            console.log(`🔍 Fetching students for Class ID: ${classId}`);
-            
-            // Query with COALESCE to handle nulls gracefully
+        if (dataSource === 'database' && classId) {
             const query = `
-                SELECT 
-                    s.student_id, s.first_name, s.last_name, s.roll_number,
-                    COALESCE(c.course_name, '') AS class_name,
-                    COALESCE(b.batch_name, '') AS section_name
+                SELECT s.student_id, s.first_name, s.last_name, s.email, s.roll_number,
+                COALESCE(c.course_name, '') AS class_name, COALESCE(b.batch_name, '') AS section_name
                 FROM students s
                 LEFT JOIN batches b ON s.batch_id = b.id
                 LEFT JOIN courses c ON b.course_id = c.id
@@ -56,167 +83,129 @@ router.post('/generate', authenticateToken, upload.fields([
             `;
             const result = await pool.query(query, [classId]);
             students = result.rows;
-            console.log(`✅ Found ${students.length} students.`);
         } else {
-            console.log("⚠️ No Class ID provided. Using Dummy External Data.");
-            // External/CSV Dummy Data (Only happens if no class is selected)
-            students = [{ 
-                first_name: 'External', 
-                last_name: 'Participant', 
-                student_id: null, 
-                class_name: 'External', 
-                section_name: '' 
-            }];
+            students = [{ first_name: 'External', last_name: 'User', student_id: null, email: null }];
         }
 
         if (students.length === 0) {
             const doc = new PDFDocument();
             archive.append(doc, { name: 'error.pdf' });
-            doc.text('No students found in the selected class.');
+            doc.text('No students found.');
             doc.end();
         }
 
-        // 2. Generate PDF Loop
         for (const student of students) {
-            const studentName = `${student.first_name} ${student.last_name}`.trim();
-            
-            // Logic to handle Class Name display
-            let fullClassName = "";
-            if (student.class_name || student.section_name) {
-                fullClassName = `${student.class_name} ${student.section_name}`.trim();
-            } else {
-                fullClassName = "Open Category";
-            }
-                
-            const formattedDate = formatDate(issueDate);
-            const uniqueId = `CERT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+            const name = `${student.first_name} ${student.last_name}`.trim();
+            const className = (student.class_name || student.section_name) ? `${student.class_name} ${student.section_name}` : '';
+            const uid = `CERT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+            const dateStr = formatDate(issueDate);
 
-            // Save to DB (if internal student)
             if (student.student_id) {
-                // We wrap this in a try-catch so one DB error doesn't stop the whole PDF generation
-                try {
-                    await pool.query(
-                        `INSERT INTO certificates (certificate_uid, student_id, course_name, issue_date) 
-                         VALUES ($1, $2, $3, $4)
-                         ON CONFLICT (certificate_uid) DO NOTHING`,
-                        [uniqueId, student.student_id, courseEvent, issueDate]
-                    );
-                } catch (dbError) {
-                    console.error("Error saving certificate to DB:", dbError);
-                }
+                await pool.query(
+                    `INSERT INTO certificates (certificate_uid, student_id, course_name, issue_date, status) 
+                     VALUES ($1, $2, $3, $4, 'Valid') ON CONFLICT (certificate_uid) DO NOTHING`,
+                    [uid, student.student_id, courseEvent, issueDate]
+                );
             }
 
-            // QR Code
-            const verifyUrl = `${req.protocol}://${req.get('host')}/verify.html?id=${uniqueId}`;
-            const qrBuffer = await QRCode.toBuffer(verifyUrl, { margin: 1, width: 100, color: { dark: '#002b49' } });
+            // QR Code (Navy Blue)
+            const verifyUrl = `${req.protocol}://${req.get('host')}/verify.html?id=${uid}`;
+            const qrBuffer = await QRCode.toBuffer(verifyUrl, { margin: 0, width: 70, color: { dark: '#002b49' } });
 
-            // Initialize PDF
-            const doc = new PDFDocument({
-                layout: orientation || 'landscape',
-                size: 'A4',
-                margin: 0
+            const doc = new PDFDocument({ layout: 'landscape', size: 'A4', margin: 0 });
+            let buffers = [];
+            doc.on('data', buffers.push.bind(buffers));
+            doc.on('end', async () => {
+                if (String(sendEmail) === 'true' && student.email) {
+                    await sendCertificateEmail(student.email, name, Buffer.concat(buffers), courseEvent);
+                }
             });
 
-            archive.append(doc, { name: `${studentName.replace(/ /g,'_')}_${uniqueId}.pdf` });
+            archive.append(doc, { name: `${name.replace(/ /g,'_')}.pdf` });
 
-            const w = doc.page.width;
+            const w = doc.page.width; 
             const h = doc.page.height;
-            const centerX = w / 2;
 
-            // --- A. DESIGN ---
+            // --- A. BACKGROUND ---
             if (req.files.backgroundImage) {
-                try {
-                    doc.image(req.files.backgroundImage[0].buffer, 0, 0, { width: w, height: h });
-                } catch(e) {}
+                try { doc.image(req.files.backgroundImage[0].buffer, 0, 0, { width: w, height: h }); } catch(e){}
             } else {
-                // Default Border
-                doc.rect(20, 20, w - 40, h - 40).lineWidth(5).strokeColor('#b88a4d').stroke();
-                doc.rect(28, 28, w - 56, h - 56).lineWidth(1).strokeColor('#e5c376').stroke();
+                doc.rect(20, 20, w-40, h-40).lineWidth(3).strokeColor(primaryColor).stroke();
             }
 
-            // --- B. TEXT CONTENT ---
-            doc.moveDown(2.5);
+            // --- B. TOP ELEMENTS (QR & CERT NO) ---
             
-            // Title
-            doc.font('Times-Bold').fontSize(42).fillColor('#b88a4d')
-               .text(certTitle.toUpperCase(), 0, 80, { align: 'center', characterSpacing: 2 });
+            // 1. Certificate No (Top Left)
+            // Position: X=40, Y=50
+            doc.fontSize(9).fillColor('#333').font('Helvetica-Bold')
+               .text(`Certificate No: ${uid}`, 40, 50, { align: 'left' });
+
+            // 2. QR Code (Top Right)
+            // Position: X=Width-110, Y=40
+            doc.image(qrBuffer, w - 110, 40, { width: 60 });
+            doc.fontSize(7).fillColor('#555')
+               .text("Scan to Verify", w - 110, 105, { width: 60, align: 'center' });
+
+            // --- C. HEADER (Title) ---
+            doc.moveDown(4); 
+            
+            doc.font(titleFont).fontSize(50).fillColor(primaryColor)
+               .text(titleText.toUpperCase(), 0, 130, { align: 'center', characterSpacing: 2 });
+
+            // Ribbon
+            const rw = 320, rh = 30, rx = (w - rw)/2, ry = doc.y + 5;
+            doc.rect(rx, ry, rw, rh).fill(secondaryColor);
+            doc.fontSize(15).fillColor('white').font('Helvetica-Bold')
+               .text(subTitleText, 0, ry + 8, { align: 'center', letterSpacing: 2 });
+
+            // --- D. BODY ---
+            doc.moveDown(3);
+            doc.fillColor('black').font(bodyFont).fontSize(14).text('This is to certify that', { align: 'center' });
             
             doc.moveDown(0.5);
-            doc.font('Helvetica').fontSize(10).fillColor('#555')
-               .text('IS HEREBY AWARDED TO', { align: 'center', letterSpacing: 4 });
+            doc.font(titleFont).fontSize(32).fillColor(primaryColor)
+               .text(name.toUpperCase(), { align: 'center' });
 
-            // Student Name
-            doc.moveDown(0.5);
-            doc.font('Times-Italic').fontSize(55).fillColor('#b88a4d')
-               .text(studentName, { align: 'center' });
+            doc.moveDown(0.8);
             
-            // Name Underline (Optional)
-            // doc.lineWidth(0.5).strokeColor('#ccc').moveTo(centerX - 150, doc.y).lineTo(centerX + 150, doc.y).stroke();
+            let body = (certBody || "Has successfully participated in the event.")
+                .replace(/{{StudentName}}/g, name)
+                .replace(/{{Class}}/g, className)
+                .replace(/{{Event}}/g, courseEvent)
+                .replace(/{{Date}}/g, dateStr);
 
-            // Body Text
-            doc.moveDown(1); 
-            
-            // Global Replacement Logic
-            let processedBody = (certBody || "")
-                .split('{{StudentName}}').join(studentName)
-                .split('{{Class}}').join(fullClassName)
-                .split('{{Event}}').join(courseEvent)
-                .split('{{Date}}').join(formattedDate);
+            doc.font(bodyFont).fontSize(13).fillColor('#333')
+               .text(body, 80, doc.y, { align: 'center', width: w-160 });
 
-            doc.font('Times-Roman').fontSize(14).fillColor('#333')
-               .text(processedBody, 80, doc.y + 10, { align: 'center', width: w - 160, lineGap: 8 });
-
-            // Date Display
             doc.moveDown(1);
-            doc.fontSize(12).fillColor('#555').text(`DATE: ${formattedDate}`, { align: 'center', letterSpacing: 1 });
+            doc.fontSize(11).text(`Date: ${dateStr}`, { align: 'center' });
 
-            // --- C. FOOTER ---
-            const footerY = h - 130;
-
-            // Center Seal
-            // Outer Circle
-            doc.circle(centerX, footerY, 45).lineWidth(2).strokeColor('#b88a4d').stroke();
-            // Inner Circle
-            doc.circle(centerX, footerY, 40).lineWidth(0.5).strokeColor('#e5c376').stroke();
-            // Text inside Seal
-            doc.fontSize(7).fillColor('#b88a4d').font('Helvetica-Bold')
-               .text('OFFICIAL', centerX - 20, footerY - 10, { align: 'center', width: 40 });
-            doc.text('AWARD', centerX - 20, footerY, { align: 'center', width: 40 });
-
-            // Signatures
-            const sigY = footerY + 10;
-
-            // Signature 1
-            doc.lineWidth(1).strokeColor('#b88a4d').moveTo(100, sigY).lineTo(280, sigY).stroke();
-            doc.fontSize(11).fillColor('#002b49').font('Times-Bold')
-               .text(req.body.sig1Name || 'Principal', 100, sigY + 10, { width: 180, align: 'center' });
+            // --- E. FOOTER ---
+            const fy = h - 120;
+            const leftX = 100;
+            const rightX = w - 260;
+            const cx = w/2;
             
-            if (req.files.signature1) {
-                doc.image(req.files.signature1[0].buffer, 140, sigY - 50, { height: 45 });
-            }
+            // Left Sig
+            if(req.files.signature1) doc.image(req.files.signature1[0].buffer, leftX+20, fy-40, { height:40 });
+            doc.lineWidth(1).strokeColor('#333').moveTo(leftX, fy).lineTo(leftX+160, fy).stroke();
+            doc.fontSize(11).fillColor(primaryColor).font(titleFont).text(sig1Name || "Coordinator", leftX, fy+5, { width: 160, align: 'center' });
 
-            // Signature 2
-            doc.lineWidth(1).strokeColor('#b88a4d').moveTo(w - 280, sigY).lineTo(w - 100, sigY).stroke();
-            doc.fontSize(11).fillColor('#002b49')
-               .text(req.body.sig2Name || 'Director', w - 280, sigY + 10, { width: 180, align: 'center' });
+            // Center Gold Seal (Since QR moved up, Seal takes center stage)
+            doc.circle(cx, fy - 10, 45).lineWidth(2).strokeColor('#DAA520').stroke(); 
+            doc.circle(cx, fy - 10, 40).lineWidth(0.5).strokeColor('#B8860B').stroke();
+            doc.fontSize(7).fillColor('#DAA520').text('OFFICIAL\nAWARD', cx - 20, fy - 15, { align: 'center', width: 40 });
 
-            if (req.files.signature2) {
-                doc.image(req.files.signature2[0].buffer, w - 240, sigY - 50, { height: 45 });
-            }
-
-            // QR Code (Small, below seal)
-            doc.image(qrBuffer, centerX - 20, footerY + 50, { width: 40 });
-            doc.fontSize(6).fillColor('#999')
-               .text(`ID: ${uniqueId}`, centerX - 50, footerY + 92, { width: 100, align: 'center' });
+            // Right Sig
+            if(req.files.signature2) doc.image(req.files.signature2[0].buffer, rightX+20, fy-40, { height:40 });
+            doc.lineWidth(1).strokeColor('#333').moveTo(rightX, fy).lineTo(rightX+160, fy).stroke();
+            doc.fontSize(11).fillColor(primaryColor).font(titleFont).text(sig2Name || "Director", rightX, fy+5, { width: 160, align: 'center' });
 
             doc.end();
         }
-
         await archive.finalize();
-
-    } catch (error) {
-        console.error('Cert Gen Error:', error);
-        if (!res.headersSent) res.status(500).json({ error: error.message });
+    } catch (e) {
+        if(!res.headersSent) res.status(500).json({ error: e.message });
     }
 });
 
