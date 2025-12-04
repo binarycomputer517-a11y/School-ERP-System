@@ -1,17 +1,15 @@
-// public/edit-student.js
-
 document.addEventListener('DOMContentLoaded', initializeEditForm);
 
-// Retrieve the token from localStorage set during login
+// --- Constants & Global State ---
 const AUTH_TOKEN = localStorage.getItem('erp-token');
 const ACADEMICS_API = '/api/academicswithfees';
 const STUDENTS_API = '/api/students';
 
-// Get the student ID from the URL (e.g., /edit-student.html?id=...)
+// Get the student ID from the URL
 const STUDENT_ID = new URLSearchParams(window.location.search).get('id');
 
-// Variable to store the student's integer User ID retrieved from the database
-let STUDENT_USER_ID = null; // <--- ADDED GLOBAL VARIABLE
+// CRITICAL State Variable: Stores the associated User ID needed for the PUT request
+let STUDENT_USER_ID = null; 
 
 
 /**
@@ -19,7 +17,19 @@ let STUDENT_USER_ID = null; // <--- ADDED GLOBAL VARIABLE
  */
 async function handleApi(url, options = {}) {
     options.headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AUTH_TOKEN}` };
+    
+    // Set method defaults
+    if (!options.method) {
+        options.method = 'GET';
+    } 
+    // If body is an object, stringify it
+    if (options.body && typeof options.body !== 'string' && options.method !== 'GET') {
+        options.body = JSON.stringify(options.body);
+    }
+
     const response = await fetch(url, options);
+
+    // Handle authentication failure globally
     if (response.status === 401 || response.status === 403) {
         alert('Session expired or unauthorized. Please log in again.');
         window.location.href = '/login.html';
@@ -29,64 +39,51 @@ async function handleApi(url, options = {}) {
 }
 
 /**
- * Initializes the student edit form: fetches student data, pre-fills form, and attaches listeners.
+ * Initializes the form, loads necessary data, and attaches event listeners.
  */
 async function initializeEditForm() {
     const form = document.getElementById('editStudentForm'); 
     
-    if (!form || !AUTH_TOKEN) {
-        if (!AUTH_TOKEN) alert('Authentication token missing. Please log in.');
-        return;
-    }
-    
-    if (!STUDENT_ID) {
-        document.getElementById('profileContainer').innerHTML = '<h2>Error: Student ID is missing. Please select a student to edit.</h2>';
+    if (!form || !AUTH_TOKEN || !STUDENT_ID) {
+        if (!STUDENT_ID) document.getElementById('profileContainer').innerHTML = '<h2>Error: Student ID is missing.</h2>';
         return;
     }
 
-    // Attach event listeners
     form.addEventListener('submit', handleEditStudentSubmit);
     
     const courseSelect = document.getElementById('course_id');
     if (courseSelect) courseSelect.addEventListener('change', handleCourseChange);
 
-    // Load initial data and pre-fill form
     await loadInitialDropdowns();
     await loadStudentData(STUDENT_ID, form);
 }
 
-// --- Dynamic Data Loading ---
+// ----------------------------------------------------------------------
+//                        DATA FETCHING AND PRE-FILLING
+// ----------------------------------------------------------------------
 
 async function loadInitialDropdowns() {
     const courseSelect = document.getElementById('course_id');
     const batchSelect = document.getElementById('batch_id');
-    
     if (!courseSelect || !batchSelect) return;
 
     courseSelect.innerHTML = '<option value="">Loading Courses...</option>';
     batchSelect.innerHTML = '<option value="">-- Waiting for Course --</option>';
-    batchSelect.disabled = true;
 
     try {
         const response = await handleApi(`${ACADEMICS_API}/courses`);
         const courses = await response.json();
-
-        if (!Array.isArray(courses)) {
-            courseSelect.innerHTML = '<option value="">Error: Server failed to return course list.</option>';
-            return;
-        }
-
         courseSelect.innerHTML = '<option value="">-- Select Course --</option>';
-        courses.forEach(c => {
-            courseSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name} (${c.course_code})</option>`;
-        });
+        if (Array.isArray(courses)) {
+            courses.forEach(c => {
+                courseSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name} (${c.course_code})</option>`;
+            });
+        }
     } catch (err) {
         console.error('Failed to load courses:', err);
         courseSelect.innerHTML = '<option value="">Error loading courses</option>';
     }
 }
-
-// --- Logic: Load and Pre-fill Student Data ---
 
 async function loadStudentData(studentId, form) {
     const loadingMessage = document.getElementById('loadingMessage');
@@ -94,12 +91,10 @@ async function loadStudentData(studentId, form) {
     
     try {
         const response = await handleApi(`${STUDENTS_API}/${studentId}`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch student profile: ${response.statusText}`);
-        }
+        if (!response.ok) { throw new Error(`Failed to fetch student profile: ${response.statusText}`); }
         const student = await response.json();
         
-        // --- CRITICAL FIX: Store the retrieved user_id globally ---
+        // CRITICAL: Store the retrieved user_id 
         STUDENT_USER_ID = student.user_id; 
         
         // 1. Pre-fill basic form data
@@ -108,9 +103,7 @@ async function loadStudentData(studentId, form) {
             if (input) {
                 if (input.type === 'date' && student[key]) {
                     input.value = student[key].substring(0, 10);
-                } else if (input.type === 'password' || key === 'username') {
-                    // Skip password pre-fill for security
-                } else {
+                } else if (input.type !== 'password' && key !== 'username') {
                     input.value = student[key];
                 }
             }
@@ -118,27 +111,21 @@ async function loadStudentData(studentId, form) {
 
         // 2. Handle Course and Batch dependent loading
         if (student.course_id) {
-            // Set the course selection
             const courseSelect = document.getElementById('course_id');
             if (courseSelect) courseSelect.value = student.course_id;
 
-            // Trigger batch population
+            // Wait for batches to populate before setting the batch value
             await populateBatchDropdown(student.course_id); 
 
-            // After batches are populated, set the batch selection
             const batchSelect = document.getElementById('batch_id');
             if (batchSelect) batchSelect.value = student.batch_id;
             
-            // Manually trigger fee and subject loading based on loaded data
-            const feeDisplayEl = document.getElementById('fee-structure-display');
-            const subjectsDisplayEl = document.getElementById('subjects-display');
-            
-            loadSubjects(student.course_id, subjectsDisplayEl);
-            loadFeeStructure(student.course_id, student.batch_id, feeDisplayEl);
+            // Trigger associated lookups
+            loadSubjects(student.course_id, document.getElementById('subjects-display'));
+            loadFeeStructure(student.course_id, student.batch_id, document.getElementById('fee-structure-display'));
         }
 
         loadingMessage.textContent = `Editing Student Profile: ${student.first_name} ${student.last_name}`;
-        document.title = `Edit: ${student.first_name}`;
 
     } catch (error) {
         console.error('Error loading student data:', error);
@@ -147,16 +134,19 @@ async function loadStudentData(studentId, form) {
     }
 }
 
-
-// --- Dependency Handlers (Course, Batch, Fee, Subject) ---
+// ----------------------------------------------------------------------
+//                        DYNAMIC DROPDOWN & INFO LOGIC
+// ----------------------------------------------------------------------
 
 async function handleCourseChange(event) {
     const courseId = event.target.value;
     const feeDisplayEl = document.getElementById('fee-structure-display'); 
     const subjectsDisplayEl = document.getElementById('subjects-display');
     
-    clearFeeAndSubjectDisplay(feeDisplayEl, subjectsDisplayEl); 
-    
+    // Clear displays 
+    clearFeeDisplay(feeDisplayEl);
+    if (subjectsDisplayEl) subjectsDisplayEl.innerHTML = '<p>Subjects assigned to this Course will appear here.</p>';
+
     await populateBatchDropdown(courseId);
     
     loadSubjects(courseId, subjectsDisplayEl); 
@@ -167,8 +157,8 @@ async function populateBatchDropdown(courseId) {
     if (!batchSelect) return;
 
     batchSelect.innerHTML = '<option value="">Loading batches...</option>';
-    batchSelect.disabled = true;
     
+    // Cleanup previous listener before potentially adding a new one
     batchSelect.removeEventListener('change', handleBatchChange); 
 
     if (!courseId) {
@@ -185,7 +175,7 @@ async function populateBatchDropdown(courseId) {
             batches.forEach(b => {
                 batchSelect.innerHTML += `<option value="${b.id || b.batch_id}">${b.batch_name} (${b.batch_code})</option>`;
             });
-            batchSelect.disabled = false;
+            // Re-attach batch change handler
             batchSelect.addEventListener('change', handleBatchChange); 
         } else {
             batchSelect.innerHTML = '<option value="">-- No batches found --</option>';
@@ -212,50 +202,47 @@ async function handleBatchChange() {
 }
 
 async function loadSubjects(courseId, subjectsDisplayEl) {
-    if (!subjectsDisplayEl) return;
-    subjectsDisplayEl.innerHTML = 'Fetching assigned subjects...';
-    if (!courseId) {
-        subjectsDisplayEl.innerHTML = '<p>Subjects assigned to this Course will appear here.</p>';
+    if (!subjectsDisplayEl || !courseId) {
+        if(subjectsDisplayEl) subjectsDisplayEl.innerHTML = '<p>Subjects assigned to this Course will appear here.</p>';
         return;
     }
+    subjectsDisplayEl.innerHTML = 'Fetching assigned subjects...';
+
     try {
         const response = await handleApi(`${ACADEMICS_API}/courses/${courseId}/subjects`);
         if (response.ok) {
             const subjects = await response.json();
-            if (Array.isArray(subjects) && subjects.length > 0) {
-                const listHtml = subjects.map(s => `<li>${s.subject_name} (${s.subject_code})</li>`).join('');
-                subjectsDisplayEl.innerHTML = `
-                    <h4>📚 Assigned Subjects (${subjects.length})</h4>
-                    <ul style="margin-top: 5px; padding-left: 20px;">${listHtml}</ul>
-                `;
-            } else {
-                subjectsDisplayEl.innerHTML = '<p>⚠️ No subjects are currently assigned to this course.</p>';
-            }
+            const listHtml = (Array.isArray(subjects) && subjects.length > 0) 
+                ? subjects.map(s => `<li>${s.subject_name} (${s.subject_code})</li>`).join('')
+                : '<p>⚠️ No subjects are currently assigned to this course.</p>';
+            subjectsDisplayEl.innerHTML = `<h4>📚 Assigned Subjects</h4><ul style="margin-top: 5px; padding-left: 20px;">${listHtml}</ul>`;
         } else {
             const error = await response.json();
             subjectsDisplayEl.innerHTML = `<p style="color:red;">Error fetching subjects: ${error.message || response.statusText}</p>`;
         }
     } catch (err) {
         console.error('Subject Fetch Error:', err);
-        subjectsDisplayEl.innerHTML = '<p style="color:red;">A network error occurred while retrieving subjects.</p>';
+        subjectsDisplayEl.innerHTML = '<p style="color:red;">Error retrieving subjects.</p>';
     }
 }
 
 async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
-    if (!feeDisplayEl) return; 
+    if (!feeDisplayEl || !courseId || !batchId) return; 
     feeDisplayEl.innerHTML = 'Fetching fee structure...';
     try {
         const response = await handleApi(`${ACADEMICS_API}/fees/structures/find?course_id=${courseId}&batch_id=${batchId}`);
         if (response.ok) {
             const structure = await response.json();
             const totalFee = calculateTotalFee(structure);
+            
+            // CRITICAL FIX: Use parseFloat() to handle database strings and prevent TypeError
             feeDisplayEl.innerHTML = `
                 <h4>💰 Fee Structure Details</h4>
-                <p><strong>Admission Fee:</strong> ₹${(structure.admission_fee || 0).toFixed(2)}</p>
-                <p><strong>Registration Fee:</strong> ₹${(structure.registration_fee || 0).toFixed(2)}</p>
-                <p><strong>Examination Fee:</strong> ₹${(structure.examination_fee || 0).toFixed(2)}</p>
-                ${structure.has_transport ? `<p><strong>Transport Fee (x${structure.course_duration_months} mos):</strong> ₹${(structure.transport_fee * structure.course_duration_months).toFixed(2)}</p>` : ''}
-                ${structure.has_hostel ? `<p><strong>Hostel Fee (x${structure.course_duration_months} mos):</strong> ₹${(structure.hostel_fee * structure.course_duration_months).toFixed(2)}</p>` : ''}
+                <p><strong>Admission Fee:</strong> ₹${parseFloat(structure.admission_fee || 0).toFixed(2)}</p>
+                <p><strong>Registration Fee:</strong> ₹${parseFloat(structure.registration_fee || 0).toFixed(2)}</p>
+                <p><strong>Tuition Fee:</strong> ₹${parseFloat(structure.tuition_fee || 0).toFixed(2)}</p>
+                <p><strong>Examination Fee:</strong> ₹${parseFloat(structure.examination_fee || 0).toFixed(2)}</p>
+                <p><strong>Duration:</strong> ${structure.course_duration_months} months</p>
                 <hr>
                 <p style="font-weight: bold;">TOTAL ESTIMATED FEE: ₹${totalFee}</p>
             `;
@@ -272,25 +259,19 @@ async function loadFeeStructure(courseId, batchId, feeDisplayEl) {
 }
 
 function calculateTotalFee(structure) {
+    // CRITICAL FIX: Ensure all structure properties are parsed as floats before calculation.
     const admission = parseFloat(structure.admission_fee) || 0;
     const registration = parseFloat(structure.registration_fee) || 0;
+    const tuition = parseFloat(structure.tuition_fee) || 0;
     const examination = parseFloat(structure.examination_fee) || 0;
     const duration = parseInt(structure.course_duration_months) || 1;
     
+    // Monthly fees are calculated over the course duration
     const transport = structure.has_transport ? (parseFloat(structure.transport_fee) || 0) * duration : 0;
     const hostel = structure.has_hostel ? (parseFloat(structure.hostel_fee) || 0) * duration : 0;
     
-    const total = admission + registration + examination + transport + hostel;
+    const total = admission + registration + tuition + examination + transport + hostel;
     return total.toFixed(2);
-}
-
-function clearFeeAndSubjectDisplay(feeDisplayEl, subjectsDisplayEl) { 
-    if (feeDisplayEl) {
-        feeDisplayEl.innerHTML = 'Fee structure details will appear here upon Course and Batch selection.';
-    }
-    if (subjectsDisplayEl) {
-         subjectsDisplayEl.innerHTML = '<p>Subjects assigned to this Course will appear here.</p>';
-    }
 }
 
 function clearFeeDisplay(feeDisplayEl) { 
@@ -300,7 +281,9 @@ function clearFeeDisplay(feeDisplayEl) {
 }
 
 
-// --- Form Submission (PUT Method) ---
+// ----------------------------------------------------------------------
+//                          FORM SUBMISSION
+// ----------------------------------------------------------------------
 
 async function handleEditStudentSubmit(event) {
     event.preventDefault(); 
@@ -309,7 +292,7 @@ async function handleEditStudentSubmit(event) {
     const password = form.querySelector('#password').value;
     const confirmPassword = form.querySelector('#confirm_password').value;
 
-    // Only check password if the user entered values (meaning they intend to change it)
+    // Basic client-side validation for password change intention
     if (password || confirmPassword) {
         if (password !== confirmPassword) {
             alert("Error: New Password and Confirm Password do not match!");
@@ -320,15 +303,11 @@ async function handleEditStudentSubmit(event) {
     const formData = new FormData(form);
     const studentData = Object.fromEntries(formData.entries());
 
-    // Remove confirmation field
+    // Clean up request body
     delete studentData.confirm_password; 
-
-    // If password fields are empty, remove them entirely so the API doesn't hash an empty string
-    if (studentData.password === "") {
-        delete studentData.password;
-    }
+    if (studentData.password === "") { delete studentData.password; }
     
-    // *** CRITICAL FIX: Explicitly include the stored user_id for server validation ***
+    // Attach the stored user_id for the backend transaction
     if (STUDENT_USER_ID !== null) {
         studentData.user_id = STUDENT_USER_ID; 
     } else {
@@ -339,19 +318,20 @@ async function handleEditStudentSubmit(event) {
     const API_ENDPOINT = `${STUDENTS_API}/${STUDENT_ID}`; 
     
     try {
-        // Use PUT method for updating an existing resource
-        const response = await handleApi(API_ENDPOINT, { method: 'PUT', body: JSON.stringify(studentData) });
+        const response = await handleApi(API_ENDPOINT, { method: 'PUT', body: studentData });
         
         const result = await response.json();
+        
         if (response.ok) {
-            alert(`Student Profile for ${result.first_name} updated successfully!`);
-            // Optional: Reload the data to reflect any changes from the server
-            // await loadStudentData(STUDENT_ID, form); 
+            // FIX: Display the reliable, server-constructed message 
+            alert(result.message); 
+            // Reload data to reflect any changes
+            await loadStudentData(STUDENT_ID, form); 
         } else {
             alert(`Update Failed: ${result.message || response.statusText}`);
         }
     } catch (error) {
         console.error('Network Error:', error);
-        alert('A network error occurred. Could not connect to the API.');
+        alert('A network error occurred. Please check your connection.');
     }
 }

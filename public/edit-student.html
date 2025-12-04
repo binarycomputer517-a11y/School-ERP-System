@@ -6,53 +6,35 @@
     <title>Edit Student Profile</title>
     
     <script src="edit-student.js" defer></script> 
+    <script src="js/global-config.js" defer></script> 
     
     <style>
         /* BASE ERP STYLES (Kept for consistency) */
         :root {
-            --primary-color: #005A9C; /* Institutional Blue */
-            --accent-color: #C0392B; /* Deep Red for accents/buttons */
-            --border-color: #333333; /* Dark Border */
+            --primary-color: #005A9C; 
+            --accent-color: #C0392B; 
+            --border-color: #333333; 
             --font-serif: 'Times New Roman', serif;
             --font-sans: Arial, sans-serif;
             --tab-background: #f1f1f1;
             --tab-active-color: #ffffff;
         }
         
-        body {
-            font-family: var(--font-serif);
-            background-color: #f8f8f8;
-            padding: 40px;
-            color: #333;
-        }
+        body { font-family: var(--font-serif); background-color: #f8f8f8; padding: 40px; color: #333; }
         
         .container {
-            max-width: 900px;
-            margin: 0 auto;
-            background: #ffffff;
-            border: 2px solid var(--border-color);
-            box-shadow: 6px 6px 0px #cccccc;
-            padding: 30px 40px;
+            max-width: 900px; margin: 0 auto; background: #ffffff; border: 2px solid var(--border-color); 
+            box-shadow: 6px 6px 0px #cccccc; padding: 30px 40px;
         }
 
         h1 {
-            text-align: center;
-            color: var(--primary-color);
-            border-bottom: 3px double var(--border-color);
-            padding-bottom: 15px;
-            margin-bottom: 30px;
-            font-family: var(--font-sans);
-            font-weight: bold;
+            text-align: center; color: var(--primary-color); border-bottom: 3px double var(--border-color);
+            padding-bottom: 15px; margin-bottom: 30px; font-family: var(--font-sans); font-weight: bold;
         }
         
-        #loadingMessage {
-            text-align: center;
-            color: var(--primary-color);
-            font-weight: bold;
-            margin-bottom: 20px;
-        }
+        #loadingMessage { text-align: center; color: var(--primary-color); font-weight: bold; margin-bottom: 20px; }
 
-        /* Input & Button Styles (simplified for brevity) */
+        /* Input & Button Styles */
         label { display: block; margin-top: 10px; margin-bottom: 4px; font-weight: 600; }
         input[type="text"], input[type="date"], input[type="email"], input[type="tel"], input[type="password"], input[type="number"], select, textarea {
             width: 100%; padding: 8px; border: 1px solid #777; box-sizing: border-box; font-family: var(--font-serif);
@@ -63,54 +45,81 @@
         }
 
         /* --- TAB SPECIFIC STYLES --- */
-        .tab-bar {
-            display: flex;
-            margin-bottom: 1px;
-            border-bottom: 2px solid var(--primary-color);
-        }
+        .tab-bar { display: flex; margin-bottom: 1px; border-bottom: 2px solid var(--primary-color); }
         
         .tab-button {
-            background-color: var(--tab-background);
-            border: none;
-            padding: 10px 20px;
-            cursor: pointer;
-            transition: 0.3s;
-            font-size: 1.0em;
-            border: 1px solid var(--primary-color);
-            border-bottom: none;
-            margin-right: 5px;
-            border-radius: 5px 5px 0 0;
-            outline: none;
-            color: var(--primary-color);
-            font-family: var(--font-sans);
+            background-color: var(--tab-background); border: 1px solid var(--primary-color); border-bottom: none;
+            padding: 10px 20px; cursor: pointer; transition: 0.3s; font-size: 1.0em; margin-right: 5px; 
+            border-radius: 5px 5px 0 0; outline: none; color: var(--primary-color); font-family: var(--font-sans);
         }
         
         .tab-button.active {
-            background-color: var(--primary-color);
-            color: var(--tab-active-color);
-            border-color: var(--primary-color);
+            background-color: var(--primary-color); color: var(--tab-active-color); border-color: var(--primary-color);
         }
 
-        .tab-content {
-            border: 1px solid var(--primary-color);
-            padding: 20px;
-            min-height: 400px; /* Ensure content area exists */
-        }
+        .tab-content { border: 1px solid var(--primary-color); padding: 20px; min-height: 400px; }
 
-        /* Hide fieldsets by default, show only the active one */
-        .tab-content fieldset {
-            display: none;
-            border: none; /* Fieldset border removed as tab border is now primary */
-            padding: 0;
-            margin: 0;
-        }
-        
-        .tab-content fieldset.active {
-            display: block;
-        }
+        /* Only the active fieldset is displayed */
+        .tab-content fieldset { display: none; border: none; padding: 0; margin: 0; }
+        .tab-content fieldset.active { display: block; }
         /* End TAB Styles */
-
     </style>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize the first tab as active upon load
+            const firstTabId = document.querySelector('.tab-button').dataset.tab;
+            if (firstTabId) {
+                document.getElementById(firstTabId).classList.add('active');
+            }
+
+            // Attach listeners to all tab buttons
+            document.querySelectorAll('.tab-button').forEach(button => {
+                button.addEventListener('click', (evt) => openTab(evt, button.dataset.tab));
+            });
+
+            // Run initial validation attribute configuration
+            // Note: The openTab function will now be responsible for managing required attributes.
+            const initialTabButton = document.querySelector('.tab-button.active');
+            if (initialTabButton) {
+                 // Trigger the logic to set 'required' attributes on the active tab
+                 openTab({ currentTarget: initialTabButton }, initialTabButton.dataset.tab); 
+            }
+        });
+        
+        // This function switches tabs and dynamically manages the 'required' attribute.
+        function openTab(evt, tabId) {
+            let i, tabcontent, tablinks, currentFieldset;
+
+            // 1. Hide all content and remove 'active' state from all buttons
+            tabcontent = document.querySelectorAll('.tab-content fieldset');
+            tablinks = document.querySelectorAll('.tab-button');
+            
+            // 2. Remove 'required' from all fields in all non-active tabs before switching
+            tabcontent.forEach(fieldset => {
+                // Remove 'required' from all inputs in the fieldset that is about to be deactivated
+                fieldset.querySelectorAll('[required]').forEach(input => {
+                    input.removeAttribute('required-temp'); // Clean up any previous temp markers
+                    input.setAttribute('required-temp', 'true'); // Mark required fields
+                    input.removeAttribute('required');
+                });
+                fieldset.classList.remove('active');
+            });
+            
+            tablinks.forEach(link => link.classList.remove('active'));
+
+            // 3. Show the current tab and set button to active
+            currentFieldset = document.getElementById(tabId);
+            currentFieldset.classList.add('active');
+            evt.currentTarget.classList.add('active');
+            
+            // 4. Re-add 'required' to fields in the newly active tab that were originally required
+            currentFieldset.querySelectorAll('[required-temp]').forEach(input => {
+                input.setAttribute('required', 'true');
+                input.removeAttribute('required-temp');
+            });
+        }
+    </script>
 </head>
 <body>
     <div class="container" id="profileContainer">
@@ -128,10 +137,10 @@
             <input type="hidden" name="id" readonly> 
 
             <div class="tab-bar">
-                <button type="button" class="tab-button active" onclick="openTab(event, 'personal')">1. Personal & Address</button>
-                <button type="button" class="tab-button" onclick="openTab(event, 'academics')">2. Academics & Fees</button>
-                <button type="button" class="tab-button" onclick="openTab(event, 'parents')">3. Parent/Guardian</button>
-                <button type="button" class="tab-button" onclick="openTab(event, 'login')">4. Login/Security</button>
+                <button type="button" class="tab-button active" data-tab="personal">1. Personal & Address</button>
+                <button type="button" class="tab-button" data-tab="academics">2. Academics & Fees</button>
+                <button type="button" class="tab-button" data-tab="parents">3. Parent/Guardian</button>
+                <button type="button" class="tab-button" data-tab="login">4. Login/Security</button>
             </div>
 
             <div class="tab-content">
@@ -270,7 +279,9 @@
                     <p>Change password/username only if necessary. Current values are hidden.</p>
 
                     <label for="username">Username:</label>
-                    <input type="text" id="username" name="username" readonly> <label for="email">Email (Login):</label>
+                    <input type="text" id="username" name="username" readonly> 
+                    
+                    <label for="email">Email (Login):</label>
                     <input type="email" id="email" name="email" required>
 
                     <label for="phone_number">Phone Number:</label>
@@ -287,28 +298,5 @@
             <button type="submit">Update Student Profile</button>
         </form>
     </div>
-    <script>
-        function openTab(evt, tabId) {
-            // Declare all variables
-            var i, tabcontent, tablinks;
-
-            // Get all elements with class="tab-content" and hide them (by hiding fieldsets)
-            tabcontent = document.querySelectorAll('.tab-content fieldset');
-            for (i = 0; i < tabcontent.length; i++) {
-                tabcontent[i].classList.remove('active');
-            }
-
-            // Get all elements with class="tab-button" and remove the active class
-            tablinks = document.querySelectorAll('.tab-button');
-            for (i = 0; i < tablinks.length; i++) {
-                tablinks[i].classList.remove('active');
-            }
-
-            // Show the current tab, and add an "active" class to the button that opened the tab
-            document.getElementById(tabId).classList.add('active');
-            evt.currentTarget.classList.add('active');
-        }
-    </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>
