@@ -9,14 +9,15 @@ const crypto = require('crypto');
 const QRCode = require('qrcode');
 const nodemailer = require('nodemailer');
 
+// Memory storage for uploads
 const upload = multer({ storage: multer.memoryStorage() });
 
-// --- EMAIL CONFIG ---
+// --- EMAIL CONFIGURATION ---
 const transporter = nodemailer.createTransport({
     service: 'gmail',
     auth: {
-        user: 'your-email@gmail.com', // REPLACE
-        pass: 'your-app-password'     // REPLACE
+        user: 'your-email@gmail.com', // REPLACE WITH REAL EMAIL
+        pass: 'your-app-password'     // REPLACE WITH APP PASSWORD
     }
 });
 
@@ -40,6 +41,29 @@ async function sendCertificateEmail(studentEmail, studentName, pdfBuffer, course
     } catch (e) { console.error(`❌ Email error: ${e.message}`); }
 }
 
+// --- PUBLIC VERIFY ROUTE ---
+router.get('/verify/:uid', async (req, res) => {
+    try {
+        const { uid } = req.params;
+        const query = `
+            SELECT c.certificate_uid, c.course_name, c.issue_date, c.status, c.revoked_reason,
+                   s.first_name || ' ' || s.last_name as student_name 
+            FROM certificates c
+            JOIN students s ON c.student_id = s.student_id
+            WHERE c.certificate_uid = $1
+        `;
+        const result = await pool.query(query, [uid]);
+        
+        if (result.rows.length > 0) {
+            res.json(result.rows[0]);
+        } else {
+            res.status(404).json({ error: 'Certificate not found.' });
+        }
+    } catch (e) {
+        res.status(500).json({ error: 'Server Error' });
+    }
+});
+
 // --- GENERATE ROUTE ---
 router.post('/generate', authenticateToken, upload.fields([
     { name: 'backgroundImage', maxCount: 1 },
@@ -59,12 +83,13 @@ router.post('/generate', authenticateToken, upload.fields([
     const titleText = certTitle || "CERTIFICATE";
     const subTitleText = "OF PARTICIPATION";
 
-    // Fonts
+    // Fonts Logic
     let titleFont = 'Times-Bold';
     let bodyFont = 'Times-Roman';
     if(fontFamily === 'Courier') { titleFont = 'Courier-Bold'; bodyFont = 'Courier'; }
     if(fontFamily === 'Helvetica') { titleFont = 'Helvetica-Bold'; bodyFont = 'Helvetica'; }
 
+    // Initialize ZIP Stream
     const archive = archiver('zip', { zlib: { level: 9 } });
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', 'attachment; filename=certificates.zip');
@@ -73,7 +98,7 @@ router.post('/generate', authenticateToken, upload.fields([
     try {
         let students = [];
         
-        // 1. Fetch Actual Data
+        // 1. Fetch Actual Data from Database
         if (dataSource === 'database' && classId) {
             const query = `
                 SELECT s.student_id, s.first_name, s.last_name, s.email, s.roll_number,
@@ -86,21 +111,25 @@ router.post('/generate', authenticateToken, upload.fields([
             const result = await pool.query(query, [classId]);
             students = result.rows;
         } 
-        // Note: Removed "External User" mock data. If no DB data, students array stays empty.
+        
+        // ✅ Mock Data Removed: If no DB data, 'students' array remains empty.
 
         if (students.length === 0) {
+            // Create a simple error PDF inside ZIP if no students found
             const doc = new PDFDocument();
             archive.append(doc, { name: 'error.pdf' });
             doc.text('No students found in the selected class.');
             doc.end();
         }
 
+        // 2. Loop & Generate Certificates
         for (const student of students) {
             const name = `${student.first_name} ${student.last_name}`.trim();
             const className = (student.class_name || student.section_name) ? `${student.class_name} ${student.section_name}` : '';
             const uid = `CERT-${new Date().getFullYear()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
             const dateStr = formatDate(issueDate);
 
+            // Save to DB
             if (student.student_id) {
                 await pool.query(
                     `INSERT INTO certificates (certificate_uid, student_id, course_name, issue_date, status) 
@@ -114,6 +143,8 @@ router.post('/generate', authenticateToken, upload.fields([
             const qrBuffer = await QRCode.toBuffer(verifyUrl, { margin: 0, width: 70, color: { dark: '#002b49' } });
 
             const doc = new PDFDocument({ layout: 'landscape', size: 'A4', margin: 0 });
+            
+            // Handle Email Buffer
             let buffers = [];
             doc.on('data', buffers.push.bind(buffers));
             doc.on('end', async () => {
@@ -131,18 +162,17 @@ router.post('/generate', authenticateToken, upload.fields([
             if (req.files.backgroundImage) {
                 try { doc.image(req.files.backgroundImage[0].buffer, 0, 0, { width: w, height: h }); } catch(e){}
             } else {
+                // Fallback Border
                 doc.rect(20, 20, w-40, h-40).lineWidth(3).strokeColor(primaryColor).stroke();
             }
 
-            // --- B. TOP HEADER ELEMENTS (QR & ID) ---
+            // --- B. TOP ELEMENTS (QR & ID) ---
             
             // 1. Certificate No (Top Left)
-            // Position: X=40, Y=50
             doc.fontSize(9).fillColor('#333').font('Helvetica-Bold')
                .text(`Certificate No: ${uid}`, 40, 50, { align: 'left' });
 
             // 2. QR Code (Top Right)
-            // Position: X=Width-110, Y=40
             doc.image(qrBuffer, w - 110, 40, { width: 60 });
             doc.fontSize(7).fillColor('#555')
                .text("Scan to Verify", w - 110, 105, { width: 60, align: 'center' });
@@ -178,8 +208,6 @@ router.post('/generate', authenticateToken, upload.fields([
             doc.font(bodyFont).fontSize(13).fillColor('#333')
                .text(body, 80, doc.y, { align: 'center', width: w-160 });
 
-            // Date (Removed from here, moved to footer as per request)
-            
             // --- E. FOOTER SIGNATURES ---
             const fy = h - 120;
             const leftX = 100;
