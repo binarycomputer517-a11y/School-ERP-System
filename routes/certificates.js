@@ -53,7 +53,7 @@ router.post('/generate', authenticateToken, upload.fields([
         accentColor, ribbonColor, fontFamily 
     } = req.body;
     
-    // Defaults
+    // Defaults (Gold/Premium Style)
     const primaryColor = accentColor || '#8B0000'; // Maroon
     const secondaryColor = ribbonColor || '#E65100'; // Orange
     const titleText = certTitle || "CERTIFICATE";
@@ -133,20 +133,18 @@ router.post('/generate', authenticateToken, upload.fields([
                 doc.rect(20, 20, w-40, h-40).lineWidth(3).strokeColor(primaryColor).stroke();
             }
 
-            // --- B. TOP ELEMENTS (QR & CERT NO) ---
+            // --- B. TOP HEADER ELEMENTS (QR & ID) ---
             
             // 1. Certificate No (Top Left)
-            // Position: X=40, Y=50
             doc.fontSize(9).fillColor('#333').font('Helvetica-Bold')
                .text(`Certificate No: ${uid}`, 40, 50, { align: 'left' });
 
             // 2. QR Code (Top Right)
-            // Position: X=Width-110, Y=40
             doc.image(qrBuffer, w - 110, 40, { width: 60 });
             doc.fontSize(7).fillColor('#555')
                .text("Scan to Verify", w - 110, 105, { width: 60, align: 'center' });
 
-            // --- C. HEADER (Title) ---
+            // --- C. MAIN HEADER ---
             doc.moveDown(4); 
             
             doc.font(titleFont).fontSize(50).fillColor(primaryColor)
@@ -177,10 +175,7 @@ router.post('/generate', authenticateToken, upload.fields([
             doc.font(bodyFont).fontSize(13).fillColor('#333')
                .text(body, 80, doc.y, { align: 'center', width: w-160 });
 
-            doc.moveDown(1);
-            doc.fontSize(11).text(`Date: ${dateStr}`, { align: 'center' });
-
-            // --- E. FOOTER ---
+            // --- E. FOOTER SIGNATURES ---
             const fy = h - 120;
             const leftX = 100;
             const rightX = w - 260;
@@ -189,9 +184,9 @@ router.post('/generate', authenticateToken, upload.fields([
             // Left Sig
             if(req.files.signature1) doc.image(req.files.signature1[0].buffer, leftX+20, fy-40, { height:40 });
             doc.lineWidth(1).strokeColor('#333').moveTo(leftX, fy).lineTo(leftX+160, fy).stroke();
-            doc.fontSize(11).fillColor(primaryColor).font(titleFont).text(sig1Name || "Coordinator", leftX, fy+5, { width: 160, align: 'center' });
+            doc.fontSize(11).fillColor(primaryColor).font(titleFont).text(sig1Name || "Principal", leftX, fy+5, { width: 160, align: 'center' });
 
-            // Center Gold Seal (Since QR moved up, Seal takes center stage)
+            // Gold Seal (Center)
             doc.circle(cx, fy - 10, 45).lineWidth(2).strokeColor('#DAA520').stroke(); 
             doc.circle(cx, fy - 10, 40).lineWidth(0.5).strokeColor('#B8860B').stroke();
             doc.fontSize(7).fillColor('#DAA520').text('OFFICIAL\nAWARD', cx - 20, fy - 15, { align: 'center', width: 40 });
@@ -200,6 +195,16 @@ router.post('/generate', authenticateToken, upload.fields([
             if(req.files.signature2) doc.image(req.files.signature2[0].buffer, rightX+20, fy-40, { height:40 });
             doc.lineWidth(1).strokeColor('#333').moveTo(rightX, fy).lineTo(rightX+160, fy).stroke();
             doc.fontSize(11).fillColor(primaryColor).font(titleFont).text(sig2Name || "Director", rightX, fy+5, { width: 160, align: 'center' });
+
+            // --- F. BOTTOM ELEMENTS (Date & Website) ---
+            
+            // 1. Published Date (Bottom Left)
+            doc.fontSize(9).fillColor('#555').font('Helvetica-Bold')
+               .text(`Published Date: ${dateStr}`, 40, h - 40, { align: 'left' });
+
+            // 2. Website (Bottom Right)
+            doc.fontSize(9).fillColor('#555').font('Helvetica')
+               .text('www.gokuluniversity.ac.in', w - 240, h - 40, { align: 'right', width: 200 });
 
             doc.end();
         }
