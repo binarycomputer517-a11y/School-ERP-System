@@ -204,10 +204,8 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
     }
 });
 
-// ... (Code preceding Section 4 remains the same)
-
 // =========================================================
-// 4. PUT: Update Student (CRITICAL FIX: Row Count Check & Message)
+// 4. PUT: Update Student
 // =========================================================
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const studentId = req.params.id;
@@ -223,14 +221,14 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
     const safeUpdatedBy = toUUID(updated_by);
 
     if (!safeStudentId || !safeUserId) {
-        return res.status(400).json({ message: 'Invalid Student ID or User ID format.' });
+        return res.status(400).json({ message: 'Invalid ID format.' });
     }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Update 'users' table (Handles email/phone update for login account)
+        // Update 'users' table
         const userUpdateQuery = `
             UPDATE ${USERS_TABLE} SET 
                 email = $1, 
@@ -238,23 +236,18 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
                 updated_at = CURRENT_TIMESTAMP 
             WHERE id = $3::uuid AND role = 'Student';
         `;
-        // We run this update without checking rowCount, as the primary check will be on the student table.
         await client.query(userUpdateQuery, [email, phone_number || null, safeUserId]);
 
-        // 2. Update Student Profile (Dynamic SQL Construction)
+        // Update Student Profile
         const updateFields = [];
         const updateValues = [];
         let paramIndex = 1;
 
         const addField = (field, value, cast = '') => {
-             // We only build the field if the value is explicitly provided in the request body
-             if (value !== undefined) {
-                 updateFields.push(`${field} = $${paramIndex++}${cast}`);
-                 updateValues.push(value);
-             }
+             updateFields.push(`${field} = $${paramIndex++}${cast}`);
+             updateValues.push(value);
         };
 
-        // Populate fields based on request body
         addField('first_name', first_name);
         addField('last_name', last_name);
         addField('email', email);
@@ -272,12 +265,6 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         addField('updated_by', safeUpdatedBy, '::uuid');
         updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
-        // Check if any fields besides 'updated_at' were provided
-        if (updateFields.length <= 1) { 
-            await client.query('ROLLBACK'); 
-            return res.status(400).json({ message: 'No valid profile fields provided for update.' });
-        }
-
         const studentUpdateQuery = `
             UPDATE ${STUDENTS_TABLE} SET
                 ${updateFields.join(', ')}
@@ -288,21 +275,10 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         updateValues.push(safeStudentId);
 
         const result = await client.query(studentUpdateQuery, updateValues);
+        await client.query('COMMIT');
         
-        // *** CRITICAL FIX: Ensure at least one row was updated ***
-        if (result.rowCount === 0) { 
-            await client.query('ROLLBACK'); 
-            // Return 404 because the ID was valid but didn't match an editable student record
-            return res.status(404).json({ message: 'Student profile not found or already deleted.' });
-        }
-
-        await client.query('COMMIT'); // Commit only if update succeeded
-        
-        // Final Message Construction (Reliable for frontend display)
-        const studentName = `${result.rows[0].first_name} ${result.rows[0].last_name}`;
-
         res.status(200).json({ 
-            message: `Student Profile for ${studentName} updated successfully!`, // Fixes 'undefined'
+            message: 'Student profile updated successfully.',
             data: result.rows[0]
         });
 
@@ -314,8 +290,6 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         client.release();
     }
 });
-
-// ... (Code following Section 4 remains the same)
 
 // =========================================================
 // 5. DELETE: Soft Delete Student
