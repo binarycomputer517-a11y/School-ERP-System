@@ -145,7 +145,7 @@ app.use('/api/alumni', require('./routes/alumni'));
 app.use('/api/discipline', require('./routes/discipline'));
 app.use('/api/compliance', require('./routes/compliance'));
 app.use('/api/reports', require('./routes/reports'));
-
+app.use('/api/reports', require('./routes/idreports'));
 // ===================================
 // 5. FRONTEND ROUTING (SPA Support)
 // ===================================

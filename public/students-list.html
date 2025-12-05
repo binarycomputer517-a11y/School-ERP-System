@@ -3,201 +3,168 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Enrollment Management</title>
+    <title>Student Management List</title>
     
-    <script src="students-list.js" defer></script> 
-
+    <script src="js/global-config.js"></script>
+    <script src="/students-list.js" defer></script> 
+    
     <style>
-        /* CLASSIC & PROFESSIONAL ERP STYLE */
+        /* --- Base Styles --- */
         :root {
-            --primary-color: #005A9C; /* Institutional Blue */
-            --accent-color: #C0392B; /* Deep Red for accents/buttons */
-            --border-color: #333333; /* Dark Border */
-            --font-serif: 'Times New Roman', serif;
-            --font-sans: Arial, sans-serif;
+            --primary-color: #005A9C; 
+            --secondary-color: #007bff; 
+            --accent-color: #C0392B; 
+            --border-color: #ddd; 
+            --font-sans: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            --header-bg: #f8f9fa;
+            --info-color: #17a2b8; /* New color for View actions */
         }
+        body { font-family: var(--font-sans); background-color: var(--header-bg); padding: 20px; color: #333; }
+        .container { max-width: 1200px; margin: 0 auto; background: #ffffff; border: 1px solid var(--border-color); box-shadow: 0 4px 15px rgba(0,0,0,0.1); padding: 30px; border-radius: 8px; }
+        h1 { color: var(--primary-color); border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; font-weight: 700; }
         
-        body {
-            font-family: var(--font-serif);
-            background-color: #f8f8f8;
-            padding: 40px;
-            color: #333;
-        }
+        /* --- Header & Controls --- */
+        .controls-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; }
+        .controls-header h1 { margin: 0; border: none; padding: 0; }
         
-        .container {
-            max-width: 1200px; /* Wider container for the table */
-            margin: 0 auto;
-            background: #ffffff;
-            border: 2px solid var(--border-color);
-            box-shadow: 6px 6px 0px #cccccc;
-            padding: 30px 40px;
-        }
-
-        h1 {
-            text-align: center;
-            color: var(--primary-color);
-            border-bottom: 3px double var(--border-color);
-            padding-bottom: 15px;
-            margin-bottom: 30px;
-            font-family: var(--font-sans);
-            font-weight: bold;
-        }
-        
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        /* --- Table Specific Styles --- */
-        #studentsTable {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-            font-family: var(--font-serif);
-        }
-        
-        #studentsTable th, #studentsTable td {
-            border: 1px solid #999;
-            padding: 12px 10px;
-            text-align: left;
-        }
-        
-        #studentsTable th {
-            background-color: #e0e0e0;
-            color: #000;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        
-        #studentsTable tbody tr:nth-child(even) {
-            background-color: #f7f7f7;
-        }
-        
-        .view-link {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: bold;
-        }
-        
-        .view-link:hover {
-            text-decoration: underline;
-        }
-
-        /* --- ACTION ICON STYLES --- */
-        
-        .action-icon-btn, .action-icon-link {
-            display: inline-block;
-            padding: 5px 8px;
-            font-size: 1.1em;
-            text-decoration: none;
-            line-height: 1;
-            border: 1px solid transparent;
-            border-radius: 3px;
+        /* General Action Buttons Container */
+        .action-buttons { display: flex; gap: 10px; }
+        .action-buttons a, .action-buttons button {
+            text-decoration: none; 
+            padding: 10px 18px; 
+            background-color: var(--secondary-color); 
+            color: white; 
+            border: none;
+            border-radius: 6px; 
+            font-weight: 600; 
             cursor: pointer;
-            background: none;
-            transition: background-color 0.1s;
+            transition: background 0.2s; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        
-        .action-icon-link.edit-link {
-            color: var(--primary-color);
+        .action-buttons button.id-group-btn { background-color: var(--info-color); }
+        .action-buttons a:hover, .action-buttons button:hover { background-color: #0056b3; }
+        .action-buttons button.id-group-btn:hover { background-color: #138496; }
+
+
+        /* --- Filter Area (Remains the same) --- */
+        .filter-area { display: flex; gap: 15px; margin-bottom: 25px; padding: 15px; background: #f4f4f4; border-radius: 6px; flex-wrap: wrap; }
+        .filter-area input[type="text"], .filter-area select { 
+            padding: 10px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            box-sizing: border-box; 
+            flex-grow: 1; 
+            min-width: 150px;
         }
 
-        .action-icon-btn.delete-btn {
+        /* --- Table Styles --- */
+        .table-responsive { overflow-x: auto; }
+        .data-table { width: 100%; border-collapse: collapse; min-width: 900px; }
+        .data-table th, .data-table td { 
+            border: 1px solid var(--border-color); 
+            padding: 12px; 
+            text-align: left; 
+            font-size: 0.9em; 
+            vertical-align: middle;
+        }
+        .data-table th { 
+            background-color: #e9ecef; 
+            font-weight: 600; 
+            color: var(--primary-color); 
+            cursor: pointer; 
+            position: sticky; top: 0; 
+        }
+        .data-table tr:nth-child(even) { background-color: #f9f9f9; }
+        .data-table tr:hover:not(:first-child) { background-color: #e6f7ff; }
+        
+        /* Status Badges (Remains the same) */
+        .status-badge { 
+            padding: 4px 8px; 
+            border-radius: 12px; 
+            font-size: 0.8em; 
+            font-weight: bold; 
+            display: inline-block;
+        }
+        .status-enrolled { background-color: #d4edda; color: #155724; }
+        .status-inactive { background-color: #f8d7da; color: #721c24; }
+        .status-pending { background-color: #fff3cd; color: #856404; }
+
+        /* Table Action Links */
+        .action-cell { white-space: nowrap; }
+        .action-link { 
+            color: var(--secondary-color); 
+            text-decoration: none; 
+            margin-right: 8px; 
+            font-weight: 600;
+        }
+        .action-link.view-btn { color: var(--info-color); }
+        .action-link.id-btn { color: #8e44ad; } /* Purple for ID generation */
+        .delete-link {
             color: var(--accent-color);
-            margin-left: 5px;
-        }
-        
-        .action-icon-btn:hover, .action-icon-link:hover {
-            background-color: #eeeeee;
-            border: 1px solid #ccc;
-        }
-        
-        /* General Nav Button */
-        .button, a.button {
-            display: inline-block;
-            padding: 8px 15px;
-            background-color: var(--accent-color);
-            color: white;
-            text-decoration: none;
-            border: 2px solid var(--border-color);
-            border-radius: 0;
             cursor: pointer;
-            font-weight: bold;
-            box-shadow: 2px 2px 0 var(--border-color);
-            transition: all 0.1s;
         }
 
-        .button:hover, a.button:hover {
-            background-color: #a0281a;
-            box-shadow: 1px 1px 0 var(--border-color);
-            transform: translate(1px, 1px);
+        /* --- Loader Style (Remains the same) --- */
+        #loading-spinner {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: var(--primary-color);
+            display: none;
         }
-
     </style>
 </head>
 <body>
     <div class="container">
-        <header>
-            <h1>Student Enrollment Management</h1>
-            <nav>
-                <a href="/add-student.html" class="button">➕ Add New Student</a>
-            </nav>
-        </header>
+        <div class="controls-header">
+            <h1>🧑‍🎓 Student List Management</h1>
+            <div class="action-buttons">
+                <button id="generate-bulk-id-btn" class="id-group-btn">💳 Generate ID Cards (Selected)</button>
+                
+                <a href="/add-student.html">➕ Register New Student</a>
+            </div>
+        </div>
 
-        <main>
-            <h2>Enrolled Students List</h2>
+        <div class="filter-area">
+            <input type="text" id="search-input" placeholder="Search by Name, ID, or Email...">
             
-            <div id="loadingMessage">Loading student data...</div>
-            <div id="errorMessage" style="color: red; display: none;"></div>
+            <select id="course-filter">
+                <option value="">Filter by Course (All)</option>
+            </select>
+            
+            <select id="batch-filter" disabled>
+                <option value="">Filter by Batch (All)</option>
+            </select>
+            
+            <select id="status-filter">
+                <option value="">Filter by Status (All)</option>
+                <option value="Enrolled">Enrolled</option>
+                <option value="Inactive">Inactive</option>
+                <option value="Pending">Pending</option>
+            </select>
+        </div>
 
-            <table id="studentsTable">
+        <div id="data-status" style="margin-bottom: 15px; font-weight: 500;">Loading data...</div>
+        <div id="loading-spinner">Fetching student records, please wait...</div>
+
+        <div class="table-responsive">
+            <table class="data-table" id="students-table">
                 <thead>
                     <tr>
-                        <th>Enrollment No.</th>
-                        <th>Name</th>
-                        <th>Admission ID</th>
-                        <th>Course/Batch</th>
-                        <th>Subject</th> 
-                        <th>Fees Structure</th> 
-                        <th>Email</th>
-                        <th>Phone</th>
+                        <th style="width: 20px;">#</th> 
+                        <th data-sort="admission_id">Admission ID</th>
+                        <th data-sort="first_name">Name</th>
+                        <th data-sort="course_name" style="width: 25%;">Course / Fees Structure</th>
+                        <th data-sort="email">Login / Contact</th>
+                        <th data-sort="status">Status</th>
                         <th>Actions</th>
                     </tr>
                 </thead>
-                <tbody id="studentsTableBody">
+                <tbody id="students-table-body">
                     </tbody>
             </table>
-            
-            <p id="noStudentsMessage" style="display: none; text-align: center; margin-top: 30px;">
-                No students currently enrolled in the system.
-            </p>
-        </main>
-
-        <template id="studentRowTemplate">
-            <tr data-student-id="">
-                <td data-field="enrollment_no"></td>
-                <td>
-                    <a href="#" class="view-link" data-field="name"></a>
-                </td>
-                <td data-field="admission_id"></td>
-                <td data-field="course_batch"></td>
-                <td data-field="subject"></td> 
-                <td data-field="fees_structure"></td> <td data-field="email"></td>
-                <td data-field="phone_number"></td>
-                
-                <td>
-                    <a href="#" class="edit-link action-icon-link" title="Edit Profile">
-                        ✏️
-                    </a>
-                    <button class="delete-btn action-icon-btn" title="Delete/Deactivate">
-                        🗑️
-                    </button>
-                </td>
-            </tr>
-        </template>
+        </div>
     </div>
-    <script src="js/global-config.js"></script>
+    
 </body>
 </html>

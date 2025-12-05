@@ -1,6 +1,6 @@
 /**
- * @fileoverview Routes for managing Student profiles, including creation, retrieval, updates, and deletion.
- * Includes auto-generation for Enrollment Numbers and Admission IDs.
+ * @fileoverview Express router for managing Student profiles, including creation, retrieval, updates, and deletion.
+ * @module routes/students
  */
 
 const express = require('express');
@@ -16,6 +16,7 @@ const USERS_TABLE = 'users';
 const BRANCHES_TABLE = 'branches';
 const COURSES_TABLE = 'courses';
 const BATCHES_TABLE = 'batches';
+const FEE_STRUCTURES_TABLE = 'fee_structures'; // Added constant for clarity
 
 // --- Constants: Access Control ---
 const CRUD_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar'];
@@ -23,6 +24,7 @@ const VIEW_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar', 'Teacher', 'Coord
 
 // --- Helper: Get Configuration IDs from Request ---
 function getConfigIds(req) {
+    // Note: branch_id often comes from the authenticated user's profile
     const branch_id = req.user.branch_id; 
     return { branch_id, created_by: req.user.id, updated_by: req.user.id };
 }
@@ -32,8 +34,71 @@ function toUUID(value) {
     if (!value || typeof value !== 'string' || value.trim() === '') {
         return null;
     }
+    // Note: Trusting the database UUID type check for string validity
     return value.trim();
 }
+
+// --- Helper: Dynamic Update Query Builder ---
+/**
+ * Builds a parameterized query string for dynamic updates.
+ * @returns {object} { updateFields: string[], updateValues: any[] }
+ */
+function buildUpdateQuery(body, updatedBy) {
+    const updateFields = [];
+    const updateValues = [];
+    let paramIndex = 1;
+    
+    // Define all mutable fields and their required types/casting
+    const mutableFields = {
+        first_name: 'text', last_name: 'text', middle_name: 'text', 
+        dob: 'date', gender: 'text', 
+        blood_group: 'text', religion: 'text', mother_tongue: 'text',
+        aadhaar_number: 'text', caste_category: 'text', nationality: 'text',
+        permanent_address: 'text', city: 'text', state: 'text', zip_code: 'text', country: 'text', 
+        enrollment_no: 'text', roll_number: 'text', status: 'text',
+        
+        // Academic & Document IDs (Requires UUID casting)
+        academic_session_id: 'uuid', course_id: 'uuid', batch_id: 'uuid',
+        
+        // Parent Data
+        parent_first_name: 'text', parent_last_name: 'text', parent_phone_number: 'text',
+        parent_email: 'text', parent_occupation: 'text', guardian_relation: 'text',
+        parent_annual_income: 'numeric', // Assumes frontend sends numeric string or null
+        
+        // Document Paths (Only update if new path/base64 was processed)
+        profile_image_path: 'text', signature_path: 'text', id_document_path: 'text',
+        location_coords: 'text' // GPS data
+    };
+
+    for (const field in mutableFields) {
+        // Only include fields that were explicitly sent in the request body
+        if (body.hasOwnProperty(field)) {
+            let value = body[field];
+            const type = mutableFields[field];
+            
+            // Convert empty string/null to actual null value for DB
+            if (value === null || value === '') {
+                value = null;
+            } else if (type === 'uuid') {
+                value = toUUID(value);
+            }
+            
+            // Construct the parameterized field assignment with casting
+            const cast = type === 'uuid' ? '::uuid' : (type === 'date' ? '::date' : '');
+            updateFields.push(`${field} = $${paramIndex++}${cast}`);
+            updateValues.push(value);
+        }
+    }
+    
+    // Add Audit Fields
+    updateFields.push(`updated_by = $${paramIndex++}::uuid`);
+    updateValues.push(toUUID(updatedBy));
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+
+
+    return { updateFields, updateValues };
+}
+
 
 // =========================================================
 // 1. GET: Main Student List (Optimized for Dashboard)
@@ -42,28 +107,38 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
-                s.student_id, 
-                s.admission_id,
-                s.enrollment_no,
+                s.student_id, s.admission_id, s.enrollment_no,
                 s.first_name, s.last_name, 
-                s.email, s.phone_number, s.gender, s.dob,
-                s.status,
+                s.email, s.phone_number, s.status, s.course_id, s.batch_id,
                 
-                -- User Account Details
                 u.username, u.role, u.id AS user_id,
                 
-                -- Academic & Fee Details (Prevents N/A on Frontend)
                 c.course_name, 
-                c.course_code AS subject,      -- Alias: subject
-                c.total_fee AS fees_structure, -- Alias: fees_structure
-                
                 b.batch_name, 
-                br.branch_name
+                br.branch_name,
+                
+                -- ✅ CRITICAL FIX: Calculate total fees including monthly charges multiplied by duration
+                (
+                    -- One-Time Fees
+                    COALESCE(fs.admission_fee, 0) + COALESCE(fs.registration_fee, 0) + COALESCE(fs.examination_fee, 0)
+                    +
+                    -- Monthly Fees * Duration (Assumes duration is stored in fs)
+                    (
+                        (COALESCE(fs.transport_fee, 0) * COALESCE(fs.course_duration_months, 0)) 
+                        + 
+                        (COALESCE(fs.hostel_fee, 0) * COALESCE(fs.course_duration_months, 0))
+                    )
+                ) AS total_fees_due,
+                fs.structure_name AS fee_structure_name
+                
             FROM ${STUDENTS_TABLE} s
             LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
             LEFT JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
             LEFT JOIN ${BRANCHES_TABLE} br ON s.branch_id = br.id
+            -- 🛑 CRITICAL JOIN: Link to Fee Structures based on Course AND Batch
+            LEFT JOIN ${FEE_STRUCTURES_TABLE} fs ON fs.course_id = s.course_id AND fs.batch_id = s.batch_id
+            
             WHERE u.deleted_at IS NULL
             ORDER BY s.created_at DESC;
         `;
@@ -79,18 +154,12 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
 // 2. POST: Create New Student (Auto-Generate IDs)
 // =========================================================
 router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    let {
-        username, password, first_name, last_name, email, phone_number,
-        dob, gender, address, course_id, batch_id,
-        enrollment_no, // Optional: System will generate if empty
-        admission_id,  // Optional: System will generate if empty
-        academic_session_id 
-    } = req.body;
+    let body = req.body;
     
     const { branch_id, created_by } = getConfigIds(req);
 
     // Validation
-    if (!username || !password || !first_name || !last_name || !course_id || !batch_id) {
+    if (!body.username || !body.password || !body.first_name || !body.last_name || !body.course_id || !body.batch_id) {
         return res.status(400).json({ message: 'Missing required fields: Name, Login, Course, or Batch.' });
     }
 
@@ -99,35 +168,32 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
         await client.query('BEGIN'); // Start Transaction
 
-        // --- A. Auto-Generate Enrollment No (Format: STU-YYYY-001) ---
-        if (!enrollment_no) {
+        // --- A. Auto-Generate Enrollment/Admission IDs ---
+        if (!body.enrollment_no) {
             const year = new Date().getFullYear();
-            // Count existing students to find the next sequence number
             const countRes = await client.query(`SELECT COUNT(*) FROM ${STUDENTS_TABLE}`);
             const nextNum = parseInt(countRes.rows[0].count) + 1;
-            enrollment_no = `STU-${year}-${String(nextNum).padStart(3, '0')}`;
+            body.enrollment_no = `STU-${year}-${String(nextNum).padStart(4, '0')}`;
         }
-
-        // --- B. Auto-Generate Admission ID (Format: ADMN-XXXXXX) ---
-        if (!admission_id) {
-            const uniqueSuffix = Date.now().toString().slice(-6);
-            admission_id = `ADMN-${uniqueSuffix}`;
+        if (!body.admission_id) {
+            const uniqueSuffix = Math.floor(Math.random() * 900000) + 100000;
+            body.admission_id = `ADMN-${uniqueSuffix}`;
         }
-
-        // --- C. Fetch Active Academic Session (Fallback safety) ---
+        
+        // --- B. Fetch Active Academic Session (Fallback safety) ---
+        let academic_session_id = toUUID(body.academic_session_id);
         if (!academic_session_id) {
             const sessionRes = await client.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
             if (sessionRes.rowCount > 0) {
                 academic_session_id = sessionRes.rows[0].id;
             } else {
-                // If no active session, grab ANY session to prevent crash
                 const anySession = await client.query("SELECT id FROM academic_sessions LIMIT 1");
                 academic_session_id = anySession.rowCount > 0 ? anySession.rows[0].id : null;
             }
         }
 
-        // --- D. Create User Login ---
-        const password_hash = await bcrypt.hash(password, saltRounds);
+        // --- C. Create User Login ---
+        const password_hash = await bcrypt.hash(body.password, saltRounds);
         const safeBranchId = toUUID(branch_id);
 
         const userQuery = `
@@ -135,31 +201,39 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
             VALUES ($1, $2, 'Student', $3, $4, $5::uuid)
             RETURNING id;
         `;
-        const userResult = await client.query(userQuery, [username, password_hash, email, phone_number || null, safeBranchId]);
+        const userResult = await client.query(userQuery, [body.username, password_hash, body.email, body.phone_number || null, safeBranchId]);
         const newUserId = userResult.rows[0].id;
 
-        // --- E. Create Student Profile ---
+        // --- D. Create Student Profile ---
         const studentQuery = `
             INSERT INTO ${STUDENTS_TABLE} (
-                user_id, first_name, last_name, email, phone_number, 
+                user_id, first_name, last_name, middle_name, email, phone_number, 
                 dob, gender, permanent_address, course_id, batch_id, branch_id,
-                created_by, admission_id, academic_session_id, enrollment_no
+                created_by, admission_id, academic_session_id, enrollment_no,
+                profile_image_path, signature_path, id_document_path, aadhaar_number, nationality,
+                city, state, zip_code, country, religion, blood_group, caste_category,
+                parent_first_name, parent_last_name, parent_phone_number, parent_email, parent_occupation, guardian_relation
             )
-            VALUES ($1::uuid, $2, $3, $4, $5, $6, $7, $8, $9::uuid, $10::uuid, $11::uuid, $12::uuid, $13, $14::uuid, $15)
+            VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::date, $8, $9, $10::uuid, $11::uuid, $12::uuid, $13::uuid, $14, $15::uuid, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34)
             RETURNING student_id, first_name, last_name, enrollment_no;
         `;
         
         const studentResult = await client.query(studentQuery, [
-            newUserId, first_name, last_name, email, phone_number || null,
-            dob || null, gender || null, address || null, toUUID(course_id), toUUID(batch_id), safeBranchId,
-            toUUID(created_by), admission_id, academic_session_id, enrollment_no
+            newUserId, body.first_name, body.last_name, body.middle_name || null, body.email, body.phone_number || null,
+            body.dob || null, body.gender || null, body.permanent_address || null, toUUID(body.course_id), toUUID(body.batch_id), safeBranchId,
+            toUUID(created_by), body.admission_id, academic_session_id, body.enrollment_no,
+            body.profile_image_path || null, body.signature_path || null, body.id_document_path || null, body.aadhaar_number || null, body.nationality || null,
+            body.city || null, body.state || null, body.zip_code || null, body.country || null, body.religion || null, body.blood_group || null, body.caste_category || null,
+            body.parent_first_name || null, body.parent_last_name || null, body.parent_phone_number || null, body.parent_email || null, body.parent_occupation || null, body.guardian_relation || null
         ]);
 
         await client.query('COMMIT'); // Commit Transaction
         
         res.status(201).json({ 
             message: 'Student created successfully.', 
-            student: studentResult.rows[0] 
+            student: studentResult.rows[0],
+            admission_id: body.admission_id, // Return the generated ID for client confirmation
+            enrollment_no: body.enrollment_no
         });
 
     } catch (error) {
@@ -174,6 +248,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         client.release();
     }
 });
+
 // =========================================================
 // 3. GET: Single Student Details (Smart Lookup)
 // =========================================================
@@ -184,8 +259,6 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
     if (!safeId) return res.status(400).json({ message: 'Invalid ID format.' });
 
     try {
-        // FIX: Check BOTH student_id AND user_id columns
-        // This ensures it works regardless of which ID the frontend sends
         const query = `
             SELECT s.*, u.username, u.role
             FROM ${STUDENTS_TABLE} s
@@ -205,86 +278,116 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
 });
 
 // =========================================================
-// 4. PUT: Update Student
+// 4. PUT: Update Student (IMPROVED DYNAMIC UPDATE)
 // =========================================================
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const studentId = req.params.id;
+    const body = req.body;
     const { updated_by } = getConfigIds(req);
-    const {
-        first_name, last_name, email, phone_number, dob, gender, 
-        address, course_id, batch_id, status,
-        user_id, enrollment_no
-    } = req.body;
 
     const safeStudentId = toUUID(studentId);
-    const safeUserId = toUUID(user_id);
     const safeUpdatedBy = toUUID(updated_by);
 
-    if (!safeStudentId || !safeUserId) {
-        return res.status(400).json({ message: 'Invalid ID format.' });
+    if (!safeStudentId) {
+        return res.status(400).json({ message: 'Invalid Student ID format.' });
     }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Update 'users' table
-        const userUpdateQuery = `
-            UPDATE ${USERS_TABLE} SET 
-                email = $1, 
-                phone_number = $2, 
-                updated_at = CURRENT_TIMESTAMP 
-            WHERE id = $3::uuid AND role = 'Student';
-        `;
-        await client.query(userUpdateQuery, [email, phone_number || null, safeUserId]);
+        // --- Step 1: Update USERS table (for login/contact details) ---
+        if (body.user_id) {
+            const userId = toUUID(body.user_id);
+            const userUpdateFields = [];
+            const userUpdateValues = [];
+            let userParamIndex = 1;
 
-        // Update Student Profile
-        const updateFields = [];
-        const updateValues = [];
-        let paramIndex = 1;
+            if (body.email !== undefined) {
+                 userUpdateFields.push(`email = $${userParamIndex++}`);
+                 userUpdateValues.push(body.email);
+            }
+            if (body.phone_number !== undefined) {
+                 userUpdateFields.push(`phone_number = $${userParamIndex++}`);
+                 userUpdateValues.push(body.phone_number);
+            }
+            if (body.password) { // Only update password if a new one is provided
+                 const password_hash = await bcrypt.hash(body.password, saltRounds);
+                 userUpdateFields.push(`password_hash = $${userParamIndex++}`);
+                 userUpdateValues.push(password_hash);
+            }
 
-        const addField = (field, value, cast = '') => {
-             updateFields.push(`${field} = $${paramIndex++}${cast}`);
-             updateValues.push(value);
+            if (userUpdateFields.length > 0) {
+                userUpdateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+                userUpdateValues.push(userId); // Last parameter is the WHERE clause ID
+                
+                const userUpdateQuery = `
+                    UPDATE ${USERS_TABLE} SET 
+                        ${userUpdateFields.join(', ')} 
+                    WHERE id = $${userParamIndex}::uuid AND role = 'Student'
+                    RETURNING email;
+                `;
+                await client.query(userUpdateQuery, userUpdateValues);
+            }
+        }
+
+        // --- Step 2: Update STUDENT Profile ---
+        const studentFieldDefinitions = {
+            first_name: 'text', last_name: 'text', middle_name: 'text', 
+            dob: 'date', gender: 'text', 
+            blood_group: 'text', religion: 'text', mother_tongue: 'text',
+            aadhaar_number: 'text', caste_category: 'text', nationality: 'text',
+            permanent_address: 'text', city: 'text', state: 'text', zip_code: 'text', country: 'text', 
+            enrollment_no: 'text', roll_number: 'text', status: 'text',
+            academic_session_id: 'uuid', course_id: 'uuid', batch_id: 'uuid',
+            parent_first_name: 'text', parent_last_name: 'text', parent_phone_number: 'text',
+            parent_email: 'text', parent_occupation: 'text', guardian_relation: 'text',
+            parent_annual_income: 'numeric',
+            profile_image_path: 'text', signature_path: 'text', id_document_path: 'text',
+            location_coords: 'text' 
         };
-
-        addField('first_name', first_name);
-        addField('last_name', last_name);
-        addField('email', email);
-        addField('phone_number', phone_number || null);
-        addField('dob', dob || null);
-        addField('gender', gender || null);
-        addField('permanent_address', address || null);
-        addField('status', status || 'Enrolled');
         
-        addField('course_id', toUUID(course_id), '::uuid');
-        addField('batch_id', toUUID(batch_id), '::uuid');
-        addField('enrollment_no', enrollment_no || null);
-        
-        // Audit Fields
-        addField('updated_by', safeUpdatedBy, '::uuid');
-        updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+        const { updateFields, updateValues } = buildUpdateQuery(body, studentFieldDefinitions, safeUpdatedBy);
 
+        if (updateFields.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(200).json({ message: 'No fields provided for update.' });
+        }
+
+        const paramIndexAfterFields = updateValues.length + 1;
+        
         const studentUpdateQuery = `
             UPDATE ${STUDENTS_TABLE} SET
                 ${updateFields.join(', ')}
-            WHERE student_id = $${paramIndex++}::uuid
-            RETURNING first_name, last_name; 
+            WHERE student_id = $${paramIndexAfterFields}::uuid
+            RETURNING first_name, last_name, admission_id; 
         `;
         
         updateValues.push(safeStudentId);
 
         const result = await client.query(studentUpdateQuery, updateValues);
+
+        if (result.rowCount === 0) {
+             await client.query('ROLLBACK');
+             return res.status(404).json({ message: 'Update failed: Student not found or no changes made.' });
+        }
+
         await client.query('COMMIT');
         
+        // FIX: Ensure the returned data is correct for the frontend alert
         res.status(200).json({ 
             message: 'Student profile updated successfully.',
+            first_name: result.rows[0].first_name, // Returns the actual name for the alert
             data: result.rows[0]
         });
 
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Student Update Error:', error);
+        
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'Duplicate Data: Email, Phone, or Enrollment No already exists.' });
+        }
         res.status(500).json({ message: 'Failed to update student profile.', error: error.message });
     } finally {
         client.release();
@@ -354,7 +457,6 @@ router.get('/:id/fees', authenticateToken, async (req, res) => {
             ORDER BY due_date DESC;
         `;
         
-        // Use nested try/catch to gracefully handle missing tables during setup
         try {
             const result = await pool.query(query, [safeStudentId]);
             res.status(200).json(result.rows);

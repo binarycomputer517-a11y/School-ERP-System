@@ -169,15 +169,38 @@ router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordi
     }
 });
 
+// -----------------------------------------------------------------
+// 🛑 MISSING/FIXED ROUTE FOR BATCH LOOKUP BY COURSE ID 🛑
+// -----------------------------------------------------------------
+
+/**
+ * @route   GET /api/academicswithfees/batches/:courseId
+ * @desc    Get all batches for a specific course ID. (Fixes the add-student.js 404)
+ * @access  Private (Admin, Teacher, Coordinator, Student)
+ */
+router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+    try {
+        // The :courseId param correctly references batches.course_id (which points to courses.id)
+        const result = await pool.query(
+            'SELECT id AS batch_id, batch_name, batch_code FROM batches WHERE course_id = $1 ORDER BY batch_name',
+            [req.params.courseId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching batches for course:', err);
+        res.status(500).json({ message: 'Server error fetching batches for course', error: err.message });
+    }
+});
+// -----------------------------------------------------------------
+
 /**
  * @route   GET /api/academicswithfees/courses/:courseId/batches
- * @desc    Get all batches for a specific course
+ * @desc    (This route is redundant if the above /batches/:courseId is used, but kept for legacy)
  * @access  Private (Admin, Teacher, Coordinator, Student)
  */
 router.get('/courses/:courseId/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
         // --- FIXED ---: Select 'id' aliased as 'batch_id'.
-        // The :courseId param correctly references batches.course_id (which points to courses.id)
         const result = await pool.query(
             'SELECT id AS batch_id, batch_name, batch_code FROM batches WHERE course_id = $1 ORDER BY batch_name',
             [req.params.courseId]
@@ -333,8 +356,6 @@ router.delete('/subjects/:id', authenticateToken, authorize(['Admin']), async (r
 router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
     try {
         // --- FIXED ---: Select 's.id' (subject PK) aliased as 'subject_id'
-        // Your schema confirms 'course_subjects.course_id' references 'courses.id'
-        // and 'course_subjects.subject_id' likely references 'subjects.id'
         const result = await pool.query(`
             SELECT s.id AS subject_id, s.subject_name, s.subject_code FROM subjects s
             JOIN course_subjects cs ON s.id = cs.subject_id
@@ -735,6 +756,26 @@ router.delete('/fees/structures/:id', authenticateToken, authorize(['Admin']), a
         res.status(500).json({ message: 'Error deleting fee structure', error: err.message });
     }
 });
+
+/**
+ * @route   GET /api/academicswithfees/batches/:courseId
+ * @desc    Get all batches for a specific course ID. (Needed by add-student.js)
+ * @access  Private (Admin, Teacher, Coordinator, Student)
+ */
+router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+    try {
+        // The :courseId param correctly references batches.course_id (which points to courses.id)
+        const result = await pool.query(
+            'SELECT id AS batch_id, batch_name, batch_code FROM batches WHERE course_id = $1 ORDER BY batch_name',
+            [req.params.courseId]
+        );
+        res.json(result.rows);
+    } catch (err) {
+        console.error('Error fetching batches for course:', err);
+        res.status(500).json({ message: 'Server error fetching batches for course', error: err.message });
+    }
+});
+
 
 // =================================================================
 // --- EXPORT ROUTER ---
