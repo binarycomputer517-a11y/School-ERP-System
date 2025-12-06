@@ -90,8 +90,8 @@
         @media print {
             body { 
                 background: white; 
-                -webkit-print-color-adjust: exact; /* Chrome, Safari, Edge */
-                print-color-adjust: exact;         /* Firefox, Standard */
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
             .no-print, .controls-section { display: none !important; }
             .report-container { box-shadow: none; border: none; padding: 0; margin: 0; width: 100%; max-width: 100%; }
@@ -269,6 +269,10 @@
             day: '2-digit', month: 'short', year: 'numeric'
         });
     };
+    
+    function showLoader(show) {
+        document.getElementById('loader').style.display = show ? 'flex' : 'none';
+    }
 
     // 1. Initial Load
     document.addEventListener('DOMContentLoaded', () => {
@@ -291,13 +295,19 @@
             const select = document.getElementById('studentSelect');
             select.innerHTML = '<option value="">-- Select Student --</option>';
             
-            // Sort alphabetically
-            students.sort((a, b) => a.username.localeCompare(b.username));
+            // ⭐ FIX: Ensure 'username' exists before comparing. Use || '' as a fallback.
+            students.sort((a, b) => {
+                const nameA = a.username || '';
+                const nameB = b.username || '';
+                return nameA.localeCompare(nameB);
+            });
 
             students.forEach(s => {
                 const option = document.createElement('option');
                 option.value = s.student_id;
-                option.text = `${s.username} (Roll: ${s.roll_number || 'N/A'}) - ${s.course_name || ''}`;
+                // Use robust name retrieval and display
+                const displayName = s.username || s.student_name || 'Student (Name Missing)';
+                option.text = `${displayName} (Roll: ${s.roll_number || 'N/A'}) - ${s.course_name || ''}`;
                 select.appendChild(option);
             });
         } catch (error) {
@@ -358,6 +368,7 @@
         const tbody = document.getElementById('ledgerBody');
         tbody.innerHTML = '';
 
+        let runningBalance = 0; // Running balance starts at 0
         let sumDebit = 0;
         let sumCredit = 0;
 
@@ -367,6 +378,9 @@
             ledger.forEach(row => {
                 const debit = parseFloat(row.debit);
                 const credit = parseFloat(row.credit);
+                
+                // Balance Calculation
+                runningBalance = runningBalance + debit - credit;
                 
                 sumDebit += debit;
                 sumCredit += credit;
@@ -385,18 +399,18 @@
             });
         }
 
-        const balance = sumDebit - sumCredit;
+        const finalBalance = sumDebit - sumCredit;
 
         // C. Update Summaries
         // 1. Cards
         document.getElementById('cardDebit').innerText = formatCurrency(sumDebit);
         document.getElementById('cardCredit').innerText = formatCurrency(sumCredit);
-        document.getElementById('cardBalance').innerText = formatCurrency(balance);
+        document.getElementById('cardBalance').innerText = formatCurrency(finalBalance);
 
         // 2. Footer Table
         document.getElementById('footerDebit').innerText = formatCurrency(sumDebit);
         document.getElementById('footerCredit').innerText = formatCurrency(sumCredit);
-        document.getElementById('footerBalance').innerText = formatCurrency(balance);
+        document.getElementById('footerBalance').innerText = formatCurrency(finalBalance);
     }
 
     function showLoader(show) {
