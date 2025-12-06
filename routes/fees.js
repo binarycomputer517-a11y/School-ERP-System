@@ -30,7 +30,8 @@ const DB = {
     INVOICES: 'student_invoices',
     BUDGET_CATS: 'budget_categories',
     BUDGETS: 'annual_budgets',
-    EXPENSES: 'expenses'
+    EXPENSES: 'expenses',
+    SETTINGS: 'erp_settings'
 };
 
 const BASE_TUITION_FEE = 5000.00; 
