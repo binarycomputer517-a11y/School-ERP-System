@@ -250,11 +250,10 @@ router.post('/refund', authenticateToken, authorize(['admin', 'finance']), async
 
 
 // =========================================================
-// NEW ROUTE: 2.4 LIST STUDENTS ELIGIBLE FOR REFUND
+// 2.4 LIST STUDENTS ELIGIBLE FOR REFUND (FINAL FIX)
 // =========================================================
 router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     try {
-        // Query: Fetch students who have made at least one payment (Refund Candidate List)
         const query = `
             SELECT DISTINCT 
                 s.student_id, 
@@ -264,7 +263,8 @@ router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']
             FROM ${DB.PAYMENTS} p
             JOIN ${DB.STUDENTS} s ON p.student_id = s.student_id
             JOIN ${DB.USERS} u ON s.user_id = u.id
-            LEFT JOIN ${DB.COURSES} c ON s.course_id = c.course_id
+            -- FIX APPLIED: Joining students.course_id to courses.id
+            LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id 
             ORDER BY u.username ASC
         `;
         
@@ -276,7 +276,6 @@ router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']
         res.status(500).json({ message: 'Failed to fetch student list for refund.' });
     }
 });
-
 // =========================================================
 // SECTION 3: STUDENT DATA & RECEIPTS
 // =========================================================
