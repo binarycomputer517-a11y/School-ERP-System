@@ -8,6 +8,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { background: #555; padding: 20px; font-family: 'Poppins', sans-serif; }
+        
         .invoice-box {
             max-width: 800px;
             margin: auto;
@@ -18,11 +19,36 @@
             font-size: 16px;
             line-height: 24px;
             color: #555;
+            position: relative; /* For Watermark positioning */
+            overflow: hidden;   /* Keeps watermark inside */
         }
+
+        /* --- WATERMARK STYLES --- */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 60%; /* Adjust size of watermark */
+            opacity: 0.08; /* Very light opacity (8%) */
+            z-index: 0;
+            pointer-events: none; /* Allows clicking through it */
+            filter: grayscale(100%); /* Optional: Make it B&W */
+        }
+        
+        /* Ensure content stays ABOVE watermark */
+        .invoice-content-relative {
+            position: relative;
+            z-index: 2;
+        }
+
         /* Header Layout */
         .header-row { display: flex; justify-content: space-between; margin-bottom: 20px; }
         .company-details { text-align: right; }
-        .company-details h2 { margin: 0; color: #4a90e2; }
+        
+        /* Dynamic Header Styles */
+        .global-school-name { font-size: 24px; font-weight: bold; color: #4a90e2; margin: 0; text-transform: uppercase; }
+        .global-school-address, .global-school-email { font-size: 14px; margin: 2px 0; color: #555; }
         
         /* Invoice Info & Student Info */
         .info-row { display: flex; justify-content: space-between; margin-top: 40px; margin-bottom: 20px;}
@@ -31,7 +57,7 @@
         /* Table Styles */
         .invoice-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
         .invoice-table th { background: #4a90e2; color: white; padding: 10px; text-align: left; }
-        .invoice-table td { padding: 10px; border-bottom: 1px solid #eee; }
+        .invoice-table td { padding: 10px; border-bottom: 1px solid #eee; background: rgba(255,255,255,0.8); } /* Slight background to make text readable */
         .total-row td { font-weight: bold; border-top: 2px solid #333; }
         
         /* Status Badges */
@@ -46,16 +72,28 @@
         .btn-back { background: #777; }
 
         @media print {
-            body { background: white; padding: 0; }
+            body { 
+                background: white; 
+                padding: 0; 
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
             .invoice-box { box-shadow: none; border: none; width: 100%; max-width: 100%; }
             .actions { display: none; }
+            .global-school-name { color: #4a90e2 !important; }
+            .invoice-table th { background: #4a90e2 !important; color: white !important; }
+            /* Ensure watermark prints */
+            .watermark { opacity: 0.1 !important; display: block !important; }
         }
     </style>
 </head>
 <body>
 
 <div class="invoice-box" id="invoice-content">
-    <div style="text-align: center; padding: 50px;">Loading Invoice...</div>
+    
+    <img src="/images/logo-placeholder.png" class="watermark global-school-logo" alt="Watermark">
+
+    <div style="text-align: center; padding: 50px; position:relative; z-index:2;">Loading Invoice...</div>
 </div>
 
 <div class="actions">
@@ -63,11 +101,11 @@
     <button class="btn btn-print" onclick="window.print()"><i class="fas fa-print"></i> Print Invoice</button>
 </div>
 
+<script src="js/global-config.js"></script>
+
 <script>
-    // 1. Get Invoice ID from URL
     const urlParams = new URLSearchParams(window.location.search);
     const invoiceId = urlParams.get('id');
-
     const token = localStorage.getItem('erp-token');
 
     async function loadInvoice() {
@@ -77,16 +115,22 @@
         }
 
         try {
-            const response = await fetch(`/api/invoices/${invoiceId}/details`, {
+            // Assuming endpoint for invoice details
+            const response = await fetch(`/api/invoices/${invoiceId}/details`, { 
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            if (!response.ok) throw new Error('Failed to fetch invoice');
-
+            if (!response.ok) throw new Error('Failed to fetch invoice details');
             const data = await response.json();
             renderInvoice(data);
+            
+            // Re-apply global settings to ensure logo loads
+            if(typeof initGlobalSettings === 'function') {
+                initGlobalSettings();
+            }
 
         } catch (error) {
+            console.error(error);
             document.getElementById('invoice-content').innerHTML = `<h3 style="text-align:center; color:red;">Error: ${error.message}</h3>`;
         }
     }
@@ -94,83 +138,95 @@
     function renderInvoice({ invoice, items }) {
         const isPaid = invoice.status === 'Paid';
         const balance = parseFloat(invoice.total_amount) - parseFloat(invoice.amount_paid);
-        const shortId = invoice.id.substring(0, 8).toUpperCase();
+        const shortId = invoice.id ? invoice.id.substring(0, 8).toUpperCase() : 'N/A';
+        const invDate = invoice.issue_date || invoice.bill_date;
 
         let itemsHtml = '';
-        items.forEach(item => {
-            itemsHtml += `
-                <tr>
-                    <td>${item.description}</td>
-                    <td style="text-align:right;">₹${parseFloat(item.amount).toFixed(2)}</td>
-                </tr>
-            `;
-        });
-
-        const html = `
-            <div class="header-row">
-                <div>
-                    <h1 style="color:#555;">INVOICE</h1>
-                    <p><strong>Ref ID:</strong> #${shortId}</p>
-                    <p><strong>Date:</strong> ${new Date(invoice.bill_date).toLocaleDateString()}</p>
-                    <p><strong>Status:</strong> <span class="badge ${isPaid ? 'bg-paid' : 'bg-pending'}">${invoice.status}</span></p>
-                </div>
-                <div class="company-details">
-                    <h2>School ERP System</h2>
-                    <p>123 Education Lane</p>
-                    <p>West Bengal, India</p>
-                    <p>admin@school.com</p>
-                </div>
-            </div>
-
-            <div class="info-row">
-                <div class="info-box">
-                    <h3>Bill To:</h3>
-                    <p><strong>${invoice.student_name || 'Student'}</strong></p>
-                    <p>Roll No: ${invoice.roll_number || 'N/A'}</p>
-                    <p>Course: ${invoice.course_name || 'N/A'}</p>
-                    <p>Phone: ${invoice.phone_number || 'N/A'}</p>
-                </div>
-                <div class="info-box" style="text-align:right;">
-                    <h3>Payment Details:</h3>
-                    <p>Due Date: ${new Date(invoice.due_date).toLocaleDateString()}</p>
-                    <p>Total Amount: ₹${invoice.total_amount}</p>
-                </div>
-            </div>
-
-            <table class="invoice-table">
-                <thead>
+        if(items && items.length > 0) {
+            items.forEach(item => {
+                itemsHtml += `
                     <tr>
-                        <th>Description</th>
-                        <th style="text-align:right;">Amount</th>
+                        <td>${item.description}</td>
+                        <td style="text-align:right;">₹${parseFloat(item.amount).toFixed(2)}</td>
                     </tr>
-                </thead>
-                <tbody>
-                    ${itemsHtml}
-                    <tr class="total-row">
-                        <td style="text-align:right;">Total:</td>
-                        <td style="text-align:right;">₹${parseFloat(invoice.total_amount).toFixed(2)}</td>
-                    </tr>
-                    <tr>
-                        <td style="text-align:right;">Amount Paid:</td>
-                        <td style="text-align:right;">(-) ₹${parseFloat(invoice.amount_paid).toFixed(2)}</td>
-                    </tr>
-                    <tr style="background:#f9f9f9; font-weight:bold; font-size:1.1em;">
-                        <td style="text-align:right;">Balance Due:</td>
-                        <td style="text-align:right; color:${balance > 0 ? '#c0392b' : '#27ae60'};">₹${balance.toFixed(2)}</td>
-                    </tr>
-                </tbody>
-            </table>
+                `;
+            });
+        } else {
+            itemsHtml = '<tr><td colspan="2" class="text-center">No items found</td></tr>';
+        }
 
-            <div style="margin-top: 50px; text-align: center; font-size: 0.9em; color: #888;">
-                <p>This is a computer-generated invoice and does not require a physical signature.</p>
+        // We keep the watermark image in the HTML (static part) and inject the content around it
+        // Note: We use 'invoice-content-relative' class to ensure text sits ON TOP of the watermark
+        const contentHtml = `
+            <img src="/images/default-logo.png" class="watermark global-school-logo" alt="Watermark">
+
+            <div class="invoice-content-relative">
+                <div class="header-row">
+                    <div>
+                        <h1 style="color:#333; border-bottom: 3px solid #333; display:inline-block; margin-bottom:15px;">INVOICE</h1>
+                        <p><strong>Ref ID:</strong> #${shortId}</p>
+                        <p><strong>Date:</strong> ${new Date(invDate).toLocaleDateString()}</p>
+                        <p><strong>Status:</strong> <span class="badge ${isPaid ? 'bg-paid' : 'bg-pending'}">${invoice.status}</span></p>
+                    </div>
+                    
+                    <div class="company-details">
+                        <div class="global-school-name">School ERP System</div>
+                        <div class="global-school-address">Address Loading...</div>
+                        <div class="global-school-email">email@school.com</div>
+                        <div class="global-school-phone">+91 ...</div>
+                    </div>
+                </div>
+
+                <div class="info-row">
+                    <div class="info-box">
+                        <h3>Bill To:</h3>
+                        <p><strong>${invoice.student_name || invoice.username || 'Student'}</strong></p>
+                        <p>Roll No: ${invoice.roll_number || 'N/A'}</p>
+                        <p>Course: ${invoice.course_name || 'N/A'}</p>
+                        <p>Phone: ${invoice.phone_number || 'N/A'}</p>
+                    </div>
+                    <div class="info-box" style="text-align:right;">
+                        <h3>Payment Details:</h3>
+                        <p>Due Date: ${new Date(invoice.due_date).toLocaleDateString()}</p>
+                        <p>Total Amount: ₹${parseFloat(invoice.total_amount).toFixed(2)}</p>
+                    </div>
+                </div>
+
+                <table class="invoice-table">
+                    <thead>
+                        <tr>
+                            <th>DESCRIPTION</th>
+                            <th style="text-align:right;">AMOUNT</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${itemsHtml}
+                        <tr class="total-row">
+                            <td style="text-align:right;">Total:</td>
+                            <td style="text-align:right;">₹${parseFloat(invoice.total_amount).toFixed(2)}</td>
+                        </tr>
+                        <tr>
+                            <td style="text-align:right;">Amount Paid:</td>
+                            <td style="text-align:right;">(-) ₹${parseFloat(invoice.amount_paid).toFixed(2)}</td>
+                        </tr>
+                        <tr style="background:#f9f9f9; font-weight:bold; font-size:1.1em;">
+                            <td style="text-align:right;">Balance Due:</td>
+                            <td style="text-align:right; color:${balance > 0 ? '#c0392b' : '#27ae60'};">₹${balance.toFixed(2)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div style="margin-top: 50px; text-align: center; font-size: 0.9em; color: #888;">
+                    <p>This is a computer-generated invoice and does not require a physical signature.</p>
+                </div>
             </div>
         `;
 
-        document.getElementById('invoice-content').innerHTML = html;
+        document.getElementById('invoice-content').innerHTML = contentHtml;
     }
 
     loadInvoice();
 </script>
-<script src="js/global-config.js"></script>
+
 </body>
 </html>

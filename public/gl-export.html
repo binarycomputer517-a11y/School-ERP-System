@@ -5,9 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>General Ledger (GL) Export</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         body { font-family: 'Segoe UI', sans-serif; background-color: #f4f7f6; padding: 20px; }
         .container { max-width: 800px; margin: 40px auto; background: white; padding: 40px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); border: 1px solid #ddd; }
+        
+        /* Dynamic Header Placeholder */
+        .page-header-info { text-align: center; margin-bottom: 20px; }
+        .global-school-name { font-size: 1.5rem; font-weight: 700; color: #0056b3; margin-bottom: 5px; }
+
         h2 { text-align: center; color: #2c3e50; text-transform: uppercase; margin-bottom: 10px; }
         .back-link { display: block; text-align: center; margin-bottom: 30px; text-decoration: none; color: #3498db; }
         
@@ -16,20 +22,29 @@
         label { font-weight: 600; display: block; margin-bottom: 5px; color: #555; }
         input, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
         
-        .btn-export { width: 100%; padding: 12px; background-color: #0056b3; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background 0.2s; }
+        .btn-export { 
+            width: 100%; padding: 12px; background-color: #0056b3; color: white; border: none; border-radius: 4px; font-size: 16px; cursor: pointer; transition: background 0.2s; 
+            font-weight: 600;
+        }
         .btn-export:hover { background-color: #004494; }
+        .btn-export:disabled { background-color: #999; cursor: not-allowed; }
         
         .error-msg { color: #c0392b; background: #f9d7da; padding: 10px; border-radius: 4px; margin-top: 15px; display: none; text-align: center; }
+        .success-msg { color: #155724; background: #d4edda; padding: 10px; border-radius: 4px; margin-top: 15px; display: none; text-align: center; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>General Ledger (GL) Export</h2>
-    <a href="/finance-dashboard.html" class="back-link">← Back to Finance Dashboard</a>
+    <div class="page-header-info">
+        <div class="global-school-name">School ERP System</div>
+        <h2 style="border: none;">General Ledger (GL) Export</h2>
+    </div>
+    
+    <a href="/finance-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Finance Dashboard</a>
 
     <div class="export-card">
-        <h3 style="margin-top: 0; color: #0056b3;">Export Criteria</h3>
+        <h3 style="margin-top: 0; color: #0056b3;"><i class="fas fa-calculator"></i> Export Criteria</h3>
         <hr>
         
         <div class="row" style="display: flex; gap: 20px;">
@@ -50,9 +65,12 @@
             </select>
         </div>
 
-        <button class="btn-export" onclick="generateGL()">Generate & Download GL Export</button>
+        <button class="btn-export" onclick="generateGL()" id="generateBtn">
+            <i class="fas fa-file-download"></i> Generate & Download GL Export
+        </button>
         
         <div id="errorBox" class="error-msg"></div>
+        <div id="successBox" class="success-msg"></div>
     </div>
 </div>
 
@@ -60,7 +78,25 @@
     const token = localStorage.getItem('erp-token');
     const API_BASE = '/api/fees'; // Correct Base URL for fees module
 
-    // Set Defaults (This Month)
+    // --- Helper Functions ---
+    function hideMessages() {
+        document.getElementById('errorBox').style.display = 'none';
+        document.getElementById('successBox').style.display = 'none';
+    }
+
+    function showError(msg) {
+        const box = document.getElementById('errorBox');
+        box.innerText = "❌ " + msg;
+        box.style.display = 'block';
+    }
+    
+    function showSuccess(msg) {
+        const box = document.getElementById('successBox');
+        box.innerText = "✅ " + msg;
+        box.style.display = 'block';
+    }
+    
+    // Set Defaults (Current Month)
     const today = new Date();
     document.getElementById('endDate').valueAsDate = today;
     document.getElementById('startDate').valueAsDate = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -68,14 +104,18 @@
     async function generateGL() {
         const start = document.getElementById('startDate').value;
         const end = document.getElementById('endDate').value;
-        const errorBox = document.getElementById('errorBox');
+        const generateBtn = document.getElementById('generateBtn');
         
-        errorBox.style.display = 'none';
+        hideMessages();
 
         if (!start || !end) {
             showError("Please select both start and end dates.");
             return;
         }
+
+        const originalText = generateBtn.innerHTML;
+        generateBtn.disabled = true;
+        generateBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
 
         try {
             // 1. Fetch Data
@@ -83,7 +123,7 @@
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
-            if (!res.ok) throw new Error("Failed to fetch GL data from server.");
+            if (!res.ok) throw new Error("Failed to fetch GL data from server. Check Network logs.");
             
             const data = await res.json();
 
@@ -92,12 +132,17 @@
                 return;
             }
 
-            // 2. Convert JSON to CSV
+            // 2. Convert JSON to CSV and Download
             downloadCSV(data, `GL_Export_${start}_to_${end}.csv`);
+            
+            showSuccess(`Download successful! Exported ${data.length} transactions.`);
 
         } catch (error) {
-            console.error(error);
+            console.error("GL Export Error:", error);
             showError(error.message);
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.innerHTML = originalText;
         }
     }
 
@@ -111,7 +156,7 @@
         // CSV Rows
         data.forEach(row => {
             const date = new Date(row.date).toLocaleDateString('en-IN');
-            // Escape commas in description
+            // Escape quotes and commas in description
             const desc = `"${(row.description || '').replace(/"/g, '""')}"`; 
             
             const values = [
@@ -119,8 +164,8 @@
                 row.type,
                 row.category,
                 desc,
-                row.debit,
-                row.credit
+                parseFloat(row.debit || 0).toFixed(2),
+                parseFloat(row.credit || 0).toFixed(2)
             ];
             csvRows.push(values.join(','));
         });
@@ -137,14 +182,10 @@
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-    }
-
-    function showError(msg) {
-        const box = document.getElementById('errorBox');
-        box.innerText = "❌ " + msg;
-        box.style.display = 'block';
+        window.URL.revokeObjectURL(url); // Clean up
     }
 </script>
 <script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>

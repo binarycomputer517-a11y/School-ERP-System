@@ -4,8 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Daily Transaction Daybook</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600&display=swap');
 
         body {
             font-family: 'Roboto', sans-serif;
@@ -35,10 +36,18 @@
         }
 
         h1 {
-            margin: 0;
             color: #C0392B;
             text-transform: uppercase;
             font-size: 1.8rem;
+            margin: 0;
+        }
+
+        /* Dynamic School Name Styling */
+        .global-school-name {
+            color: #C0392B;
+            text-transform: uppercase;
+            font-size: 1rem;
+            font-weight: 500;
         }
 
         .back-link {
@@ -143,8 +152,11 @@
 
 <div class="container">
     <div class="header-row">
-        <h1>Daily Transaction Daybook</h1>
-        <a href="/admin-dashboard.html" class="back-link">← Back to Dashboard</a>
+        <div>
+            <h1>Daily Transaction Daybook</h1>
+            <span class="global-school-name">Loading School Name...</span>
+        </div>
+        <a href="/finance-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
     </div>
 
     <div class="filter-box">
@@ -160,6 +172,7 @@
                 <option value="Card">Card</option>
                 <option value="UPI">UPI</option>
                 <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Expense">Expense/Debit</option>
             </select>
         </div>
         <button class="btn-view" onclick="loadDaybook()">View Daybook</button>
@@ -192,6 +205,11 @@
     const API_BASE_URL = '/api';
     const token = localStorage.getItem('erp-token');
 
+    // Helper: Format to INR
+    const formatCurrency = (amount) => {
+        return parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    };
+
     // Init
     document.addEventListener('DOMContentLoaded', () => {
         if(!token) window.location.href = '/login.html';
@@ -211,7 +229,7 @@
             return;
         }
 
-        tbody.innerHTML = '<tr><td colspan="6" class="loading">Fetching transactions...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Fetching transactions...</td></tr>';
 
         try {
             // 1. Fetch Income (Fees) for the selected Date
@@ -219,35 +237,72 @@
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
-            if (!feesRes.ok) throw new Error("Failed to fetch data");
+            // 2. Fetch Expenses for the selected Date (Using GL Export Route)
+            const expenseRes = await fetch(`${API_BASE_URL}/fees/reports/gl-export?startDate=${dateInput}&endDate=${dateInput}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!feesRes.ok || !expenseRes.ok) throw new Error("Failed to fetch data from one or more endpoints.");
+            
             const feesData = await feesRes.json();
+            const expenseData = await expenseRes.json();
 
-            // 2. Map Data to Transactions
-            let transactions = feesData.map(f => ({
-                id: f.receipt_number || f.payment_id || 'N/A',
-                category: 'Fee Collection',
-                desc: `${f.student_name} (${f.roll_number || 'N/A'}) - ${f.course_name}`,
-                mode: f.payment_mode,
-                amount: parseFloat(f.amount),
-                type: 'Income'
-            }));
+            // 3. Map Data to Combined Transactions (Filter by Type later)
+            let transactions = [];
+            
+            // Map Income (Fees)
+            feesData.forEach(f => {
+                transactions.push({
+                    id: f.transaction_id || f.payment_id || 'N/A',
+                    category: 'Fee Collection',
+                    desc: `${f.student_name || 'Student'} (Ref: ${f.transaction_id})`,
+                    mode: f.payment_mode,
+                    amount: parseFloat(f.amount),
+                    type: 'Income',
+                    date: f.payment_date
+                });
+            });
 
-            // (Optional) Add Expenses logic here later
-            // transactions.push(...expenseData);
+            // Map Expenses (from GL Export)
+            expenseData
+                .filter(e => e.type === 'Expense') // Only take the debit entries (Expenses)
+                .forEach(e => {
+                    transactions.push({
+                        id: e.reference_id || 'EXP-' + e.date.substring(5, 10).replace('-', ''), 
+                        category: e.category,
+                        desc: e.description,
+                        mode: 'N/A', // Set mode to N/A for cash/bank expenses
+                        amount: parseFloat(e.debit),
+                        type: 'Expense',
+                        date: e.date
+                    });
+                });
+            
+            // Sort by date/timestamp to maintain ledger order
+            transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-            // 3. Filter by Mode (Case Insensitive Fix)
+            // 4. Filter by Mode (Combined Fix)
             if (modeFilter !== 'All') {
-                transactions = transactions.filter(t => 
-                    t.mode && t.mode.toLowerCase() === modeFilter.toLowerCase()
-                );
+                if (modeFilter === 'Expense') {
+                    // Show only Expense type transactions
+                    transactions = transactions.filter(t => t.type === 'Expense');
+                } else {
+                    // Filter Income transactions by specific mode (Cash, Card, etc.)
+                    transactions = transactions.filter(t => 
+                        t.type === 'Income' && t.mode && t.mode.toLowerCase() === modeFilter.toLowerCase()
+                    );
+                }
+            } else {
+                // If 'All' is selected, filter out anything that is neither Income nor Expense
+                transactions = transactions.filter(t => t.type === 'Income' || t.type === 'Expense');
             }
 
-            // 4. Render & Calculate
+            // 5. Render & Calculate
             renderTable(transactions);
 
         } catch (error) {
-            console.error(error);
-            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error: ${error.message}</td></tr>`;
+            console.error("Daybook Load Error:", error);
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red; padding:20px;"><i class="fas fa-exclamation-triangle"></i> Error loading: ${error.message}</td></tr>`;
         }
     }
 
@@ -266,17 +321,19 @@
                 if (txn.type === 'Expense') totalExpense += txn.amount;
 
                 const badgeClass = txn.type === 'Income' ? 'badge-inc' : 'badge-exp';
+                const typeIcon = txn.type === 'Income' ? '<i class="fas fa-arrow-circle-down"></i>' : '<i class="fas fa-arrow-circle-up"></i>';
                 
                 // Ensure ID doesn't break layout if too long
                 const displayId = txn.id.length > 15 ? txn.id.substring(0, 12) + '...' : txn.id;
+                const modeDisplay = txn.type === 'Expense' ? '—' : txn.mode; // Display dash for Expense mode
 
                 const row = `
                     <tr>
                         <td title="${txn.id}">${displayId}</td>
                         <td>${txn.category}</td>
                         <td>${txn.desc}</td>
-                        <td>${txn.mode}</td>
-                        <td style="font-weight:bold;">₹${txn.amount.toFixed(2)}</td>
+                        <td>${modeDisplay}</td>
+                        <td style="font-weight:bold;">${typeIcon} ₹${formatCurrency(txn.amount)}</td>
                         <td><span class="badge ${badgeClass}">${txn.type}</span></td>
                     </tr>
                 `;
@@ -285,11 +342,12 @@
         }
 
         // Update Totals
-        document.getElementById('sumIncome').innerText = totalIncome.toFixed(2);
-        document.getElementById('sumExpense').innerText = totalExpense.toFixed(2);
-        document.getElementById('sumNet').innerText = (totalIncome - totalExpense).toFixed(2);
+        document.getElementById('sumIncome').innerText = formatCurrency(totalIncome);
+        document.getElementById('sumExpense').innerText = formatCurrency(totalExpense);
+        document.getElementById('sumNet').innerText = formatCurrency(totalIncome - totalExpense);
     }
 </script>
 <script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>

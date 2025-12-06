@@ -3,37 +3,90 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Payment History | School ERP</title>
+    <title>Transaction History | School ERP</title>
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
     <style>
-        body { background-color: #f4f6f9; padding: 30px; }
-        .card { border: none; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
-        h2 { color: #4a90e2; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 20px; }
-        .table th { background-color: #f8f9fa; color: #555; font-weight: 600; }
-        .badge-mode { background-color: #e3f2fd; color: #0d47a1; padding: 5px 10px; border-radius: 4px; font-size: 0.85em; }
-        .btn-view { padding: 2px 10px; font-size: 0.9em; }
+        :root {
+            --primary-color: #005A9C;
+            --secondary-color: #f4f6f9;
+        }
+        body { background-color: var(--secondary-color); padding: 30px; font-family: 'Segoe UI', sans-serif; }
+        
+        .main-card {
+            border: none;
+            border-radius: 10px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+            background: white;
+            padding: 25px;
+        }
+
+        /* Header Styling */
+        .page-header { border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 25px; }
+        .page-title { color: var(--primary-color); font-weight: 700; margin: 0; }
+        
+        /* Table Styling */
+        .table thead th { 
+            background-color: #f8f9fa; 
+            color: #555; 
+            font-weight: 600; 
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+        .table tbody td { vertical-align: middle; font-size: 0.95rem; }
+        
+        /* Badges */
+        .badge-mode { 
+            background-color: #e3f2fd; color: #0d47a1; 
+            padding: 6px 12px; border-radius: 20px; 
+            font-size: 0.8rem; font-weight: 600;
+        }
+        .text-amount { color: #198754; font-weight: 700; font-family: 'Courier New', monospace; }
+
+        /* Loader */
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.7); z-index: 1000;
+            display: none; justify-content: center; align-items: center;
+        }
     </style>
 </head>
 <body>
 
+<div class="loader-overlay" id="loader">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
 <div class="container">
-    <div class="card p-4">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h2>Transaction History</h2>
-            <a href="/fee-collection.html" class="btn btn-outline-primary">← Back to Collection</a>
+    <div class="main-card">
+        
+        <div class="d-flex justify-content-between align-items-center page-header">
+            <div>
+                <h2 class="page-title"><i class="fas fa-history"></i> Transaction History</h2>
+                <p class="text-muted small mb-0 global-school-name">School ERP System</p>
+            </div>
+            <a href="/fee-collection.html" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Collection
+            </a>
         </div>
 
-        <div class="row g-2 mb-4 bg-light p-3 rounded">
+        <div class="row g-3 mb-4 bg-light p-3 rounded align-items-end">
             <div class="col-md-4">
-                <label class="small text-muted">Start Date</label>
-                <input type="date" id="startDate" class="form-control">
+                <label class="form-label small fw-bold text-muted">Start Date</label>
+                <input type="date" id="startDate" class="form-control shadow-sm">
             </div>
             <div class="col-md-4">
-                <label class="small text-muted">End Date</label>
-                <input type="date" id="endDate" class="form-control">
+                <label class="form-label small fw-bold text-muted">End Date</label>
+                <input type="date" id="endDate" class="form-control shadow-sm">
             </div>
-            <div class="col-md-4 d-flex align-items-end">
-                <button class="btn btn-primary w-100" onclick="loadHistory()">Filter Records</button>
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100 shadow-sm" onclick="loadHistory()">
+                    <i class="fas fa-filter"></i> Filter Records
+                </button>
             </div>
         </div>
 
@@ -42,94 +95,149 @@
                 <thead>
                     <tr>
                         <th>Date</th>
-                        <th>Student</th>
-                        <th>Receipt No</th>
-                        <th>Mode</th>
-                        <th>Amount</th>
-                        <th>Action</th>
+                        <th>Student Name</th>
+                        <th>Receipt / Ref ID</th>
+                        <th>Payment Mode</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-center">Action</th>
                     </tr>
                 </thead>
                 <tbody id="historyTableBody">
-                    <tr><td colspan="6" class="text-center p-4 text-muted">Loading data...</td></tr>
+                    <tr><td colspan="6" class="text-center p-5 text-muted">Click 'Filter Records' to load data.</td></tr>
                 </tbody>
             </table>
         </div>
+        
+        <div class="mt-3 text-end">
+            <h5 class="text-muted">Total Collected: <span class="text-dark fw-bold" id="totalCollected">₹0.00</span></h5>
+        </div>
+
     </div>
 </div>
 
 <script>
     const API_BASE = '/api/fees';
     const token = localStorage.getItem('erp-token');
+
+    // 1. Auth Check
+    if (!token) {
+        alert("Session Expired. Please login again.");
+        window.location.href = '/login.html';
+    }
     
-    // Set default dates (This Month)
+    // 2. Set Default Dates (Current Month)
     const today = new Date();
     document.getElementById('endDate').valueAsDate = today;
     const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
     document.getElementById('startDate').valueAsDate = firstDay;
 
-    // Load Data
+    // 3. Load Data Function
     async function loadHistory() {
         const start = document.getElementById('startDate').value;
         const end = document.getElementById('endDate').value;
         const tbody = document.getElementById('historyTableBody');
+        const totalDisplay = document.getElementById('totalCollected');
+
+        showLoader(true);
 
         try {
-            // FIXED 1: Changed params to 'startDate' and 'endDate' to match backend req.query
+            // Fetch from Backend
             const response = await fetch(`${API_BASE}/history?startDate=${start}&endDate=${end}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
-            if(!response.ok) throw new Error("Failed to fetch history");
+            if(!response.ok) throw new Error("Failed to fetch transaction history");
             
             const data = await response.json();
             tbody.innerHTML = '';
+            
+            let totalSum = 0;
 
             if(data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-muted">No transactions found for this period.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5 text-muted"><i class="fas fa-folder-open fa-2x mb-3"></i><br>No transactions found for this period.</td></tr>';
+                totalDisplay.innerText = '₹0.00';
                 return;
             }
 
+            // Render Rows
             data.forEach(row => {
-                // FIXED 2: Using 'row.payment_id' instead of 'row.id'
-                // This maps correctly to the UUID returned by the updated backend query
+                const amount = parseFloat(row.amount);
+                totalSum += amount;
+
+                // Backend returns 'payment_id' (UUID) and 'transaction_id' (Readable Ref)
                 const paymentId = row.payment_id; 
                 
                 tbody.innerHTML += `
                     <tr>
-                        <td>${new Date(row.payment_date).toLocaleDateString('en-IN')}</td>
-                        <td class="fw-bold text-dark">${row.student_name || 'Unknown'}</td>
-                        <td><small class="text-muted">${row.transaction_id}</small></td>
-                        <td><span class="badge-mode">${row.payment_mode}</span></td>
-                        <td class="fw-bold text-success">₹${parseFloat(row.amount).toFixed(2)}</td>
+                        <td>${new Date(row.payment_date).toLocaleDateString('en-GB')}</td>
                         <td>
-                            <button class="btn btn-sm btn-outline-secondary btn-view" 
-                                onclick="viewReceipt('${paymentId}')">
-                                📄 View Receipt
+                            <div class="fw-bold text-dark">${row.student_name || 'Unknown'}</div>
+                        </td>
+                        <td>
+                            <small class="text-muted font-monospace">${row.transaction_id}</small>
+                        </td>
+                        <td><span class="badge-mode">${row.payment_mode}</span></td>
+                        <td class="text-end text-amount">₹${amount.toFixed(2)}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary" onclick="downloadReceipt('${paymentId}', this)">
+                                <i class="fas fa-file-invoice"></i> Receipt
                             </button>
                         </td>
                     </tr>
                 `;
             });
 
+            // Update Total
+            totalDisplay.innerText = '₹' + totalSum.toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
         } catch (err) {
             console.error(err);
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Error loading data.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger p-4">Error loading data. Please try again.</td></tr>';
+        } finally {
+            showLoader(false);
         }
     }
 
-    // View Receipt Function
-    function viewReceipt(id) {
-        if(!id || id === 'undefined') {
-            alert("Error: Invalid Receipt ID");
-            return;
+    // 4. Secure Receipt Download (Blob Method)
+    async function downloadReceipt(paymentId, btnElement) {
+        const originalText = btnElement.innerHTML;
+        btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btnElement.disabled = true;
+
+        try {
+            const res = await fetch(`${API_BASE}/receipt/${paymentId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!res.ok) throw new Error("Receipt generation failed");
+
+            // Create Blob from PDF Stream
+            const blob = await res.blob();
+            const url = window.URL.createObjectURL(blob);
+            
+            // Open in New Tab
+            window.open(url, '_blank');
+
+            // Cleanup
+            setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+
+        } catch (error) {
+            alert("Error: " + error.message);
+        } finally {
+            btnElement.innerHTML = originalText;
+            btnElement.disabled = false;
         }
-        // Opens PDF in new tab
-        window.open(`${API_BASE}/receipt/${id}?token=${token}`, '_blank');
+    }
+
+    function showLoader(show) {
+        document.getElementById('loader').style.display = show ? 'flex' : 'none';
     }
 
     // Initial Load
     document.addEventListener('DOMContentLoaded', loadHistory);
 </script>
+
 <script src="js/global-config.js"></script>
+
 </body>
 </html>

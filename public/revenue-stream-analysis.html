@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Revenue Stream Analysis | School ERP</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
         :root {
@@ -174,10 +175,10 @@
                 </div>
                 <div class="form-group">
                     <label for="group-by">Analysis Type</label>
-                    <select id="group-by" required>
+                    <select id="group-by" required disabled title="Backend currently supports only Fee Category breakdown based on available routes.">
                         <option value="fee_category">By Fee Category (Tuition, Transport, etc.)</option>
-                        <option value="course">By Course & Batch</option>
-                        <option value="payment_mode">By Payment Mode</option>
+                        <option value="course">By Course & Batch (Not fully supported)</option>
+                        <option value="payment_mode">By Payment Mode (Not fully supported)</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -228,7 +229,7 @@
     
     // Redirect if not authorized
     if (!token || !['Admin', 'Super Admin', 'Finance'].includes(userRole)) { 
-        window.location.href = '/login'; 
+        window.location.href = '/login.html'; 
     }
     
     // --- 2. API Helper ---
@@ -238,7 +239,6 @@
             const response = await fetch(url, options);
             if (!response.ok) {
                 const errorText = await response.text();
-                // Try to parse JSON error, fallback to text
                 let errorMessage;
                 try {
                     const errJson = JSON.parse(errorText);
@@ -254,74 +254,103 @@
             throw error;
         }
     }
-    
-    // --- 3. Main Logic: Fetch & Render ---
+
+    // --- 3. Currency Helper ---
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2
+        }).format(amount);
+    };
+
+    // --- 4. Main Logic: Fetch & Render ---
     async function fetchAndRenderAnalysis(filters) {
         const tbody = document.getElementById('analysis-tbody');
-        tbody.innerHTML = '<tr><td colspan="4" class="placeholder-message">Generating analysis... please wait.</td></tr>';
+        const reportTable = document.getElementById('report-table');
+        
+        // Ensure tfoot from previous run is removed
+        const existingTfoot = reportTable.querySelector('tfoot');
+        if(existingTfoot) existingTfoot.remove();
+
+        tbody.innerHTML = '<tr><td colspan="4" class="placeholder-message"><i class="fas fa-sync fa-spin"></i> Generating analysis... please wait.</td></tr>';
         document.getElementById('total-revenue-metric').textContent = '...';
 
         try {
             const queryString = new URLSearchParams(filters).toString();
-            
-            // =========================================================
-            // CRITICAL FIX: URL includes '/fees' to match server.js mount point
-            // =========================================================
             const apiUrl = `/api/fees/reports/revenue-stream?${queryString}`;
             
-            const analysisData = await handleApi(apiUrl); 
-            
+            const response = await handleApi(apiUrl); 
+            const analysisData = response; 
+
             tbody.innerHTML = '';
             
-            // Handle case with no data
             if (!analysisData.breakdown || analysisData.breakdown.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="placeholder-message">No revenue found for this specific criteria.</td></tr>';
                 document.getElementById('total-revenue-metric').textContent = '₹0.00';
                 return;
             }
 
-            // Render Table Rows
+            // Calculate Total from Breakdown (as API might not return a grand_total field)
             let calculatedTotal = 0;
+            analysisData.breakdown.forEach(item => {
+                calculatedTotal += parseFloat(item.amount) || 0;
+            });
+
+            // Render Table Rows
+            const finalTotal = calculatedTotal;
             
             analysisData.breakdown.forEach(item => {
                 const amount = parseFloat(item.amount) || 0;
-                calculatedTotal += amount;
                 
-                // Safety check for division by zero
-                const grandTotal = parseFloat(analysisData.grand_total) || 0;
-                const percentage = grandTotal > 0 
-                    ? ((amount / grandTotal) * 100).toFixed(1) 
+                const percentage = finalTotal > 0 
+                    ? ((amount / finalTotal) * 100).toFixed(1) 
                     : '0.0';
                 
+                // NOTE: Using 'category' field name from backend query
                 const row = `<tr>
-                    <td>${item.category_name}</td>
-                    <td>${item.course_name || '-'}</td>
-                    <td>₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                    <td>${item.category}</td>
+                    <td>-</td> 
+                    <td>${formatCurrency(amount)}</td>
                     <td>${percentage}%</td>
                 </tr>`;
                 tbody.innerHTML += row;
             });
-            
+
             // Update Summary Box
-            const finalTotal = parseFloat(analysisData.grand_total || calculatedTotal);
-            document.getElementById('total-revenue-metric').textContent = `₹${finalTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+            document.getElementById('total-revenue-metric').textContent = formatCurrency(finalTotal);
+
+            // Add Footer Row (Total)
+            const footer = reportTable.createTFoot();
+            const footerRow = footer.insertRow();
+            footerRow.innerHTML = `
+                <td colspan="2" style="text-align: right; font-weight: bold; background-color: #e8f4fc;">GRAND TOTAL:</td>
+                <td style="font-weight: bold; color: var(--info-color); background-color: #e8f4fc;">${formatCurrency(finalTotal)}</td>
+                <td style="font-weight: bold; background-color: #e8f4fc;">100.0%</td>
+            `;
 
         } catch (error) {
             console.error('Error in analysis:', error);
-            tbody.innerHTML = `<tr><td colspan="4" class="placeholder-message" style="color: red;">Error: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="4" class="placeholder-message" style="color: red;"><i class="fas fa-exclamation-triangle"></i> Error: ${error.message}</td></tr>`;
             document.getElementById('total-revenue-metric').textContent = 'Error';
         }
     }
 
-    // --- 4. CSV Export Logic (Client Side) ---
+    // --- 5. CSV Export Logic (Client Side) ---
     function exportTableToCSV(filename) {
         const csv = [];
-        const rows = document.querySelectorAll("table tr");
+        const rows = document.getElementById("report-table").querySelectorAll("tr");
         
         for (let i = 0; i < rows.length; i++) {
-            const row = [], cols = rows[i].querySelectorAll("td, th");
+            const row = [], 
+                  cols = rows[i].querySelectorAll("td, th");
+            
+            // Skip the footer total row (which might interfere with CSV)
+            if (rows[i].parentElement.tagName === 'TFOOT') continue;
+
             for (let j = 0; j < cols.length; j++) 
-                row.push('"' + cols[j].innerText + '"'); // Quote strings to handle commas
+                row.push('"' + cols[j].innerText.trim().replace(/₹/g, '').replace(/,/g, '') + '"'); 
+            
             csv.push(row.join(","));        
         }
 
@@ -334,7 +363,7 @@
         downloadLink.click();
     }
 
-    // --- 5. Initialization ---
+    // --- 6. Initialization ---
     document.addEventListener('DOMContentLoaded', () => {
         // Set Default Dates (First day of month to Today)
         const today = new Date();
@@ -343,14 +372,24 @@
         // Format as YYYY-MM-DD for input fields
         const formatDate = (d) => d.toISOString().split('T')[0];
         
-        document.getElementById('start-date').value = formatDate(firstDay);
-        document.getElementById('end-date').value = formatDate(today);
+        // FIX: Retrieve elements safely
+        const startDateEl = document.getElementById('start-date');
+        const endDateEl = document.getElementById('end-date');
+        const groupByEl = document.getElementById('group-by');
+
+        // Apply default dates only if elements exist
+        if (startDateEl) {
+            startDateEl.value = formatDate(firstDay);
+        }
+        if (endDateEl) {
+            endDateEl.value = formatDate(today);
+        }
 
         // Initial Load
         const initialFilters = {
-            start_date: document.getElementById('start-date').value,
-            end_date: document.getElementById('end-date').value,
-            group_by: document.getElementById('group-by').value,
+            start_date: startDateEl ? startDateEl.value : '',
+            end_date: endDateEl ? endDateEl.value : '',
+            group_by: groupByEl ? groupByEl.value : 'fee_category',
         };
         fetchAndRenderAnalysis(initialFilters);
 
@@ -373,5 +412,6 @@
     });
 </script>
 <script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>

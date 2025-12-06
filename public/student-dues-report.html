@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Detailed Student Dues Report</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
         :root {
@@ -146,20 +147,28 @@
 <body>
 
 <script>
+    // Global Config check (ensures token is loaded)
     const token = localStorage.getItem('erp-token');
-    // NOTE: Correct API Base for fees module
-    const API_BASE = '/api'; 
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
     
+    // NOTE: API Base for fees module
+    const API_BASE = '/api'; 
+    
+    // Ensure token is available before setting auth headers
     if (!token) window.location.href = '/login.html';
     
-    // --- Helper for API Calls ---
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+    
+    // --- Helper for API Calls (Updated for global compatibility) ---
     async function handleApi(url, options = {}) {
         options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
         const response = await fetch(url, options);
         if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-            throw new Error(errorBody.message || `Error ${response.status}`);
+            const errorBody = await response.json().catch(() => ({ message: 'Server did not return JSON body.' }));
+            // Log specific 401/403 errors
+            if (response.status === 401 || response.status === 403) {
+                throw new Error(`Authentication Failed (${response.status}). Please re-login.`);
+            }
+            throw new Error(errorBody.message || `Error ${response.status}: Failed to process request.`);
         }
         return response.json();
     }
@@ -171,7 +180,7 @@
         const tbody = document.getElementById('dues-tbody');
         const tfoot = document.getElementById('dues-tfoot');
         
-        tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">Generating report...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message"><i class="fas fa-sync fa-spin"></i> Generating report...</td></tr>';
         tfoot.innerHTML = '';
 
         try {
@@ -205,6 +214,10 @@
                 totalBilledSum += totalBilled;
                 totalPaidSum += totalPaid;
                 
+                const lastPaymentDate = d.last_payment_date 
+                    ? new Date(d.last_payment_date).toLocaleDateString('en-IN') 
+                    : '<span class="badge bg-warning text-dark">Never</span>';
+
                 const row = `<tr>
                     <td style="font-weight:500;">${d.roll_number || '-'}</td>
                     <td>${d.student_name || 'Unknown'}</td>
@@ -212,9 +225,7 @@
                     <td>₹${totalBilled.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                     <td style="color: var(--success-color);">₹${totalPaid.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                     <td style="color: var(--error-color); font-weight: 700;">₹${balance.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
-                    <td style="font-size:0.9em; color:#666;">
-                        ${d.last_payment_date ? new Date(d.last_payment_date).toLocaleDateString('en-IN') : '<span class="badge bg-warning text-dark">Never</span>'}
-                    </td>
+                    <td style="font-size:0.9em; color:#666;">${lastPaymentDate}</td>
                 </tr>`;
                 tbody.innerHTML += row;
             });
@@ -230,7 +241,7 @@
 
         } catch (error) {
             console.error('Error fetching dues report:', error);
-            tbody.innerHTML = `<tr><td colspan="7" class="placeholder-message" style="color: var(--error-color);">Error loading report: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="placeholder-message" style="color: var(--error-color);"><i class="fas fa-exclamation-triangle"></i> Error loading report: ${error.message}</td></tr>`;
         }
     }
     
@@ -240,15 +251,16 @@
     async function loadCourses() {
         const courseFilter = document.getElementById('course-filter');
         try {
-            const courses = await handleApi(`${API_BASE}/academicswithfees/courses`); // Verify this path exists in your academics module
+            // Assuming endpoint for courses list exists
+            const courses = await handleApi(`${API_BASE}/courses`); 
             courses.forEach(c => {
                 const option = document.createElement('option');
-                option.value = c.course_id;
+                option.value = c.course_id || c.id; // Use course_id or id
                 option.innerText = c.course_name;
                 courseFilter.appendChild(option);
             });
         } catch (error) {
-            console.warn('Could not load courses list (API might be different). Using manual input.');
+            console.warn('Could not load courses list:', error.message);
         }
     }
 
@@ -270,7 +282,8 @@
         
         // Export Button Logic (Simple CSV Export)
         document.getElementById('export-btn').addEventListener('click', () => {
-            alert("Export functionality will be implemented with server-side PDF generation.");
+            // NOTE: Full CSV/PDF export logic should be handled server-side for large data
+            alert("Export functionality requires a server-side route to generate the file.");
         });
     });
 </script>
@@ -278,11 +291,11 @@
 <div class="container">
     <h1>Detailed Student Dues Report</h1>
     <div class="nav-links">
-        <a href="/finance-dashboard.html">← Back to Dashboard</a>
+        <a href="/finance-dashboard.html"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
     </div>
 
     <div class="card">
-        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0;">Report Filters</h3>
+        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px; margin-top: 0;"><i class="fas fa-filter"></i> Report Filters</h3>
         <form id="report-form">
             <div class="filter-grid">
                 <div class="form-group">
@@ -297,13 +310,17 @@
                 </div>
                 
                 <div class="form-group action-btns">
-                    <button type="submit" style="background-color: var(--primary-color);">Generate Report</button>
-                    <button type="button" id="export-btn" style="background-color: var(--success-color);">Download CSV</button>
+                    <button type="submit" style="background-color: var(--primary-color);">
+                        <i class="fas fa-chart-line"></i> Generate Report
+                    </button>
+                    <button type="button" id="export-btn" style="background-color: var(--success-color);">
+                        <i class="fas fa-download"></i> Download CSV
+                    </button>
                 </div>
             </div>
         </form>
 
-        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px;">Report Results</h3>
+        <h3 style="border-bottom: 1px solid #eee; padding-bottom: 10px;"><i class="fas fa-table"></i> Report Results</h3>
         <div style="overflow-x: auto;">
             <table class="dues-table">
                 <thead>
@@ -326,5 +343,6 @@
     </div>
 </div>
 <script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>

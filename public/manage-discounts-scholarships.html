@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Manage Discounts & Scholarships</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
         :root {
@@ -84,6 +85,10 @@
         .submit-btn:hover {
             background-color: #357abd;
         }
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
         .discount-table {
             width: 100%;
             border-collapse: collapse;
@@ -105,7 +110,20 @@
         .placeholder-message {
             text-align: center;
             padding: 20px 0;
-            color: var(--secondary-color);
+            color: var(--dark-gray-color);
+        }
+        .btn-action {
+            background-color: #f39c12;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            margin-right: 5px;
+        }
+        .btn-delete {
+            background-color: var(--error-color);
         }
     </style>
 </head>
@@ -115,8 +133,11 @@
     const userRole = localStorage.getItem('user-role');
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     
+    // API Endpoint constant
+    const API_BASE = '/api/fees/discounts';
+
     if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
-        window.location.href = '/login'; 
+        window.location.href = '/login.html'; 
     }
     
     // --- Helper for API Calls ---
@@ -124,22 +145,42 @@
         options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
         const response = await fetch(url, options);
         if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+            const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Unknown Server Error' }));
+            throw new Error(`API call failed (Status: ${response.status}). Message: ${errorBody.message}`);
         }
         return response.json();
     }
     
     /**
-     * Fetches and renders existing discounts/scholarships.
+     * Helper: Format currency/percentage display
+     */
+    const formatValue = (value, type) => {
+        const floatValue = parseFloat(value) || 0;
+        if (type === 'percent') {
+            return `${floatValue.toFixed(2)}%`;
+        }
+        return `₹${floatValue.toFixed(2)}`;
+    };
+
+    /**
+     * Resets the form and prepares for a new entry.
+     */
+    function resetForm() {
+        document.getElementById('discount-form').reset();
+        document.getElementById('discount-id').value = '';
+        document.getElementById('submit-btn').textContent = 'Save Discount/Scholarship';
+    }
+
+
+    /**
+     * Fetch and render existing discounts/scholarships.
      */
     async function fetchAndRenderDiscounts() {
         const tbody = document.getElementById('discounts-tbody');
-        tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message">Loading existing discounts...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="placeholder-message"><i class="fas fa-spinner fa-spin"></i> Loading existing discounts...</td></tr>';
 
         try {
-            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of discounts ❌
-            const discounts = await handleApi('/api/fees/discounts'); 
+            const discounts = await handleApi(API_BASE); 
             
             tbody.innerHTML = '';
             if (discounts.length === 0) {
@@ -148,31 +189,65 @@
             }
 
             discounts.forEach(d => {
-                const isActive = new Date(d.expiry_date) > new Date();
+                const expiryDate = new Date(d.expiry_date);
+                const isActive = expiryDate > new Date();
                 const statusClass = isActive ? 'status-active' : 'status-expired';
                 const statusText = isActive ? 'Active' : 'Expired';
                 
-                const valueText = d.type === 'percent' 
-                    ? `${d.value}%` 
-                    : `₹${(d.value || 0).toFixed(2)}`;
+                const valueText = formatValue(d.value, d.type);
 
                 const row = `<tr>
                     <td>${d.name}</td>
                     <td>${d.code}</td>
                     <td>${valueText} (${d.type})</td>
                     <td>${d.usage_limit || 'Unlimited'}</td>
-                    <td>${new Date(d.expiry_date).toLocaleDateString()}</td>
+                    <td>${expiryDate.toLocaleDateString()}</td>
                     <td><span class="${statusClass}">${statusText}</span></td>
-                    <td><button onclick="editDiscount(${d.id})">Edit</button></td>
+                    <td>
+                        <button class="btn-action" onclick="loadForEdit('${d.id}')">
+                            <i class="fas fa-edit"></i> Edit
+                        </button>
+                        <button class="btn-delete" onclick="deleteDiscount('${d.id}')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
+                    </td>
                 </tr>`;
                 tbody.innerHTML += row;
             });
 
         } catch (error) {
             console.error('Error fetching discounts:', error);
-            tbody.innerHTML = `<tr><td colspan="7" class="placeholder-message" style="color: var(--error-color);">Error loading data: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="placeholder-message" style="color: var(--error-color);">${error.message}</td></tr>`;
         }
     }
+
+    /**
+     * Load a single discount into the form for editing.
+     */
+    async function loadForEdit(discountId) {
+        try {
+            // NOTE: Requires backend to have GET /api/fees/discounts/:id route for single item retrieval
+            const discount = await handleApi(`${API_BASE}/${discountId}`); 
+
+            document.getElementById('discount-id').value = discount.id;
+            document.getElementById('discount-name').value = discount.name;
+            document.getElementById('discount-code').value = discount.code;
+            document.getElementById('discount-type').value = discount.type;
+            document.getElementById('discount-value').value = parseFloat(discount.value).toFixed(2);
+            document.getElementById('usage-limit').value = discount.usage_limit || '';
+            
+            // Format date to YYYY-MM-DD for input field
+            document.getElementById('expiry-date').value = discount.expiry_date ? new Date(discount.expiry_date).toISOString().split('T')[0] : '';
+            document.getElementById('fee-category-id').value = discount.fee_category_id || 'ALL';
+
+            document.getElementById('submit-btn').textContent = 'Update Discount';
+            window.scrollTo(0, 0); // Scroll to top to see the form
+
+        } catch (error) {
+            alert(`❌ Failed to load discount for editing: ${error.message}`);
+        }
+    }
+
 
     /**
      * Handles form submission for creating or updating a discount.
@@ -180,38 +255,51 @@
     async function submitDiscount(formData) {
         const submitBtn = document.getElementById('submit-btn');
         submitBtn.disabled = true;
+        const originalText = submitBtn.textContent;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
         const discountId = formData.id;
         const isUpdate = !!discountId;
         const method = isUpdate ? 'PUT' : 'POST';
-        const url = isUpdate ? `/api/fees/discounts/${discountId}` : '/api/fees/discounts';
+        const url = isUpdate ? `${API_BASE}/${discountId}` : API_BASE;
 
         try {
-            // ❌ ACTUAL API CALL for submission ❌
             await handleApi(url, { method: method, body: JSON.stringify(formData) });
             
             alert(`✅ Discount ${isUpdate ? 'updated' : 'created'} successfully!`);
-            document.getElementById('discount-form').reset();
+            resetForm();
             fetchAndRenderDiscounts(); // Refresh list
 
         } catch (error) {
             alert(`❌ Error saving discount: ${error.message}`);
         } finally {
             submitBtn.disabled = false;
+            submitBtn.textContent = originalText;
         }
     }
 
-    // Placeholder for editing a discount
-    function editDiscount(discountId) {
-        alert(`Loading Discount ID ${discountId} for editing (requires another API call to fetch single item).`);
+    /**
+     * Delete discount
+     */
+    async function deleteDiscount(id) {
+        if(!confirm("Are you sure you want to delete this rate? This action cannot be undone.")) return;
+        
+        try {
+            await handleApi(`${API_BASE}/${id}`, { method: 'DELETE' });
+            alert('✅ Discount deleted successfully.');
+            fetchAndRenderDiscounts();
+        } catch (error) {
+            alert(`❌ Error deleting: ${error.message}`);
+        }
     }
-    
+
     // Placeholder function to load fee categories
     async function loadFeeCategories() {
         const select = document.getElementById('fee-category-id');
         try {
-            // ❌ ACTUAL API CALL: Endpoint assumed to return a list of fee categories ❌
-            const categories = [ /* await handleApi('/api/fees/categories') */ ]; 
+            // Assuming the categories API returns objects with { id: UUID, name: string }
+            // If the endpoint /api/fees/categories does not exist, this will default to ALL.
+            const categories = []; /* await handleApi('/api/fees/categories') */ 
 
             select.innerHTML = '<option value="ALL">ALL (Total Fee)</option>';
             categories.forEach(cat => {
@@ -230,22 +318,34 @@
         document.getElementById('discount-form').addEventListener('submit', (e) => {
             e.preventDefault();
             const formData = {
-                id: document.getElementById('discount-id').value,
+                id: document.getElementById('discount-id').value || null,
                 name: document.getElementById('discount-name').value,
                 code: document.getElementById('discount-code').value,
                 type: document.getElementById('discount-type').value,
-                value: parseFloat(document.getElementById('discount-value').value),
+                value: parseFloat(document.getElementById('discount-value').value) || 0,
                 usage_limit: parseInt(document.getElementById('usage-limit').value) || null,
                 expiry_date: document.getElementById('expiry-date').value,
                 fee_category_id: document.getElementById('fee-category-id').value, 
+                description: `Discount ${document.getElementById('discount-code').value} applied.` // Dynamic description for audit
             };
+
+            // Basic validation
+            if (formData.value <= 0) {
+                 alert("Value must be greater than zero.");
+                 return;
+            }
+            if (formData.type === 'percent' && formData.value > 100) {
+                 alert("Percentage cannot exceed 100.");
+                 return;
+            }
+
             submitDiscount(formData);
         });
     });
 </script>
 
 <div class="container">
-    <h1>Manage Discounts & Scholarships</h1>
+    <h1><i class="fas fa-tags"></i> Manage Discounts & Scholarships</h1>
     <div class="nav-links">
         <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
     </div>
@@ -291,6 +391,11 @@
             </div>
             <button type="submit" id="submit-btn" class="submit-btn">Save Discount/Scholarship</button>
         </form>
+        <div class="text-center mt-3">
+            <button class="btn btn-sm btn-action" style="background-color: #555;" onclick="resetForm()">
+                <i class="fas fa-plus"></i> Create New
+            </button>
+        </div>
     </div>
 
     <div class="card">
@@ -314,5 +419,6 @@
     </div>
 </div>
 <script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>

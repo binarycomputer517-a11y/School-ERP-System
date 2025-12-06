@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Process Student Fee Refunds</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
         :root {
@@ -86,21 +87,86 @@
             transition: background-color 0.3s;
         }
         .submit-btn:hover {
-            background-color: #a72d21;
+            background-color: #a72d2d; /* Slightly darker red */
         }
         .submit-btn:disabled {
             background-color: #ccc;
             cursor: not-allowed;
         }
-        #current-balance {
+        #refundable-balance {
             font-size: 1.5em;
             font-weight: 600;
             color: var(--success-color);
         }
+        .loader-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.7); z-index: 1000;
+            display: none; justify-content: center; align-items: center;
+        }
     </style>
 </head>
 <body>
+
+<div class="loader-overlay" id="loader">
+    <div class="spinner-border text-primary" role="status">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+</div>
+
+<div class="container">
+    <h1>Process Student Fee Refunds</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html"><i class="fas fa-arrow-left"></i> Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>1. Student Selection</h2>
+        <div class="form-group">
+            <label for="student-select">Student:</label>
+            <select id="student-select" required>
+                <option value="">-- Select Student --</option>
+            </select>
+        </div>
+
+        <div class="info-box" id="student-info">
+            <p>Select a student to view their refundable balance.</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>2. Refund Details</h2>
+        <div class="form-group">
+            <label>Current Refundable Balance:</label>
+            <p id="current-balance"><span id="refundable-balance">₹0.00</span></p> 
+        </div>
+
+        <form id="refund-form">
+            <div class="form-group">
+                <label for="refund-amount-input">Refund Amount (₹)</label>
+                <input type="number" id="refund-amount-input" name="amount" step="0.01" min="0" required disabled>
+            </div>
+            
+            <div class="form-group">
+                <label for="refund-mode">Refund Method</label>
+                <select id="refund-mode" name="mode" required>
+                    <option value="Bank Transfer">Bank Transfer (Preferred)</option>
+                    <option value="Cheque">Cheque</option>
+                    <option value="Cash">Cash (Max ₹500)</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="refund-reason">Refund Reason/Notes</label>
+                <textarea id="refund-reason" name="reason" rows="3" required></textarea>
+            </div>
+
+            <button type="submit" id="submit-refund-btn" class="submit-btn" disabled>Process Refund Transfer</button>
+        </form>
+    </div>
+</div>
+
 <script>
+    const API_BASE = '/api';
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
     const authHeaders = { 'Authorization': `Bearer ${token}` };
@@ -109,99 +175,104 @@
         window.location.href = '/login'; 
     }
 
+    function showLoader(show) {
+        document.getElementById('loader').style.display = show ? 'flex' : 'none';
+    }
+
     /**
-     * Fetches students with a refundable balance and populates the dropdown.
+     * Fetches students with payment history and populates the dropdown.
      */
     async function loadStudents() {
+        showLoader(true);
         const studentSelect = document.getElementById('student-select');
         studentSelect.innerHTML = '<option value="">Loading students...</option>';
 
         try {
-            // Assume an API endpoint exists to list students eligible for refunds
-            const response = await fetch('/api/students/refundable', { headers: authHeaders });
+            // ✅ FIX 1: Changed URL to the correct fees route to resolve 500 error
+            const response = await fetch('/api/fees/list-for-refund', { headers: authHeaders });
             
-            // NOTE: The 500 error occurs here. This client-side check is correct.
             if (!response.ok) throw new Error('Failed to load students list.');
             
             const students = await response.json();
             studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
 
             if (students.length === 0) {
-                 studentSelect.innerHTML = '<option value="">No students found with refundable balances.</option>';
+                 studentSelect.innerHTML = '<option value="">No students found with payment history.</option>';
                  return;
             }
 
             students.forEach(student => {
-                 // ⭐ FIX: Add robust defaulting for names/roll number for UI stability
-                const firstName = student.first_name || '';
-                const lastName = student.last_name || '';
-                const rollNumber = student.roll_number || `ID:${student.student_id}`;
-                
-                const fullName = `${firstName} ${lastName}`.trim();
-                const optionText = `${fullName} (${rollNumber})`;
+                const rollNumber = student.roll_number || `N/A`;
+                const optionText = `${student.student_name} (Roll: ${rollNumber})`;
                 
                 studentSelect.innerHTML += `<option value="${student.student_id}">${optionText}</option>`;
             });
 
         } catch (error) {
             console.error('Error loading students:', error);
-            // Show user-friendly error message in dropdown
-            studentSelect.innerHTML = '<option value="">Error loading students (Check Server)</option>';
+            studentSelect.innerHTML = `<option value="">Error loading students: ${error.message}</option>`;
+        } finally {
+            showLoader(false);
         }
     }
     
     /**
      * Fetches student details and refundable balance from the server.
-     * @param {string} studentId 
      */
     async function fetchStudentRefundDetails(studentId) {
         const infoBox = document.getElementById('student-info');
         const refundableBalanceElement = document.getElementById('refundable-balance');
         const refundAmountInput = document.getElementById('refund-amount-input');
+        const submitBtn = document.getElementById('submit-refund-btn');
         
         infoBox.innerHTML = '<p style="text-align: center;">Loading student data...</p>';
         refundableBalanceElement.textContent = '₹0.00';
         refundAmountInput.disabled = true;
+        submitBtn.disabled = true;
         refundAmountInput.value = '';
-
+        
         if (!studentId) {
             infoBox.innerHTML = '<p>Select a student to view their refundable balance.</p>';
             return;
         }
 
         try {
-            // ⭐️ ACTUAL API CALL for refundable info ⭐️
-            // Assume the API returns student_name, refundable_balance, course, and enrollment_status
+            showLoader(true);
+            // API call to check refundable balance
             const response = await fetch(`/api/fees/student-refund-info/${studentId}`, { headers: authHeaders });
             
             if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: 'Could not fetch details. Server error.' }));
+                const errorBody = await response.json().catch(() => ({ message: 'Server error fetching details.' }));
                 throw new Error(errorBody.message);
             }
             
             const data = await response.json();
             const balance = parseFloat(data.refundable_balance) || 0;
+            const canRefund = balance > 0;
 
             refundableBalanceElement.textContent = `₹${balance.toFixed(2)}`;
             refundAmountInput.max = balance;
-            refundAmountInput.disabled = balance <= 0;
-            refundAmountInput.value = balance > 0 ? balance.toFixed(2) : '0.00';
+            refundAmountInput.disabled = !canRefund;
+            submitBtn.disabled = !canRefund;
+            
+            // Set refund amount to max available balance by default
+            refundAmountInput.value = canRefund ? balance.toFixed(2) : '0.00';
             
             infoBox.innerHTML = `
-                <p><strong>Name:</strong> ${data.student_name || 'N/A'}</p>
-                <p><strong>Course:</strong> ${data.course || 'N/A'}</p>
-                <p><strong>Status:</strong> ${data.enrollment_status || 'N/A'}</p>
+                <p><strong>Balance:</strong> ₹${(data.total_paid - data.total_invoiced).toFixed(2)}</p>
+                <p><strong>Note:</strong> Refund amount equals excess payment (Total Paid - Total Billed).</p>
             `;
 
         } catch (error) {
             console.error('Error fetching refund details:', error);
-            infoBox.innerHTML = `<p style="color: var(--error-color);">Error loading data: ${error.message}</p>`;
+            infoBox.innerHTML = `<p style="color: var(--error-color);">Error loading data: ${error.message}. Check ledger.</p>`;
+        } finally {
+            showLoader(false);
         }
     }
 
     /**
      * Submits the refund request to the server.
-     * @param {Object} formData 
      */
     async function submitRefund(formData) {
         const submitBtn = document.getElementById('submit-refund-btn');
@@ -210,8 +281,10 @@
         submitBtn.disabled = true;
         
         try {
-            // ⭐️ ACTUAL API CALL for refund processing ⭐️
-            const response = await fetch('/api/fees/process-refund', {
+            document.getElementById('loader').style.display = 'flex';
+            
+            // ✅ FIX 2: Using the correct, established backend route '/api/fees/refund'
+            const response = await fetch('/api/fees/refund', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders },
                 body: JSON.stringify(formData)
@@ -223,14 +296,16 @@
                 throw new Error(result.message || 'Refund processing failed.');
             }
 
-            alert('✅ Refund processed successfully! Confirmation: ' + result.confirmation_id);
+            alert(`✅ Refund processed successfully! Credit Note: ${result.credit_note}`);
             document.getElementById('refund-form').reset();
+            
             // Re-fetch details to update balance after refund
             fetchStudentRefundDetails(studentId); 
 
         } catch (error) {
             alert(`❌ Refund Error: ${error.message}`);
         } finally {
+            document.getElementById('loader').style.display = 'none';
             submitBtn.disabled = false;
         }
     }
@@ -283,57 +358,6 @@
     });
 </script>
 
-<div class="container">
-    <h1>Process Student Fee Refunds</h1>
-    <div class="nav-links">
-        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
-    </div>
-
-    <div class="card">
-        <h2>1. Student Selection</h2>
-        <div class="form-group">
-            <label for="student-select">Student:</label>
-            <select id="student-select" required>
-                <option value="">-- Select Student --</option>
-            </select>
-        </div>
-
-        <div class="info-box" id="student-info">
-            <p>Select a student to view their refundable balance.</p>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2>2. Refund Details</h2>
-        <div class="form-group">
-            <label>Current Refundable Balance:</label>
-            <p id="refundable-balance" style="color: var(--success-color);">₹0.00</p>
-        </div>
-
-        <form id="refund-form">
-            <div class="form-group">
-                <label for="refund-amount-input">Refund Amount (₹)</label>
-                <input type="number" id="refund-amount-input" name="amount" step="0.01" min="0" required disabled>
-            </div>
-            
-            <div class="form-group">
-                <label for="refund-mode">Refund Method</label>
-                <select id="refund-mode" name="mode" required>
-                    <option value="Bank Transfer">Bank Transfer (Preferred)</option>
-                    <option value="Cheque">Cheque</option>
-                    <option value="Cash">Cash (Max ₹500)</option>
-                </select>
-            </div>
-            
-            <div class="form-group">
-                <label for="refund-reason">Refund Reason/Notes</label>
-                <textarea id="refund-reason" name="reason" rows="3" required></textarea>
-            </div>
-
-            <button type="submit" id="submit-refund-btn" class="submit-btn">Process Refund Transfer</button>
-        </form>
-    </div>
-</div>
 <script src="js/global-config.js"></script>
 </body>
 </html>

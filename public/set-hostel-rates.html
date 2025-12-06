@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -6,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Set Hostel Room & Meal Rates</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
         :root {
@@ -86,6 +86,10 @@
         .submit-btn:hover {
             background-color: #219d55;
         }
+        .submit-btn:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
         .rate-table {
             width: 100%;
             border-collapse: collapse;
@@ -116,6 +120,9 @@
             cursor: pointer;
             font-size: 0.8rem;
         }
+        .loader-icon {
+            margin-right: 5px;
+        }
     </style>
 </head>
 <body>
@@ -124,33 +131,43 @@
     const userRole = localStorage.getItem('user-role');
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     
-    // [FIXED API BASE URL] Pointing to /api/fees/hostel...
+    // API Endpoint constant
     const API_BASE = '/api/fees/hostel/rates';
 
     if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
         window.location.href = '/login.html'; 
     }
     
-    // --- Helper for API Calls ---
+    // --- Helper for API Calls (Enhanced Error Reporting) ---
     async function handleApi(url, options = {}) {
         options.headers = { ...authHeaders, 'Content-Type': 'application/json', ...options.headers };
         const response = await fetch(url, options);
         if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-            throw new Error(`API call failed with status: ${response.status} (${response.statusText}). Message: ${errorBody.message}`);
+            const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Unknown Server Error' }));
+            throw new Error(`API failed (Status: ${response.status}). Message: ${errorBody.message}`);
         }
         return response.json();
     }
     
     /**
+     * Helper: Format currency to INR
+     */
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2
+        }).format(amount);
+    };
+
+    /**
      * Fetch and render existing rates
      */
     async function fetchAndRenderRates() {
         const tbody = document.getElementById('rates-tbody');
-        tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message">Loading existing rates...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="placeholder-message"><i class="fas fa-sync fa-spin"></i> Loading existing rates...</td></tr>';
 
         try {
-            // [FIXED URL]
             const rates = await handleApi(API_BASE); 
             
             tbody.innerHTML = '';
@@ -163,10 +180,12 @@
                 const row = `<tr>
                     <td>${rate.rate_name}</td>
                     <td>${rate.room_type}</td>
-                    <td>₹${(parseFloat(rate.room_fee) || 0).toFixed(2)}</td>
-                    <td>₹${(parseFloat(rate.meal_fee) || 0).toFixed(2)}</td>
+                    <td>${formatCurrency(parseFloat(rate.room_fee) || 0)}</td>
+                    <td>${formatCurrency(parseFloat(rate.meal_fee) || 0)}</td>
                     <td>
-                        <button class="btn-delete" onclick="deleteRate('${rate.id}')">Delete</button>
+                        <button class="btn-delete" onclick="deleteRate('${rate.id}')">
+                            <i class="fas fa-trash"></i> Delete
+                        </button>
                     </td>
                 </tr>`;
                 tbody.innerHTML += row;
@@ -174,7 +193,7 @@
 
         } catch (error) {
             console.error('Error fetching rates:', error);
-            tbody.innerHTML = `<tr><td colspan="5" class="placeholder-message" style="color: var(--error-color);">Error loading rates: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="placeholder-message" style="color: var(--error-color);">${error.message}</td></tr>`;
         }
     }
 
@@ -184,9 +203,9 @@
     async function submitRate(formData) {
         const submitBtn = document.getElementById('submit-btn');
         submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin loader-icon"></i> Saving...';
 
         try {
-            // [FIXED URL]
             await handleApi(API_BASE, { method: 'POST', body: JSON.stringify(formData) });
             
             alert(`✅ Hostel rate created successfully!`);
@@ -197,6 +216,7 @@
             alert(`❌ Error saving rate: ${error.message}`);
         } finally {
             submitBtn.disabled = false;
+            submitBtn.innerHTML = 'Save Rate Structure';
         }
     }
 
@@ -204,14 +224,17 @@
      * Delete rate
      */
     async function deleteRate(id) {
-        if(!confirm("Are you sure you want to delete this rate?")) return;
+        if(!confirm("Are you sure you want to delete this rate? This action cannot be undone.")) return;
         
         try {
-            // [FIXED URL]
+            // Placeholder: Show loading while deleting
+            const deleteBtn = document.querySelector(`button[onclick="deleteRate('${id}')"]`);
+            if (deleteBtn) deleteBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
             await handleApi(`${API_BASE}/${id}`, { method: 'DELETE' });
             fetchAndRenderRates();
         } catch (error) {
-            alert(`Error deleting: ${error.message}`);
+            alert(`❌ Error deleting: ${error.message}`);
         }
     }
 
@@ -223,17 +246,25 @@
             const formData = {
                 rate_name: document.getElementById('rate-name').value,
                 room_type: document.getElementById('room-type').value,
-                room_fee: parseFloat(document.getElementById('room-fee').value),
-                meal_fee: parseFloat(document.getElementById('meal-fee').value),
+                // Ensure fees are treated as numbers, not strings from input
+                room_fee: parseFloat(document.getElementById('room-fee').value) || 0,
+                meal_fee: parseFloat(document.getElementById('meal-fee').value) || 0,
                 notes: document.getElementById('notes').value
             };
+
+            // Basic validation
+            if (formData.room_fee < 0 || formData.meal_fee < 0) {
+                 alert("Room and Meal fees cannot be negative.");
+                 return;
+            }
+
             submitRate(formData);
         });
     });
 </script>
 
 <div class="container">
-    <h1>Set Hostel Room & Meal Rates</h1>
+    <h1><i class="fas fa-bed"></i> Set Hostel Room & Meal Rates</h1>
     <div class="nav-links">
         <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
     </div>
@@ -259,11 +290,11 @@
                 </div>
                 <div class="form-group">
                     <label for="room-fee">Room Fee (Monthly, ₹)</label>
-                    <input type="number" step="0.01" id="room-fee" required min="0">
+                    <input type="number" step="0.01" id="room-fee" required min="0" value="0">
                 </div>
                 <div class="form-group">
                     <label for="meal-fee">Meal/Mess Fee (Monthly, ₹)</label>
-                    <input type="number" step="0.01" id="meal-fee" required min="0">
+                    <input type="number" step="0.01" id="meal-fee" required min="0" value="0">
                 </div>
                 <div class="form-group">
                     <label for="notes">Notes/Included Services (Optional)</label>
@@ -293,6 +324,6 @@
     </div>
 </div>
 <script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 </body>
 </html>
-
