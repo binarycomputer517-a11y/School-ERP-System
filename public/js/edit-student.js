@@ -1,262 +1,340 @@
 /**
- * File: public/js/edit-student.js
- * Description: Client-side logic for the student edit form.
- * Handles fetching existing student data, populating the form, dynamic academic info, and submitting updates.
- *
- * FIX: Correctly maps the HTML field 'date_of_birth' to the API field 'dob' during submission to prevent data loss.
+ * Student List Management Script
+ * Features: View Profile Redirect, Secure PDF Generation, Filtering & Bulk Actions
  */
 
-document.addEventListener('DOMContentLoaded', async () => {
+(function() {
+    'use strict';
+
+    // =========================================================
+    // 1. CONFIGURATION & STATE
+    // =========================================================
     
-    // --- AUTHENTICATION & SETUP ---
-    const token = localStorage.getItem('erp-token');
-    if (!token) {
-        alert('Authentication Error: You must be logged in to edit data.');
-        window.location.href = '/login.html'; 
-        return;
-    }
-    const authHeaders = { 'Authorization': `Bearer ${token}` }; 
-
-    const form = document.getElementById('editStudentForm');
-    const courseSelect = document.getElementById('course_id');
-    const batchSelect = document.getElementById('batch_id');
-    const dynamicDataArea = document.getElementById('course_dynamic_data');
-
-    // --- GET STUDENT ID FROM URL ---
-    const urlParams = new URLSearchParams(window.location.search);
-    const studentId = urlParams.get('id');
+    // API URL কনফিগারেশন
+    const API_BASE_URL = window.API_BASE_URL || '/api';
     
-    // CRITICAL FIX: Ensure studentId is valid before proceeding
-    if (!studentId || studentId === 'undefined') {
-        alert('Error: Invalid or missing student ID in the URL. Redirecting to Student List.');
-        window.location.href = '/view-student.html'; 
-        return;
-    }
+    const ENDPOINTS = {
+        STUDENTS: '/students',
+        COURSES: '/academicswithfees/courses',
+        BATCHES: '/academicswithfees/batches',
+        REPORTS: '/reports'
+    };
 
-    // --- API HELPER (for GET requests) ---
-    async function handleApiGet(url) {
-        try {
-            const response = await fetch(url, { headers: authHeaders });
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            return response.json();
-        } catch (error) {
-            console.error('API GET Error:', error);
-            alert(`Failed to load data: ${error.message}. Check server logs for exact DB error.`);
+    // অ্যাপ্লিকেশনের স্টেট
+    let state = {
+        allStudents: [],
+        filteredStudents: [],
+        selectedIds: new Set(),
+        sortConfig: { column: 'admission_id', direction: 'asc' }
+    };
+
+    // DOM এলিমেন্টস
+    const UI = {
+        tableBody: document.getElementById('students-table-body'),
+        statusMsg: document.getElementById('data-status'),
+        spinner: document.getElementById('loading-spinner'),
+        searchInput: document.getElementById('search-input'),
+        bulkBtn: document.getElementById('generate-bulk-id-btn'),
+        filters: {
+            course: document.getElementById('course-filter'),
+            batch: document.getElementById('batch-filter'),
+            status: document.getElementById('status-filter')
+        }
+    };
+
+    // =========================================================
+    // 2. API HANDLER (Secure & Blob Support)
+    // =========================================================
+
+    async function apiCall(endpoint, options = {}) {
+        const token = localStorage.getItem('erp-token');
+        if (!token) {
+            window.location.href = '/login.html';
             return null;
         }
-    }
-    
-    // ----------------------------------------------------------------------------------
-    // 1. DATA LOADING & FORM POPULATION
-    // ----------------------------------------------------------------------------------
 
-    async function loadInitialCourses() {
-        // NOTE: Assuming /api/academicswithfees/courses exists and returns {course_id, course_name, course_code}
-        const courses = await handleApiGet('/api/academicswithfees/courses');
-        if (courses && courseSelect) {
-            courseSelect.innerHTML = '<option value="">Select Course...</option>'; 
-            courses.forEach(course => {
-                const option = document.createElement('option');
-                option.value = course.course_id;
-                option.textContent = `${course.course_name} (${course.course_code})`;
-                courseSelect.appendChild(option);
-            });
+        const headers = {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            ...options.headers
+        };
+
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
+
+            // টোকেন এক্সপায়ার হলে
+            if (response.status === 401 || response.status === 403) {
+                alert('Session expired. Please login again.');
+                window.location.href = '/login.html';
+                return null;
+            }
+
+            if (!response.ok) throw new Error(`Server Error: ${response.status}`);
+
+            // PDF/Image ডাউনলোডের জন্য Blob রিটার্ন করা
+            if (options.responseType === 'blob') return await response.blob();
+
+            return await response.json();
+
+        } catch (error) {
+            console.error('API Error:', error);
+            throw error;
         }
     }
 
-    async function loadAndPopulateStudentData() {
-        const student = await handleApiGet(`/api/students/${studentId}`); 
-        if (!student) {
-            form.innerHTML = '<h3 class="text-danger text-center">Could not load student data or the student does not exist (Check API Status: 404/500).</h3>';
+    // =========================================================
+    // 3. INITIALIZATION
+    // =========================================================
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        setupEventListeners();
+        await loadCourses();
+        await fetchStudents();
+    });
+
+    function setupEventListeners() {
+        // ফিল্টার লিসেনার
+        UI.searchInput.addEventListener('input', handleFilterChange);
+        UI.filters.status.addEventListener('change', handleFilterChange);
+        UI.filters.batch.addEventListener('change', handleFilterChange);
+        
+        // কোর্স চেঞ্জ হলে ব্যাচ লোড হবে
+        UI.filters.course.addEventListener('change', async (e) => {
+            await loadBatches(e.target.value);
+            handleFilterChange();
+        });
+
+        // সর্টিং লিসেনার
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', () => handleSort(th.dataset.sort));
+        });
+
+        // বাল্ক অ্যাকশন বাটন
+        if (UI.bulkBtn) {
+            UI.bulkBtn.addEventListener('click', handleBulkGenerate);
+            UI.bulkBtn.disabled = true;
+        }
+    }
+
+    // =========================================================
+    // 4. DATA FETCHING
+    // =========================================================
+
+    async function loadCourses() {
+        try {
+            const courses = await apiCall(ENDPOINTS.COURSES);
+            if (courses) {
+                courses.forEach(c => {
+                    UI.filters.course.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`;
+                });
+            }
+        } catch (e) { console.error('Error loading courses'); }
+    }
+
+    async function loadBatches(courseId) {
+        UI.filters.batch.innerHTML = '<option value="">Filter by Batch (All)</option>';
+        UI.filters.batch.disabled = true;
+        if (!courseId) return;
+
+        try {
+            const batches = await apiCall(`${ENDPOINTS.BATCHES}/${courseId}`);
+            if (batches && batches.length > 0) {
+                batches.forEach(b => {
+                    UI.filters.batch.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`;
+                });
+                UI.filters.batch.disabled = false;
+            }
+        } catch (e) { console.error('Error loading batches'); }
+    }
+
+    async function fetchStudents() {
+        showLoading(true);
+        try {
+            const data = await apiCall(ENDPOINTS.STUDENTS);
+            state.allStudents = data || [];
+            state.filteredStudents = [...state.allStudents];
+            applyFilters();
+        } catch (error) {
+            UI.statusMsg.innerText = "Error loading data.";
+            UI.tableBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Connection Failed.</td></tr>`;
+        } finally {
+            showLoading(false);
+        }
+    }
+
+    // =========================================================
+    // 5. FILTERING & RENDER
+    // =========================================================
+
+    function handleFilterChange() {
+        applyFilters();
+        renderTable();
+    }
+
+    function applyFilters() {
+        const search = UI.searchInput.value.toLowerCase();
+        const course = UI.filters.course.value;
+        const batch = UI.filters.batch.value;
+        const status = UI.filters.status.value;
+
+        state.filteredStudents = state.allStudents.filter(s => {
+            const matchesSearch = 
+                (s.first_name || '').toLowerCase().includes(search) ||
+                (s.last_name || '').toLowerCase().includes(search) ||
+                (s.admission_id || '').toLowerCase().includes(search) ||
+                (s.email || '').toLowerCase().includes(search);
+            
+            return matchesSearch &&
+                   (!course || s.course_id == course) &&
+                   (!batch || s.batch_id == batch) &&
+                   (!status || s.status === status);
+        });
+        sortData();
+    }
+
+    function sortData() {
+        const { column, direction } = state.sortConfig;
+        state.filteredStudents.sort((a, b) => {
+            let valA = (a[column] || '').toString().toLowerCase();
+            let valB = (b[column] || '').toString().toLowerCase();
+            if (valA < valB) return direction === 'asc' ? -1 : 1;
+            if (valA > valB) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+    }
+
+    function renderTable() {
+        UI.tableBody.innerHTML = '';
+        UI.statusMsg.innerText = `Showing ${state.filteredStudents.length} records`;
+
+        if (state.filteredStudents.length === 0) {
+            UI.tableBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:20px;">No students found.</td></tr>`;
             return;
         }
 
-        // --- Data Mapping & Population ---
-        for (const key in student) {
-            if (student.hasOwnProperty(key)) {
-                const field = form.elements[key];
-                if (field) {
-                    if (field.type === 'checkbox') {
-                        field.checked = !!student[key];
-                    } else if (field.type === 'date' && student[key]) {
-                        // Handle date fields, including the original 'dob' which is mapped to 'date_of_birth' in HTML
-                        field.value = student[key].split('T')[0];
-                    } else if (key === 'photo_url' || key === 'signature_path') {
-                        // Handle file path display
-                        const linkContainer = document.getElementById(`${key}_link`);
-                        if (student[key] && linkContainer) {
-                             linkContainer.innerHTML = `<a href="${student[key]}" target="_blank" class="current-file-link">View Current File</a>`;
-                        }
-                    } else if (key === 'student_user_id') {
-                        // Map the aliased username from DB query
-                        field.value = student.student_user_id || '';
-                    } else if (key === 'address' && student.address) {
-                        // Map the aliased 'address' (permanent_address from DB)
-                        field.value = student.address;
-                    } else {
-                        field.value = student[key];
-                    }
-                }
-            }
-        }
+        const fragment = document.createDocumentFragment();
+        state.filteredStudents.forEach((student, index) => {
+            const tr = document.createElement('tr');
+            
+            // ফিস ফরম্যাটিং
+            const fees = student.total_fees_due ? `₹${parseFloat(student.total_fees_due).toFixed(2)}` : 'N/A';
+            const isChecked = state.selectedIds.has(student.student_id);
+            const statusClass = (student.status || 'pending').toLowerCase();
+
+            tr.innerHTML = `
+                <td>
+                    ${index + 1} <input type="checkbox" class="student-select-checkbox" value="${student.student_id}" ${isChecked ? 'checked' : ''} style="margin-left:5px;">
+                </td>
+                <td><strong>${student.admission_id}</strong></td>
+                <td>${student.first_name} ${student.last_name}</td>
+                <td>
+                    <div class="course-info">
+                        <span class="course-name">${student.course_name || '-'} (${student.batch_name || '-'})</span>
+                        <span class="fees-label">Due: ${fees}</span>
+                    </div>
+                </td>
+                <td>${student.email}<br><small style="color:#666">${student.phone_number || ''}</small></td>
+                <td><span class="status-badge status-${statusClass}">${student.status || 'Pending'}</span></td>
+                <td class="action-cell">
+                    <button class="action-link view-btn" style="border:none; background:none; cursor:pointer;" onclick="window.ERP_Actions.view('${student.student_id}')">View</button>
+                    <button class="action-link id-btn" style="border:none; background:none; cursor:pointer;" onclick="window.ERP_Actions.generateId('${student.student_id}')">ID Card</button>
+                    <span class="action-link delete-link" style="cursor:pointer;" onclick="window.ERP_Actions.delete('${student.student_id}', '${student.first_name}')">Delete</span>
+                    <a href="/edit-student.html?id=${student.student_id}" class="action-link">Edit</a>
+                </td>
+            `;
+            
+            // চেকবক্স ইভেন্ট হ্যান্ডলার
+            tr.querySelector('.student-select-checkbox').addEventListener('change', (e) => toggleSelection(e.target.value, e.target.checked));
+            fragment.appendChild(tr);
+        });
+        UI.tableBody.appendChild(fragment);
+        updateBulkButtonState();
+    }
+
+    // =========================================================
+    // 6. ACTIONS (Global Scope - Window)
+    // =========================================================
+
+    window.ERP_Actions = {
         
-        // --- Special Handling for DOB field name mismatch ---
-        // Manually set the HTML field 'date_of_birth' using the DB value 'dob'
-        const dobField = form.elements['date_of_birth']; 
-        if (dobField && student.dob) {
-            dobField.value = student.dob.split('T')[0]; 
-        }
+        // --- 1. View Profile (NEW UPDATE) ---
+        view: (id) => {
+            // এই লাইনটি পেজ রিডাইরেক্ট করবে
+            window.location.href = `/student-profile.html?id=${id}`;
+        },
 
-        // --- Roll Number Check (enrollment_no in DB) ---
-        const rollNumberField = form.elements['roll_number'];
-        if (rollNumberField && student.enrollment_no) {
-            rollNumberField.value = student.enrollment_no;
-        }
-
-        // --- STEP 1C: Set the course and trigger batch loading ---
-        if (student.course_id) {
-            courseSelect.value = student.course_id;
-            await fetchCourseDetails(student.course_id);
-            if(student.batch_id) {
-                 batchSelect.value = student.batch_id;
-            }
-        }
-    }
-    
-    // ----------------------------------------------------------------------------------
-    // 2. DYNAMIC ACADEMIC DATA 
-    // ----------------------------------------------------------------------------------
-
-    if (courseSelect) {
-        courseSelect.addEventListener('change', (event) => {
-            const selectedCourseId = event.target.value;
-            if (selectedCourseId) {
-                fetchCourseDetails(selectedCourseId);
-                if (batchSelect) batchSelect.disabled = false;
-            } else {
-                if (batchSelect) {
-                    batchSelect.innerHTML = '<option value="">Select Batch...</option>';
-                    batchSelect.disabled = true;
-                }
-                dynamicDataArea.innerHTML = '';
-            }
-        });
-    }
-
-    async function fetchCourseDetails(courseId) {
-        dynamicDataArea.innerHTML = '<p class="text-info mt-3">Loading academic details...</p>';
-        // NOTE: Assuming /api/academicswithfees/course-details/:courseId exists and returns {batches, subjects, feeStructures}
-        const data = await handleApiGet(`/api/academicswithfees/course-details/${courseId}`);
-        if (!data) return; 
-
-        updateBatchDropdown(data.batches);
-        renderSubjectsAndFees(data.subjects, data.feeStructures);
-    }
-    
-    function updateBatchDropdown(batches) {
-        if (!batchSelect) return;
-        const currentBatch = batchSelect.value; 
-        batchSelect.innerHTML = '<option value="">Select Batch...</option>';
-        if (batches && batches.length > 0) {
-            batches.forEach(batch => {
-                const option = document.createElement('option');
-                option.value = batch.batch_id;
-                option.textContent = `${batch.batch_name} (${batch.batch_code})`;
-                batchSelect.appendChild(option);
-            });
-            batchSelect.value = currentBatch; 
-            batchSelect.disabled = false;
-        } else {
-            batchSelect.innerHTML = '<option value="">No Batches available</option>';
-            batchSelect.disabled = true;
-        }
-    }
-
-    function renderSubjectsAndFees(subjects, feeStructures) {
-        dynamicDataArea.innerHTML = `<p class="mt-3">Academic and Fee details for the course are now loaded.</p>`;
-    }
-
-
-    // ----------------------------------------------------------
-    // 3. FORM SUBMISSION HANDLER (for UPDATE)
-    // ----------------------------------------------------------
-    if (form) {
-        form.addEventListener('submit', async function(event) {
-            event.preventDefault();
-            if (!form.checkValidity()) {
-                 event.stopPropagation();
-                 form.classList.add('was-validated');
-                 return;
-            }
-            
-            const formData = new FormData(form);
-            const body = {};
-
-            // Convert FormData to JSON payload
-            formData.forEach((value, key) => {
-                // Ensure photo/signature fields are excluded if they are files (API expects JSON here)
-                if (!['photo_file', 'signature_file'].includes(key)) {
-                    body[key] = value || null; // Send null for empty strings
-                }
-            });
-
-            // ⭐ CRITICAL FIX: Map the HTML field 'date_of_birth' to the API parameter 'dob'
-            if (body.date_of_birth) {
-                body.dob = body.date_of_birth;
-            } else {
-                // If the field is left blank, ensure 'dob' is explicitly NULL for the COALESCE logic on the server to work.
-                body.dob = null;
-            }
-            delete body.date_of_birth; 
-
-
-            // Clean up unnecessary fields for a cleaner API call
-            delete body.student_user_id;
-            delete body.roll_number;
-            delete body.security_question; 
-            
-            // SECURITY: Only include password fields if a new value was provided
-            if (!body.student_password_hash) {
-                delete body.student_password_hash;
-            }
-            if (!body.parent_password_hash) {
-                delete body.parent_password_hash;
-            }
-
-
+        // --- 2. Generate Single ID (FIXED BLOB) ---
+        generateId: async (id) => {
+            if (!confirm('Generate ID Card?')) return;
+            document.body.style.cursor = 'wait';
             try {
-                const response = await fetch(`/api/students/${studentId}`, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, // Use JSON headers
-                    body: JSON.stringify(body) 
-                });
-                
-                if (response.ok) {
-                    alert('✅ Update successful! Redirecting to profile...');
-                    window.location.href = `/student-profile.html?id=${studentId}`;
-                } else {
-                    let errorText = `Update failed (Status: ${response.status}).`;
-                    
-                    try {
-                        const errorData = await response.json();
-                        errorText = errorData.message || errorText;
-                    } catch (e) {
-                        console.error("Server returned non-JSON response:", e);
-                        errorText = `Update failed. The server returned an unexpected error format (Status: ${response.status}). Please check server logs.`;
-                    }
-                    
-                    console.error('Submission Error:', errorText); 
-                    alert(`❌ ${errorText}`);
+                // Blob হিসেবে রেসপন্স আনা হচ্ছে (Secure way)
+                const blob = await apiCall(`${ENDPOINTS.REPORTS}/generate-id?studentId=${id}`, { responseType: 'blob' });
+                if (blob) {
+                    const url = window.URL.createObjectURL(blob);
+                    window.open(url, '_blank');
                 }
+            } catch (error) { alert('Failed to generate ID.'); } 
+            finally { document.body.style.cursor = 'default'; }
+        },
 
-            } catch (error) {
-                console.error('Network or Unhandled Error:', error);
-                alert('A network error occurred. Please try again.');
+        // --- 3. Delete Student ---
+        delete: async (id, name) => {
+            if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+            try {
+                await apiCall(`${ENDPOINTS.STUDENTS}/${id}`, { method: 'DELETE' });
+                // লোকাল স্টেট আপডেট
+                state.allStudents = state.allStudents.filter(s => s.student_id !== id);
+                state.selectedIds.delete(id);
+                handleFilterChange();
+                alert('Student deleted successfully.');
+            } catch (error) { alert('Failed to delete student.'); }
+        }
+    };
+
+    // =========================================================
+    // 7. BULK ACTIONS & UTILS
+    // =========================================================
+
+    async function handleBulkGenerate() {
+        const ids = Array.from(state.selectedIds);
+        if (ids.length === 0) return;
+        if (!confirm(`Generate ID Cards for ${ids.length} selected students?`)) return;
+
+        UI.bulkBtn.textContent = "Processing...";
+        UI.bulkBtn.disabled = true;
+
+        try {
+            const blob = await apiCall(`${ENDPOINTS.REPORTS}/generate-bulk-id?studentIds=${ids.join(',')}`, { responseType: 'blob' });
+            if (blob) {
+                const url = window.URL.createObjectURL(blob);
+                window.open(url, '_blank');
+                state.selectedIds.clear();
+                handleFilterChange();
             }
-        });
+        } catch (e) { alert('Bulk generation failed.'); } 
+        finally {
+            UI.bulkBtn.textContent = "💳 Generate ID Cards (Selected)";
+            updateBulkButtonState();
+        }
     }
 
-    // --- INITIALIZATION ---
-    await loadInitialCourses();
-    await loadAndPopulateStudentData();
-});
+    function toggleSelection(id, isChecked) {
+        if (isChecked) state.selectedIds.add(id);
+        else state.selectedIds.delete(id);
+        updateBulkButtonState();
+    }
+
+    function updateBulkButtonState() {
+        if (!UI.bulkBtn) return;
+        const count = state.selectedIds.size;
+        UI.bulkBtn.innerText = `💳 Generate ID Cards (${count})`;
+        UI.bulkBtn.disabled = count === 0;
+    }
+
+    function showLoading(isLoading) {
+        if (UI.spinner) UI.spinner.style.display = isLoading ? 'block' : 'none';
+        if (UI.tableBody) UI.tableBody.style.opacity = isLoading ? '0.5' : '1';
+    }
+
+})();

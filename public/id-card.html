@@ -2,266 +2,358 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Student ID Card</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Premium Smart ID Card</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Montserrat:wght@400;600;700;800&family=Great+Vibes&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+
     <style>
-        /* ✨ UPDATED: Complete CSS overhaul for a modern, unique, and official design */
         :root {
-            --primary-blue: #0077B6;
-            --light-bg: #EDF2F7;
-            --card-bg: #FFFFFF;
-            --text-dark: #1A202C;
-            --text-light: #718096;
-            --border-color: #E2E8F0;
+            --bg-body: #e2e8f0;
+            --card-bg: #ffffff;
+            --primary: #0f172a;
+            --accent: #3b82f6;
+            --gold: #f59e0b;
+            --text-dark: #1e293b;
+            --text-gray: #64748b;
+            --card-w: 324px;
+            --card-h: 204px;
         }
 
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--light-bg);
-            color: var(--text-dark);
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-body);
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px 0;
+            padding: 40px 20px;
         }
 
-        .nav-links {
-            margin-bottom: 20px;
+        /* Controls */
+        .controls {
+            background: white; padding: 10px 25px; border-radius: 50px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); display: flex; gap: 15px;
+            margin-bottom: 50px; align-items: center; border: 1px solid #cbd5e1;
+        }
+        .btn {
+            padding: 10px 20px; border: none; border-radius: 30px; font-weight: 700; font-size: 0.75rem;
+            cursor: pointer; display: flex; align-items: center; gap: 8px; transition: all 0.2s;
+            text-transform: uppercase; letter-spacing: 0.5px;
+        }
+        .btn-back { background: #f1f5f9; color: #475569; }
+        .btn-back:hover { background: #e2e8f0; }
+        .btn-act { background: white; border: 1px solid #cbd5e1; color: #475569; }
+        .btn-act:hover { border-color: var(--accent); color: var(--accent); }
+        .btn-print { background: linear-gradient(135deg, var(--primary), var(--accent)); color: white; box-shadow: 0 4px 12px rgba(15, 23, 42, 0.3); }
+        .btn-print:hover { transform: translateY(-2px); box-shadow: 0 6px 18px rgba(15, 23, 42, 0.4); }
+
+        /* Workspace */
+        .workspace { display: flex; flex-wrap: wrap; gap: 60px; justify-content: center; }
+        .card-wrapper { text-align: center; perspective: 1000px; }
+        .card-header { margin-bottom: 20px; font-size: 0.8rem; letter-spacing: 2px; color: #94a3b8; text-transform: uppercase; font-weight: 800; }
+
+        /* CARD CSS */
+        .id-card {
+            width: var(--card-w); height: var(--card-h);
+            background: var(--card-bg); border-radius: 16px; position: relative; overflow: hidden;
+            box-shadow: 0 20px 40px -10px rgba(0,0,0,0.2);
+            background-image: radial-gradient(#cbd5e1 1px, transparent 1px); background-size: 10px 10px;
         }
 
-        .nav-links a {
-            color: var(--primary-blue);
-            text-decoration: none;
-            font-weight: 600;
+        /* Front Side */
+        .strip-container {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 75px;
+            background: linear-gradient(170deg, #1e293b, #334155); z-index: 2;
+            display: flex; flex-direction: column; align-items: center; justify-content: flex-start;
+            padding-top: 20px; border-right: 2px solid #e2e8f0;
         }
+        .smart-chip {
+            width: 36px; height: 26px; background: linear-gradient(135deg, #fcd34d, #d97706);
+            border-radius: 6px; position: relative; overflow: hidden; border: 1px solid #b45309; margin-bottom: 30px;
+            box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+        }
+        .smart-chip::before { content: ''; position: absolute; left: 50%; top: 0; bottom: 0; width: 1px; background: rgba(0,0,0,0.1); transform: translateX(-50%); }
+        .smart-chip::after { content: ''; position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: rgba(0,0,0,0.1); transform: translateY(-50%); }
         
-        .id-card-container {
-            width: 330px;
-            background: var(--card-bg);
-            border-radius: 16px;
-            box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12);
-            position: relative;
+        .v-text {
+            writing-mode: vertical-rl; transform: rotate(180deg);
+            font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 24px;
+            color: rgba(255,255,255,0.1); letter-spacing: 5px; white-space: nowrap;
+            margin-top: auto; margin-bottom: 20px;
+        }
+
+        .front-body { margin-left: 75px; padding: 15px; height: 100%; display: flex; flex-direction: column; }
+        .f-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px; }
+        .logo-hold { height: 32px; display: flex; align-items: center; }
+        .logo-hold img { height: 100%; object-fit: contain; }
+        .validity-badge { background: var(--primary); color: white; padding: 4px 8px; border-radius: 4px; font-size: 7px; font-weight: 700; text-transform: uppercase; }
+
+        .profile-grid { display: flex; gap: 15px; align-items: center; flex: 1; }
+        .avatar-box {
+            width: 75px; height: 85px; flex-shrink: 0; border-radius: 10px; padding: 3px; background: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1); border: 1px solid #e2e8f0;
+        }
+        .avatar-box img { width: 100%; height: 100%; object-fit: cover; border-radius: 8px; background: #f1f5f9; }
+
+        .info-box { text-align: left; width: 100%; }
+        .st-name {
+            font-family: 'Montserrat', sans-serif; font-size: 14px; font-weight: 800; color: var(--text-dark);
+            line-height: 1.2; text-transform: uppercase; margin-bottom: 4px;
+            display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .st-meta { font-size: 9px; font-weight: 700; color: var(--accent); text-transform: uppercase; display: block; margin-bottom: 8px; }
+        
+        .d-row { display: flex; font-size: 8px; margin-bottom: 3px; align-items: center; }
+        .d-lbl { color: #94a3b8; width: 45px; font-weight: 600; text-transform: uppercase; }
+        .d-val { color: var(--text-dark); font-weight: 700; text-transform: uppercase; }
+
+        .f-footer { text-align: right; margin-top: auto; border-top: 2px solid var(--gold); padding-top: 5px; }
+        .school-name-sm { font-size: 10px; font-weight: 800; color: var(--primary); text-transform: uppercase; }
+        .school-sub { font-size: 6px; color: #64748b; letter-spacing: 1px; text-transform: uppercase; }
+
+        /* Back Side */
+        .back-strip { position: absolute; right: 0; top: 0; bottom: 0; width: 15px; background: linear-gradient(170deg, var(--primary), var(--accent)); }
+        .back-body { padding: 20px 30px 20px 20px; height: 100%; display: flex; flex-direction: column; }
+        
+        .codes { display: flex; gap: 15px; align-items: center; margin-bottom: 15px; }
+        .qr-wrap { padding: 2px; border: 1px solid #e2e8f0; border-radius: 4px; background: white; }
+        .bar-wrap { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: flex-end; }
+        .bar-wrap svg { height: 30px; max-width: 100%; }
+
+        .contact-row { font-size: 8px; color: var(--text-dark); margin-bottom: 6px; display: flex; align-items: flex-start; gap: 6px; }
+        .contact-row i { color: var(--accent); margin-top: 1px; font-size: 9px; }
+
+        .disclaimer { font-size: 6px; color: #94a3b8; text-align: justify; line-height: 1.4; margin-top: auto; margin-bottom: 10px; border-top: 1px dashed #e2e8f0; padding-top: 5px; }
+        
+        /* Signature Area Fixed */
+        .sign-grid { display: flex; justify-content: space-between; padding-right: 5px; margin-top: 5px; }
+        .sign-col { text-align: center; width: 85px; }
+        
+        .sign-font { 
+            font-family: 'Great Vibes', cursive; 
+            font-size: 18px; 
+            color: #0f172a; 
+            height: 25px; /* Fixed Height to keep layout stable even if empty */
+            display: flex; 
+            align-items: flex-end; 
+            justify-content: center;
+            margin-bottom: 2px;
+            white-space: nowrap;
             overflow: hidden;
         }
+        .sign-line { width: 100%; height: 1px; background: #94a3b8; margin-bottom: 2px; }
+        .sign-lbl { font-size: 6px; font-weight: 700; text-transform: uppercase; color: #64748b; letter-spacing: 0.5px; }
 
-        .card-banner {
-            background: var(--primary-blue);
-            height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 0 20px;
-        }
-
-        .school-info {
-            text-align: center;
-            color: white;
-        }
-        
-        .school-info h2 {
-            margin: 0;
-            font-weight: 700;
-            font-size: 1.2em;
-        }
-
-        .card-content {
-            padding: 80px 25px 25px 25px; /* Top padding to make space for the photo */
-            text-align: center;
-        }
-
-        .photo {
-            width: 130px;
-            height: 130px;
-            border-radius: 50%;
-            border: 5px solid white;
-            overflow: hidden;
-            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
-            /* Position the photo to overlap the banner */
-            position: absolute;
-            top: 35px; /* (Banner Height / 2) + offset */
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: var(--light-bg);
-        }
-        
-        .photo img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-        
-        #student-name {
-            font-size: 1.7em;
-            font-weight: 900; /* Extra bold for impact */
-            margin: 0 0 5px 0;
-            color: var(--text-dark);
-            line-height: 1.2;
-        }
-        
-        #class-name {
-            font-size: 1em;
-            color: var(--primary-blue);
-            font-weight: 600;
-            margin: 0 0 25px 0;
-        }
-
-        .details-grid {
-            text-align: left;
-            border-top: 1px solid var(--border-color);
-            padding-top: 20px;
-        }
-        
-        .detail-item {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 12px;
-            font-size: 0.9em;
-        }
-
-        .detail-item strong {
-            color: var(--text-light);
-            font-weight: 600;
-        }
-
-        .detail-item span {
-            font-weight: 600;
-            text-align: right;
-        }
-
-        .card-footer {
-            padding: 20px 25px;
-            border-top: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .barcode-img {
-            height: 40px;
-        }
-
-        .qr-code-img {
-            width: 60px;
-            height: 60px;
-        }
-
-        .print-btn {
-            margin-top: 20px;
-            padding: 12px 25px;
-            background: var(--primary-blue);
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 8px;
-            font-size: 1rem;
-            font-family: 'Inter', sans-serif;
-            font-weight: 600;
-            transition: background 0.3s;
-        }
-        .print-btn:hover {
-            background: #005f8d;
-        }
+        /* Holographic Effect */
+        .shine-layer { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: linear-gradient(to bottom right, transparent 40%, rgba(255,255,255,0.2) 50%, transparent 60%); transform: rotate(30deg); pointer-events: none; z-index: 10; }
 
         @media print {
-            body { background-color: white; padding: 0; justify-content: flex-start; }
-            .print-btn, .nav-links { display: none; }
-            .id-card-container { box-shadow: none; border: 1px solid #ccc; }
+            body { background: white; padding: 0; align-items: flex-start; }
+            .controls, .card-header { display: none; }
+            .workspace { gap: 20px; justify-content: flex-start; }
+            .id-card { border: 1px solid #ccc; margin: 10px; page-break-inside: avoid; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         }
     </style>
 </head>
 <body>
 
-<div class="nav-links">
-    <a href="/student-dashboard.html">← Back to Dashboard</a>
-</div>
-
-<div class="id-card-container" id="id-card">
-    <div class="card-banner">
-        <div class="school-info">
-            <h2>YOUR INSTITUTE NAME</h2>
-        </div>
+    <div class="controls">
+        <a href="students-list.html" class="btn btn-back"><i class="fas fa-arrow-left"></i> Back</a>
+        <button onclick="downloadCard('front')" class="btn btn-act"><i class="fas fa-download"></i> Front</button>
+        <button onclick="downloadCard('back')" class="btn btn-act"><i class="fas fa-download"></i> Back</button>
+        <button onclick="window.print()" class="btn btn-print"><i class="fas fa-print"></i> Print Card</button>
     </div>
 
-    <div class="photo">
-        <img id="student-photo" src="/images/default-avatar.png" alt="Student Photo">
-    </div>
-
-    <div class="card-content">
-        <h3 id="student-name">Loading...</h3>
-        <p id="class-name">...</p>
+    <div class="workspace">
         
-        <div class="details-grid">
-            <div class="detail-item">
-                <strong>Admission No:</strong>
-                <span id="admission-no">...</span>
-            </div>
-            <div class="detail-item">
-                <strong>Roll No:</strong>
-                <span id="roll-no">...</span>
-            </div>
-            <div class="detail-item">
-                <strong>Blood Group:</strong>
-                <span id="blood-group">...</span>
-            </div>
-            <div class="detail-item">
-                <strong>Contact:</strong>
-                <span id="contact-no">...</span>
+        <div class="card-wrapper">
+            <div class="card-header">Front Side</div>
+            <div class="id-card" id="card-front">
+                <div class="shine-layer"></div>
+                <div class="strip-container">
+                    <div class="smart-chip"></div>
+                    <div class="v-text">STUDENT</div>
+                </div>
+
+                <div class="front-body">
+                    <div class="f-header">
+                        <div class="logo-hold">
+                            <img src="" class="global-school-logo" alt="Logo" onerror="this.style.display='none'">
+                        </div>
+                        <div class="validity-badge">VALID 2025-26</div>
+                    </div>
+
+                    <div class="profile-grid">
+                        <div class="avatar-box">
+                            <img id="p-photo" src="" alt="Student" onerror="this.src='https://ui-avatars.com/api/?name=ST&background=e2e8f0&color=64748b'">
+                        </div>
+                        <div class="info-box">
+                            <div class="st-name" id="p-name">Loading...</div>
+                            <span class="st-meta" id="p-class">CLASS - | SEC -</span>
+                            
+                            <div class="d-row"><span class="d-lbl">ID NO</span> <span class="d-val" id="p-id">---</span></div>
+                            <div class="d-row"><span class="d-lbl">DOB</span> <span class="d-val" id="p-dob">--/--/--</span></div>
+                            <div class="d-row"><span class="d-lbl">BLOOD</span> <span class="d-val" id="p-blood">--</span></div>
+                            <div class="d-row"><span class="d-lbl">PHONE</span> <span class="d-val" id="p-phone">---</span></div>
+                        </div>
+                    </div>
+
+                    <div class="f-footer">
+                        <div class="school-name-sm global-school-name">SCHOOL NAME</div>
+                        <div class="school-sub">Education Campus</div>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    
-    <div class="card-footer">
-        <img id="barcode-img" class="barcode-img" src="https://barcode.tec-it.com/barcode.ashx?data=12345&code=Code128" alt="Barcode">
-        <img id="qr-code-img" class="qr-code-img" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=student_id_12345" alt="QR Code">
-    </div>
-</div>
 
-<button class="print-btn" onclick="window.print()">Print ID Card</button>
+        <div class="card-wrapper">
+            <div class="card-header">Back Side</div>
+            <div class="id-card" id="card-back">
+                <div class="back-strip"></div>
+                <div class="back-body">
+                    
+                    <div class="codes">
+                        <div class="qr-wrap" id="qrcode"></div>
+                        <div class="bar-wrap"><svg id="barcode"></svg></div>
+                    </div>
+
+                    <div class="contact-row">
+                        <i class="fas fa-map-marker-alt"></i> 
+                        <span class="global-school-address">Loading Address...</span>
+                    </div>
+                    <div class="contact-row">
+                        <i class="fas fa-envelope"></i> 
+                        <span class="global-school-email">info@school.com</span>
+                    </div>
+                    <div class="contact-row" style="margin-top:5px;">
+                        <i class="fas fa-home"></i> 
+                        <span>Res: <span id="p-address">--</span></span>
+                    </div>
+
+                    <div class="disclaimer">
+                        This card is the property of <span class="global-school-name">the Institute</span>. It must be worn at all times within the campus. If found lost, please return to the administrative office immediately.
+                    </div>
+
+                    <div class="sign-grid">
+                        <div class="sign-col">
+                            <div class="sign-font" id="sign-guardian"></div>
+                            <div class="sign-line"></div>
+                            <div class="sign-lbl">Guardian</div>
+                        </div>
+                        <div class="sign-col">
+                            <div class="sign-font" id="sign-principal"></div> 
+                            <div class="sign-line"></div>
+                            <div class="sign-lbl">Authority</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+<script src="js/global-config.js"></script>
 
 <script>
+    const API_BASE_URL = window.API_BASE_URL || '/api';
     const token = localStorage.getItem('erp-token');
-    if (!token) window.location.href = '/login';
 
-    window.onload = () => {
+    window.onload = async () => {
         const studentId = new URLSearchParams(window.location.search).get('id');
-        if (!studentId) {
-            alert('Student ID not found in URL.');
-            return;
+        
+        if (!token) { window.location.href = '/login.html'; return; }
+        if (!studentId) { alert('Student ID Missing'); return; }
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/students/${studentId}`, { 
+                headers: { 'Authorization': `Bearer ${token}` } 
+            });
+            const data = await res.json();
+            
+            populateCard(data);
+            generateCodes(data);
+        } catch (error) {
+            console.error(error);
+        }
+    };
+
+    function populateCard(data) {
+        const get = (...keys) => {
+            for (let k of keys) if (data[k]) return data[k];
+            return '-';
+        };
+
+        // Image
+        const imgPath = get('profile_image', 'profile_image_path', 'photo');
+        const imgEl = document.getElementById('p-photo');
+        if (imgPath && imgPath !== '-') {
+            let src = imgPath;
+            if (!src.startsWith('http') && !src.startsWith('data:')) {
+                src = `${API_BASE_URL}/${src.replace(/^public[\\/]/, '').replace(/\\/g, '/')}`;
+            }
+            imgEl.src = src;
         }
 
-        fetch(`/api/students/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } })
-        .then(res => {
-            if (!res.ok) throw new Error('Could not fetch student details.');
-            return res.json();
-        })
-        .then(student => {
-            document.getElementById('student-name').textContent = `${student.first_name} ${student.last_name || ''}`;
-            document.getElementById('admission-no').textContent = student.id;
-            document.getElementById('class-name').textContent = student.class_name;
-            document.getElementById('roll-no').textContent = student.roll_number || 'N/A';
-            document.getElementById('blood-group').textContent = student.blood_group || 'N/A';
-            document.getElementById('contact-no').textContent = student.contact_number;
-            
-            if (student.profile_photo_path) {
-                document.getElementById('student-photo').src = `/${student.profile_photo_path}`;
-            }
+        // Text
+        document.getElementById('p-name').textContent = `${get('first_name')} ${get('last_name')}`;
+        document.getElementById('p-class').textContent = `${get('class_name', 'class')} | ${get('section_name', 'section')}`;
+        document.getElementById('p-id').textContent = get('admission_id', 'student_id');
+        
+        const dob = get('dob', 'date_of_birth');
+        document.getElementById('p-dob').textContent = dob !== '-' ? new Date(dob).toLocaleDateString() : '-';
+        document.getElementById('p-blood').textContent = get('blood_group', 'blood');
+        
+        // PHONE FIX: Checks multiple fields
+        document.getElementById('p-phone').textContent = get('phone_number', 'mobile', 'contact_number', 'phone');
+        
+        const addr = get('present_address', 'address');
+        document.getElementById('p-address').textContent = addr.length > 35 ? addr.substring(0, 35) + '...' : addr;
 
-            const studentIdentifier = `SID-${student.id}`;
-            const qrData = `Student ID: ${student.id}\nName: ${student.first_name}\nClass: ${student.class_name}`;
-            
-            // Update Barcode and QR Code
-            document.getElementById('barcode-img').src = `https://barcode.tec-it.com/barcode.ashx?data=${encodeURIComponent(studentIdentifier)}&code=Code128&dpi=96`;
-            document.getElementById('qr-code-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
-        })
-        .catch(err => {
-            console.error('Error:', err);
-            document.getElementById('id-card').innerHTML = `<p style="color:red; text-align:center; padding: 20px;">${err.message}</p>`;
+        // SIGNATURE LOGIC
+        // Guardian: Show name if exists, else blank
+        const father = get('father_name', 'guardian_name');
+        document.getElementById('sign-guardian').textContent = father !== '-' ? father : '';
+        
+        // Principal: Always Blank for Stamp
+        document.getElementById('sign-principal').textContent = ''; 
+    }
+
+    function generateCodes(data) {
+        const id = data.admission_id || '00000';
+        
+        try {
+            JsBarcode("#barcode", id, {
+                format: "CODE128", lineColor: "#1e293b", width: 1.5, height: 25, displayValue: true, fontSize: 9
+            });
+        } catch(e) {}
+
+        const baseUrl = window.location.origin;
+        const verifyUrl = `${baseUrl}/verify.html?id=${id}`;
+        
+        document.getElementById("qrcode").innerHTML = "";
+        new QRCode(document.getElementById("qrcode"), {
+            text: verifyUrl, width: 42, height: 42, correctLevel: QRCode.CorrectLevel.L
         });
-    };
+    }
+
+    function downloadCard(side) {
+        const el = document.getElementById(`card-${side}`);
+        html2canvas(el, { scale: 3, useCORS: true, backgroundColor: null }).then(canvas => {
+            const link = document.createElement("a");
+            link.download = `ID_${side}.png`;
+            link.href = canvas.toDataURL("image/png");
+            link.click();
+        });
+    }
 </script>
-<script src="js/global-config.js"></script>
+
 </body>
 </html>

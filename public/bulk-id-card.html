@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Bulk Smart ID Cards Print</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Montserrat:wght@400;600;700;800&family=Great+Vibes&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+    <style>
+        :root {
+            --bg-body: #555; /* Dark background for screen viewing */
+            --card-bg: #ffffff;
+            --primary: #0f172a;
+            --accent: #3b82f6;
+            --gold: #f59e0b;
+            --text-dark: #1e293b;
+            --text-gray: #64748b;
+            --card-w: 324px;
+            --card-h: 204px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background-color: var(--bg-body);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* Controls - Hidden on Print */
+        .controls-bar {
+            background: white; padding: 15px 30px; border-radius: 8px;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.2); margin-bottom: 30px;
+            display: flex; gap: 20px; align-items: center; text-align: center;
+        }
+        .btn-print {
+            background: var(--accent); color: white; border: none; padding: 12px 25px;
+            border-radius: 5px; cursor: pointer; font-weight: bold; font-size: 1rem;
+        }
+        .btn-print:hover { background: #2563eb; }
+        .btn-print:disabled { background: #ccc; cursor: not-allowed; }
+
+        /* --- A4 PAGE LAYOUT --- */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            padding: 10mm;
+            margin-bottom: 20px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* 2 Columns */
+            grid-auto-rows: max-content;
+            gap: 15px 20px; /* Row Gap, Col Gap */
+            page-break-after: always;
+        }
+
+        /* Wrapper for a student's front & back cards side-by-side */
+        .card-pair-wrapper {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            break-inside: avoid;
+        }
+
+        /* --- CARD CSS (Identical to Single View) --- */
+        .id-card {
+            width: var(--card-w); height: var(--card-h);
+            background: var(--card-bg); border-radius: 12px; position: relative; overflow: hidden;
+            border: 1px solid #ddd; /* Cutting border */
+            background-image: radial-gradient(#e2e8f0 1px, transparent 1px); background-size: 10px 10px;
+        }
+
+        /* Front Side */
+        .strip-container {
+            position: absolute; left: 0; top: 0; bottom: 0; width: 70px;
+            background: linear-gradient(170deg, #1e293b, #334155); z-index: 2;
+            display: flex; flex-direction: column; align-items: center; padding-top: 20px;
+        }
+        .smart-chip {
+            width: 32px; height: 24px; background: linear-gradient(135deg, #fcd34d, #d97706);
+            border-radius: 5px; border: 1px solid #b45309; margin-bottom: 25px;
+        }
+        .v-text {
+            writing-mode: vertical-rl; transform: rotate(180deg);
+            font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 22px;
+            color: rgba(255,255,255,0.15); letter-spacing: 4px; margin-top: auto; margin-bottom: 20px;
+        }
+        .front-body { margin-left: 70px; padding: 12px; height: 100%; display: flex; flex-direction: column; }
+        .f-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+        .logo-hold img { height: 28px; object-fit: contain; }
+        .validity-badge { background: var(--primary); color: white; padding: 3px 6px; border-radius: 3px; font-size: 7px; font-weight: 700; }
+        
+        .profile-grid { display: flex; gap: 10px; align-items: center; flex: 1; }
+        .avatar-box {
+            width: 65px; height: 75px; flex-shrink: 0; border-radius: 8px; padding: 2px; background: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1); border: 1px solid #e2e8f0;
+        }
+        .avatar-box img { width: 100%; height: 100%; object-fit: cover; border-radius: 6px; }
+        
+        .info-box { text-align: left; width: 100%; }
+        .st-name {
+            font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 800; color: var(--text-dark);
+            text-transform: uppercase; margin-bottom: 3px; line-height: 1.1;
+            display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .st-meta { font-size: 8px; font-weight: 700; color: var(--accent); text-transform: uppercase; display: block; margin-bottom: 6px; }
+        
+        .d-row { display: flex; font-size: 7px; margin-bottom: 2px; align-items: center; }
+        .d-lbl { color: #94a3b8; width: 40px; font-weight: 600; }
+        .d-val { color: var(--text-dark); font-weight: 700; text-transform: uppercase; }
+
+        .f-footer { text-align: right; margin-top: auto; border-top: 2px solid var(--gold); padding-top: 4px; }
+        .school-name-sm { font-size: 9px; font-weight: 800; color: var(--primary); text-transform: uppercase; }
+
+        /* Back Side specific */
+        .back-strip { position: absolute; right: 0; top: 0; bottom: 0; width: 12px; background: linear-gradient(170deg, var(--primary), var(--accent)); }
+        .back-body { padding: 15px 25px 15px 15px; height: 100%; display: flex; flex-direction: column; }
+        .codes { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+        .qr-wrap { padding: 2px; border: 1px solid #e2e8f0; border-radius: 4px; background: white; width: 40px; height: 40px; }
+        .bar-wrap { flex: 1; overflow: hidden; display: flex; align-items: center; justify-content: flex-end; }
+        .bar-wrap svg { height: 25px; max-width: 100%; }
+        
+        .contact-row { font-size: 7px; color: var(--text-dark); margin-bottom: 4px; display: flex; align-items: flex-start; gap: 5px; }
+        .contact-row i { color: var(--accent); margin-top: 1px; font-size: 8px; }
+        
+        .disclaimer { font-size: 5px; color: #94a3b8; text-align: justify; line-height: 1.3; margin-top: auto; margin-bottom: 8px; border-top: 1px dashed #e2e8f0; padding-top: 4px; }
+        
+        .sign-grid { display: flex; justify-content: space-between; padding-right: 5px; }
+        .sign-col { text-align: center; width: 60px; }
+        .sign-font { font-family: 'Great Vibes', cursive; font-size: 14px; color: #0f172a; height: 18px; display: flex; align-items: flex-end; justify-content: center; white-space: nowrap; overflow: hidden; }
+        .sign-line { width: 100%; height: 1px; background: #94a3b8; margin-bottom: 1px; }
+        .sign-lbl { font-size: 5px; font-weight: 700; text-transform: uppercase; color: #64748b; }
+
+        /* Print Settings */
+        @media print {
+            body { background: white; padding: 0; display: block; }
+            .controls-bar { display: none; }
+            .a4-page { box-shadow: none; margin: 0; width: 100%; height: auto; page-break-after: always; }
+            * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls-bar">
+        <div id="status-msg"><i class="fas fa-spinner fa-spin"></i> Initializing...</div>
+        <button onclick="window.print()" class="btn-print" id="print-btn" disabled><i class="fas fa-print"></i> Print Cards</button>
+    </div>
+
+    <div id="pages-container"></div>
+
+    <script src="js/global-config.js"></script>
+
+    <script>
+        const API_BASE_URL = window.API_BASE_URL || '/api';
+        const token = localStorage.getItem('erp-token');
+        const container = document.getElementById('pages-container');
+        const statusMsg = document.getElementById('status-msg');
+        const printBtn = document.getElementById('print-btn');
+
+        window.onload = async () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const idsParam = urlParams.get('ids');
+
+            if (!token) { window.location.href = '/login.html'; return; }
+            if (!idsParam) { statusMsg.innerHTML = "No students selected!"; return; }
+
+            const ids = idsParam.split(',');
+            statusMsg.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Processing ${ids.length} cards...`;
+
+            await generateBulkCards(ids);
+        };
+
+        async function generateBulkCards(ids) {
+            let currentPage = createNewPage();
+            container.appendChild(currentPage);
+            
+            // Layout: We can fit 4 pairs (8 cards total) on one A4 page
+            // Structure: [Front Back] [Front Back] ...
+            const PAIRS_PER_PAGE = 4; 
+            let pairsOnCurrentPage = 0;
+
+            for (let i = 0; i < ids.length; i++) {
+                const id = ids[i];
+                try {
+                    const res = await fetch(`${API_BASE_URL}/students/${id}`, { 
+                        headers: { 'Authorization': `Bearer ${token}` } 
+                    });
+                    
+                    if(!res.ok) throw new Error(`Fetch failed for ID ${id}`);
+                    
+                    const data = await res.json();
+
+                    // If page is full, create new page
+                    if (pairsOnCurrentPage >= PAIRS_PER_PAGE) {
+                        currentPage = createNewPage();
+                        container.appendChild(currentPage);
+                        pairsOnCurrentPage = 0;
+                    }
+
+                    // Unique IDs for dynamic generation
+                    const bcId = `bc-${id}-${i}`;
+                    const qrId = `qr-${id}-${i}`;
+
+                    // Create the pair container
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'card-pair-wrapper'; // Flex container
+                    wrapper.innerHTML = createCardPairHTML(data, bcId, qrId);
+                    
+                    currentPage.appendChild(wrapper);
+                    
+                    // Generate Codes immediately
+                    generateCodes(data.admission_id, bcId, qrId);
+
+                    pairsOnCurrentPage++;
+
+                } catch (error) {
+                    console.error(error);
+                    statusMsg.innerHTML += `<br><span style="color:red">Error ID ${id}: ${error.message}</span>`;
+                }
+            }
+            
+            statusMsg.innerHTML = `<i class="fas fa-check-circle" style="color:green"></i> Ready to print ${ids.length} cards.`;
+            printBtn.disabled = false;
+        }
+
+        function createNewPage() {
+            const div = document.createElement('div');
+            div.className = 'a4-page';
+            return div;
+        }
+
+        function generateCodes(admissionId, bcId, qrId) {
+            const idStr = admissionId || '00000';
+            // Barcode
+            try {
+                JsBarcode(`#${bcId}`, idStr, {
+                    format: "CODE128", lineColor: "#1e293b", width: 1.2, height: 25, displayValue: true, fontSize: 8, margin: 0
+                });
+            } catch(e){}
+
+            // QR Code
+            const baseUrl = window.location.origin;
+            const verifyUrl = `${baseUrl}/verify.html?id=${idStr}`;
+            
+            // Clear and generate
+            const qrContainer = document.getElementById(qrId);
+            if(qrContainer) {
+                qrContainer.innerHTML = "";
+                new QRCode(qrContainer, {
+                    text: verifyUrl, width: 36, height: 36, correctLevel: QRCode.CorrectLevel.L
+                });
+            }
+        }
+
+        function createCardPairHTML(data, bcId, qrId) {
+            const get = (...keys) => { for (let k of keys) if (data[k]) return data[k]; return '-'; };
+            
+            // --- PHOTO FIX ---
+            let imgPath = get('profile_image', 'profile_image_path', 'photo');
+            let imgSrc;
+            if (imgPath && imgPath !== '-') {
+                if (imgPath.startsWith('http') || imgPath.startsWith('data:')) {
+                     imgSrc = imgPath;
+                } else {
+                    // Adjust path if it comes as 'public/uploads/...'
+                    imgSrc = `${API_BASE_URL}/${imgPath.replace(/^public[\\/]/, '').replace(/\\/g, '/')}`;
+                }
+            } else {
+                // Fallback Avatar
+                imgSrc = `https://ui-avatars.com/api/?name=${data.first_name}+${data.last_name}&background=e2e8f0&color=64748b`;
+            }
+
+            const phone = get('phone_number', 'mobile', 'contact_number');
+            const addr = get('present_address', 'address').substring(0, 30) + '...';
+            
+            // Guardian Sign Logic
+            const father = get('father_name', 'guardian_name');
+            const guardianSign = father !== '-' ? father : '';
+
+            // We return BOTH Front and Back card HTML side-by-side
+            return `
+            <div class="id-card">
+                <div class="strip-container">
+                    <div class="smart-chip"></div>
+                    <div class="v-text">STUDENT</div>
+                </div>
+                <div class="front-body">
+                    <div class="f-header">
+                        <div class="logo-hold">
+                            <img src="" class="global-school-logo" alt="Logo" onerror="this.style.display='none'">
+                        </div>
+                        <div class="validity-badge">VALID 2025-26</div>
+                    </div>
+                    <div class="profile-grid">
+                        <div class="avatar-box">
+                            <img src="${imgSrc}" alt="Img">
+                        </div>
+                        <div class="info-box">
+                            <div class="st-name">${get('first_name')} ${get('last_name')}</div>
+                            <span class="st-meta">${get('class_name')} | ${get('section_name')}</span>
+                            <div class="d-row"><span class="d-lbl">ID</span> <span class="d-val">${get('admission_id')}</span></div>
+                            <div class="d-row"><span class="d-lbl">DOB</span> <span class="d-val">${data.dob ? new Date(data.dob).toLocaleDateString() : '-'}</span></div>
+                            <div class="d-row"><span class="d-lbl">BLD</span> <span class="d-val">${get('blood_group')}</span></div>
+                            <div class="d-row"><span class="d-lbl">PH</span> <span class="d-val">${phone}</span></div>
+                        </div>
+                    </div>
+                    <div class="f-footer">
+                        <div class="school-name-sm global-school-name">SCHOOL NAME</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="id-card">
+                <div class="back-strip"></div>
+                <div class="back-body">
+                    <div class="codes">
+                        <div class="qr-wrap" id="${qrId}"></div>
+                        <div class="bar-wrap"><svg id="${bcId}"></svg></div>
+                    </div>
+                    <div class="contact-row">
+                        <i class="fas fa-map-marker-alt"></i> <span class="global-school-address">Address...</span>
+                    </div>
+                    <div class="contact-row">
+                        <i class="fas fa-envelope"></i> <span class="global-school-email">email@school.com</span>
+                    </div>
+                    <div class="contact-row" style="margin-top:5px;">
+                        <i class="fas fa-home"></i> <span>Res: ${addr}</span>
+                    </div>
+                    <div class="disclaimer">
+                        This card is property of <span class="global-school-name">Institute</span>. If found lost, return to office.
+                    </div>
+                    <div class="sign-grid">
+                        <div class="sign-col">
+                            <div class="sign-font">${guardianSign}</div>
+                            <div class="sign-line"></div>
+                            <div class="sign-lbl">Guardian</div>
+                        </div>
+                        <div class="sign-col">
+                            <div class="sign-font"></div> <div class="sign-line"></div>
+                            <div class="sign-lbl">Authority</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            `;
+        }
+    </script>
+</body>
+</html>

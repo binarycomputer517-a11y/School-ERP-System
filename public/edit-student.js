@@ -3,7 +3,8 @@
  * Handles loading existing student data via URL ID, populating the 5-step form,
  * and submitting the update (PUT) request.
  *
- * FIX: Function definitions are reordered for correct dependency resolution within the IIFE.
+ * FIX: All function definitions are reordered for correct dependency resolution and 
+ * the image preview logic is fixed to handle both server paths and Base64 strings.
  */
 
 (function() {
@@ -64,6 +65,7 @@
         if (response.status === 401 || response.status === 403) {
             console.error('API Unauthorized or Forbidden:', url);
             alert('Session expired or unauthorized. Please log in again.');
+            window.location.href = '/login.html'; // Redirect on auth failure
             throw new Error('Unauthorized or Forbidden access.');
         }
         
@@ -164,7 +166,7 @@
             }
 
             if (isFieldInvalid) {
-                input.style.border = '2px solid red'; 
+                input.style.border = '2px solid var(--accent-color)'; 
                 isValid = false;
             } else {
                 input.style.border = ''; 
@@ -198,7 +200,7 @@
             }
 
             if (isFieldInvalid) {
-                input.style.border = '2px solid red';
+                input.style.border = '2px solid var(--accent-color)';
                 if (isValid) {
                     isValid = false;
                     firstInvalidInput = input;
@@ -214,13 +216,13 @@
             const file = event.target.files[0];
             const hiddenInput = document.getElementById(hiddenInputId);
             const previewImg = document.getElementById(previewId);
-            const previewFrame = previewImg.parentElement;
-            const placeholder = previewFrame.querySelector('.photo-placeholder');
+            const previewFrame = previewImg ? previewImg.parentElement : null;
+            const placeholder = previewFrame ? previewFrame.querySelector('.photo-placeholder') : null;
 
             if (file) {
                 const reader = new FileReader();
                 reader.onload = (e) => {
-                    hiddenInput.value = e.target.result; 
+                    if (hiddenInput) hiddenInput.value = e.target.result; 
                     if (previewImg) {
                         previewImg.src = e.target.result;
                         previewImg.style.display = 'block';
@@ -231,7 +233,7 @@
                 };
                 reader.readAsDataURL(file);
             } else {
-                hiddenInput.value = '';
+                if (hiddenInput) hiddenInput.value = '';
                 if (previewImg) previewImg.style.display = 'none';
                 if (placeholder) placeholder.style.display = 'block';
             }
@@ -588,22 +590,39 @@
         
         if (courseId) loadSubjects(courseId, subjectsDisplayEl); 
     }
-
-    // -----------------------------------------------------------
-    // --- 8. Data Loading and Submission Logic ---
-    // -----------------------------------------------------------
     
+    
+    // -----------------------------------------------------------
+    // --- 6. Data Loading and Submission Logic ---
+    // -----------------------------------------------------------
+
     /**
-     * Shows existing document preview, using the stored path.
+     * Shows existing document preview and saves the path to the hidden input.
      */
-    function showExistingPreview(previewId, path) {
+    function showExistingPreview(previewId, path, hiddenInputId) {
         const previewImg = document.getElementById(previewId);
-        if (previewImg && path) {
-            previewImg.src = API_BASE_URL + '/uploads/' + path; 
+        const hiddenInput = document.getElementById(hiddenInputId);
+
+        if (previewImg && hiddenInput && path) { 
+            // Check if path is Base64 data (shouldn't be, but safer) or a server path
+            if (path.startsWith('data:')) {
+                previewImg.src = path;
+            } else {
+                // For files stored on the server, construct the full URL
+                previewImg.src = API_BASE_URL + '/uploads/' + path; 
+            }
+
             previewImg.style.display = 'block';
+            
             const placeholder = previewImg.parentElement.querySelector('.photo-placeholder');
             if (placeholder) placeholder.style.display = 'none';
-            document.getElementById(previewId.replace('preview', 'path')).value = path; 
+            
+            // Store the path in the correct hidden input field
+            hiddenInput.value = path; 
+        } else if (previewImg) {
+            previewImg.style.display = 'none';
+            const placeholder = previewImg.parentElement.querySelector('.photo-placeholder');
+            if (placeholder) placeholder.style.display = 'block';
         }
     }
 
@@ -650,10 +669,15 @@
             document.getElementById('user_id').value = student.user_id;
 
 
-            // 4. Handle Documents (Show existing previews if path exists)
-            if (student.profile_image_path) showExistingPreview('photo-preview', student.profile_image_path);
-            if (student.signature_path) showExistingPreview('signature-preview', student.signature_path);
-            if (student.id_document_path) showExistingPreview('id-proof-preview', student.id_document_path);
+            // 4. Handle Documents (Show existing paths)
+            if (student.profile_image_path) 
+                showExistingPreview('photo-preview', student.profile_image_path, 'profile_image_path');
+                
+            if (student.signature_path) 
+                showExistingPreview('signature-preview', student.signature_path, 'signature_path');
+                
+            if (student.id_document_path) 
+                showExistingPreview('id-proof-preview', student.id_document_path, 'id_document_path');
 
             // 5. Select Dropdown Values (After options are loaded)
             if (student.academic_session_id) {
@@ -667,7 +691,8 @@
             if (student.batch_id) {
                  // Wait a moment for batches to populate before selecting the final batch ID
                  setTimeout(() => {
-                    document.getElementById('batch_id').value = student.batch_id;
+                    const batchInput = document.getElementById('batch_id');
+                    if (batchInput) batchInput.value = student.batch_id;
                     handleBatchChange(); // Final trigger for fees
                  }, 500); 
             }
@@ -707,8 +732,8 @@
         
         if (passwordInput.value && passwordInput.value !== confirmPasswordInput.value) {
             alert("Error: New passwords do not match!");
-            passwordInput.style.border = '2px solid red'; 
-            confirmPasswordInput.style.border = '2px solid red'; 
+            passwordInput.style.border = '2px solid var(--accent-color)'; 
+            confirmPasswordInput.style.border = '2px solid var(--accent-color)'; 
             return; 
         }
         
@@ -746,13 +771,14 @@
             
         } catch (error) {
              console.error('Submission Error:', error);
-             alert(`❌ Update Failed: ${error.message || 'Unknown error'}. Check permissions.`);
+             alert(`❌ Update Failed: ${error.message || 'Unknown error'}. Check console.`);
         } finally {
             submitButton.textContent = 'Update Student Record';
             submitButton.disabled = false;
         }
     }
-    
+
+
     // -----------------------------------------------------------
     // --- 9. INITIALIZATION ENTRY POINT ---
     // -----------------------------------------------------------
@@ -770,7 +796,8 @@
             return;
         }
         if (!token) {
-            console.warn('Authentication token missing.');
+            console.warn('Authentication token missing. Redirecting.');
+            window.location.href = '/login.html';
             return;
         }
 

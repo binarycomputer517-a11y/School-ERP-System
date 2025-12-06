@@ -3,300 +3,622 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Profile</title>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <title>Student Profile | ERP System</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
     <style>
         :root {
-            --hud-bg: #0a0f18;
-            --hud-primary: #00f0ff;
-            --hud-secondary: #334155;
-            --hud-danger: #ff4747;
-            --hud-warning: #ffb800;
-            --hud-text: #cbd5e1;
+            --bg-dark: #050505;
+            --panel-bg: rgba(20, 25, 35, 0.85);
+            --primary: #00f3ff;
+            --secondary: #7000ff;
+            --success: #00ff9d;
+            --danger: #ff0055;
+            --warning: #ffbe0b;
+            --text-main: #e0e6ed;
+            --text-muted: #94a3b8;
+            --border: 1px solid rgba(0, 243, 255, 0.2);
+            --glass: blur(10px);
         }
-        
-        * { box-sizing: border-box; }
+
+        * { box-sizing: border-box; outline: none; }
 
         body {
-            font-family: 'Roboto Mono', monospace;
-            background-color: var(--hud-bg);
-            color: var(--hud-text);
+            font-family: 'Rajdhani', sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-main);
             margin: 0;
             padding: 20px;
-            overflow-x: hidden;
+            min-height: 100vh;
         }
-        
+
+        /* Background Grid */
         body::before {
             content: "";
             position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.02) 1px, transparent 1px, transparent 2px);
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-image: linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+            background-size: 30px 30px;
             z-index: -1;
-            pointer-events: none;
         }
 
         .container {
-            max-width: 1200px;
-            margin: auto;
-            background-color: rgba(20, 29, 45, 0.8);
-            border: 1px solid var(--hud-secondary);
-            box-shadow: 0 0 25px rgba(0, 240, 255, 0.1);
-            backdrop-filter: blur(5px);
+            max-width: 1400px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 20px;
         }
-        
-        .nav-links { padding: 10px 25px; border-bottom: 1px solid var(--hud-secondary); }
-        .nav-links a { color: var(--hud-primary); text-decoration: none; font-weight: 700; text-shadow: 0 0 5px var(--hud-primary); }
-        
-        .profile-header { padding: 25px; }
-        .profile-header-content { display: flex; align-items: center; }
-        
-        .profile-photo-container {
-            width: 130px;
-            height: 145px;
-            margin-right: 25px;
-            clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%);
-            animation: pulse-border 3s infinite;
-        }
-        
-        .profile-header img { width: 100%; height: 100%; object-fit: cover; }
 
-        .profile-header .info h1 { margin: 0; font-size: 2em; display: flex; align-items: center; gap: 15px; color: #fff; text-shadow: 0 0 8px var(--hud-primary); }
-        .profile-header .info p { margin: 5px 0 0; opacity: 0.8; }
-        .badge { font-size: 0.6em; padding: 5px 10px; border-radius: 4px; font-weight: 700; text-transform: uppercase; }
-        .badge.active { background-color: var(--hud-primary); color: var(--hud-bg); animation: pulse-glow 2s infinite; }
-        .badge.archived { background-color: var(--hud-secondary); color: var(--hud-text); }
-        
-        .quick-actions { margin-top: 20px; display: flex; gap: 10px; }
-        .action-btn { background: transparent; color: var(--hud-primary); border: 1px solid var(--hud-primary); padding: 8px 15px; text-decoration: none; cursor: pointer; font-weight: 700; transition: all 0.2s; clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%); }
-        .action-btn:hover { background-color: var(--hud-primary); color: var(--hud-bg); box-shadow: 0 0 15px var(--hud-primary); }
-
-        .tabs { display: flex; flex-wrap: wrap; background-color: rgba(0,0,0,0.2); }
-        .tab-button { padding: 15px 20px; cursor: pointer; background: none; border: none; font-size: 0.9em; font-weight: 700; color: var(--hud-text); position: relative; }
-        .tab-button.active { color: var(--hud-primary); text-shadow: 0 0 5px var(--hud-primary); }
-        .tab-button.active::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 3px; background-color: var(--hud-primary); box-shadow: 0 0 8px var(--hud-primary); }
-
-        .tab-content { display: none; padding: 25px; animation: fadeIn 0.5s; }
-        .tab-content.active { display: block; }
-
-        .details-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 1px; background: var(--hud-secondary); border: 1px solid var(--hud-secondary); }
-        .detail-item { padding: 15px; background: var(--hud-bg); }
-        .detail-item strong { color: var(--hud-primary); display: block; margin-bottom: 4px; font-weight: 700; }
-        
-        .placeholder-hud {
+        /* --- Sidebar --- */
+        .profile-sidebar {
+            background: var(--panel-bg);
+            border: var(--border);
+            padding: 20px;
             text-align: center;
-            color: var(--hud-secondary);
-            border: 1px dashed var(--hud-secondary);
-            padding: 50px;
-            font-size: 1.2em;
+            height: fit-content;
+            position: sticky;
+            top: 20px;
         }
-        .placeholder-hud i { font-size: 3em; display: block; margin-bottom: 15px; opacity: 0.5; }
+
+        .avatar-frame {
+            width: 150px; height: 150px;
+            margin: 0 auto 15px;
+            padding: 5px;
+            border: 2px dashed var(--primary);
+            border-radius: 50%;
+            overflow: hidden;
+        }
+
+        .avatar-frame img {
+            width: 100%; height: 100%;
+            object-fit: cover;
+            border-radius: 50%;
+            background: #000;
+        }
+
+        .student-name { font-size: 1.8rem; margin: 10px 0 5px; color: #fff; text-shadow: 0 0 10px var(--primary); }
+        .student-id { color: var(--primary); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
         
-        .medical-alert { border-left: 5px solid var(--hud-danger); background-color: rgba(255, 71, 71, 0.1); padding: 15px; margin-bottom: 20px; text-shadow: 0 0 5px var(--hud-danger); }
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--hud-secondary); }
-        th { background-color: rgba(0, 240, 255, 0.05); color: var(--hud-primary); }
+        .sidebar-stats {
+            margin-top: 20px;
+            display: flex;
+            justify-content: space-around;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 15px;
+        }
+        .stat-box small { display: block; color: var(--text-muted); font-size: 0.7rem; }
+        .stat-box span { font-size: 1.2rem; font-weight: bold; color: #fff; }
+
+        /* --- Main Content --- */
+        .main-content { display: flex; flex-direction: column; gap: 20px; }
+
+        .tabs-nav { display: flex; background: var(--panel-bg); border: var(--border); padding: 5px; overflow-x: auto; }
+        .tab-btn {
+            background: transparent; border: none; color: var(--text-muted);
+            padding: 12px 25px; cursor: pointer; font-family: 'Rajdhani', sans-serif;
+            font-weight: 700; font-size: 1.1rem; text-transform: uppercase; transition: 0.3s;
+        }
+        .tab-btn:hover { color: var(--primary); }
+        .tab-btn.active { color: var(--bg-dark); background: var(--primary); box-shadow: 0 0 15px var(--primary); }
+
+        .tab-pane { display: none; background: var(--panel-bg); border: var(--border); padding: 25px; animation: fadeIn 0.4s ease; min-height: 400px;}
+        .tab-pane.active { display: block; }
+
+        .section-title {
+            font-size: 1.4rem; color: var(--primary); border-bottom: 1px solid rgba(0, 243, 255, 0.3);
+            padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
+        }
+
+        .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
+        .info-item { background: rgba(255,255,255,0.03); padding: 15px; border-left: 3px solid var(--secondary); }
+        .info-item label { display: block; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; }
+        .info-item .value { font-size: 1.1rem; font-weight: 600; color: #fff; }
+
+        /* Empty State */
+        .no-data {
+            text-align: center; color: var(--text-muted); padding: 40px;
+            border: 1px dashed var(--text-muted); font-family: 'JetBrains Mono';
+        }
+
+        /* Fee Widget */
+        .fee-widget { background: rgba(0,0,0,0.3); padding: 20px; margin-top: 20px; border: 1px solid var(--text-muted); }
+        .progress-container { height: 20px; background: #333; border-radius: 10px; overflow: hidden; margin: 10px 0; }
+        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 1s ease-in-out; }
         
-        #address-map { filter: invert(100%) grayscale(100%) brightness(1.5) contrast(1.2); border: 1px solid var(--hud-secondary); }
+        /* Tables */
+        table { width: 100%; margin-top: 20px; border-collapse: collapse; font-family: 'JetBrains Mono'; font-size: 0.9rem; }
+        th { text-align: left; padding: 10px; color: var(--primary); border-bottom: 2px solid var(--text-muted); }
+        td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+
+        /* Heatmap */
+        .attendance-heatmap { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 5px; margin-top: 15px; }
+        .heat-box { height: 30px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; }
+        .heat-present { background: rgba(0, 255, 157, 0.6); color: #000; }
+        .heat-absent { background: rgba(255, 0, 85, 0.6); color: #fff; }
+        .heat-leave { background: var(--warning); color: #000; }
+
+        /* Timeline */
+        .timeline { border-left: 2px solid var(--primary); margin-left: 10px; padding-left: 20px; }
+        .timeline-item { position: relative; margin-bottom: 25px; }
+        .timeline-item::before {
+            content: ''; position: absolute; left: -26px; top: 5px; width: 10px; height: 10px;
+            background: var(--bg-dark); border: 2px solid var(--primary); border-radius: 50%;
+        }
+        .t-date { color: var(--primary); font-size: 0.85rem; font-family: 'JetBrains Mono'; }
+        .t-content { background: rgba(255,255,255,0.05); padding: 10px; margin-top: 5px; border-radius: 4px; }
 
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        @keyframes pulse-glow { 0%, 100% { box-shadow: 0 0 5px var(--hud-primary); } 50% { box-shadow: 0 0 15px var(--hud-primary); } }
-        @keyframes pulse-border { 0%, 100% { border: 2px solid var(--hud-primary); } 50% { border: 2px solid #fff; } }
+        
+        /* Mobile */
+        @media (max-width: 768px) {
+            .container { grid-template-columns: 1fr; }
+            .profile-sidebar { position: static; }
+        }
+        
+        /* 🚀 PRINT SUMMARY MODIFICATIONS 🚀 */
+        @media print {
+            body { 
+                background: #fff; 
+                color: #000; 
+                /* Ensure all content fits on one A4 page without excessive margins */
+                margin: 0; 
+                padding: 10mm;
+            }
+            .container { 
+                display: block; /* Stack sidebar and main content */
+                max-width: 100%;
+            }
+            
+            /* Hide non-summary UI elements */
+            .tabs-nav, .back-nav, button { 
+                display: none; 
+            }
+            body::before, .avatar-frame { 
+                border: none; 
+                background: none; 
+            }
+
+            /* Main Content and Sidebar Layout for Print */
+            .main-content {
+                padding-top: 20px;
+            }
+            .profile-sidebar { 
+                border: none; 
+                background: none; 
+                padding: 0; 
+                margin-bottom: 20px;
+                position: static; /* Important for flow */
+                width: 100%;
+                text-align: left; /* Adjust sidebar alignment for print */
+            }
+            .profile-sidebar h1, .profile-sidebar div {
+                text-align: left;
+            }
+            .sidebar-stats {
+                justify-content: flex-start;
+                gap: 40px;
+                border: none;
+                padding-top: 0;
+            }
+            .stat-box {
+                border: 1px solid #ccc;
+                padding: 10px;
+            }
+
+
+            /* Display ALL panes for a complete summary, but simplify their appearance */
+            .tab-pane { 
+                display: block !important; /* Forces all tabs to display */
+                border: 1px solid #ccc; 
+                background: none; 
+                color: #000; 
+                page-break-inside: avoid;
+                margin-top: 20px;
+                padding: 15px;
+            }
+            
+            /* Remove background/glass effects in print */
+            .profile-sidebar, .tab-pane, .tabs-nav {
+                background: none !important;
+                border: 1px solid #ccc !important;
+            }
+            
+            /* Re-style titles for print */
+            .section-title {
+                color: #333;
+                border-bottom: 1px solid #ddd;
+            }
+            
+            /* Ensure maps and charts are visible and legible */
+            #map-container { 
+                filter: none !important; 
+                border: 1px solid #ddd !important;
+                height: 150px !important; /* Smaller map for summary */
+            }
+            #charts-container {
+                grid-template-columns: 1fr; /* Stack charts vertically */
+            }
+            #charts-container > div {
+                 background: #f7f7f7 !important; /* Light background for charts */
+            }
+
+            /* Hide elements intended for interactive use or excessive detail */
+            #invoice-table, #timeline-container, .attendance-heatmap {
+                display: none; /* Hiding tables, heatmap, and full timeline for a brief A4 summary */
+            }
+            
+            /* Keep essential finance summary */
+            .fee-widget {
+                border: 1px solid #ccc;
+                background: #f7f7f7;
+            }
+
+        }
     </style>
 </head>
 <body>
 
-<script>
-    const token = localStorage.getItem('erp-token');
-    if (!token) { window.location.href = '/login'; }
-</script>
-
 <div class="container">
-    <div class="nav-links">
-        <a href="/view-student.html">« BACK_TO_DIRECTORY</a>
-    </div>
+    
+    <aside class="profile-sidebar">
+        <div style="margin-bottom: 20px; text-align: left;" class="back-nav">
+            <a href="/students-list.html" style="color: var(--text-muted); text-decoration: none; font-weight:bold;"><i class="fas fa-arrow-left"></i> BACK</a>
+        </div>
 
-    <div class="profile-header">
-        <div class="profile-header-content">
-            <div class="profile-photo-container">
-                <img id="student-photo" src="/images/default-avatar.png" alt="Student Photo">
+        <div class="avatar-frame">
+            <img id="p-photo" src="" alt="Profile Photo">
+        </div>
+        
+        <h1 class="student-name" id="p-name">Loading...</h1>
+        <div class="student-id" id="p-admission-id">---</div>
+        <div id="p-status-container" style="margin-top: 10px;"></div>
+
+        <div class="sidebar-stats">
+            <div class="stat-box">
+                <small>Attendance</small>
+                <span id="p-attendance-stat">--</span>
             </div>
-            <div class="info">
-                <h1><span id="full-name">Loading...</span><span id="status-badge"></span></h1>
-                <p>CLASS: <span id="class-name">N/A</span> | ROLL: <span id="roll-number">N/A</span></p>
-                <p>ADMISSION_ID: <span id="admission-number">N/A</span></p>
+            <div class="stat-box">
+                <small>Due Fees</small>
+                <span id="p-due-stat" style="color: var(--danger)">--</span>
             </div>
         </div>
-        <div id="quick-actions" class="quick-actions"></div>
-    </div>
 
-    <div class="tabs">
-        <button class="tab-button active" onclick="openTab(event, 'personal')">PERSONAL_DATA</button>
-        <button class="tab-button" onclick="openTab(event, 'guardians')">GUARDIANS</button>
-        <button class="tab-button" onclick="openTab(event, 'address')">ADDRESS</button>
-        <button class="tab-button" onclick="openTab(event, 'medical')">MEDICAL</button>
-        <button class="tab-button" onclick="openTab(event, 'documents')">DOCUMENTS</button>
-        <button class="tab-button" onclick="openTab(event, 'history')">HISTORY</button>
-        <button class="tab-button" onclick="openTab(event, 'logistics')">LOGISTICS</button>
-        <button class="tab-button" onclick="openTab(event, 'performance')">PERFORMANCE</button>
-        <button class="tab-button" onclick="openTab(event, 'library')">LIBRARY</button>
-        <button class="tab-button" onclick="openTab(event, 'discipline')">DISCIPLINE</button>
-        <button class="tab-button" onclick="openTab(event, 'communication')">COMMUNICATION</button>
-        <button class="tab-button" onclick="openTab(event, 'system')">SYSTEM_LOGS</button>
-    </div>
-    
-    <div id="personal" class="tab-content active">
-        <div class="details-grid" id="personal-grid"></div>
-        <div id="siblings-section" style="margin-top: 20px;"></div>
-    </div>
-    
-    <div id="guardians" class="tab-content"><div class="details-grid" id="guardians-grid"></div></div>
-    <div id="address" class="tab-content"><div class="details-grid" id="address-grid"></div><div id="address-map" style="height: 300px; margin-top:20px;"></div></div>
-    <div id="medical" class="tab-content"><div id="medical-content"></div></div>
-    <div id="logistics" class="tab-content"><div id="logistics-content"></div></div>
-    <div id="performance" class="tab-content" style="background: rgba(0,0,0,0.2); padding: 15px;"><canvas id="performanceChart"></canvas></div>
+        <div style="margin-top: 25px; display: grid; gap: 10px;">
+            <button onclick="window.print()" class="tab-btn" style="border: 1px solid var(--text-muted); font-size: 0.9rem;">
+                <i class="fas fa-print"></i> PRINT
+            </button>
+            <button onclick="generateIdCard()" class="tab-btn" style="border: 1px solid var(--primary); font-size: 0.9rem; color: var(--primary);">
+                <i class="fas fa-id-card"></i> ID CARD
+            </button>
+        </div>
+    </aside>
 
-    <div id="documents" class="tab-content"><div class="placeholder-hud"><i class="fas fa-folder-open"></i>// DOCUMENT_ARCHIVE //</div></div>
-    <div id="history" class="tab-content"><div class="placeholder-hud"><i class="fas fa-history"></i>// ACADEMIC_RECORD //</div></div>
-    <div id="library" class="tab-content"><div class="placeholder-hud"><i class="fas fa-book"></i>// LIBRARY_TRANSACTIONS //</div></div>
-    <div id="discipline" class="tab-content"><div class="placeholder-hud"><i class="fas fa-gavel"></i>// DISCIPLINARY_LOGS //</div></div>
-    <div id="communication" class="tab-content"><div class="placeholder-hud"><i class="fas fa-satellite-dish"></i>// COMMUNICATION_STREAM //</div></div>
-    <div id="system" class="tab-content"><div class="placeholder-hud"><i class="fas fa-cogs"></i>// SYSTEM_ACCESS_LOGS //</div></div>
+    <main class="main-content">
+        
+        <nav class="tabs-nav">
+            <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
+            <button class="tab-btn" onclick="switchTab('academic')">Academic</button>
+            <button class="tab-btn" onclick="switchTab('finance')">Finance</button>
+            <button class="tab-btn" onclick="switchTab('history')">Timeline</button>
+        </nav>
+
+        <div id="overview" class="tab-pane active">
+            <h2 class="section-title"><i class="fas fa-user-astronaut"></i> Personal Data</h2>
+            <div class="info-grid">
+                <div class="info-item"><label>Full Name</label><div class="value" id="d-fullname"></div></div>
+                <div class="info-item"><label>Date of Birth</label><div class="value" id="d-dob"></div></div>
+                <div class="info-item"><label>Gender</label><div class="value" id="d-gender"></div></div>
+                <div class="info-item"><label>Blood Group</label><div class="value" id="d-blood"></div></div>
+                <div class="info-item"><label>Phone</label><div class="value" id="d-phone"></div></div>
+                <div class="info-item"><label>Email</label><div class="value" id="d-email"></div></div>
+            </div>
+
+            <h2 class="section-title" style="margin-top: 30px;"><i class="fas fa-users"></i> Guardian Info</h2>
+            <div class="info-grid">
+                <div class="info-item"><label>Father's Name</label><div class="value" id="d-father"></div></div>
+                <div class="info-item"><label>Mother's Name</label><div class="value" id="d-mother"></div></div>
+                <div class="info-item"><label>Emergency Contact</label><div class="value" id="d-emergency"></div></div>
+            </div>
+
+            <h2 class="section-title" style="margin-top: 30px;"><i class="fas fa-map-marker-alt"></i> Address</h2>
+            <div class="info-item">
+                <label>Present Address</label>
+                <div class="value" id="d-address"></div>
+            </div>
+            <div id="map-container" style="height: 250px; border: 1px solid var(--text-muted); margin-top: 15px; display:none;"></div>
+        </div>
+
+        <div id="academic" class="tab-pane">
+            <h2 class="section-title"><i class="fas fa-chart-line"></i> Performance</h2>
+            <div id="charts-container" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
+                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                    <canvas id="examChart"></canvas>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
+                    <canvas id="skillsChart"></canvas>
+                </div>
+            </div>
+            <div id="no-academic-data" class="no-data" style="display:none;">No academic records found.</div>
+
+            <h2 class="section-title" style="margin-top: 30px;"><i class="fas fa-calendar-alt"></i> Attendance History</h2>
+            <div class="attendance-heatmap" id="attendance-grid"></div>
+            <div id="no-attendance-data" class="no-data" style="display:none;">No attendance logs available.</div>
+        </div>
+
+        <div id="finance" class="tab-pane">
+            <h2 class="section-title"><i class="fas fa-credit-card"></i> Fee Status</h2>
+            
+            <div id="finance-content">
+                <div class="fee-widget">
+                    <div style="display: flex; justify-content: space-between; align-items: end; margin-bottom: 5px;">
+                        <span>Payment Progress</span>
+                        <span id="fee-percentage" style="color: var(--primary); font-weight: bold;">0%</span>
+                    </div>
+                    <div class="progress-container">
+                        <div class="progress-bar" id="fee-bar"></div>
+                    </div>
+                    <div class="fee-details" style="display: flex; justify-content: space-between;">
+                        <span style="color: var(--success);">PAID: <span id="val-paid">₹0</span></span>
+                        <span style="color: var(--danger);">DUE: <span id="val-due">₹0</span></span>
+                    </div>
+                </div>
+
+                <table id="invoice-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Description</th>
+                            <th style="text-align: right;">Amount</th>
+                            <th style="text-align: center;">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoice-list"></tbody>
+                </table>
+            </div>
+            
+            <div id="no-finance-data" class="no-data" style="display:none;">
+                Financial records not initialized for this student.
+            </div>
+        </div>
+
+        <div id="history" class="tab-pane">
+            <h2 class="section-title"><i class="fas fa-history"></i> Activity Log</h2>
+            <div class="timeline" id="timeline-container"></div>
+            <div id="no-timeline-data" class="no-data" style="display:none;">No activity history recorded.</div>
+        </div>
+
+    </main>
 </div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
 <script>
+    const API_BASE_URL = window.API_BASE_URL || '/api';
+    const token = localStorage.getItem('erp-token');
+    if (!token) window.location.href = '/login.html';
+
     const urlParams = new URLSearchParams(window.location.search);
     const studentId = urlParams.get('id');
-
-    function openTab(evt, tabName) {
-        let i, tabcontent, tabbuttons;
-        tabcontent = document.getElementsByClassName("tab-content");
-        for (i = 0; i < tabcontent.length; i++) { tabcontent[i].style.display = "none"; }
-        tabbuttons = document.getElementsByClassName("tab-button");
-        for (i = 0; i < tabbuttons.length; i++) { tabbuttons[i].classList.remove("active"); }
-        document.getElementById(tabName).style.display = "block";
-        evt.currentTarget.classList.add("active");
-    }
+    let mapInstance = null;
 
     document.addEventListener('DOMContentLoaded', async () => {
-        // ADDED CHECK: If no ID is provided, prevent the API call and show an error.
-        if (!studentId || studentId === 'undefined') {
-            document.body.innerHTML = '<h1>Error: No Student ID specified. Please ensure you clicked a link from the directory.</h1>';
+        if (!studentId) {
+            document.querySelector('.container').innerHTML = "<h1 style='color:red; text-align:center;'>Error: Missing Student ID</h1>";
             return;
         }
         
         try {
-            const res = await fetch(`/api/students/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) {
-                if(res.status === 404) throw new Error('Student entity not found.');
-                if(res.status === 403) throw new Error('Access denied.');
-                throw new Error('Could not fetch student data.');
-            }
-            const student = await res.json();
-            populateProfile(student);
-        } catch (err) {
-            document.querySelector('.container').innerHTML = `<div style="padding:40px; text-align:center; color: var(--hud-danger);"><h2>ERROR: ${err.message}</h2></div>`;
+            const studentRes = await fetch(`${API_BASE_URL}/students/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            
+            if (!studentRes.ok) throw new Error("Failed to load student");
+            const studentData = await studentRes.json();
+            
+            populateBasicInfo(studentData);
+            populateFinance(studentData);
+            populateAcademic(studentData);
+            populateTimeline(studentData);
+
+        } catch (error) {
+            console.error(error);
+            document.querySelector('.container').innerHTML = `<h2 style='color:red; text-align:center;'>Error Loading Profile: ${error.message}</h2>`;
         }
     });
 
-    function populateProfile(student) {
-        const formatDate = (dateString) => dateString ? new Date(dateString).toLocaleDateString('en-GB') : 'N/A';
-        const na = (text) => text || 'N/A';
-        const fullName = `${na(student.first_name)} ${student.last_name || ''}`.trim();
-        document.title = `Profile: ${fullName}`;
+    // 1. Basic Info Populator
+    function populateBasicInfo(data) {
+        const set = (id, val) => {
+            const el = document.getElementById(id);
+            if(el) el.textContent = val || 'N/A';
+        };
         
-        document.getElementById('full-name').textContent = fullName;
-        document.getElementById('class-name').textContent = na(student.class_name);
-        document.getElementById('roll-number').textContent = na(student.roll_number);
-        document.getElementById('admission-number').textContent = na(student.admission_number);
-        if (student.photo_path) { document.getElementById('student-photo').src = `/${student.photo_path.replace('public/', '')}`; }
+        document.title = `${data.first_name}'s Profile`;
+        set('p-name', `${data.first_name} ${data.last_name}`);
+        set('p-admission-id', data.admission_id || data.student_id);
+        
+        // Status Badge
+        const statusDiv = document.getElementById('p-status-container');
+        statusDiv.innerHTML = `<span style="padding: 5px 10px; border: 1px solid var(--success); color: var(--success); font-weight:bold; text-transform:uppercase;">${data.status || 'Active'}</span>`;
 
-        const statusBadge = document.getElementById('status-badge');
-        statusBadge.textContent = student.is_active ? 'ACTIVE' : 'ARCHIVED';
-        statusBadge.className = `badge ${student.is_active ? 'active' : 'archived'}`;
-        
-        // FIX: Using the reliable studentId variable (read from URL) for links
-        // to prevent 'undefined' ID being passed to the ID card and edit pages.
-        document.getElementById('quick-actions').innerHTML = `
-            <a href="/edit-student.html?id=${studentId}" class="action-btn">EDIT_ENTITY</a>
-            <a href="/id-card.html?id=${studentId}" class="action-btn">ID_CARD</a>
-            <button onclick="alert('Password reset functionality to be implemented.')" class="action-btn">RESET_PASSWORD</button>
-        `;
+        // --- FIXED IMAGE LOGIC ---
+        const photoEl = document.getElementById('p-photo');
+        const imagePath = data.profile_image_path || data.profile_image; 
+        const defaultAvatar = `https://ui-avatars.com/api/?name=${data.first_name}+${data.last_name}&background=0a0f18&color=00f3ff&bold=true`;
 
-        document.getElementById('personal-grid').innerHTML = `
-            <div class="detail-item"><strong>FIRST_NAME</strong> <span>${na(student.first_name)}</span></div>
-            <div class="detail-item"><strong>LAST_NAME</strong> <span>${na(student.last_name)}</span></div>
-            <div class="detail-item"><strong>DATE_OF_BIRTH</strong> <span>${formatDate(student.date_of_birth)}</span></div>
-            <div class="detail-item"><strong>GENDER</strong> <span>${na(student.gender)}</span></div>
-            <div class="detail-item"><strong>CONTACT</strong> <span>${na(student.contact_number)}</span></div>
-            <div class="detail-item"><strong>EMAIL</strong> <span>${na(student.email)}</span></div>
-            <div class="detail-item"><strong>NATIONALITY</strong> <span>${na(student.nationality)}</span></div>
-            <div class="detail-item"><strong>RELIGION</strong> <span>${na(student.religion)}</span></div>
-        `;
-        
-        document.getElementById('guardians-grid').innerHTML = `
-            <div class="detail-item"><strong>FATHER_NAME</strong> <span>${na(student.father_name)}</span></div>
-            <div class="detail-item"><strong>FATHER_OCCUPATION</strong> <span>${na(student.father_occupation)}</span></div>
-            <div class="detail-item"><strong>MOTHER_NAME</strong> <span>${na(student.mother_name)}</span></div>
-            <div class="detail-item"><strong>MOTHER_OCCUPATION</strong> <span>${na(student.mother_occupation)}</span></div>
-        `;
-
-        document.getElementById('address-grid').innerHTML = `
-            <div class="detail-item"><strong>PRESENT_ADDRESS</strong> <span>${na(student.present_address)}</span></div>
-            <div class="detail-item"><strong>PERMANENT_ADDRESS</strong> <span>${na(student.permanent_address)}</span></div>
-        `;
-        
-        const map = L.map('address-map').setView([20.5937, 78.9629], 5);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png').addTo(map);
-        if(student.present_address) L.marker([20.5937, 78.9629]).addTo(map).bindPopup(student.present_address);
-
-        document.getElementById('medical-content').innerHTML = `
-            <div class="medical-alert"><strong>ALLERGIES:</strong> ${na(student.allergies)}</div>
-            <div class="details-grid">
-                <div class="detail-item"><strong>BLOOD_GROUP</strong> <span>${na(student.blood_group)}</span></div>
-                <div class="detail-item"><strong>EMERGENCY_CONTACT</strong> <span>${na(student.emergency_contact)}</span></div>
-                <div class="detail-item"><strong>MEDICAL_NOTES</strong> <span>${na(student.medical_notes)}</span></div>
-            </div>
-        `;
-
-        document.getElementById('logistics-content').innerHTML = `
-            <div class="details-grid">
-                <div class="detail-item"><strong>TRANSPORT_REQUIRED</strong> <span>${student.transport_required ? 'YES' : 'NO'}</span></div>
-                <div class="detail-item"><strong>HOSTEL_REQUIRED</strong> <span>${student.hostel_required ? 'YES' : 'NO'}</span></div>
-            </div>
-        `;
-        
-        // RESTORED: Sibling Info
-        document.getElementById('siblings-section').innerHTML = `
-            <h4 style="color: var(--hud-primary); margin-top: 30px;">SIBLING_DATA</h4>
-            <div class="placeholder-hud" style="padding: 20px; font-size: 1em;">// NO SIBLING INFORMATION ON RECORD //</div>
-        `;
-        
-        const ctx = document.getElementById('performanceChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['Term 1', 'Mid-Term', 'Term 2', 'Finals'],
-                datasets: [{ label: 'Overall Score', data: [75, 78, 85, 82], borderColor: 'var(--hud-primary)', backgroundColor: 'rgba(0, 240, 255, 0.2)', tension: 0.3, pointBackgroundColor: '#fff', pointBorderColor: 'var(--hud-primary)' }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: { ticks: { color: 'var(--hud-text)' }, grid: { color: 'var(--hud-secondary)' } },
-                    x: { ticks: { color: 'var(--hud-text)' }, grid: { color: 'var(--hud-secondary)' } }
-                },
-                plugins: { legend: { labels: { color: 'var(--hud-text)' } } }
+        if (imagePath) {
+            if (imagePath.startsWith('data:image')) {
+                photoEl.src = imagePath; // Base64
+            } else if (imagePath.startsWith('http')) {
+                photoEl.src = imagePath; // Full URL
+            } else {
+                const cleanPath = imagePath.replace(/^\//, ''); 
+                photoEl.src = `${API_BASE_URL}/${cleanPath}`; // Relative path
             }
-        });
+        } else {
+            photoEl.src = defaultAvatar;
+        }
+        photoEl.onerror = () => { photoEl.src = defaultAvatar; };
+        // --------------------------
+
+        set('p-attendance-stat', data.attendance_percentage ? `${data.attendance_percentage}%` : 'N/A');
+        set('p-due-stat', data.total_fees_due ? `₹${data.total_fees_due}` : 'N/A');
+
+        set('d-fullname', `${data.first_name} ${data.last_name}`);
+        set('d-dob', data.dob ? new Date(data.dob).toLocaleDateString() : 'N/A');
+        set('d-gender', data.gender);
+        set('d-blood', data.blood_group);
+        set('d-phone', data.phone_number);
+        set('d-email', data.email);
+        set('d-father', data.father_name);
+        set('d-mother', data.mother_name);
+        set('d-emergency', data.emergency_contact_number || data.emergency_contact);
+        set('d-address', data.permanent_address || data.present_address);
+
+        // Map Setup
+        if (data.location_coords) {
+            const [lat, lng] = data.location_coords.split(',').map(c => parseFloat(c.trim()));
+            if (!isNaN(lat) && !isNaN(lng)) {
+                document.getElementById('map-container').style.display = 'block';
+                initMap(lat, lng);
+            }
+        }
     }
+
+    // 2. Finance
+    function populateFinance(data) {
+        const hasFinanceData = (data.total_course_fee !== undefined) || (data.payment_history && data.payment_history.length > 0);
+        if (!hasFinanceData) {
+            document.getElementById('finance-content').style.display = 'none';
+            document.getElementById('no-finance-data').style.display = 'block';
+            return;
+        }
+
+        const total = parseFloat(data.total_course_fee) || 0;
+        const due = parseFloat(data.total_fees_due) || 0;
+        const paid = total - due;
+        
+        if (total > 0) {
+            const percent = Math.round((paid / total) * 100);
+            document.getElementById('fee-bar').style.width = `${percent}%`;
+            document.getElementById('fee-percentage').textContent = `${percent}%`;
+            document.getElementById('val-paid').textContent = `₹${paid}`;
+            document.getElementById('val-due').textContent = `₹${due}`;
+        }
+
+        const tbody = document.getElementById('invoice-list');
+        tbody.innerHTML = '';
+        if (data.payment_history && Array.isArray(data.payment_history)) {
+            data.payment_history.forEach(pay => {
+                const row = `<tr>
+                    <td>${new Date(pay.payment_date).toLocaleDateString()}</td>
+                    <td>${pay.description || 'Fee Payment'}</td>
+                    <td style="text-align:right">₹${pay.amount}</td>
+                    <td style="text-align:center">${pay.status || 'Completed'}</td>
+                </tr>`;
+                tbody.innerHTML += row;
+            });
+        } else {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No transaction history.</td></tr>';
+        }
+    }
+
+    // 3. Academic
+    function populateAcademic(data) {
+        const hasExamData = data.exam_results && Array.isArray(data.exam_results) && data.exam_results.length > 0;
+        if (hasExamData) {
+            const labels = data.exam_results.map(e => e.exam_name);
+            const scores = data.exam_results.map(e => e.percentage || e.total_marks);
+            
+            new Chart(document.getElementById('examChart'), {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Performance (%)',
+                        data: scores,
+                        borderColor: '#00f3ff',
+                        tension: 0.3
+                    }]
+                },
+                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+            });
+        } else {
+            document.getElementById('charts-container').style.display = 'none';
+            document.getElementById('no-academic-data').style.display = 'block';
+        }
+
+        const attendanceGrid = document.getElementById('attendance-grid');
+        attendanceGrid.innerHTML = '';
+        if (data.attendance_logs && Array.isArray(data.attendance_logs) && data.attendance_logs.length > 0) {
+            data.attendance_logs.forEach(log => {
+                const box = document.createElement('div');
+                box.className = `heat-box ${log.status === 'Present' ? 'heat-present' : 'heat-absent'}`;
+                box.title = `${new Date(log.date).toDateString()}: ${log.status}`;
+                box.textContent = new Date(log.date).getDate();
+                attendanceGrid.appendChild(box);
+            });
+        } else {
+            document.getElementById('no-attendance-data').style.display = 'block';
+        }
+    }
+
+    // 4. Timeline
+    function populateTimeline(data) {
+        const container = document.getElementById('timeline-container');
+        container.innerHTML = '';
+        if (data.activity_logs && Array.isArray(data.activity_logs) && data.activity_logs.length > 0) {
+            data.activity_logs.forEach(log => {
+                const item = `<div class="timeline-item">
+                    <div class="t-date">${new Date(log.timestamp).toLocaleString()}</div>
+                    <div class="t-content">${log.message}</div>
+                </div>`;
+                container.innerHTML += item;
+            });
+        } else {
+            document.getElementById('no-timeline-data').style.display = 'block';
+        }
+    }
+
+    // --- Map Initialization (Fixed) ---
+    function initMap(lat, lng) {
+        if (typeof L === 'undefined') {
+            console.error("Leaflet library not loaded.");
+            return;
+        }
+        if (mapInstance) mapInstance.remove();
+        
+        mapInstance = L.map('map-container').setView([lat, lng], 14);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(mapInstance);
+        L.marker([lat, lng]).addTo(mapInstance);
+    }
+
+    window.switchTab = (tabId) => {
+        document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        event.currentTarget.classList.add('active');
+        
+        if(tabId === 'overview' && mapInstance) {
+            setTimeout(() => mapInstance.invalidateSize(), 200);
+        }
+    };
+
+    window.generateIdCard = () => {
+        window.open(`${API_BASE_URL}/reports/generate-id?studentId=${studentId}`, '_blank');
+    };
 </script>
-<script src="js/global-config.js"></script>
+
 </body>
 </html>

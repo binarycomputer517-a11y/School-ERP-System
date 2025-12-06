@@ -1,25 +1,23 @@
 /**
  * students-list.js
- * Manages fetching, filtering, sorting, and rendering the student records table
- * including enhanced features for bulk actions (ID Card Generation) and quick view.
- *
- * NOTE: Assumes backend GET /api/students returns joined fields like course_name, batch_name, and total_fees_due.
+ * Comprehensive logic for managing student records.
+ * Features: Fetch, Sort, Filter, Bulk Actions, and ID Card Routing.
  */
 
 (function() {
     // -----------------------------------------------------------
-    // --- 1. Global Configuration and State ---
+    // --- 1. CONFIGURATION & STATE ---
     // -----------------------------------------------------------
     const API_BASE_URL = window.API_BASE_URL || '/api';
     const STUDENTS_API_ENDPOINT = '/students';
     const ACADEMICS_API_ENDPOINT = '/academicswithfees';
     
     let allStudentsData = [];
-    let selectedStudentIds = new Set(); // Tracks IDs for bulk actions
+    let selectedStudentIds = new Set(); 
     let currentSortColumn = 'admission_id';
     let currentSortDirection = 'asc';
     
-    // --- DOM Elements (Fetched globally on initialization) ---
+    // --- DOM Elements ---
     const studentTableBody = document.getElementById('students-table-body');
     const dataStatus = document.getElementById('data-status');
     const searchInput = document.getElementById('search-input');
@@ -28,107 +26,117 @@
     const statusFilter = document.getElementById('status-filter');
     const loadingSpinner = document.getElementById('loading-spinner');
     const bulkIdBtn = document.getElementById('generate-bulk-id-btn');
+    const selectAllCheckbox = document.getElementById('select-all-checkbox');
 
 
     // -----------------------------------------------------------
-    // --- 2. CORE API HANDLER (Reusable) ---
+    // --- 2. API HANDLER (Centralized) ---
     // -----------------------------------------------------------
 
     async function handleApi(endpoint, options = {}) {
         const AUTH_TOKEN = localStorage.getItem('erp-token');
+        
         const headers = { 
             'Content-Type': 'application/json', 
             'Authorization': `Bearer ${AUTH_TOKEN}`
         };
+        
         options.method = options.method || 'GET';
         
-        const url = `${API_BASE_URL}${endpoint}`;
-        const response = await fetch(url, { ...options, headers });
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, { ...options, headers });
 
-        if (response.status === 401 || response.status === 403) {
-            console.error('API Unauthorized or Forbidden:', url);
-            alert('Session expired or unauthorized. Please log in again.');
-            throw new Error('Unauthorized access.');
+            if (response.status === 401 || response.status === 403) {
+                console.warn('Session expired. Redirecting...');
+                window.location.href = '/login.html';
+                throw new Error('Unauthorized access.');
+            }
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.message || `Server Error: ${response.status}`);
+            }
+            
+            return response;
+        } catch (error) {
+            console.error(`API Request Failed:`, error);
+            throw error;
         }
-        
-        if (!response.ok) {
-            let errorData = await response.json().catch(() => null);
-            throw new Error(`Server error: ${response.status}. ${errorData?.message || 'Unknown error'}`);
-        }
-        
-        return response; 
     }
 
 
     // -----------------------------------------------------------
-    // --- 3. DATA FETCHING AND INITIALIZATION ---
+    // --- 3. INITIALIZATION ---
     // -----------------------------------------------------------
 
-    document.addEventListener('DOMContentLoaded', initializeStudentList);
+    document.addEventListener('DOMContentLoaded', init);
 
-    function initializeStudentList() {
+    function init() {
         if (!studentTableBody) return; 
 
-        // Attach event listeners for filtering and searching
+        // Attach Listeners
         searchInput.addEventListener('keyup', renderTable);
-        courseFilter.addEventListener('change', handleCourseFilterChange);
+        courseFilter.addEventListener('change', handleCourseChange);
         batchFilter.addEventListener('change', renderTable);
         statusFilter.addEventListener('change', renderTable);
+
+        if (bulkIdBtn) {
+            bulkIdBtn.addEventListener('click', handleBulkIdGeneration);
+            bulkIdBtn.disabled = true; 
+        }
+
+        if (selectAllCheckbox) {
+            selectAllCheckbox.addEventListener('change', handleSelectAll);
+        }
         
-        // Attach bulk actions and selection handlers
-        if (bulkIdBtn) bulkIdBtn.addEventListener('click', handleBulkIdGeneration);
-        
-        // Attach sorting handlers to table headers
-        document.querySelectorAll('#students-table th[data-sort]').forEach(header => {
+        // Sorting Headers
+        document.querySelectorAll('th[data-sort]').forEach(header => {
             header.addEventListener('click', () => handleSort(header.dataset.sort));
+            header.style.cursor = 'pointer'; 
         });
-        
-        // Load all data
-        fetchStudentList();
+
+        // Initial Data Load
+        loadStudents();
     }
 
-    async function fetchStudentList() {
-        if (dataStatus) dataStatus.textContent = 'Loading student records...';
+    async function loadStudents() {
+        if (dataStatus) dataStatus.textContent = 'Loading records...';
         if (loadingSpinner) loadingSpinner.style.display = 'block';
 
         try {
-            const studentsResponse = await handleApi(STUDENTS_API_ENDPOINT);
-            allStudentsData = await studentsResponse.json();
-            
-            await populateFilterDropdowns();
+            // Parallel Fetch
+            const [studentsRes, coursesRes] = await Promise.all([
+                handleApi(STUDENTS_API_ENDPOINT),
+                handleApi(`${ACADEMICS_API_ENDPOINT}/courses`)
+            ]);
 
+            allStudentsData = await studentsRes.json();
+            const courses = await coursesRes.json();
+            
+            populateCourseFilter(courses);
             renderTable();
 
         } catch (error) {
-            console.error("Failed to load student data:", error);
-            if (dataStatus) dataStatus.textContent = `❌ Error loading data: ${error.message}`;
-            studentTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">Failed to load records.</td></tr>`;
+            if (dataStatus) {
+                dataStatus.innerHTML = `<span class="text-danger"><i class="fas fa-exclamation-triangle"></i> Error: ${error.message}</span>`;
+            }
+            studentTableBody.innerHTML = `<tr><td colspan="8" class="text-center text-danger py-4">Failed to load data. Please refresh.</td></tr>`;
         } finally {
             if (loadingSpinner) loadingSpinner.style.display = 'none';
         }
     }
     
-    // --- Filter Dropdown Population ---
-    async function populateFilterDropdowns() {
-        try {
-            const courseResponse = await handleApi(`${ACADEMICS_API_ENDPOINT}/courses`);
-            const courses = await courseResponse.json();
-            
-            courseFilter.innerHTML = '<option value="">Filter by Course (All)</option>';
-            courses.forEach(c => {
-                courseFilter.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`;
-            });
-            courseFilter.disabled = false;
-
-        } catch (error) {
-            console.error('Failed to populate courses for filters:', error);
-            courseFilter.innerHTML = '<option value="">Error loading courses</option>';
-        }
+    function populateCourseFilter(courses) {
+        courseFilter.innerHTML = '<option value="">Filter by Course (All)</option>';
+        courses.forEach(c => {
+            courseFilter.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`;
+        });
+        courseFilter.disabled = false;
     }
 
-    async function handleCourseFilterChange(event) {
+    async function handleCourseChange(event) {
         const courseId = event.target.value;
-        batchFilter.innerHTML = '<option value="">Loading batches...</option>';
+        batchFilter.innerHTML = '<option value="">Loading...</option>';
         batchFilter.disabled = true;
 
         if (!courseId) {
@@ -138,11 +146,11 @@
         }
 
         try {
-            const response = await handleApi(`${ACADEMICS_API_ENDPOINT}/batches/${courseId}`);
-            const batches = await response.json();
+            const res = await handleApi(`${ACADEMICS_API_ENDPOINT}/batches/${courseId}`);
+            const batches = await res.json();
 
             batchFilter.innerHTML = '<option value="">Filter by Batch (All)</option>';
-            if (Array.isArray(batches) && batches.length > 0) {
+            if (batches.length > 0) {
                 batches.forEach(b => {
                     batchFilter.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`;
                 });
@@ -151,7 +159,7 @@
                 batchFilter.innerHTML = '<option value="">No batches found</option>';
             }
         } catch (error) {
-            console.error('Failed to load batches for filter:', error);
+            console.error(error);
             batchFilter.innerHTML = '<option value="">Error loading batches</option>';
         }
         renderTable();
@@ -159,46 +167,160 @@
 
 
     // -----------------------------------------------------------
-    // --- 4. FILTERING, SORTING, AND RENDERING ---
+    // --- 4. RENDER & LOGIC ---
     // -----------------------------------------------------------
 
-    function applyFiltersAndSearch(data) {
-        const searchTerm = searchInput.value.toLowerCase();
-        const selectedCourse = courseFilter.value;
-        const selectedBatch = batchFilter.value;
-        const selectedStatus = statusFilter.value;
+    function getFilteredAndSortedData() {
+        const term = searchInput.value.toLowerCase();
+        const course = courseFilter.value;
+        const batch = batchFilter.value;
+        const status = statusFilter.value;
 
-        return data.filter(student => {
-            // Search filter
-            const matchesSearch = !searchTerm || 
-                                  student.first_name.toLowerCase().includes(searchTerm) || 
-                                  student.last_name.toLowerCase().includes(searchTerm) ||
-                                  student.admission_id.toLowerCase().includes(searchTerm) ||
-                                  student.email.toLowerCase().includes(searchTerm);
+        // 1. Filter
+        let data = allStudentsData.filter(s => {
+            const name = (s.first_name + ' ' + s.last_name).toLowerCase();
+            const id = (s.admission_id || '').toString().toLowerCase();
+            const phone = (s.phone_number || '').toString();
+            const email = (s.email || '').toLowerCase();
 
-            // Course filter
-            const matchesCourse = !selectedCourse || student.course_id === selectedCourse;
-
-            // Batch filter
-            const matchesBatch = !selectedBatch || student.batch_id === selectedBatch;
-
-            // Status filter
-            const matchesStatus = !selectedStatus || student.status === selectedStatus;
+            const matchesSearch = !term || name.includes(term) || id.includes(term) || phone.includes(term) || email.includes(term);
+            const matchesCourse = !course || s.course_id == course;
+            const matchesBatch = !batch || s.batch_id == batch;
+            const matchesStatus = !status || s.status === status;
 
             return matchesSearch && matchesCourse && matchesBatch && matchesStatus;
         });
-    }
 
-    function sortData(data) {
+        // 2. Sort
         return data.sort((a, b) => {
-            const aVal = a[currentSortColumn] || '';
-            const bVal = b[currentSortColumn] || '';
+            const aVal = (a[currentSortColumn] || '').toString().toLowerCase();
+            const bVal = (b[currentSortColumn] || '').toString().toLowerCase();
 
             if (aVal < bVal) return currentSortDirection === 'asc' ? -1 : 1;
             if (aVal > bVal) return currentSortDirection === 'asc' ? 1 : -1;
             return 0;
         });
     }
+
+    function renderTable() {
+        const data = getFilteredAndSortedData();
+        studentTableBody.innerHTML = '';
+        
+        if (dataStatus) {
+            dataStatus.innerHTML = `Showing <strong>${data.length}</strong> record(s)`;
+            dataStatus.style.color = '#333';
+        }
+
+        if(selectAllCheckbox) selectAllCheckbox.checked = false;
+
+        if (data.length === 0) {
+            studentTableBody.innerHTML = `<tr><td colspan="8" class="text-center py-4 text-muted">No students found.</td></tr>`;
+            return;
+        }
+
+        data.forEach(student => {
+            const isChecked = selectedStudentIds.has(student.student_id.toString()) ? 'checked' : '';
+            
+            // Payment Logic
+            let paymentBadge = `<span class="badge bg-success"><i class="fas fa-check-circle"></i> Paid</span>`;
+            if (student.total_fees_due > 0) {
+                paymentBadge = `<span class="badge bg-danger">Due: ₹${parseFloat(student.total_fees_due).toFixed(2)}</span>`;
+            }
+
+            // Avatar Logic
+            let avatar = `<div class="avatar-circle bg-light text-secondary d-flex align-items-center justify-content-center fw-bold border" style="width:40px;height:40px;border-radius:50%;font-size:16px;">${student.first_name.charAt(0)}</div>`;
+            if (student.profile_image) {
+                let imgUrl = student.profile_image.startsWith('http') ? student.profile_image : `${API_BASE_URL}/${student.profile_image}`;
+                avatar = `<img src="${imgUrl}" class="rounded-circle border" style="width:40px;height:40px;object-fit:cover;">`;
+            }
+
+            const row = `
+                <tr>
+                    <td class="align-middle">
+                        <div class="form-check">
+                            <input class="form-check-input student-chk" type="checkbox" value="${student.student_id}" ${isChecked}>
+                        </div>
+                    </td>
+                    <td class="align-middle fw-bold text-primary">${student.admission_id || '-'}</td>
+                    <td class="align-middle">
+                        <div class="d-flex align-items-center gap-3">
+                            ${avatar}
+                            <div>
+                                <div class="fw-bold text-dark">${student.first_name} ${student.last_name}</div>
+                                <div class="small text-muted"><i class="fas fa-envelope me-1"></i>${student.email || ''}</div>
+                            </div>
+                        </div>
+                    </td>
+                    <td class="align-middle">
+                        <span class="badge bg-light text-dark border mb-1">${student.course_name || '-'}</span>
+                        <div class="small text-muted"><i class="fas fa-layer-group me-1"></i>${student.batch_name || '-'}</div>
+                    </td>
+                    <td class="align-middle">${student.phone_number || '-'}</td>
+                    <td class="align-middle">${paymentBadge}</td>
+                    <td class="align-middle">
+                        <span class="badge bg-${getStatusColor(student.status)} text-uppercase">${student.status || 'Active'}</span>
+                    </td>
+                    <td class="align-middle text-end">
+                        <div class="dropdown">
+                            <button class="btn btn-sm btn-light border" data-bs-toggle="dropdown"><i class="fas fa-ellipsis-v"></i></button>
+                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                                <li><a class="dropdown-item py-2" href="student-profile.html?id=${student.student_id}"><i class="fas fa-user-circle text-info me-2"></i> View Profile</a></li>
+                                <li><a class="dropdown-item py-2" href="edit-student.html?id=${student.student_id}"><i class="fas fa-pen text-warning me-2"></i> Edit Details</a></li>
+                                <li><a class="dropdown-item py-2" href="id-card.html?id=${student.student_id}" target="_blank"><i class="fas fa-id-badge text-primary me-2"></i> Print ID Card</a></li>
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item py-2 text-danger del-btn" href="#" data-id="${student.student_id}"><i class="fas fa-trash-alt me-2"></i> Delete Record</a></li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            studentTableBody.innerHTML += row;
+        });
+        
+        attachRowListeners();
+    }
+
+    function getStatusColor(status) {
+        if (!status) return 'secondary';
+        const s = status.toLowerCase();
+        if (s === 'active' || s === 'enrolled') return 'success';
+        if (s === 'inactive' || s === 'left') return 'secondary';
+        if (s === 'suspended') return 'danger';
+        return 'warning';
+    }
+
+    function attachRowListeners() {
+        // Checkboxes
+        document.querySelectorAll('.student-chk').forEach(el => {
+            el.addEventListener('change', (e) => {
+                const id = e.target.value;
+                e.target.checked ? selectedStudentIds.add(id) : selectedStudentIds.delete(id);
+                updateBulkButton();
+            });
+        });
+
+        // Delete Buttons
+        document.querySelectorAll('.del-btn').forEach(el => {
+            el.addEventListener('click', async (e) => {
+                e.preventDefault();
+                const id = e.target.closest('a').dataset.id;
+                if(confirm("Are you sure? This will deactivate the student.")) {
+                    try {
+                        await handleApi(`${STUDENTS_API_ENDPOINT}/${id}`, { method: 'DELETE' });
+                        allStudentsData = allStudentsData.filter(s => s.student_id != id);
+                        selectedStudentIds.delete(id);
+                        renderTable();
+                        updateBulkButton();
+                        // Optional: Show toast
+                    } catch(err) { alert(err.message); }
+                }
+            });
+        });
+    }
+
+    // -----------------------------------------------------------
+    // --- 5. HELPERS ---
+    // -----------------------------------------------------------
 
     function handleSort(column) {
         if (currentSortColumn === column) {
@@ -209,159 +331,42 @@
         }
         renderTable();
     }
-    
-    function handleSelectionChange(event) {
-        const studentId = event.target.value;
-        if (event.target.checked) {
-            selectedStudentIds.add(studentId);
-        } else {
-            selectedStudentIds.delete(studentId);
-        }
-        // Optionally update the bulk button text here
+
+    function handleSelectAll(e) {
+        const isChecked = e.target.checked;
+        const visibleChecks = document.querySelectorAll('.student-chk');
+        visibleChecks.forEach(chk => {
+            chk.checked = isChecked;
+            isChecked ? selectedStudentIds.add(chk.value) : selectedStudentIds.delete(chk.value);
+        });
+        updateBulkButton();
+    }
+
+    function updateBulkButton() {
+        const count = selectedStudentIds.size;
         if (bulkIdBtn) {
-            bulkIdBtn.textContent = `💳 Generate ID Cards (${selectedStudentIds.size})`;
-            bulkIdBtn.disabled = selectedStudentIds.size === 0;
+            bulkIdBtn.innerHTML = `<i class="fas fa-id-card me-2"></i> Generate ID Cards (${count})`;
+            bulkIdBtn.disabled = count === 0;
+            bulkIdBtn.className = count > 0 ? 'btn btn-primary shadow-sm' : 'btn btn-secondary';
         }
     }
 
-    function renderTable() {
-        let filteredData = applyFiltersAndSearch(allStudentsData);
-        let sortedData = sortData(filteredData);
-
-        if (studentTableBody) studentTableBody.innerHTML = '';
-        
-        if (dataStatus) {
-            dataStatus.textContent = `Showing ${sortedData.length} of ${allStudentsData.length} records.`;
-            dataStatus.style.color = sortedData.length > 0 ? '#155724' : '#721c24';
-        }
-
-        if (sortedData.length === 0) {
-            if (studentTableBody) {
-                studentTableBody.innerHTML = `<tr><td colspan="7" style="text-align: center;">No students match the current criteria.</td></tr>`;
-            }
-            if (bulkIdBtn) bulkIdBtn.disabled = true;
-            return;
-        }
-
-        sortedData.forEach(student => {
-            const statusClass = student.status ? `status-${student.status.toLowerCase()}` : 'status-pending';
-            const isSelected = selectedStudentIds.has(student.student_id);
-
-            // Format Fees: Use 'total_fees_due'
-            const feesDue = student.total_fees_due 
-                            ? `₹${parseFloat(student.total_fees_due).toFixed(2)}` 
-                            : 'N/A';
-                            
-            const loginContactCell = `
-                ${student.email} / <span style="font-size: 0.85em;">${student.phone_number || 'N/A'}</span>
-            `;
-            
-            // Construct the Course/Fees cell
-            const courseFeesCell = `
-                <div class="course-info">
-                    <span class="course-name">${student.course_name || 'N/A'} - ${student.batch_name || 'N/A'}</span>
-                    <span class="fees-label">Fees: ${feesDue}</span> 
-                </div>
-            `;
-
-            const row = `
-                <tr>
-                    <td>
-                        <input type="checkbox" value="${student.student_id}" ${isSelected ? 'checked' : ''} class="student-select-checkbox">
-                    </td>
-                    <td>${student.admission_id}</td>
-                    <td>${student.first_name} ${student.last_name}</td>
-                    <td>${courseFeesCell}</td> 
-                    <td>${loginContactCell}</td>
-                    <td><span class="status-badge ${statusClass}">${student.status || 'Pending'}</span></td>
-                    <td class="action-cell">
-                        <span class="action-link view-btn" onclick="handleQuickView('${student.student_id}', '${student.first_name}')">View</span>
-                        <a href="/edit-student.html?id=${student.student_id}" class="action-link">Edit</a>
-                        <span class="action-link delete-link" data-id="${student.student_id}" data-name="${student.first_name}">Delete</span>
-                        <a href="#" class="action-link id-btn" onclick="handleGenerateId('${student.student_id}')">ID Card</a>
-                    </td>
-                </tr>
-            `;
-            if (studentTableBody) studentTableBody.innerHTML += row;
-        });
-        
-        // Attach post-render handlers
-        document.querySelectorAll('.delete-link').forEach(link => {
-            link.addEventListener('click', handleDeleteClick);
-        });
-        document.querySelectorAll('.student-select-checkbox').forEach(checkbox => {
-            checkbox.addEventListener('change', handleSelectionChange);
-        });
-        
-        // Update the bulk button state after rendering all rows
-        if (bulkIdBtn) {
-            bulkIdBtn.textContent = `💳 Generate ID Cards (${selectedStudentIds.size})`;
-            bulkIdBtn.disabled = selectedStudentIds.size === 0;
-        }
-    }
-
-
-    // -----------------------------------------------------------
-    // --- 5. ACTION HANDLERS (Delete, Quick View, ID Card) ---
-    // -----------------------------------------------------------
-
-    // Global function for Quick View (accessible via inline HTML)
-    window.handleQuickView = (studentId, studentName) => {
-        // Conceptual Quick View - would open a modal fetching detailed data
-        alert(`Quick View Requested for ${studentName} (ID: ${studentId}).\nModal implementation required to fetch full profile details.`);
-        // A real implementation would launch a modal here.
-    };
-
-    // Global function for Individual ID Card Generation (accessible via inline HTML)
-    window.handleGenerateId = (studentId) => {
-        // Conceptual ID Generation - would typically open a new tab with a report/PDF API link
-        const apiPath = `${API_BASE_URL}/reports/generate-id?studentId=${studentId}`;
-        alert(`Generating ID Card for ${studentId}. Opening new tab with path: ${apiPath}`);
-        // window.open(apiPath, '_blank');
-    };
-
+    // --- SMART BULK GENERATION LOGIC ---
     function handleBulkIdGeneration() {
-        if (selectedStudentIds.size === 0) {
-            alert("Please select at least one student to generate ID cards.");
-            return;
-        }
+        if (selectedStudentIds.size === 0) return;
         
         const idsArray = Array.from(selectedStudentIds);
-        const apiPath = `${API_BASE_URL}/reports/generate-bulk-id?studentIds=${idsArray.join(',')}`;
         
-        if (confirm(`Generate ID Cards for ${idsArray.length} students?`)) {
-            alert(`Initiating Bulk ID Generation. Opening new tab with path: ${apiPath}`);
-            // window.open(apiPath, '_blank');
-            selectedStudentIds.clear(); // Clear selection after initiating bulk action
-            renderTable();
+        if (confirm(`Generate ID Cards for ${idsArray.length} selected student(s)?`)) {
+            if (idsArray.length === 1) {
+                // Single Student -> Single Card View
+                window.open(`id-card.html?id=${idsArray[0]}`, '_blank');
+            } else {
+                // Multiple Students -> Bulk Sheet View
+                const url = `bulk-id-card.html?ids=${idsArray.join(',')}`;
+                window.open(url, '_blank');
+            }
         }
     }
-
-
-    async function handleDeleteClick(event) {
-        const studentId = event.target.dataset.id;
-        const studentName = event.target.dataset.name;
-
-        if (!confirm(`Are you sure you want to deactivate student ${studentName} (ID: ${studentId})? This action is generally a soft delete.`)) {
-            return;
-        }
-        
-        try {
-            // API: DELETE /api/students/:id
-            await handleApi(`${STUDENTS_API_ENDPOINT}/${studentId}`, { method: 'DELETE' });
-            
-            alert(`${studentName}'s record has been successfully deactivated.`);
-            
-            // Remove the student from local data and re-render the table
-            allStudentsData = allStudentsData.filter(s => s.student_id !== studentId);
-            selectedStudentIds.delete(studentId); // Remove from selection set
-            renderTable();
-
-        } catch (error) {
-            console.error('Deletion failed:', error);
-            alert(`Failed to delete student ${studentName}. Error: ${error.message}`);
-        }
-    }
-
 
 })();

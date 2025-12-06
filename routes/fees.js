@@ -49,14 +49,17 @@ const generateInvoiceNumber = () => {
 // SECTION 2: CORE TRANSACTIONS (INVOICING, COLLECTION, REFUND)
 // =========================================================
 
+// =========================================================
+// SECTION 2: CORE TRANSACTIONS (INVOICING, COLLECTION, REFUND)
+// =========================================================
+
 /**
  * 2.1 FULL COURSE INVOICE GENERATION (One-Time based on Structure)
- * This generates a single invoice comprising Tuition + Admission + Exam + Registration fees.
+ * FIX: Ensures monthly fees are multiplied by duration before invoicing.
  */
 router.post('/generate-structure-invoice', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
     const adminId = req.user.id;
-    const issueDate = moment().format('YYYY-MM-DD'); // Today's date
-    // Due date can be set to end of session or custom. Here set to 30 days.
+    const issueDate = moment().format('YYYY-MM-DD'); 
     const dueDate = moment().add(30, 'days').format('YYYY-MM-DD'); 
 
     const client = await pool.connect();
@@ -64,18 +67,19 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
         await client.query('BEGIN');
         
         // 1. Fetch Students linked with Fee Structure
-        // We fetch ALL fee components
         const studentsRes = await client.query(`
             SELECT 
                 s.student_id, 
                 u.username, 
                 fs.id AS fee_structure_id,
                 fs.structure_name,
-                COALESCE(fs.tuition_fee, 0) AS tuition,
+                COALESCE(fs.tuition_fee, 0) AS tuition_monthly,
                 COALESCE(fs.admission_fee, 0) AS admission,
                 COALESCE(fs.registration_fee, 0) AS registration,
-                COALESCE(fs.exam_fee, 0) AS exam,
-                COALESCE(fs.transport_fee, 0) AS transport_struct -- If transport is part of structure
+                COALESCE(fs.examination_fee, 0) AS exam,
+                COALESCE(fs.course_duration_months, 1) AS duration, 
+                COALESCE(fs.transport_fee, 0) AS transport_struct_monthly,
+                COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly
             FROM ${DB.STUDENTS} s
             JOIN ${DB.USERS} u ON s.user_id = u.id
             JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
@@ -87,9 +91,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
 
         for (const student of studentsRes.rows) {
             
-            // 2. DUPLICATE CHECK: 
-            // Check if an invoice for this specific Fee Structure ID already exists for this student.
-            // This prevents generating the full course fee twice.
+            // 2. DUPLICATE CHECK
             const checkDuplicate = await client.query(`
                 SELECT id FROM ${DB.INVOICES} 
                 WHERE student_id = $1::uuid AND fee_structure_id = $2::uuid
@@ -100,11 +102,11 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                 continue; 
             }
 
-            // 3. Calculate Grand Total & Prepare Items
+            // 3. Calculate Grand Total & Prepare Items (Including Monthly x Duration)
             let totalAmount = 0;
             const items = [];
+            const duration = student.duration;
 
-            // Helper to add item
             const addItem = (desc, amount) => {
                 const amt = parseFloat(amount);
                 if (amt > 0) {
@@ -112,22 +114,30 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                     totalAmount += amt;
                 }
             };
-
-            addItem('Tuition Fee (Total)', student.tuition);
+            
+            // One-time fees
             addItem('Admission Fee', student.admission);
             addItem('Registration Fee', student.registration);
             addItem('Examination Fee', student.exam);
-            
-            // Note: Transport is usually monthly, but if it's fixed package, add it here:
-            // addItem('Transport Fee (Fixed)', student.transport_struct);
 
-            if (totalAmount === 0) continue; // Skip if fee is 0
+            // ✅ FIX: Calculate Monthly Fees * Duration
+            if (student.tuition_monthly > 0) {
+                addItem(`Tuition Fee (${duration} Months)`, student.tuition_monthly * duration);
+            }
+            if (student.transport_struct_monthly > 0) {
+                addItem(`Transport Fee (${duration} Months)`, student.transport_struct_monthly * duration);
+            }
+            if (student.hostel_struct_monthly > 0) {
+                addItem(`Hostel Fee (${duration} Months)`, student.hostel_struct_monthly * duration);
+            }
 
-            // 4. Insert Invoice Header (With fee_structure_id)
+            if (totalAmount === 0) continue; 
+
+            // 4. Insert Invoice Header
             const invRes = await client.query(`
                 INSERT INTO ${DB.INVOICES} 
                 (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
-                VALUES ($1::uuid, $2, $3, $4, $5, 'Pending', $6::uuid, $7::uuid) 
+                VALUES ($1::uuid, $2, $3::date, $4::date, $5, 'Pending', $6::uuid, $7::uuid) 
                 RETURNING id;
             `, [
                 student.student_id, 
@@ -136,14 +146,15 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                 dueDate, 
                 totalAmount, 
                 adminId,
-                student.fee_structure_id // Important for duplicate check
+                student.fee_structure_id 
             ]);
             
             const invoiceId = invRes.rows[0].id;
             
             // 5. Insert Line Items
             if (items.length > 0) {
-                const itemsValues = items.map(item => `('${invoiceId}', '${item.description}', ${item.amount})`).join(',');
+                // Safely escape single quotes for SQL insertion
+                const itemsValues = items.map(item => `('${invoiceId}', '${item.description.replace(/'/g, "''")}', ${item.amount})`).join(',');
                 await client.query(`INSERT INTO ${DB.ITEMS} (invoice_id, description, amount) VALUES ${itemsValues};`);
             }
             
@@ -154,12 +165,13 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
         res.status(201).json({ message: `Structure Generation Complete. Generated: ${generatedCount}, Skipped (Already Assigned): ${skippedCount}` });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error("Gen Error:", error);
+        console.error("Invoice Generation Error:", error);
         res.status(500).json({ message: 'Failed to generate structure invoices.' });
     } finally { client.release(); }
 });
-/**
- * 2.2 FEE COLLECTION
+// ... (rest of the file remains the same) ...
+
+ /* 2.2 FEE COLLECTION
  */
 router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff', 'super admin']), async (req, res) => {
     const { student_id, amount_paid, payment_mode, notes } = req.body;
