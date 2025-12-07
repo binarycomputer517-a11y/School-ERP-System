@@ -89,7 +89,8 @@ const disciplineRouter = require('./routes/discipline');
 const complianceRouter = require('./routes/compliance');
 const reportsRouter = require('./routes/reports');
 const feedbackRouter = require('./routes/feedback');
-
+const placementsRouter = require('./routes/placements');
+const healthRouter = require('./routes/health');
 // --- App Initialization ---
 const app = express();
 const server = http.createServer(app);
@@ -144,7 +145,7 @@ app.use('/api/dashboard', dashboardRouter);
 app.use('/api/users', usersRouter); 
 app.use('/api/vms', vmsRouter); 
 app.use('/api/public/verify', verifyRouter); 
-
+app.use('/api/health-records', healthRouter);
 // --- B. PROTECTED ROUTES (JWT Token Required) ---
 // All routes mounted below require a valid Bearer Token
 app.use('/api', authenticateToken);
@@ -174,7 +175,7 @@ app.use('/api/timetable', timetableRouter);
 app.use('/api/attendance', attendanceRouter);
 app.use('/api/leave', leaveRouter);
 app.use('/api/ptm', ptmRouter);
-
+app.use('/api/placements', placementsRouter);
 // Exam Modules
 app.use('/api/exams', examsRouter);
 app.use('/api/online-exam', onlineExamRouter);

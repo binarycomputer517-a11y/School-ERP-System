@@ -8,7 +8,11 @@
 <body>
 <script>
     const token = localStorage.getItem('erp-token');
-    if (!token || localStorage.getItem('user-role') !== 'Admin') {
+    // Ensure Super Admin, Admin, or Placement Officer can access this.
+    const userRole = localStorage.getItem('user-role');
+    const allowedRoles = ['Admin', 'Super Admin', 'Placement Officer']; 
+    
+    if (!token || !allowedRoles.includes(userRole)) {
         window.location.href = '/login';
     }
 </script>
@@ -48,22 +52,33 @@
     async function loadInitialData() {
         try {
             const studentSelect = document.getElementById('student-select');
-            const students = await fetch('/api/students', { headers: authHeaders }).then(res => res.json());
-            studentSelect.innerHTML = '<option value="">-- Select Student --</option>' + students.map(s => `<option value="${s.id}">${s.student_name}</option>`).join('');
+            
+            // 🛑 FIX 1: Use the dedicated student lookup API
+            const students = await fetch('/api/students/lookup/all', { headers: authHeaders }).then(res => res.json());
+            
+            studentSelect.innerHTML = '<option value="">-- Select Student --</option>' + 
+                // 🛑 FIX 2: Use s.id for value and s.display_name for text (resolves 'undefined')
+                students.map(s => 
+                    `<option value="${s.id}">${s.display_name} (${s.roll_number || 'Enrollment'})</option>`
+                ).join('');
             
             const jobSelect = document.getElementById('job-select');
             const jobs = await fetch('/api/placements/jobs', { headers: authHeaders }).then(res => res.json());
-            jobSelect.innerHTML = '<option value="">-- Select Job --</option>' + jobs.map(j => `<option value="${j.id}">${j.job_title} at ${j.company_name}</option>`).join('');
+            
+            jobSelect.innerHTML = '<option value="">-- Select Job --</option>' + 
+                jobs.map(j => `<option value="${j.id}">${j.job_title} at ${j.company_name}</option>`).join('');
 
             loadPlacements();
         } catch (err) {
             console.error("Error loading initial data:", err);
-            alert("Could not load necessary data.");
+            // Alert user only if the error is due to a server failure (not just empty list)
+            if (err.message && err.message.includes("Failed")) {
+                alert("Could not load necessary data. Check server logs.");
+            }
         }
     }
 
     function loadPlacements() {
-        // This will now work because of the new backend route
         fetch('/api/placements/records', { headers: authHeaders })
             .then(res => res.json())
             .then(placements => {
@@ -83,6 +98,10 @@
                         </tr>
                     `;
                 });
+            })
+            .catch(err => {
+                 console.error("Error loading placement records:", err);
+                 document.getElementById('placement-list-body').innerHTML = '<tr><td colspan="4" style="color: red;">Error loading records.</td></tr>';
             });
     }
 
@@ -101,7 +120,8 @@
                 this.reset();
                 loadPlacements(); // Refresh the list
             } else {
-                return res.text().then(text => Promise.reject(text));
+                // Read the error message from the JSON response if available
+                return res.json().then(error => Promise.reject(error.message || 'Unknown error'));
             }
         })
         .catch(err => {

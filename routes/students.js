@@ -543,4 +543,35 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
     }
 });
 
+// =========================================================
+// 9. GET: Student Lookup (FIXED SYNTAX)
+// =========================================================
+
+/**
+ * @route GET /api/students/lookup/all
+ * @desc Get a simple list of all enrolled students (ID, Name, Roll No) for dropdowns.
+ * @access Private (Admin, Teacher, Placement Officer)
+ */
+router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Placement Officer']), async (req, res) => {
+    try {
+        const result = await pool.query(`
+            SELECT 
+                s.student_id AS id, 
+                (s.first_name || ' ' || s.last_name) AS display_name,
+                s.roll_number
+            FROM students s
+            WHERE s.status = 'Enrolled'
+            ORDER BY s.last_name, s.first_name;
+        `);
+        
+        res.status(200).json(result.rows);
+    } catch (e) { 
+        // FIX: Provide a complete error handler for this route
+        console.error('Error fetching student lookup data:', e);
+        res.status(500).json({ message: 'Failed to retrieve student list for dropdowns.' });
+    }
+}); // <--- The file must end cleanly here.
+
+
+
 module.exports = router;
