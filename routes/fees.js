@@ -1,6 +1,3 @@
-// routes/fees.js
-// TRUE FULL & FINAL VERSION (Includes ALL 17 Features & Sections)
-
 // =========================================================
 // SECTION 1: IMPORTS, CONSTANTS & CONFIGURATION
 // =========================================================
@@ -35,7 +32,6 @@ const DB = {
     SETTINGS: 'erp_settings' 
 };
 
-// const BASE_TUITION_FEE = 5000.00; // Removed as Tuition is no longer billed
 const FEE_ROLES = ['Admin', 'Staff', 'Super Admin', 'Finance'];
 
 // --- Helper Functions ---
@@ -52,6 +48,7 @@ const generateInvoiceNumber = () => {
  * FIX: Tuition Fee calculation removed.
  */
 router.post('/generate-structure-invoice', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
+    // ... (Code for bulk invoice generation - Uses DB transactions)
     const adminId = req.user.id;
     const issueDate = moment().format('YYYY-MM-DD'); 
     const dueDate = moment().add(30, 'days').format('YYYY-MM-DD'); 
@@ -114,13 +111,6 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
             addItem('Registration Fee', student.registration);
             addItem('Examination Fee', student.exam);
 
-            // ❌ Tuition Fee is REMOVED from calculation and item list
-            /*
-            if (student.tuition_monthly > 0) {
-                addItem(`Tuition Fee (${duration} Months)`, student.tuition_monthly * duration);
-            }
-            */
-            
             // Transport Fee is INCLUDED
             if (student.transport_struct_monthly > 0) {
                 addItem(`Transport Fee (${duration} Months)`, student.transport_struct_monthly * duration);
@@ -173,6 +163,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
  * 2.2 FEE COLLECTION
  */
 router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff', 'super admin']), async (req, res) => {
+    // ... (Code for fee collection - Uses DB transactions and prorates payment across open invoices)
     const { student_id, amount_paid, payment_mode, notes } = req.body;
     const collectedBy = req.user.id;
     const payAmount = parseFloat(amount_paid);
@@ -242,6 +233,7 @@ router.post('/refund', authenticateToken, authorize(['admin', 'finance']), async
     const { student_id, amount, reason } = req.body;
     try {
         const creditNote = `CN-${uuidv4().substring(0,6)}`;
+        // Refund is recorded as a negative invoice/credit note
         await pool.query(`INSERT INTO ${DB.INVOICES} (student_id, invoice_number, total_amount, paid_amount, status, created_by) VALUES ($1::uuid, $2, $3, $3, 'Refunded', $4::uuid)`, [student_id, creditNote, -amount, req.user.id]);
         res.status(200).json({ message: "Refund processed.", credit_note: creditNote });
     } catch (e) { res.status(500).json({ message: "Refund failed." }); }
@@ -274,6 +266,7 @@ router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']
         res.status(500).json({ message: 'Failed to fetch student list for refund.' });
     }
 });
+
 // =========================================================
 // SECTION 3: STUDENT DATA & RECEIPTS
 // =========================================================
@@ -298,6 +291,7 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
  * FIX: Tuition Fee calculation removed; Transport/Hostel mandatory fallback added.
  */
 router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
+    // ... (Code for student dashboard with auto-invoice logic and fee calculation)
     const client = await pool.connect();
     try {
         const { studentId } = req.params;
@@ -316,7 +310,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 c.course_name, 
                 b.batch_name,
                 
-                -- Fee Structure Info
+                -- Fee Structure Info (omitted for brevity)
                 fs.id AS fee_structure_id,
                 fs.structure_name,
                 COALESCE(fs.course_duration_months, 12) AS duration,
@@ -327,13 +321,13 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
                 COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
 
-                -- Transport Info (Checking is_active and taking fee from assignment)
+                -- Transport Info (omitted for brevity)
                 ta.monthly_fee AS transport_assigned_fee,
                 r.monthly_fee AS route_base_fee,
                 r.route_name,
                 ta.is_active AS transport_active,
 
-                -- Hostel Info
+                -- Hostel Info (omitted for brevity)
                 hr.room_fee AS hostel_monthly_rate,
                 hr.rate_name AS hostel_room_name
 
@@ -363,7 +357,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
         
         const student = sRes.rows[0];
 
-        // 2. CHECK & AUTO-GENERATE INVOICE LOGIC
+        // 2. CHECK & AUTO-GENERATE INVOICE LOGIC (Auto-generation logic is implemented here...)
         if (student.fee_structure_id) {
             
             const invCheck = await client.query(`
@@ -376,7 +370,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 
                 const duration = parseInt(student.duration);
 
-                // ❌ A. Base Course Fees - Set to 0 as Tuition is removed
+                // A. Base Course Fees - Set to 0 as Tuition is removed
                 const totalTuition = 0; 
                 
                 // B. Transport Calculation (Priority: Assigned Active > Structure Mandatory)
@@ -421,7 +415,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                     parseFloat(student.exam);
 
                 if (totalAmount > 0) {
-                    // Create Header
+                    // Create Header and Items (omitted for brevity)
                     const invRes = await client.query(`
                         INSERT INTO ${DB.INVOICES} 
                         (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
@@ -464,7 +458,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
         await client.query('COMMIT');
 
-        // 3. FETCH FINAL TOTALS
+        // 3. FETCH FINAL TOTALS & 4. Fetch Payment History (omitted for brevity)
         const invoiceStats = await pool.query(`
             SELECT 
                 COALESCE(SUM(total_amount), 0) AS total_invoiced,
@@ -512,6 +506,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
  * 3.3 PROFESSIONAL RECEIPT GENERATION (A5 Landscape - Fixed Layout)
  */
 router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
+    // ... (PDF Generation Logic - Detailed implementation is quite long)
     const { idOrTxn } = req.params;
     try {
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idOrTxn);
@@ -519,6 +514,7 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
 
         const q = `
             SELECT 
+                p.id AS payment_id, /* ADDED: Ensure p.id is fetched as fallback */
                 p.transaction_id, p.amount, p.payment_date, p.payment_mode, p.remarks,
                 i.invoice_number, i.total_amount as invoice_total, (i.total_amount - i.paid_amount) as due_balance,
                 u.username AS student_name, 
@@ -538,35 +534,46 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         if (!rows[0]) return res.status(404).json({ message: 'Receipt Not Found' });
         const data = rows[0];
 
-        // 1. Fetch System Configuration for dynamic header/logo
+        // 1. Fetch System Configuration (FIXED: Extracting all branding data from module_config JSONB)
         const configRes = await pool.query(`
-            SELECT school_name, school_address, school_phone, school_logo_path, school_email 
+            SELECT 
+                module_config ->> 'school_name' AS school_name,
+                module_config ->> 'school_address' AS school_address,
+                module_config ->> 'school_phone' AS school_phone,
+                module_config ->> 'school_email' AS school_email,
+                school_logo_path,
+                currency
             FROM ${DB.SETTINGS} 
             LIMIT 1
         `);
-        const config = configRes.rows[0] || {};
 
+        // The 'config' object now contains clean, usable strings extracted from JSONB.
+        const config = configRes.rows[0] || {}; 
+
+        // Define safe reference for filenames and PDF body text
+        const receiptRef = data.transaction_id || data.payment_id || 'UNKNOWN';
+        const currencySymbol = config.currency === 'INR' ? '₹' : (config.currency || 'Rs.');
 
         // --- PDF SETUP ---
         const doc = new PDFDocument({ size: 'A5', layout: 'landscape', margin: 30 });
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', `attachment; filename=Receipt-${data.transaction_id}.pdf`);
+        res.setHeader('Content-Disposition', `attachment; filename=Receipt-${receiptRef}.pdf`); 
         doc.pipe(res);
 
         // Border
         doc.rect(20, 20, 555, 380).lineWidth(1).strokeColor('#333').stroke();
 
-        // 1. HEADER (Using dynamic config)
+        // 1. HEADER (MOCK DATA REMOVED - Using dynamic config from JSONB)
         const headerY = 35;
         doc.fillColor('#2c3e50')
-           .fontSize(18).font("Helvetica-Bold").text(config.school_name || 'SCHOOL ERP SYSTEM', 40, headerY)
-           .fontSize(9).font("Helvetica").text(config.school_address || '123 Education Lane, Kolkata - 700001', 40, headerY + 20)
-           .text(`Phone: ${config.school_phone || '+91 9876543210'} | Email: ${config.school_email || 'email@school.com'}`, 40, headerY + 32);
+           .fontSize(18).font("Helvetica-Bold").text(config.school_name || 'SCHOOL ERP SYSTEM', 40, headerY) 
+           .fontSize(9).font("Helvetica").text(config.school_address || '', 40, headerY + 20) 
+           .text(`Phone: ${config.school_phone || ''} | Email: ${config.school_email || ''}`, 40, headerY + 32); 
 
         doc.fillColor('#000')
            .fontSize(14).font("Helvetica-Bold").text('MONEY RECEIPT', 400, headerY, { width: 155, align: 'right' })
            .fontSize(9).font("Helvetica")
-           .text(`Receipt No: ${data.transaction_id}`, 350, headerY + 20, { width: 205, align: 'right' })
+           .text(`Receipt No: ${receiptRef}`, 350, headerY + 20, { width: 205, align: 'right' })
            .text(`Date: ${moment(data.payment_date).format('DD-MM-YYYY')}`, 350, headerY + 32, { width: 205, align: 'right' });
 
         doc.moveTo(40, headerY + 50).lineTo(555, headerY + 50).lineWidth(0.5).strokeColor('#aaa').stroke();
@@ -597,7 +604,7 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         
         doc.text("SL", 50, tableTop + 5);
         doc.text("DESCRIPTION", 100, tableTop + 5);
-        doc.text("AMOUNT (INR)", 450, tableTop + 5, { width: 95, align: 'right' });
+        doc.text(`AMOUNT (${config.currency || 'INR'})`, 450, tableTop + 5, { width: 95, align: 'right' });
 
         // Row
         const rowY = tableTop + 25;
@@ -619,11 +626,11 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
            .text("GRAND TOTAL:", 300, totalY, { width: 140, align: 'right' });
         
         // Amount Column (Separate X position)
-        doc.text(`Rs. ${amountPaid}`, 450, totalY, { width: 95, align: 'right' });
+        doc.text(`${currencySymbol} ${amountPaid}`, 450, totalY, { width: 95, align: 'right' });
 
         // Due Balance (Below Total)
         doc.fontSize(9).font("Helvetica").fillColor('#e74c3c')
-           .text(`(Remaining Due: Rs. ${dueBalance})`, 40, totalY + 5);
+           .text(`(Remaining Due: ${currencySymbol} ${dueBalance})`, 40, totalY + 5);
 
         // 5. FOOTER
         const sigY = 300; 
@@ -646,11 +653,13 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
     }
 });
 
+
+
 // =========================================================
 // SECTION 4: SETTINGS & CONFIGURATION (ADMIN CRUD)
 // =========================================================
 
-// 4.1 DISCOUNT MANAGEMENT
+// 4.1 DISCOUNT MANAGEMENT (CRUD - Omitted for brevity)
 router.get('/discounts', authenticateToken, async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.DISCOUNTS} ORDER BY created_at DESC`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -661,7 +670,7 @@ router.delete('/discounts/:id', authenticateToken, authorize(['admin']), async (
     try { await pool.query(`DELETE FROM ${DB.DISCOUNTS} WHERE id=$1::uuid`, [req.params.id]); res.json({message:'Deleted'}); } catch (e) { res.status(500).json({message:'Error'}); }
 });
 
-// 4.2 HOSTEL RATES
+// 4.2 HOSTEL RATES (CRUD - Omitted for brevity)
 router.get('/hostel/rates', authenticateToken, async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.HOSTEL}`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -679,6 +688,7 @@ router.get('/late-fee-config/current', authenticateToken, async (req, res) => {
 
 router.post('/late-fee-config', authenticateToken, authorize(['admin']), async (req, res) => {
     try { 
+        // Ensures only one configuration exists
         await pool.query(`DELETE FROM ${DB.LATE_FEE}`); 
         const r = await pool.query(`INSERT INTO ${DB.LATE_FEE} (grace_days, penalty_type, penalty_value, max_penalty_value, compounding_interval) VALUES ($1, $2, $3, $4, $5) RETURNING *`, [req.body.grace_days, req.body.penalty_type, req.body.penalty_value, req.body.max_penalty_value, req.body.compounding_interval]); 
         res.json(r.rows[0]); 
@@ -713,7 +723,7 @@ router.put('/late-fee-config/:id', authenticateToken, authorize(['admin', 'finan
     }
 });
 
-// 4.4 BUDGET TARGET CONFIG
+// 4.4 BUDGET TARGET CONFIG (Omitted for brevity)
 router.post('/budget-target', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { year, category_name, amount, type } = req.body;
     try {
@@ -732,7 +742,7 @@ router.post('/budget-target', authenticateToken, authorize(['admin', 'finance'])
 // SECTION 5: ANALYTICS & REPORTS
 // =========================================================
 
-// 5.1 GLOBAL TRANSACTION HISTORY
+// 5.1 GLOBAL TRANSACTION HISTORY (Omitted for brevity)
 router.get('/history', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('month').format('YYYY-MM-DD');
@@ -764,12 +774,13 @@ router.get('/history', authenticateToken, authorize(['admin', 'super admin', 'fi
     }
 });
 
-// 5.2 REVENUE STREAM
+// 5.2 REVENUE STREAM (Omitted for brevity)
 router.get('/reports/revenue-stream', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { start_date, end_date } = req.query;
     const s = start_date || moment().startOf('month').format('YYYY-MM-DD');
     const e = end_date || moment().endOf('month').format('YYYY-MM-DD');
     try {
+        // Groups income by invoice item description (e.g., 'Admission Fee', 'Transport Fee')
         const q = `SELECT SPLIT_PART(item.description, ' (', 1) AS category, SUM(item.amount) AS amount FROM ${DB.PAYMENTS} p JOIN ${DB.ITEMS} item ON p.invoice_id=item.invoice_id WHERE p.payment_date::date >= $1 AND p.payment_date::date <= $2 GROUP BY category`;
         const r = await pool.query(q, [s, e]);
         res.json({ breakdown: r.rows });
@@ -783,7 +794,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
     const end = `${year+1}-03-31`;
 
     try {
-        // 1. Fetch Configured Targets
+        // 1. Fetch Configured Targets (omitted for brevity)
         const targets = await pool.query(`
             SELECT c.name, b.budget_amount, c.type 
             FROM ${DB.BUDGETS} b 
@@ -798,7 +809,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
             actual: 0 
         }));
 
-        // 2. Calculate & Merge Actual Income
+        // 2. Calculate & Merge Actual Income (omitted for brevity)
         const incomeRes = await pool.query(`
             SELECT COALESCE(SUM(amount), 0) as val 
             FROM ${DB.PAYMENTS} 
@@ -815,7 +826,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
             reportData.push({ name: 'Tuition Fee Collection', budgeted: 0, type: 'Income', actual: totalIncome });
         }
 
-        // 3. Calculate & Merge Actual Expenses
+        // 3. Calculate & Merge Actual Expenses (omitted for brevity)
         const expenseRes = await pool.query(`
             SELECT c.name, SUM(e.amount) as val 
             FROM ${DB.EXPENSES} e 
@@ -843,7 +854,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
     }
 });
 
-// 5.4 EXPENSE RECORDING
+// 5.4 EXPENSE RECORDING (Omitted for brevity)
 router.post('/expenses', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { category_name, amount, description, date } = req.body;
     try {
@@ -854,9 +865,10 @@ router.post('/expenses', authenticateToken, authorize(['admin', 'finance']), asy
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// 5.5 REVENUE FORECAST
+// 5.5 REVENUE FORECAST (Omitted for brevity)
 router.get('/reports/revenue-forecast', authenticateToken, async (req, res) => {
     try {
+        // Forecasts revenue based on outstanding balances of invoices due in the next 6 months
         const q = `SELECT TO_CHAR(due_date, 'Mon YYYY') as month, SUM(total_amount - paid_amount) as projected FROM ${DB.INVOICES} WHERE status IN ('Pending', 'Partial') AND due_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '6 months') GROUP BY month ORDER BY month`;
         const r = await pool.query(q);
         res.json(r.rows);
@@ -864,7 +876,7 @@ router.get('/reports/revenue-forecast', authenticateToken, async (req, res) => {
 });
 
 
-// 5.6 DASHBOARD QUICK STATS 
+// 5.6 DASHBOARD QUICK STATS (Omitted for brevity)
 router.get('/reports/dashboard-stats', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     try {
         const query = `
@@ -923,7 +935,7 @@ router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async 
 
         const result = await pool.query(query, [studentId]);
         
-        // Fetch Student Basic Info for Header
+        // Fetch Student Basic Info for Header (omitted for brevity)
         const studentInfo = await pool.query(`
             SELECT u.username, s.roll_number, c.course_name, b.batch_name 
             FROM ${DB.STUDENTS} s 
@@ -999,13 +1011,14 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
 });
 
 
-// 5.9 GENERAL LEDGER EXPORT
+// 5.9 GENERAL LEDGER EXPORT (Omitted for brevity)
 router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('year').format('YYYY-MM-DD');
     const end = endDate || moment().endOf('year').format('YYYY-MM-DD');
 
     try {
+        // Combines Income (Payments) and Expenses for General Ledger view
         const query = `
             SELECT * FROM (
                 -- 1. INCOME (Credit)
@@ -1049,7 +1062,7 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
 // SECTION 6: ADMIN UTILITIES (WAIVERS, DEFAULTERS)
 // =========================================================
 
-// 6.1 WAIVER REQUESTS
+// 6.1 WAIVER REQUESTS (CRUD - Omitted for brevity)
 router.get('/waiver-requests', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.WAIVERS} ORDER BY request_date DESC`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -1061,6 +1074,7 @@ router.put('/waiver-requests/:requestId/status', authenticateToken, authorize(['
         const { requestId } = req.params; const { newStatus, amount } = req.body;
         await client.query(`UPDATE ${DB.WAIVERS} SET status=$1, processed_by=$2::uuid WHERE id=$3::uuid`, [newStatus, req.user.id, requestId]);
         
+        // If approved, update the invoice total amount to reflect the waiver/discount
         if (newStatus === 'Approved' && amount > 0) {
             const wRes = await client.query(`SELECT student_id FROM ${DB.WAIVERS} WHERE id=$1::uuid`, [requestId]);
             const inv = await client.query(`SELECT id FROM ${DB.INVOICES} WHERE student_id=$1::uuid AND status!='Paid' LIMIT 1`, [wRes.rows[0].student_id]);
