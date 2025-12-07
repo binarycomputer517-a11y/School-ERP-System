@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Integration Hub</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* --- General Layout & Typography --- */
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+        .container { max-width: 900px; margin: 20px auto; padding: 40px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #005A9C; font-weight: 700; border-bottom: 2px solid #005A9C; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }
+        h2 { color: #2c3e50; font-size: 1.4em; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #3498db; }
+        
+        /* --- Settings Sections --- */
+        .settings-section { 
+            margin-bottom: 30px; 
+            padding: 20px; 
+            border: 1px solid #e9ecef; 
+            border-radius: 6px; 
+            background: #f8f9fa; 
+        }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: 600; display: block; margin-bottom: 5px; color: #555; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        /* Grid for key inputs */
+        .input-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+
+        /* --- Buttons --- */
+        .btn-save { 
+            padding: 12px 20px; 
+            background-color: #28a745; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            font-weight: 600;
+            transition: background 0.2s;
+            margin-top: 20px;
+        }
+        .btn-save:hover { background-color: #1e7e34; }
+        .btn-save:disabled { background-color: #999; cursor: not-allowed; }
+
+        /* Status Messages */
+        #status-msg { padding: 10px; border-radius: 4px; margin-top: 20px; font-weight: 600; display: none; text-align: center; }
+        .msg-success { background-color: #d4edda; color: #155724; }
+        .msg-error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<script>
+    // --- Authentication and Authorization Check ---
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role');
+    // We use the existing settings config API
+    const API_SETTINGS_CONFIG = '/api/settings/config/current'; 
+    const API_SETTINGS_UPDATE = '/api/settings/config/00000000-0000-0000-0000-000000000001'; 
+
+    // Only allow Super Admin
+    if (!TOKEN || USER_ROLE !== 'Super Admin') {
+        alert('Access Denied. Only Super Admins can configure API Integration.');
+        window.location.href = '/admin-dashboard.html';
+    }
+    
+    // --- Helper Functions ---
+    async function handleApi(url, method, data = null) {
+        const options = {
+            method: method,
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }
+        };
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+        
+        const response = await fetch(url, options);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+        return response;
+    }
+
+    function displayStatus(msg, isError = false) {
+        const statusEl = document.getElementById('status-msg');
+        statusEl.textContent = msg;
+        statusEl.className = isError ? 'msg-error' : 'msg-success';
+        statusEl.style.display = 'block';
+        setTimeout(() => statusEl.style.display = 'none', 5000);
+    }
+    
+    // --- LOAD SETTINGS ---
+    async function loadApiSettings() {
+        try {
+            const response = await handleApi(API_SETTINGS_CONFIG, 'GET');
+            if (!response.ok) throw new Error('Failed to load current settings.');
+            
+            const settings = await response.json();
+            
+            // 1. SMS Settings
+            document.getElementById('sms_provider').value = settings.sms_provider || '';
+            document.getElementById('sms_api_key').value = settings.sms_api_key || '';
+            document.getElementById('sms_sender_id').value = settings.sms_sender_id || '';
+
+            // 2. Email Settings
+            document.getElementById('mail_driver').value = settings.mail_driver || '';
+            document.getElementById('mail_host').value = settings.mail_host || '';
+            document.getElementById('mail_port').value = settings.mail_port || '';
+            document.getElementById('mail_username').value = settings.mail_username || '';
+            document.getElementById('mail_password').value = settings.mail_password || '';
+
+            // 3. Payment Gateway Settings
+            document.getElementById('payment_gateway_provider').value = settings.payment_gateway_provider || '';
+            document.getElementById('pg_public_key').value = settings.pg_public_key || '';
+            document.getElementById('pg_secret_key').value = settings.pg_secret_key || '';
+
+        } catch (e) {
+            displayStatus(`Could not load API settings: ${e.message}`, true);
+        }
+    }
+    
+    // --- SAVE SETTINGS ---
+    document.getElementById('integration-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const saveBtn = document.getElementById('save-btn');
+        saveBtn.disabled = true;
+        
+        // Collect all data from the form inputs
+        const data = {
+            // SMS
+            sms_provider: document.getElementById('sms_provider').value,
+            sms_api_key: document.getElementById('sms_api_key').value,
+            sms_sender_id: document.getElementById('sms_sender_id').value,
+
+            // Email (Mail)
+            mail_driver: document.getElementById('mail_driver').value,
+            mail_host: document.getElementById('mail_host').value,
+            mail_port: document.getElementById('mail_port').value,
+            mail_username: document.getElementById('mail_username').value,
+            mail_password: document.getElementById('mail_password').value,
+
+            // Payment Gateway (PG)
+            payment_gateway_provider: document.getElementById('payment_gateway_provider').value,
+            pg_public_key: document.getElementById('pg_public_key').value,
+            pg_secret_key: document.getElementById('pg_secret_key').value,
+        };
+        
+        try {
+            // Note: The API_SETTINGS_UPDATE route (PUT /api/settings/config/ID) handles merging these fields 
+            // into the fixed columns or the JSONB module_config based on the backend logic.
+            const response = await handleApi(API_SETTINGS_UPDATE, 'PUT', data);
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || response.statusText);
+            }
+
+            displayStatus("API Integration settings updated successfully.", false);
+
+        } catch (e) {
+            displayStatus(`Failed to save settings: ${e.message}`, true);
+        } finally {
+            saveBtn.disabled = false;
+        }
+    });
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', loadApiSettings);
+</script>
+
+<div class="container">
+    <a href="/admin-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+    <h1><i class="fas fa-plug"></i> API Integration Hub</h1>
+    <p>Configure third-party services for communication, finance, and external data exchange. These settings apply globally.</p>
+
+    <form id="integration-form">
+
+        <div class="settings-section">
+            <h2><i class="fas fa-sms"></i> SMS Gateway</h2>
+            <div class="input-grid">
+                <div class="form-group">
+                    <label for="sms_provider">Provider Name (e.g., Twilio, local SMS provider)</label>
+                    <input type="text" id="sms_provider" name="sms_provider" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="sms_sender_id">Sender ID / Phone Number</label>
+                    <input type="text" id="sms_sender_id" name="sms_sender_id" class="form-control">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="sms_api_key">API Key / Auth Token (Sensitive)</label>
+                <input type="password" id="sms_api_key" name="sms_api_key" class="form-control">
+            </div>
+            <p style="font-size: 0.85em; color: #777;">Used for bulk notifications (attendance, fees due, alerts).</p>
+        </div>
+
+        <div class="settings-section">
+            <h2><i class="fas fa-envelope"></i> Email (SMTP) Gateway</h2>
+            <div class="input-grid">
+                <div class="form-group">
+                    <label for="mail_driver">Driver (e.g., SMTP, Gmail)</label>
+                    <input type="text" id="mail_driver" name="mail_driver" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="mail_host">SMTP Host</label>
+                    <input type="text" id="mail_host" name="mail_host" class="form-control">
+                </div>
+            </div>
+            <div class="input-grid">
+                 <div class="form-group">
+                    <label for="mail_port">Port (e.g., 587)</label>
+                    <input type="number" id="mail_port" name="mail_port" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="mail_username">Username/Sender Email</label>
+                    <input type="email" id="mail_username" name="mail_username" class="form-control">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="mail_password">Password/App Key (Sensitive)</label>
+                <input type="password" id="mail_password" name="mail_password" class="form-control">
+            </div>
+            <p style="font-size: 0.85em; color: #777;">Used for internal communication, password resets, and sending reports.</p>
+        </div>
+
+        <div class="settings-section">
+            <h2><i class="fas fa-credit-card"></i> Online Payment Gateway</h2>
+            <div class="input-grid">
+                <div class="form-group">
+                    <label for="payment_gateway_provider">Provider Name (e.g., Razorpay, PayTM)</label>
+                    <input type="text" id="payment_gateway_provider" name="payment_gateway_provider" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="pg_public_key">Public Key / Merchant ID</label>
+                    <input type="text" id="pg_public_key" name="pg_public_key" class="form-control">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="pg_secret_key">Secret Key (Highly Sensitive)</label>
+                <input type="password" id="pg_secret_key" name="pg_secret_key" class="form-control">
+            </div>
+            <p style="font-size: 0.85em; color: #777;">Used for collecting fees and other payments online.</p>
+        </div>
+        
+        <button type="submit" id="save-btn" class="btn-save"><i class="fas fa-save"></i> Save All Integration Settings</button>
+    </form>
+    
+    <div id="status-msg" class="msg-success"></div>
+</div>
+
+<script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+</body>
+</html>

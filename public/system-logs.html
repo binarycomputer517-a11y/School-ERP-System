@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>System Logs & Monitoring</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* --- General Layout & Typography --- */
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+        .container { max-width: 1400px; margin: 20px auto; padding: 40px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #005A9C; font-weight: 700; border-bottom: 2px solid #005A9C; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }
+        
+        /* --- Controls & Filters --- */
+        .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #3498db; }
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 15px; margin-bottom: 30px; }
+        .form-control, .btn-action { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn-primary { background-color: #005A9C; color: white; border: none; font-weight: 600; cursor: pointer; }
+        .btn-primary:hover { background-color: #00407a; }
+        .form-group label { display: block; font-size: 0.85em; margin-bottom: 3px; color: #555; }
+
+        /* --- Log Table --- */
+        .log-table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 0.9em; }
+        .log-table th, .log-table td { border: 1px solid #eee; padding: 12px; text-align: left; vertical-align: top; }
+        .log-table th { background-color: #f4f4f4; color: #333; font-weight: 600; }
+        
+        /* --- Log Level Styling --- */
+        .level-ERROR { background-color: #f9d7da; color: #c0392b; font-weight: 600; }
+        .level-WARN { background-color: #fff0b3; color: #f39c12; }
+        .level-INFO { background-color: #e6f7ff; color: #3498db; }
+        .level-SECURITY { background-color: #d4edda; color: #155724; font-weight: 600; }
+    </style>
+</head>
+<body>
+
+<script>
+    // --- Authentication and Authorization Check ---
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role');
+    const API_LOGS = '/api/system/logs'; // Assumed API endpoint
+
+    // Only allow Super Admin or IT Helpdesk/Support access
+    if (!TOKEN || (USER_ROLE !== 'Super Admin' && USER_ROLE !== 'IT Helpdesk' && USER_ROLE !== 'Admin')) {
+        alert('Access Denied. Elevated privileges required.');
+        window.location.href = '/admin-dashboard.html';
+    }
+    
+    let allLogs = [];
+</script>
+
+<div class="container">
+    <a href="/admin-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+    <h1><i class="fas fa-search"></i> System Logs & Auditing</h1>
+    <p>Real-time view of server activity, API calls, security events, and errors. Filter logs for diagnostics.</p>
+
+    <div class="controls-grid">
+        <div class="form-group">
+            <label for="logLevel">Log Level:</label>
+            <select id="logLevel" class="form-control">
+                <option value="">All Levels</option>
+                <option value="ERROR">ERROR</option>
+                <option value="WARN">WARN</option>
+                <option value="INFO">INFO</option>
+                <option value="SECURITY">SECURITY</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate" class="form-control">
+        </div>
+        <div class="form-group">
+            <label for="searchQuery">Search Text:</label>
+            <input type="text" id="searchQuery" class="form-control" placeholder="User ID, Route, or Message">
+        </div>
+        <div class="form-group" style="align-self: flex-end;">
+            <button class="btn-primary btn-action" onclick="fetchLogs()" id="fetch-btn"><i class="fas fa-filter"></i> Apply Filters</button>
+        </div>
+    </div>
+    
+    <p id="loading-status" style="text-align: center; color: #005A9C;"><i class="fas fa-spinner fa-spin"></i> Loading logs...</p>
+
+    <table class="log-table">
+        <thead>
+            <tr>
+                <th style="width: 150px;">Timestamp</th>
+                <th style="width: 80px;">Level</th>
+                <th style="width: 120px;">Source/User</th>
+                <th>Message / Details</th>
+                <th style="width: 100px;">Context</th>
+            </tr>
+        </thead>
+        <tbody id="log-list">
+            </tbody>
+    </table>
+    
+    <p id="no-logs" style="text-align: center; margin-top: 20px; display: none;">No log entries found for the selected criteria.</p>
+</div>
+
+<script>
+    // --- Helper Functions ---
+    async function handleApi(url, options = {}) {
+        options.headers = { 
+            'Authorization': `Bearer ${TOKEN}`,
+            'Content-Type': 'application/json',
+            ...options.headers 
+        };
+        const response = await fetch(url, options);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+        return response;
+    }
+    
+    function formatDate(timestamp) {
+        if (!timestamp) return 'N/A';
+        const date = new Date(timestamp);
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function getLevelClass(level) {
+        return `level-${(level || 'INFO').toUpperCase()}`;
+    }
+
+    // --- RENDER & FETCH DATA ---
+    async function fetchLogs() {
+        const logListEl = document.getElementById('log-list');
+        const loadingStatusEl = document.getElementById('loading-status');
+        const noLogsEl = document.getElementById('no-logs');
+        const fetchBtn = document.getElementById('fetch-btn');
+
+        logListEl.innerHTML = '';
+        noLogsEl.style.display = 'none';
+        loadingStatusEl.style.display = 'block';
+        fetchBtn.disabled = true;
+
+        const level = document.getElementById('logLevel').value;
+        const startDate = document.getElementById('startDate').value;
+        const query = document.getElementById('searchQuery').value;
+
+        let apiUrl = `${API_LOGS}?level=${level}&startDate=${startDate}&query=${query}`;
+        
+        try {
+            const response = await handleApi(apiUrl, { method: 'GET' });
+            if (!response.ok) throw new Error('Failed to fetch logs from server.');
+            
+            allLogs = await response.json();
+            
+            if (!Array.isArray(allLogs)) allLogs = [];
+            
+            if (allLogs.length === 0) {
+                noLogsEl.style.display = 'block';
+                return;
+            }
+
+            logListEl.innerHTML = allLogs.map(log => `
+                <tr>
+                    <td>${formatDate(log.timestamp)}</td>
+                    <td class="${getLevelClass(log.level)}">${log.level || 'INFO'}</td>
+                    <td>${log.user_id || log.source || 'SYSTEM'}</td>
+                    <td>${log.message || 'No message provided'}</td>
+                    <td><pre style="white-space: pre-wrap; margin: 0; font-size: 0.8em;">${log.context || ''}</pre></td>
+                </tr>
+            `).join('');
+
+        } catch (e) {
+            logListEl.innerHTML = `<tr><td colspan="5" style="text-align: center; color: red;">Error: ${e.message}</td></tr>`;
+        } finally {
+            loadingStatusEl.style.display = 'none';
+            fetchBtn.disabled = false;
+        }
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Set default filter to the last 24 hours (or current day)
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('startDate').value = today;
+        fetchLogs(); 
+    });
+</script>
+<script src="js/global-config.js"></script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 /**
  * SERVER.JS
  * Entry point for the School ERP System
- * Final Updated Version: Fixed Route Mounting for Fees & Payments
+ * Final Updated Version: Incorporating all Global Feature Routers AND Backup Static File Route
  */
 
 // ===================================
@@ -12,7 +12,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const path = require('path');
+const path = require('path'); // <-- This is correctly imported
 const fs = require('fs');
 const morgan = require('morgan'); 
 
@@ -25,11 +25,70 @@ const { authenticateToken } = require('./authMiddleware');
 // --- Configuration Constants ---
 const PORT = process.env.PORT || 3005;
 const UPLOAD_DIRS = [
-    path.join(__dirname, 'uploads', 'teachers'),
+    path.join(__dirname, 'uploads', 'teacher_photos'),
+    path.join(__dirname, 'uploads', 'teacher_cvs'),
     path.join(__dirname, 'uploads', 'transport'),
     path.join(__dirname, 'uploads', 'documents'),
     path.join(__dirname, 'uploads', 'media')
 ];
+// Define the path to the backup files (sibling to the routes/ directory)
+const BACKUP_DIR = path.join(__dirname, 'backups'); // Define backups directory here
+
+// --- Router Imports (NEW and existing) ---
+const authRouter = require('./routes/auth');
+const dashboardRouter = require('./routes/dashboard'); 
+const usersRouter = require('./routes/users'); 
+const vmsRouter = require('./routes/vms'); 
+const verifyRouter = require('./routes/verify'); 
+const settingsRouter = require('./routes/settings');
+const mediaRouter = require('./routes/media');
+const announcementsRouter = require('./routes/announcements');
+const noticesRouter = require('./routes/notices');
+const messagingRouter = require('./routes/messaging');
+const studentsRouter = require('./routes/students');
+const admissionRouter = require('./routes/admission');
+const teachersRouter = require('./routes/teachers');
+
+// --- NEW GLOBAL FEATURE ROUTERS ---
+const branchesRouter = require('./routes/branches'); 
+const systemLogsRouter = require('./routes/systemLogs'); 
+const backupRestoreRouter = require('./routes/backupRestore'); 
+// ... (All other router imports remain the same) ...
+const coursesRouter = require('./routes/courses');
+const subjectsRouter = require('./routes/subjects');
+const sectionsRouter = require('./routes/sections');
+const academicSessionsRouter = require('./routes/academic_sessions');
+const academicswithfeesRouter = require('./routes/academicswithfees');
+const timetableRouter = require('./routes/timetable');
+const attendanceRouter = require('./routes/attendance');
+const leaveRouter = require('./routes/leave');
+const ptmRouter = require('./routes/ptm');
+const examsRouter = require('./routes/exams');
+const onlineExamRouter = require('./routes/onlineExam');
+const marksRouter = require('./routes/marks');
+const reportCardRouter = require('./routes/reportcard');
+const certificatesRouter = require('./routes/certificates');
+const assignmentsRouter = require('./routes/assignments');
+const onlineLearningRouter = require('./routes/onlineLearning');
+const feesRouter = require('./routes/fees');
+const paymentsRouter = require('./routes/payments');
+const invoicesRouter = require('./routes/invoices');
+const payrollRouter = require('./routes/payroll');
+const staffhrRouter = require('./routes/staffhr');
+const hrDepartmentsRouter = require('./routes/hr/departments');
+const transportRouter = require('./routes/transport');
+const hostelRouter = require('./routes/hostel');
+const cafeteriaRouter = require('./routes/cafeteria');
+const libraryRouter = require('./routes/library');
+const inventoryRouter = require('./routes/inventory-with-assets');
+const itHelpdeskRouter = require('./routes/it-helpdesk');
+const enquiriesRouter = require('./routes/enquiries');
+const clubsEventsRouter = require('./routes/clubsEvents');
+const alumniRouter = require('./routes/alumni');
+const disciplineRouter = require('./routes/discipline');
+const complianceRouter = require('./routes/compliance');
+const reportsRouter = require('./routes/reports');
+const feedbackRouter = require('./routes/feedback');
 
 // --- App Initialization ---
 const app = express();
@@ -61,6 +120,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
+// 💡 ADD THE BACKUP STATIC ROUTE HERE
+app.use('/backups', express.static(BACKUP_DIR)); // <-- NEW: Serves files from the /backups folder
+
+
 // ===================================
 // 3. REAL-TIME SOCKET LOGIC
 // ===================================
@@ -76,73 +139,76 @@ io.on('connection', (socket) => {
 // ===================================
 
 // --- A. PUBLIC ROUTES (No Token Required) ---
-app.use('/api/auth', require('./routes/auth'));
-app.use('/api/dashboard', require('./routes/dashboard')); 
-app.use('/api/users', require('./routes/users')); 
-app.use('/api/vms', require('./routes/vms')); 
-app.use('/api/public/verify', require('./routes/verify')); // Certificate Verification
+app.use('/api/auth', authRouter);
+app.use('/api/dashboard', dashboardRouter); 
+app.use('/api/users', usersRouter); 
+app.use('/api/vms', vmsRouter); 
+app.use('/api/public/verify', verifyRouter); 
 
 // --- B. PROTECTED ROUTES (JWT Token Required) ---
 // All routes mounted below require a valid Bearer Token
 app.use('/api', authenticateToken);
 
+// --- GLOBAL MANAGEMENT MODULES (NEW) ---
+app.use('/api/branches', branchesRouter); 
+app.use('/api/system/logs', systemLogsRouter); 
+app.use('/api/system/backup', backupRestoreRouter); 
+app.use('/api/feedback', feedbackRouter);
 // Core Modules
-app.use('/api/settings', require('./routes/settings'));
-app.use('/api/media', require('./routes/media'));
-app.use('/api/announcements', require('./routes/announcements'));
-app.use('/api/notices', require('./routes/notices'));
-app.use('/api/messaging', require('./routes/messaging'));
+app.use('/api/settings', settingsRouter);
+app.use('/api/media', mediaRouter);
+app.use('/api/announcements', announcementsRouter);
+app.use('/api/notices', noticesRouter);
+app.use('/api/messaging', messagingRouter);
 
 // Academic Modules
-app.use('/api/students', require('./routes/students'));
-app.use('/api/admission', require('./routes/admission'));
-app.use('/api/teachers', require('./routes/teachers'));
-app.use('/api/courses', require('./routes/courses'));
-app.use('/api/subjects', require('./routes/subjects'));
-app.use('/api/sections', require('./routes/sections'));
-app.use('/api/academic-sessions', require('./routes/academic_sessions'));
-app.use('/api/academicswithfees', require('./routes/academicswithfees'));
-app.use('/api/timetable', require('./routes/timetable'));
-app.use('/api/attendance', require('./routes/attendance'));
-app.use('/api/leave', require('./routes/leave'));
-app.use('/api/ptm', require('./routes/ptm'));
+app.use('/api/students', studentsRouter);
+app.use('/api/admission', admissionRouter);
+app.use('/api/teachers', teachersRouter);
+app.use('/api/courses', coursesRouter);
+app.use('/api/subjects', subjectsRouter);
+app.use('/api/sections', sectionsRouter);
+app.use('/api/academic-sessions', academicSessionsRouter);
+app.use('/api/academicswithfees', academicswithfeesRouter);
+app.use('/api/timetable', timetableRouter);
+app.use('/api/attendance', attendanceRouter);
+app.use('/api/leave', leaveRouter);
+app.use('/api/ptm', ptmRouter);
 
 // Exam Modules
-app.use('/api/exams', require('./routes/exams'));
-app.use('/api/online-exam', require('./routes/onlineExam'));
-app.use('/api/marks', require('./routes/marks'));
-app.use('/api/report-card', require('./routes/reportcard'));
-app.use('/api/certificates', require('./routes/certificates'));
-app.use('/api/assignments', require('./routes/assignments'));
-app.use('/api/online-learning', require('./routes/onlineLearning'));
+app.use('/api/exams', examsRouter);
+app.use('/api/online-exam', onlineExamRouter);
+app.use('/api/marks', marksRouter);
+app.use('/api/report-card', reportCardRouter);
+app.use('/api/certificates', certificatesRouter);
+app.use('/api/assignments', assignmentsRouter);
+app.use('/api/online-learning', onlineLearningRouter);
 
-// Finance Modules (✅ Fixed: This ensures /api/fees/history works)
-app.use('/api/fees', require('./routes/fees'));
-app.use('/api/payments', require('./routes/payments'));
-app.use('/api/invoices', require('./routes/invoices')); // Legacy/Specific invoice routes
-app.use('/api/payroll', require('./routes/payroll'));
+// Finance Modules
+app.use('/api/fees', feesRouter);
+app.use('/api/payments', paymentsRouter);
+app.use('/api/invoices', invoicesRouter); 
+app.use('/api/payroll', payrollRouter);
 
 // HR & Operations
-app.use('/api/staffhr', require('./routes/staffhr'));
-app.use('/api/hr/departments', require('./routes/hr/departments'));
-app.use('/api/transport', require('./routes/transport'));
-app.use('/api/hostel', require('./routes/hostel'));
-app.use('/api/cafeteria', require('./routes/cafeteria'));
-app.use('/api/library', require('./routes/library'));
+app.use('/api/staffhr', staffhrRouter);
+app.use('/api/hr/departments', hrDepartmentsRouter);
+app.use('/api/transport', transportRouter);
+app.use('/api/hostel', hostelRouter);
+app.use('/api/cafeteria', cafeteriaRouter);
+app.use('/api/library', libraryRouter);
 
 // Inventory & IT
-app.use('/api/inventory', require('./routes/inventory-with-assets'));
-app.use('/api/it-helpdesk', require('./routes/it-helpdesk'));
+app.use('/api/inventory', inventoryRouter);
+app.use('/api/it-helpdesk', itHelpdeskRouter);
 
 // General Modules
-app.use('/api/enquiries', require('./routes/enquiries'));
-app.use('/api/activities', require('./routes/clubsEvents'));
-app.use('/api/alumni', require('./routes/alumni'));
-app.use('/api/discipline', require('./routes/discipline'));
-app.use('/api/compliance', require('./routes/compliance'));
-app.use('/api/reports', require('./routes/reports'));
-// Note: Assuming 'idreports' handles different reports, ensure no path conflict
-// app.use('/api/reports', require('./routes/idreports')); // Conflict check: merged logic recommended
+app.use('/api/enquiries', enquiriesRouter);
+app.use('/api/activities', clubsEventsRouter);
+app.use('/api/alumni', alumniRouter);
+app.use('/api/discipline', disciplineRouter);
+app.use('/api/compliance', complianceRouter);
+app.use('/api/reports', reportsRouter);
 
 // ===================================
 // 5. FRONTEND ROUTING (SPA Support)
@@ -199,6 +265,10 @@ async function startServer() {
         UPLOAD_DIRS.forEach(dir => {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         });
+        // Ensure Backup Directory exists
+        if (!fs.existsSync(BACKUP_DIR)) {
+            fs.mkdirSync(BACKUP_DIR, { recursive: true });
+        }
         
         // Connect Database
         await initializeDatabase();

@@ -1,12 +1,4 @@
-/**
- * routes/settings.js
- * ----------------------------------------------------
- * Enterprise ERP Settings Module
- * Features:
- * 1. Dynamic JSONB Storage for infinite settings.
- * 2. File Upload handling for Logos & Designs.
- * 3. Helper routes for dropdown population.
- */
+// routes/settings.js
 
 const express = require('express');
 const router = express.Router();
@@ -21,26 +13,25 @@ const CONFIG_ID = '00000000-0000-0000-0000-000000000001';
 const SETTINGS_TABLE = 'erp_settings'; 
 
 // --- MULTER CONFIGURATION (For File Uploads) ---
-// Ensure directory exists
+// ... (Multer setup code remains unchanged) ...
 const uploadDir = './public/uploads/designs';
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
 }
 
 const storage = multer.diskStorage({
+// ... (storage config) ...
     destination: (req, file, cb) => {
         cb(null, uploadDir);
     },
     filename: (req, file, cb) => {
-        // Generate unique filename: fieldname-timestamp.ext
-        // Example: school_logo-16788888.png
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
         cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
 
-// Filter for images only
 const fileFilter = (req, file, cb) => {
+// ... (fileFilter config) ...
     if (file.mimetype.startsWith('image/')) {
         cb(null, true);
     } else {
@@ -54,7 +45,7 @@ const upload = multer({ storage: storage, fileFilter: fileFilter });
 // =========================================================
 // 1. HELPER ROUTES (For Dropdowns)
 // =========================================================
-
+// ... (Helper routes remain unchanged) ...
 router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
         const result = await pool.query(`SELECT id, session_name AS name, start_date FROM academic_sessions ORDER BY start_date DESC`);
@@ -75,21 +66,100 @@ router.get('/branches/all', authenticateToken, authorize(['Admin', 'Super Admin'
 
 
 // =========================================================
-// 2. MAIN CONFIGURATION ROUTES
+// 2. GLOBAL/DEFAULT SETTINGS ROUTES 
 // =========================================================
+// ... (Global/Default routes remain unchanged) ...
+/**
+ * @route GET /api/settings/global
+ * @desc Get high-level global settings (e.g., default branch ID) for modular frontends.
+ * @access Private (Admin or Super Admin)
+ */
+router.get('/global', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT default_branch_id, COALESCE(module_config, '{}'::jsonb) AS module_config
+            FROM ${SETTINGS_TABLE} 
+            LIMIT 1;
+        `;
+        const result = await pool.query(query);
 
-// --- GET CURRENT SETTINGS ---
+        if (result.rows.length === 0) {
+            return res.status(200).json({});
+        }
+
+        const settings = result.rows[0];
+        
+        res.status(200).json({
+            default_branch_id: settings.default_branch_id || null, 
+            currency: settings.module_config.currency || 'INR', 
+        });
+
+    } catch (error) {
+        console.error('Error fetching global settings:', error);
+        res.status(500).json({ message: 'Failed to retrieve global settings.' });
+    }
+});
+
+/**
+ * @route PUT /api/settings/global
+ * @desc Update high-level global settings (e.g., set default branch ID).
+ * @access Private (Super Admin)
+ */
+router.put('/global', authenticateToken, authorize(['Super Admin']), async (req, res) => {
+    const { default_branch_id } = req.body;
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        
+        const check = await client.query(`SELECT id FROM ${SETTINGS_TABLE} LIMIT 1`);
+        let targetId = CONFIG_ID;
+        
+        if (check.rowCount === 0) {
+            await client.query(`INSERT INTO ${SETTINGS_TABLE} (id) VALUES ($1)`, [CONFIG_ID]);
+        } else {
+            targetId = check.rows[0].id;
+        }
+
+        const updateQuery = `
+            UPDATE ${SETTINGS_TABLE}
+            SET default_branch_id = $1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING default_branch_id;
+        `;
+        const result = await client.query(updateQuery, [default_branch_id, targetId]);
+        
+        await client.query('COMMIT');
+        res.status(200).json({ 
+            success: true, 
+            message: "Global settings updated.",
+            default_branch_id: result.rows[0]?.default_branch_id
+        });
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error updating global settings:', error);
+        res.status(500).json({ message: 'Failed to update global settings.' });
+    } finally {
+        client.release();
+    }
+});
+
+
+// =========================================================
+// 3. MAIN CONFIGURATION ROUTES (config/current & config/:id)
+// =========================================================
+// ... (Main configuration routes remain unchanged) ...
+// --- GET CURRENT SETTINGS (Previously Section 2) ---
 router.get('/config/current', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
         const result = await pool.query(`SELECT * FROM ${SETTINGS_TABLE} LIMIT 1`);
         
         if (result.rowCount === 0) {
-            // Default response if DB is empty
             return res.json({ id: CONFIG_ID, currency: 'INR', module_config: {} });
         }
         
         const row = result.rows[0];
-        // Merge structured columns + JSON config into one flat object
         res.json({ 
             ...row, 
             ...(row.module_config || {}) 
@@ -100,7 +170,7 @@ router.get('/config/current', authenticateToken, authorize(['Admin', 'Super Admi
     }
 });
 
-// --- UPDATE SETTINGS (Supports Text + Files) ---
+// --- UPDATE SETTINGS (config/:id) ---
 router.put('/config/:id', authenticateToken, authorize(['Super Admin', 'Admin']), upload.any(), async (req, res) => {
     
     // 1. Define Fixed Columns (That exist in DB schema)
@@ -126,16 +196,13 @@ router.put('/config/:id', authenticateToken, authorize(['Super Admin', 'Admin'])
     // 3. Process Uploaded Files (req.files)
     if (req.files && req.files.length > 0) {
         req.files.forEach(file => {
-            // Construct public URL
             const fileUrl = `/uploads/designs/${file.filename}`;
             
-            // Map specific files to fixed columns, others to JSON
             if (file.fieldname === 'school_logo') {
                 dbPayload['school_logo_path'] = fileUrl;
             } else if (file.fieldname === 'school_signature') {
                 dbPayload['school_signature_path'] = fileUrl;
             } else {
-                // Backgrounds (ID card, Certificate etc.) go to JSON
                 jsonPayload[file.fieldname] = fileUrl;
             }
         });
@@ -196,5 +263,88 @@ router.put('/config/:id', authenticateToken, authorize(['Super Admin', 'Admin'])
         client.release();
     }
 });
+
+
+// =========================================================
+// 4. COMPLIANCE MANAGEMENT ROUTES (The missing routes)
+// =========================================================
+
+const COMPLIANCE_ROLES = ['Super Admin', 'Prime Admin'];
+const SETTINGS_ID = CONFIG_ID; 
+
+/**
+ * @route GET /api/settings/compliance
+ * @desc Fetch current global compliance settings from JSONB module_config.
+ * @access Private (Super Admin, Prime Admin)
+ */
+router.get('/compliance', authenticateToken, authorize(COMPLIANCE_ROLES), async (req, res) => {
+    try {
+        const result = await pool.query(`SELECT module_config FROM ${SETTINGS_TABLE} LIMIT 1`);
+        
+        if (result.rowCount === 0) {
+            return res.status(200).json({}); // Return empty object
+        }
+        
+        // Extract compliance settings from the JSONB column
+        const moduleConfig = result.rows[0].module_config || {};
+        const complianceSettings = {
+            gdpr_consent_required: moduleConfig.gdpr_consent_required || false,
+            data_retention_days: moduleConfig.data_retention_days || 365,
+            anonymize_after_retention: moduleConfig.anonymize_after_retention || false,
+            audit_log_retention_days: moduleConfig.audit_log_retention_days || 180,
+            force_mfa_admins: moduleConfig.force_mfa_admins || false,
+        };
+        
+        res.json(complianceSettings);
+
+    } catch (e) {
+        console.error("Compliance Settings Fetch Error:", e);
+        res.status(500).json({ message: "Failed to retrieve compliance settings." });
+    }
+});
+
+/**
+ * @route PUT /api/settings/compliance
+ * @desc Update global compliance settings (stored in JSONB module_config).
+ * @access Private (Super Admin)
+ */
+router.put('/compliance', authenticateToken, authorize(['Super Admin']), async (req, res) => {
+    const newComplianceSettings = req.body;
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+
+        // 1. Ensure the settings row exists (Upsert)
+        const check = await client.query(`SELECT id FROM ${SETTINGS_TABLE} LIMIT 1`);
+        if (check.rowCount === 0) {
+            await client.query(`INSERT INTO ${SETTINGS_TABLE} (id) VALUES ($1)`, [SETTINGS_ID]);
+        }
+
+        // 2. Build the JSONB payload
+        const jsonPayload = JSON.stringify(newComplianceSettings);
+
+        // 3. Update the module_config JSONB column, merging the new compliance settings
+        const updateQuery = `
+            UPDATE ${SETTINGS_TABLE}
+            SET module_config = COALESCE(module_config, '{}'::jsonb) || $1::jsonb,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $2
+            RETURNING *;
+        `;
+        await client.query(updateQuery, [jsonPayload, SETTINGS_ID]);
+        
+        await client.query('COMMIT');
+        res.status(200).json({ success: true, message: "Compliance settings saved." });
+
+    } catch (e) {
+        await client.query('ROLLBACK');
+        console.error("Compliance Settings Update Error:", e);
+        res.status(500).json({ message: "Failed to update compliance settings." });
+    } finally {
+        client.release();
+    }
+});
+
 
 module.exports = router;

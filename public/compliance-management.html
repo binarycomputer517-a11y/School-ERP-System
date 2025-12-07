@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Compliance Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* --- General Layout & Typography --- */
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+        .container { max-width: 900px; margin: 20px auto; padding: 40px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0-0,0.05); }
+        h1 { color: #005A9C; font-weight: 700; border-bottom: 2px solid #005A9C; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }
+        h2 { color: #2c3e50; font-size: 1.4em; margin-top: 30px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #3498db; }
+        
+        /* --- Settings Sections --- */
+        .settings-section { margin-bottom: 30px; padding: 15px; border: 1px solid #e9ecef; border-radius: 6px; background: #f8f9fa; }
+        .form-group { margin-bottom: 15px; }
+        label { font-weight: 600; display: block; margin-bottom: 5px; color: #555; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        /* Toggle Switch Styling */
+        .switch { position: relative; display: inline-block; width: 60px; height: 34px; margin-top: 5px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #005A9C; }
+        input:checked + .slider:before { transform: translateX(26px); }
+        .switch-label { font-size: 0.9em; font-weight: 400; color: #777; margin-top: 10px; }
+
+        /* --- Buttons --- */
+        .btn-save { 
+            padding: 12px 20px; 
+            background-color: #28a745; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+        .btn-save:hover { background-color: #1e7e34; }
+        .btn-save:disabled { background-color: #999; cursor: not-allowed; }
+
+        /* Status Messages */
+        #status-msg { padding: 10px; border-radius: 4px; margin-top: 20px; font-weight: 600; display: none; text-align: center; }
+        .msg-success { background-color: #d4edda; color: #155724; }
+        .msg-error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<script>
+    // --- Authentication and Authorization Check ---
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role');
+    const API_COMPLIANCE = '/api/settings/compliance'; // Assumed API endpoint for global settings
+
+    // Only allow Super Admin or specific roles (e.g., Compliance Officer)
+    if (!TOKEN || (USER_ROLE !== 'Super Admin' && USER_ROLE !== 'Prime Admin')) {
+        alert('Access Denied. Elevated privileges required for compliance management.');
+        window.location.href = '/admin-dashboard.html';
+    }
+    
+    // --- Helper Functions ---
+    async function handleApi(url, method, data = null) {
+        const options = {
+            method: method,
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }
+        };
+        if (data) {
+            options.body = JSON.stringify(data);
+        }
+        
+        const response = await fetch(url, options);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+        return response;
+    }
+
+    function displayStatus(msg, isError = false) {
+        const statusEl = document.getElementById('status-msg');
+        statusEl.textContent = msg;
+        statusEl.className = isError ? 'msg-error' : 'msg-success';
+        statusEl.style.display = 'block';
+        setTimeout(() => statusEl.style.display = 'none', 5000);
+    }
+    
+    // --- LOAD SETTINGS (Must be called after DOMContentLoaded) ---
+    async function loadComplianceSettings() {
+        try {
+            const response = await handleApi(API_COMPLIANCE, 'GET');
+            if (!response.ok) throw new Error('Failed to load settings.');
+            
+            const settings = await response.json();
+            
+            // 1. Data Privacy
+            document.getElementById('gdpr_consent_required').checked = settings.gdpr_consent_required === true;
+            document.getElementById('data_retention_days').value = settings.data_retention_days || 365;
+            document.getElementById('anonymize_after_retention').checked = settings.anonymize_after_retention === true;
+            
+            // 2. Audit & Security
+            document.getElementById('audit_log_retention_days').value = settings.audit_log_retention_days || 180;
+            document.getElementById('force_mfa_admins').checked = settings.force_mfa_admins === true;
+
+        } catch (e) {
+            displayStatus(`Could not load compliance settings: ${e.message}`, true);
+        }
+    }
+    
+    // --- INITIALIZATION FUNCTION (The fix for the timing error) ---
+    function initializePage() {
+        
+        const formElement = document.getElementById('compliance-form');
+        
+        // This attaches the listener safely, now that the DOM is loaded
+        if (formElement) {
+            formElement.addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const saveBtn = document.getElementById('save-btn');
+                saveBtn.disabled = true;
+                
+                const data = {
+                    // Data Privacy
+                    gdpr_consent_required: document.getElementById('gdpr_consent_required').checked,
+                    data_retention_days: parseInt(document.getElementById('data_retention_days').value),
+                    anonymize_after_retention: document.getElementById('anonymize_after_retention').checked,
+                    
+                    // Audit & Security
+                    audit_log_retention_days: parseInt(document.getElementById('audit_log_retention_days').value),
+                    force_mfa_admins: document.getElementById('force_mfa_admins').checked
+                };
+                
+                // Simple validation
+                if (data.data_retention_days < 90 || data.audit_log_retention_days < 30) {
+                    displayStatus("Retention periods must be reasonable (e.g., Data >= 90 days, Audit >= 30 days).", true);
+                    saveBtn.disabled = false;
+                    return;
+                }
+
+                try {
+                    const response = await handleApi(API_COMPLIANCE, 'PUT', data);
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.message || `Server responded with ${response.status}`);
+                    }
+
+                    displayStatus("Compliance settings updated successfully.", false);
+
+                } catch (e) {
+                    displayStatus(`Failed to save settings: ${e.message}`, true);
+                } finally {
+                    saveBtn.disabled = false;
+                }
+            });
+        }
+        
+        // Load settings regardless of whether the form listener attached
+        loadComplianceSettings();
+    }
+
+    // --- Initialization Trigger ---
+    // The browser waits for the entire HTML structure to be parsed before running this.
+    document.addEventListener('DOMContentLoaded', initializePage);
+</script>
+
+<div class="container">
+    <a href="/admin-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+    <h1><i class="fas fa-gavel"></i> Global Compliance Management</h1>
+    <p>Configure legal and data privacy settings that apply system-wide across all user types and branches. Only Super Admins should modify these settings.</p>
+
+    <form id="compliance-form">
+        <div class="settings-section">
+            <h2>Data Privacy & Retention (GDPR/CCPA)</h2>
+            
+            <div class="form-group">
+                <label>EU/Global Privacy Consent:</label>
+                <label class="switch">
+                    <input type="checkbox" id="gdpr_consent_required">
+                    <span class="slider"></span>
+                </label>
+                <div class="switch-label">Require explicit GDPR/Privacy consent on first login/registration.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="data_retention_days">Student Data Retention Period (Days):</label>
+                <input type="number" id="data_retention_days" name="data_retention_days" class="form-control" min="30" max="3650" required>
+                <div class="switch-label">Days to keep records after a student's final departure.</div>
+            </div>
+
+            <div class="form-group">
+                <label>Automatic Anonymization:</label>
+                <label class="switch">
+                    <input type="checkbox" id="anonymize_after_retention">
+                    <span class="slider"></span>
+                </label>
+                <div class="switch-label">Automatically strip PII (Personally Identifiable Information) after the retention period expires.</div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h2>Audit & Security Compliance</h2>
+            
+            <div class="form-group">
+                <label for="audit_log_retention_days">Audit Log Retention Period (Days):</label>
+                <input type="number" id="audit_log_retention_days" name="audit_log_retention_days" class="form-control" min="30" max="3650" required>
+                <div class="switch-label">How long to store detailed audit logs of critical actions.</div>
+            </div>
+
+            <div class="form-group">
+                <label>Mandatory Multi-Factor Authentication (MFA):</label>
+                <label class="switch">
+                    <input type="checkbox" id="force_mfa_admins">
+                    <span class="slider"></span>
+                </label>
+                <div class="switch-label">Force MFA setup for all users with Admin or Finance roles.</div>
+            </div>
+        </div>
+        
+        <button type="submit" id="save-btn" class="btn-save"><i class="fas fa-save"></i> Save Global Compliance Settings</button>
+    </form>
+    
+    <div id="status-msg" class="msg-success"></div>
+</div>
+
+<script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+</body>
+</html>

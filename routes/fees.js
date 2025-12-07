@@ -1056,17 +1056,16 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
 });
 
 
-// 5.9 GENERAL LEDGER EXPORT (Omitted for brevity)
+// 5.9 GENERAL LEDGER EXPORT (FIXED CAFETERIA COLUMNS BASED ON SCHEMA)
 router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('year').format('YYYY-MM-DD');
     const end = endDate || moment().endOf('year').format('YYYY-MM-DD');
 
     try {
-        // Combines Income (Payments) and Expenses for General Ledger view
         const query = `
             SELECT * FROM (
-                -- 1. INCOME (Credit)
+                -- 1. FEE INCOME (Credit)
                 SELECT 
                     payment_date AS date,
                     'Income' AS type,
@@ -1078,8 +1077,8 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
                 WHERE payment_date::date >= $1 AND payment_date::date <= $2
 
                 UNION ALL
-
-                -- 2. EXPENSES (Debit)
+                
+                -- 2. OPERATIONAL EXPENSES (Debit)
                 SELECT 
                     e.expense_date AS date,
                     'Expense' AS type,
@@ -1090,6 +1089,37 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
                 FROM ${DB.EXPENSES} e
                 LEFT JOIN ${DB.BUDGET_CATS} c ON e.category_id = c.id
                 WHERE e.expense_date::date >= $1 AND e.expense_date::date <= $2
+                
+                UNION ALL
+                
+                -- 3. PAYROLL EXPENSE (Debit)
+                -- Uses confirmed payroll columns from schema analysis: ps.pay_date and ps.net_pay
+                SELECT
+                    ps.pay_date AS date,
+                    'Expense' AS type,
+                    'Payroll' AS category,
+                    (COALESCE(t.full_name, 'Staff') || ' Salary Payout, ID: ' || ps.employee_id) AS description,
+                    0.00 AS credit,
+                    ps.net_pay AS debit
+                FROM pay_slips ps
+                LEFT JOIN teachers t ON ps.teacher_id = t.id
+                WHERE ps.pay_date::date >= $1 AND ps.pay_date::date <= $2
+                
+                UNION ALL
+                
+                -- 4. CAFETERIA INCOME (Credit)
+                -- FIX: Using confirmed schema columns: ct.created_at and ct.amount
+                SELECT 
+                    ct.created_at::date AS date,
+                    'Income' AS type,
+                    'Cafeteria Sales' AS category,
+                    ('Cafeteria Sale Ref: ' || ct.id::text) AS description,
+                    ct.amount AS credit,
+                    0.00 AS debit
+                FROM cafeteria_transactions ct
+                WHERE ct.type = 'Sale' /* Use 'type' column for filtering */
+                  AND ct.created_at::date >= $1 AND ct.created_at::date <= $2
+
             ) ledger_data
             ORDER BY date DESC
         `;
@@ -1099,9 +1129,13 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
 
     } catch (error) {
         console.error('GL Export Error:', error);
-        res.status(500).json({ message: 'Failed to generate GL report.' });
+        res.status(500).json({ message: 'Failed to generate GL report. SQL Error likely.' });
     }
 });
+
+
+
+
 
 // =========================================================
 // SECTION 6: ADMIN UTILITIES (WAIVERS, DEFAULTERS)

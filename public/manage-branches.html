@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Global Branch Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <style>
+        /* --- General Layout & Typography --- */
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 40px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #005A9C; font-weight: 700; border-bottom: 2px solid #005A9C; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }
+        h2 { color: #2c3e50; font-size: 1.4em; margin-top: 30px; }
+        
+        /* --- Controls & Buttons --- */
+        .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #3498db; }
+        button, .btn-action { padding: 8px 12px; border: 1px solid #333; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-weight: 600; margin-left: 5px; }
+        .btn-primary { background-color: #005A9C; color: white; border-color: #00407a; }
+        .btn-primary:hover { background-color: #00407a; }
+        .btn-danger { background-color: #C0392B; color: white; border-color: #942b20; }
+        .btn-danger:hover { background-color: #942b20; }
+        .btn-warning { background-color: #FFC300; color: #333; border-color: #e5b300; }
+        .btn-warning:hover { background-color: #e5b300; }
+        .btn-clone { background-color: #3498db; color: white; border-color: #2a7cad; }
+        
+        /* --- Forms --- */
+        #add-branch-form { display: grid; grid-template-columns: repeat(4, 1fr) auto; gap: 15px; background: #f8f8f8; padding: 20px; border-radius: 6px; border: 1px solid #eee; margin-bottom: 30px; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .form-group label { display: block; font-size: 0.9em; margin-bottom: 3px; }
+        
+        /* --- Unique Feature Styling --- */
+        .default-badge { background-color: #28a745; color: white; padding: 2px 8px; border-radius: 4px; font-size: 0.75em; margin-left: 10px; }
+        .migration-box { background: #f0f8ff; border: 1px solid #bce8f1; padding: 20px; border-radius: 6px; margin-top: 20px; }
+        .migration-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+
+        /* --- Table --- */
+        .branch-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        .branch-table th, .branch-table td { border: 1px solid #eee; padding: 12px; text-align: left; }
+        .branch-table th { background-color: #f4f4f4; color: #333; font-weight: 600; }
+        .active-status { color: #28a745; font-weight: 600; }
+        .inactive-status { color: #C0392B; }
+    </style>
+</head>
+<body>
+
+<script>
+    // --- Authentication and Authorization Check ---
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role');
+    const API_BRANCHES = '/api/branches'; 
+    const API_SETTINGS_GLOBAL = '/api/settings/global'; // Hypothetical global settings API
+    const API_MIGRATE = '/api/system/migrate/user';      // Hypothetical user migration API
+    const API_CLONE = '/api/branches/clone';             // Hypothetical branch cloning API
+
+    // Only allow Super Admin access
+    if (!TOKEN || USER_ROLE !== 'Super Admin') {
+        alert('Access Denied. Only Super Admins can manage branches.');
+        window.location.href = '/admin-dashboard.html';
+    }
+    
+    let allBranches = [];
+    let defaultBranchId = ''; // Store the UUID of the system's default branch
+</script>
+
+<div class="container">
+    <a href="/admin-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+    <h1><i class="fas fa-city"></i> Global Branch Management</h1>
+    <p>Manage all independent school branches or tenants. Control access, status, and system defaults.</p>
+
+    <h2>Add New Branch</h2>
+    <form id="add-branch-form">
+        <div class="form-group">
+            <label for="branch_name">Branch Name *</label>
+            <input type="text" id="branch_name" name="branch_name" class="form-control" required>
+        </div>
+        <div class="form-group">
+            <label for="branch_code">Branch Code *</label>
+            <input type="text" id="branch_code" name="branch_code" class="form-control" required placeholder="E.g., MC01">
+        </div>
+        <div class="form-group">
+            <label for="address">Address (Text)</label>
+            <input type="text" id="address" name="address" class="form-control" placeholder="123 School Lane">
+        </div>
+        <div class="form-group">
+            <label for="email">Email</label>
+            <input type="email" id="email" name="email" class="form-control" placeholder="contact@branch.com">
+        </div>
+        <div class="form-group" style="grid-column: 5 / 6; align-self: flex-end;">
+            <button type="submit" class="btn-primary" id="submit-btn"><i class="fas fa-plus"></i> Add Branch</button>
+        </div>
+    </form>
+    
+    <p id="message-area" style="color: green; margin-top: -15px;"></p>
+
+    <h2>Existing Branches</h2>
+    <table class="branch-table" id="branch-table">
+        <thead>
+            <tr>
+                <th>Branch Name (Code)</th>
+                <th>Contact/Phone</th>
+                <th>Address/Email</th>
+                <th>Branch ID (UUID)</th>
+                <th>Status</th>
+                <th>Global Actions</th>
+            </tr>
+        </thead>
+        <tbody id="branch-list">
+            <tr><td colspan="6" style="text-align: center;">Loading branches...</td></tr>
+        </tbody>
+    </table>
+    
+    <div class="migration-box">
+        <h2><i class="fas fa-people-arrows"></i> User Migration Tool (Global)</h2>
+        <p>Move selected users (by ID) in bulk from one branch to another.</p>
+        <form id="migration-form" class="migration-grid">
+            <div class="form-group">
+                <label for="source_branch_id">Source Branch</label>
+                <select id="source_branch_id" name="source_branch_id" class="form-control" required></select>
+            </div>
+            <div class="form-group">
+                <label for="target_branch_id">Target Branch</label>
+                <select id="target_branch_id" name="target_branch_id" class="form-control" required></select>
+            </div>
+            <div class="form-group" style="grid-column: 3 / 4;">
+                <label for="user_ids">User IDs (Comma Separated)</label>
+                <input type="text" id="user_ids" name="user_ids" class="form-control" required placeholder="e.g., STUDENT01, STAFF05">
+            </div>
+            <div class="form-group" style="grid-column: 4 / 5; align-self: flex-end;">
+                <button type="submit" class="btn-warning" id="migrate-btn"><i class="fas fa-exchange-alt"></i> Migrate Users</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // --- Helper Functions ---
+    async function handleApi(url, options = {}) {
+        options.headers = { 
+            'Authorization': `Bearer ${TOKEN}`,
+            'Content-Type': 'application/json',
+            ...options.headers 
+        };
+        const response = await fetch(url, options);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+        return response;
+    }
+    
+    function displayMessage(msg, isError = false) {
+        const msgEl = document.getElementById('message-area');
+        msgEl.textContent = isError ? "❌ Error: " + msg : "✅ " + msg;
+        msgEl.style.color = isError ? 'red' : 'green';
+    }
+
+    // --- RENDER & FETCH DATA ---
+    async function fetchBranches() {
+        const branchListEl = document.getElementById('branch-list');
+        branchListEl.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading branches...</td></tr>';
+        
+        try {
+            // Fetch branches
+            const branchResponse = await handleApi(API_BRANCHES, { method: 'GET' });
+            if (!branchResponse.ok) {
+                const error = await branchResponse.json();
+                throw new Error(error.message || branchResponse.statusText);
+            }
+            allBranches = await branchResponse.json();
+            
+            // Fetch global settings to get default branch ID
+            // NOTE: This assumes the global settings API returns a key like { default_branch_id: UUID }
+            const settingsResponse = await handleApi(API_SETTINGS_GLOBAL, { method: 'GET' });
+            if (settingsResponse.ok) {
+                const settings = await settingsResponse.json();
+                defaultBranchId = settings.default_branch_id || '';
+            }
+
+            if (allBranches.length === 0) {
+                branchListEl.innerHTML = '<tr><td colspan="6" style="text-align: center;">No branches configured yet.</td></tr>';
+                return;
+            }
+
+            // Populate Table
+            branchListEl.innerHTML = allBranches.map(branch => {
+                const isDefault = branch.id === defaultBranchId;
+                
+                return `
+                    <tr data-id="${branch.id}">
+                        <td>
+                            ${branch.branch_name} (${branch.branch_code})
+                            ${isDefault ? '<span class="default-badge">DEFAULT</span>' : ''}
+                        </td>
+                        <td>${branch.phone_number || 'N/A'}</td>
+                        <td>${branch.address || 'N/A'} / ${branch.email || 'N/A'}</td>
+                        <td style="font-family: monospace; font-size: 0.85em;">${branch.id}</td>
+                        <td>
+                            <span class="${branch.is_active ? 'active-status' : 'inactive-status'}">
+                                ${branch.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                        </td>
+                        <td>
+                            ${!isDefault ? `<button class="btn-warning btn-action" title="Set as System Default" onclick="setDefaultBranch('${branch.id}', '${branch.branch_name}')"><i class="fas fa-star"></i> Default</button>` : ''}
+                            <button class="btn-clone btn-action" title="Clone settings to new branch" onclick="cloneBranch('${branch.id}', '${branch.branch_name}')"><i class="fas fa-copy"></i> Clone</button>
+                            <button class="btn-primary btn-action" onclick="editBranch('${branch.id}')"><i class="fas fa-pen"></i> Edit</button>
+                            <button class="btn-danger btn-action" onclick="deleteBranch('${branch.id}', '${branch.branch_name}')" ${isDefault ? 'disabled title="Cannot delete default branch"' : ''}><i class="fas fa-trash"></i> Delete</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+            
+            // Populate Migration Selects
+            populateMigrationSelects();
+
+        } catch (e) {
+            displayMessage(e.message || 'Could not connect to API.', true);
+            branchListEl.innerHTML = `<tr><td colspan="6" style="text-align: center; color: red;">Failed to load data: ${e.message}</td></tr>`;
+        }
+    }
+    
+    function populateMigrationSelects() {
+        const sourceEl = document.getElementById('source_branch_id');
+        const targetEl = document.getElementById('target_branch_id');
+        
+        // Clear existing options, keep the first default disabled option if present
+        sourceEl.innerHTML = '<option value="" disabled selected>Select Source</option>';
+        targetEl.innerHTML = '<option value="" disabled selected>Select Target</option>';
+        
+        allBranches.forEach(branch => {
+            const option = `<option value="${branch.id}">${branch.branch_name} (${branch.branch_code})</option>`;
+            sourceEl.innerHTML += option;
+            targetEl.innerHTML += option;
+        });
+    }
+
+
+    // --- CRUD and Global Actions ---
+
+    // 1. ADD BRANCH HANDLER (Existing Logic)
+    document.getElementById('add-branch-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const submitBtn = document.getElementById('submit-btn');
+        submitBtn.disabled = true;
+        displayMessage('Processing...', false);
+
+        const formData = new FormData(event.target);
+        const data = Object.fromEntries(formData.entries());
+        data.is_active = true; 
+
+        try {
+            const response = await handleApi(API_BRANCHES, {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || response.statusText);
+            }
+
+            displayMessage(`Branch "${data.branch_name}" added successfully!`);
+            event.target.reset();
+            fetchBranches();
+
+        } catch (e) {
+            displayMessage(e.message, true);
+        } finally {
+            submitBtn.disabled = false;
+        }
+    });
+
+    // 2. SET DEFAULT BRANCH
+    async function setDefaultBranch(id, name) {
+        if (confirm(`Confirm setting "${name}" as the NEW System Default Branch? This affects all user sign-ups and system fallbacks.`)) {
+            try {
+                 // Hypothetical API call to update global settings
+                const response = await handleApi(API_SETTINGS_GLOBAL, {
+                    method: 'PUT',
+                    body: JSON.stringify({ default_branch_id: id })
+                });
+                
+                if (!response.ok) throw new Error('Failed to update global default setting.');
+
+                displayMessage(`"${name}" is now the System Default Branch.`);
+                fetchBranches(); // Re-render to show badge
+
+            } catch (e) {
+                displayMessage(e.message, true);
+            }
+        }
+    }
+    
+    // 3. CLONE BRANCH
+    async function cloneBranch(id, name) {
+        const newName = prompt(`Enter a new name for the cloned settings (e.g., ${name} - Copy):`);
+        if (!newName) return;
+        
+        if (confirm(`Confirm cloning the configuration of "${name}" to create a new branch named "${newName}"?`)) {
+            try {
+                // Hypothetical API call to clone settings
+                const response = await handleApi(API_CLONE, {
+                    method: 'POST',
+                    body: JSON.stringify({ source_id: id, new_name: newName })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Cloning failed.');
+                }
+                
+                displayMessage(`Branch "${newName}" created by cloning "${name}" settings!`);
+                fetchBranches();
+
+            } catch (e) {
+                displayMessage(e.message, true);
+            }
+        }
+    }
+
+    // 4. USER MIGRATION HANDLER
+    document.getElementById('migration-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
+        const migrateBtn = document.getElementById('migrate-btn');
+        migrateBtn.disabled = true;
+        displayMessage('Initiating migration...', false);
+
+        const formData = new FormData(event.target);
+        const data = Object.fromEntries(formData.entries());
+        
+        const userIDs = data.user_ids.split(',').map(id => id.trim()).filter(id => id);
+
+        if (data.source_branch_id === data.target_branch_id) {
+            displayMessage('Source and Target branches must be different.', true);
+            migrateBtn.disabled = false;
+            return;
+        }
+
+        try {
+            const response = await handleApi(API_MIGRATE, {
+                method: 'POST',
+                body: JSON.stringify({
+                    user_identifiers: userIDs,
+                    source_branch_id: data.source_branch_id,
+                    target_branch_id: data.target_branch_id
+                })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Migration failed.');
+            }
+
+            const result = await response.json();
+            displayMessage(`Migration complete: ${result.migrated_count || userIDs.length} users successfully moved to the target branch.`);
+
+        } catch (e) {
+            displayMessage(e.message, true);
+        } finally {
+            migrateBtn.disabled = false;
+        }
+    });
+
+    // 5. EDIT/DELETE (Existing Logic - exposed globally)
+    // Expose functions globally for table buttons
+    window.editBranch = function(id) { 
+        const branch = allBranches.find(b => b.id === id);
+        if (confirm(`Editing ${branch.branch_name}. Do you want to TOGGLE its status to ${branch.is_active ? 'Inactive' : 'Active'}?`)) {
+             const newStatus = !branch.is_active;
+             mockUpdateBranch(id, { is_active: newStatus });
+        }
+    };
+    window.deleteBranch = deleteBranch;
+    window.setDefaultBranch = setDefaultBranch;
+    window.cloneBranch = cloneBranch;
+    window.mockUpdateBranch = mockUpdateBranch; // For toggle
+
+    async function mockUpdateBranch(id, updates) {
+        try {
+            const response = await handleApi(`${API_BRANCHES}/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify(updates)
+            });
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Update failed.');
+            }
+            displayMessage('Branch status updated.');
+            fetchBranches();
+        } catch(e) {
+            displayMessage(e.message, true);
+        }
+    }
+    async function deleteBranch(id, name) {
+        if (confirm(`CRITICAL: Are you sure you want to permanently DELETE the branch "${name}"? This action cannot be undone and may affect associated users and data.`)) {
+            try {
+                const response = await handleApi(`${API_BRANCHES}/${id}`, { method: 'DELETE' });
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Deletion failed.');
+                }
+                displayMessage('Branch successfully deleted.');
+                fetchBranches();
+            } catch(e) {
+                displayMessage(e.message, true);
+            }
+        }
+    }
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', fetchBranches);
+</script>
+<script src="js/global-config.js"></script>
+</body>
+</html>

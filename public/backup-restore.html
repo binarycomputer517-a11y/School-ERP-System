@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Backup & DR</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* --- General Layout & Typography --- */
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+        .container { max-width: 1000px; margin: 20px auto; padding: 40px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #005A9C; font-weight: 700; border-bottom: 2px solid #005A9C; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }
+        h2 { color: #2c3e50; font-size: 1.4em; margin-top: 30px; }
+        .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #3498db; }
+        
+        /* --- Backup Controls --- */
+        .backup-control-card { background: #f8f8f8; padding: 20px; border-radius: 8px; border: 1px solid #eee; margin-bottom: 30px; }
+        .btn-backup { 
+            padding: 12px 20px; 
+            background-color: #28a745; 
+            color: white; 
+            border: none; 
+            border-radius: 4px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            transition: background 0.2s; 
+            font-weight: 600;
+        }
+        .btn-backup:hover { background-color: #1e7e34; }
+        .btn-backup:disabled { background-color: #999; cursor: not-allowed; }
+
+        /* --- Restore & Table --- */
+        .log-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em; }
+        .log-table th, .log-table td { border: 1px solid #eee; padding: 10px; text-align: left; }
+        .log-table th { background-color: #f4f4f4; color: #333; font-weight: 600; }
+        .log-table td:nth-child(2) { font-family: monospace; font-size: 0.85em; }
+        
+        .btn-restore { background-color: #ffc107; color: #333; border: 1px solid #ffc107; margin-right: 5px; }
+        .btn-download { background-color: #3498db; color: white; border: 1px solid #3498db; }
+        
+        /* Status Messages */
+        .status-msg { padding: 10px; border-radius: 4px; margin-top: 15px; font-weight: 600; display: none; }
+        .status-success { background-color: #d4edda; color: #155724; }
+        .status-error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<script>
+    // --- Authentication and Authorization Check ---
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role');
+    const API_BACKUP_INITIATE = '/api/system/backup/initiate';
+    const API_BACKUP_LIST = '/api/system/backup/list'; 
+
+    // Only allow Super Admin or IT Helpdesk/Support access
+    if (!TOKEN || (USER_ROLE !== 'Super Admin' && USER_ROLE !== 'IT Helpdesk')) {
+        alert('Access Denied. Elevated privileges required for DR operations.');
+        window.location.href = '/admin-dashboard.html';
+    }
+    
+    // --- Helper Functions ---
+    async function handleApi(url, options = {}) {
+        options.headers = { 
+            'Authorization': `Bearer ${TOKEN}`,
+            'Content-Type': 'application/json',
+            ...options.headers 
+        };
+        const response = await fetch(url, options);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+        return response;
+    }
+
+    function displayStatus(msg, isError = false) {
+        const statusEl = document.getElementById('backup-status');
+        statusEl.textContent = msg;
+        statusEl.className = isError ? 'status-msg status-error' : 'status-msg status-success';
+        statusEl.style.display = 'block';
+        setTimeout(() => statusEl.style.display = 'none', 7000);
+    }
+
+    function formatDate(timestamp) {
+        if (!timestamp) return 'N/A';
+        const date = new Date(timestamp);
+        return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+    
+    // --- ACTIONS ---
+
+    /**
+     * Initiates a manual, full database backup.
+     */
+    async function initiateBackup() {
+        if (!confirm("WARNING: Are you sure you want to start a full, manual database backup? This may take several minutes.")) {
+            return;
+        }
+
+        const btn = document.getElementById('initiateBtn');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Backup in Progress...';
+        document.getElementById('backup-status').style.display = 'none';
+
+        try {
+            const response = await handleApi(API_BACKUP_INITIATE, { method: 'POST' });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || `Server responded with ${response.status}`);
+            }
+
+            const result = await response.json();
+            displayStatus(`Backup successful! File: ${result.filename}`, false);
+            fetchBackupList();
+
+        } catch (e) {
+            displayStatus(`Backup Failed: ${e.message}`, true);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+        }
+    }
+
+    /**
+     * Fetches the list of recent backup files from the server.
+     */
+    async function fetchBackupList() {
+        // FIX: The ID used in the previous versions was incorrect (log-list). Correcting to match intended HTML.
+        const listEl = document.getElementById('backup-list'); 
+        listEl.innerHTML = '<tr><td colspan="4" style="text-align: center;">Fetching list...</td></tr>';
+
+        try {
+            const response = await handleApi(API_BACKUP_LIST, { method: 'GET' });
+            if (!response.ok) throw new Error('Failed to fetch backup list.');
+
+            const files = await response.json();
+
+            if (files.length === 0) {
+                listEl.innerHTML = '<tr><td colspan="4" style="text-align: center;">No backups found.</td></tr>';
+                return;
+            }
+
+            listEl.innerHTML = files.map(file => `
+                <tr>
+                    <td>${formatDate(file.timestamp)}</td>
+                    <td>${file.filename}</td>
+                    <td>${(file.size / (1024 * 1024)).toFixed(2)} MB</td>
+                    <td>
+                        <button class="btn-restore btn-action" onclick="simulateRestore('${file.filename}')"><i class="fas fa-undo"></i> Restore (Simulated)</button>
+                        <button class="btn-download btn-action" onclick="downloadBackup('${file.filename}')"><i class="fas fa-download"></i> Download</button>
+                    </td>
+                </tr>
+            `).join('');
+
+        } catch (e) {
+            listEl.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Error: ${e.message}</td></tr>`;
+        }
+    }
+
+    /**
+     * Placeholder for the dangerous restore operation.
+     */
+    function simulateRestore(filename) {
+        if (confirm(`CRITICAL WARNING: Are you absolutely sure you want to RESTORE the database from file "${filename}"? ALL current data will be LOST.`)) {
+            displayStatus(`CRITICAL: Initiating RESTORE operation from ${filename}. This would take the system offline.`, true);
+            // In a real application, a POST request to /api/system/backup/restore with the filename would be made here.
+        }
+    }
+    
+    /**
+     * Placeholder for downloading the backup file.
+     */
+    function downloadBackup(filename) {
+        // Assume the backend serves files via a dedicated static route
+        const downloadUrl = `/backups/${filename}`; 
+        window.open(downloadUrl, '_blank');
+        displayStatus(`Initiating download for ${filename}`, false);
+    }
+
+    // Expose functions globally for HTML calls
+    window.initiateBackup = initiateBackup;
+    window.simulateRestore = simulateRestore;
+    window.downloadBackup = downloadBackup;
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', fetchBackupList);
+</script>
+
+<div class="container">
+    <a href="/admin-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+    <h1><i class="fas fa-database"></i> Database Backup & Disaster Recovery</h1>
+    <p>Perform manual full backups and manage recovery operations. Automated daily backups are assumed to run in the background. 
+
+[Image of backup server rack]
+</p>
+
+    <div class="backup-control-card">
+        <h2>Manual Full Backup</h2>
+        <p>Trigger an immediate, system-wide database dump to ensure all latest data is archived.</p>
+        <button class="btn-backup" onclick="initiateBackup()" id="initiateBtn">
+            <i class="fas fa-save"></i> Initiate Full Backup Now
+        </button>
+        <div id="backup-status" class="status-msg"></div>
+    </div>
+    
+    <h2>Recent Backup Files</h2>
+    <table class="log-table">
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>File Name</th>
+                <th>Size</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="backup-list"> 
+            </tbody>
+    </table>
+</div>
+<script src="js/global-config.js"></script>
+</body>
+</html>
