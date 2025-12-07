@@ -170,12 +170,11 @@
             body { 
                 background: #fff; 
                 color: #000; 
-                /* Ensure all content fits on one A4 page without excessive margins */
                 margin: 0; 
                 padding: 10mm;
             }
             .container { 
-                display: block; /* Stack sidebar and main content */
+                display: block; 
                 max-width: 100%;
             }
             
@@ -197,9 +196,9 @@
                 background: none; 
                 padding: 0; 
                 margin-bottom: 20px;
-                position: static; /* Important for flow */
+                position: static; 
                 width: 100%;
-                text-align: left; /* Adjust sidebar alignment for print */
+                text-align: left; 
             }
             .profile-sidebar h1, .profile-sidebar div {
                 text-align: left;
@@ -218,7 +217,7 @@
 
             /* Display ALL panes for a complete summary, but simplify their appearance */
             .tab-pane { 
-                display: block !important; /* Forces all tabs to display */
+                display: block !important; 
                 border: 1px solid #ccc; 
                 background: none; 
                 color: #000; 
@@ -243,18 +242,18 @@
             #map-container { 
                 filter: none !important; 
                 border: 1px solid #ddd !important;
-                height: 150px !important; /* Smaller map for summary */
+                height: 150px !important; 
             }
             #charts-container {
-                grid-template-columns: 1fr; /* Stack charts vertically */
+                grid-template-columns: 1fr; 
             }
             #charts-container > div {
-                 background: #f7f7f7 !important; /* Light background for charts */
+                 background: #f7f7f7 !important; 
             }
 
             /* Hide elements intended for interactive use or excessive detail */
             #invoice-table, #timeline-container, .attendance-heatmap {
-                display: none; /* Hiding tables, heatmap, and full timeline for a brief A4 summary */
+                display: none; 
             }
             
             /* Keep essential finance summary */
@@ -402,6 +401,7 @@
 </div>
 
 <script>
+    // Note: Assuming window.API_BASE_URL is loaded from global-config.js
     const API_BASE_URL = window.API_BASE_URL || '/api';
     const token = localStorage.getItem('erp-token');
     if (!token) window.location.href = '/login.html';
@@ -416,16 +416,20 @@
             return;
         }
         
+        let studentData;
         try {
+            // 1. Fetch Student Profile Data
             const studentRes = await fetch(`${API_BASE_URL}/students/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
             
             if (!studentRes.ok) throw new Error("Failed to load student");
-            const studentData = await studentRes.json();
+            studentData = await studentRes.json();
             
             populateBasicInfo(studentData);
-            populateFinance(studentData);
             populateAcademic(studentData);
             populateTimeline(studentData);
+            
+            // 2. Fetch and Populate Financial Data Separately (CRITICAL FIX)
+            await populateFinance(studentData);
 
         } catch (error) {
             console.error(error);
@@ -469,7 +473,9 @@
         // --------------------------
 
         set('p-attendance-stat', data.attendance_percentage ? `${data.attendance_percentage}%` : 'N/A');
-        set('p-due-stat', data.total_fees_due ? `₹${data.total_fees_due}` : 'N/A');
+        
+        // Due stat will be updated by populateFinance later
+        // set('p-due-stat', data.total_fees_due ? `₹${data.total_fees_due}` : 'N/A');
 
         set('d-fullname', `${data.first_name} ${data.last_name}`);
         set('d-dob', data.dob ? new Date(data.dob).toLocaleDateString() : 'N/A');
@@ -477,8 +483,8 @@
         set('d-blood', data.blood_group);
         set('d-phone', data.phone_number);
         set('d-email', data.email);
-        set('d-father', data.father_name);
-        set('d-mother', data.mother_name);
+        set('d-father', data.parent_first_name);
+        set('d-mother', data.parent_last_name);
         set('d-emergency', data.emergency_contact_number || data.emergency_contact);
         set('d-address', data.permanent_address || data.present_address);
 
@@ -492,46 +498,92 @@
         }
     }
 
-    // 2. Finance
-    function populateFinance(data) {
-        const hasFinanceData = (data.total_course_fee !== undefined) || (data.payment_history && data.payment_history.length > 0);
-        if (!hasFinanceData) {
-            document.getElementById('finance-content').style.display = 'none';
-            document.getElementById('no-finance-data').style.display = 'block';
-            return;
-        }
-
-        const total = parseFloat(data.total_course_fee) || 0;
-        const due = parseFloat(data.total_fees_due) || 0;
-        const paid = total - due;
-        
-        if (total > 0) {
-            const percent = Math.round((paid / total) * 100);
-            document.getElementById('fee-bar').style.width = `${percent}%`;
-            document.getElementById('fee-percentage').textContent = `${percent}%`;
-            document.getElementById('val-paid').textContent = `₹${paid}`;
-            document.getElementById('val-due').textContent = `₹${due}`;
-        }
-
+    // 2. Finance - CRITICAL FIX APPLIED
+    async function populateFinance(studentProfileData) {
+        const financeContent = document.getElementById('finance-content');
+        const noFinanceData = document.getElementById('no-finance-data');
         const tbody = document.getElementById('invoice-list');
-        tbody.innerHTML = '';
-        if (data.payment_history && Array.isArray(data.payment_history)) {
-            data.payment_history.forEach(pay => {
-                const row = `<tr>
-                    <td>${new Date(pay.payment_date).toLocaleDateString()}</td>
-                    <td>${pay.description || 'Fee Payment'}</td>
-                    <td style="text-align:right">₹${pay.amount}</td>
-                    <td style="text-align:center">${pay.status || 'Completed'}</td>
-                </tr>`;
-                tbody.innerHTML += row;
-            });
-        } else {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No transaction history.</td></tr>';
+        const pDueStat = document.getElementById('p-due-stat');
+
+        // Hide initialization message by default
+        noFinanceData.style.display = 'none';
+
+        try {
+            // CALL THE BACKEND ROUTE THAT AUTO-GENERATES INVOICES (routes/fees.js, Section 3.2)
+            const feeRes = await fetch(`${API_BASE_URL}/fees/student/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
+            
+            // Handle case where backend returns 404 or non-OK status due to deep internal error
+            if (!feeRes.ok) {
+                 // Try to read error body if available, otherwise use status text
+                 const errorBody = await feeRes.json().catch(() => ({ message: feeRes.statusText }));
+                 throw new Error(errorBody.message || `HTTP Error ${feeRes.status}`);
+            }
+
+            const feeData = await feeRes.json();
+            
+            const total = parseFloat(feeData.total_fees) || 0;
+            const paid = parseFloat(feeData.total_paid) || 0;
+            const due = total - paid;
+            
+            if (total === 0 && feeData.payments.length === 0) {
+                 // Successfully loaded API, but total fees is 0.
+                 financeContent.style.display = 'none';
+                 noFinanceData.style.display = 'block';
+                 pDueStat.textContent = '₹0.00';
+                 noFinanceData.innerHTML = `Financial records not initialized for this student. <br><small style="color:var(--primary);">Reason: No fee structure found or Total Billed is zero.</small>`;
+                 return;
+            }
+
+            // --- Update UI ---
+            financeContent.style.display = 'block';
+
+            if (total > 0) {
+                const percent = Math.round((paid / total) * 100);
+                document.getElementById('fee-bar').style.width = `${percent}%`;
+                document.getElementById('fee-percentage').textContent = `${percent}%`;
+            } else {
+                document.getElementById('fee-bar').style.width = `100%`; // Paid > 0, Billed = 0
+                document.getElementById('fee-percentage').textContent = `100%`;
+            }
+
+            document.getElementById('val-paid').textContent = `₹${paid.toFixed(2)}`;
+            document.getElementById('val-due').textContent = `₹${due.toFixed(2)}`;
+            
+            // Update sidebar due stat using actual calculated balance
+            pDueStat.textContent = `₹${due.toFixed(2)}`;
+
+            // --- Populate Payment History (using feeData.payments) ---
+            tbody.innerHTML = '';
+            if (feeData.payments && feeData.payments.length > 0) {
+                feeData.payments.forEach(pay => {
+                    const row = `<tr>
+                        <td>${new Date(pay.payment_date).toLocaleDateString()}</td>
+                        <td>Fee Payment (${pay.payment_mode}) - Ref: ${pay.receipt_number || pay.paymentId.substring(0, 8).toUpperCase()}</td>
+                        <td style="text-align:right; color: var(--success);">+₹${parseFloat(pay.amount_paid).toFixed(2)}</td>
+                        <td style="text-align:center;">
+                            <span class="status-badge" style="background: var(--success); color:#000;">Paid</span>
+                        </td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No transaction history.</td></tr>';
+            }
+
+        } catch (error) {
+            console.error('Finance API Failed to Load/Generate:', error);
+            // Display initialization error if API failed due to status/internal crash
+            financeContent.style.display = 'none';
+            noFinanceData.style.display = 'block';
+            pDueStat.textContent = '--';
+            noFinanceData.innerHTML = `Financial records not initialized for this student. <br><small style="color:var(--danger);">Error: Transaction Failed. Check database links (Fee Structure).</small>`;
         }
     }
 
+
     // 3. Academic
     function populateAcademic(data) {
+        // ... (Academic logic remains the same)
         const hasExamData = data.exam_results && Array.isArray(data.exam_results) && data.exam_results.length > 0;
         if (hasExamData) {
             const labels = data.exam_results.map(e => e.exam_name);
@@ -572,6 +624,7 @@
 
     // 4. Timeline
     function populateTimeline(data) {
+        // ... (Timeline logic remains the same)
         const container = document.getElementById('timeline-container');
         container.innerHTML = '';
         if (data.activity_logs && Array.isArray(data.activity_logs) && data.activity_logs.length > 0) {
@@ -619,6 +672,6 @@
         window.open(`${API_BASE_URL}/reports/generate-id?studentId=${studentId}`, '_blank');
     };
 </script>
-
+<script src="js/global-config.js"></script>
 </body>
 </html>

@@ -1,3 +1,6 @@
+// routes/fees.js
+// TRUE FULL & FINAL VERSION (Includes ALL 17 Features & Sections)
+
 // =========================================================
 // SECTION 1: IMPORTS, CONSTANTS & CONFIGURATION
 // =========================================================
@@ -32,11 +35,29 @@ const DB = {
     SETTINGS: 'erp_settings' 
 };
 
+// const BASE_TUITION_FEE = 5000.00; // Removed as Tuition is no longer billed
 const FEE_ROLES = ['Admin', 'Staff', 'Super Admin', 'Finance'];
 
 // --- Helper Functions ---
 const generateInvoiceNumber = () => {
     return `INV-${moment().format('YYYYMMDD')}-${uuidv4().split('-')[0].toUpperCase().substring(0, 6)}`;
+};
+
+/**
+ * Helper to calculate Issue Date and Due Date based on course duration.
+ * @param {string} admissionDate - The student's admission date string (s.admission_date).
+ * @param {number} durationMonths - Course duration in months (fs.course_duration_months).
+ * @returns {{issueDate: string, dueDate: string}}
+ */
+const calculateDates = (admissionDate, durationMonths) => {
+    // 1. Issue Date is the Admission Date
+    const issueDate = moment(admissionDate).format('YYYY-MM-DD');
+    
+    // 2. Due Date calculation (7 days if short course, else 30 days)
+    const daysToAdd = durationMonths <= 6 ? 7 : 30; // 7 days if 6 months or less, otherwise 30 days
+    const dueDate = moment(issueDate).add(daysToAdd, 'days').format('YYYY-MM-DD');
+    
+    return { issueDate, dueDate };
 };
 
 // =========================================================
@@ -45,23 +66,21 @@ const generateInvoiceNumber = () => {
 
 /**
  * 2.1 FULL COURSE INVOICE GENERATION (One-Time based on Structure - BULK ADMIN TOOL)
- * FIX: Tuition Fee calculation removed.
+ * FIX: Uses student's admission_date as issue_date and dynamic due date calculation.
  */
 router.post('/generate-structure-invoice', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
-    // ... (Code for bulk invoice generation - Uses DB transactions)
     const adminId = req.user.id;
-    const issueDate = moment().format('YYYY-MM-DD'); 
-    const dueDate = moment().add(30, 'days').format('YYYY-MM-DD'); 
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         
-        // 1. Fetch Students linked with Fee Structure
+        // 1. Fetch Students linked with Fee Structure (Now fetching s.admission_date)
         const studentsRes = await client.query(`
             SELECT 
                 s.student_id, 
                 u.username, 
+                s.admission_date, /* ✅ ADDED: Fetch Admission Date */
                 fs.id AS fee_structure_id,
                 fs.structure_name,
                 COALESCE(fs.tuition_fee, 0) AS tuition_monthly,
@@ -82,6 +101,16 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
 
         for (const student of studentsRes.rows) {
             
+            // Skip if admission date is missing
+            if (!student.admission_date) {
+                console.warn(`Skipping bulk invoice for ${student.username}: Admission date missing.`);
+                skippedCount++;
+                continue;
+            }
+
+            // Calculate dates dynamically
+            const { issueDate, dueDate } = calculateDates(student.admission_date, student.duration);
+
             // 2. DUPLICATE CHECK
             const checkDuplicate = await client.query(`
                 SELECT id FROM ${DB.INVOICES} 
@@ -123,7 +152,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
 
             if (totalAmount === 0) continue; 
 
-            // 4. Insert Invoice Header
+            // 4. Insert Invoice Header (Uses dynamically calculated dates)
             const invRes = await client.query(`
                 INSERT INTO ${DB.INVOICES} 
                 (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
@@ -163,7 +192,6 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
  * 2.2 FEE COLLECTION
  */
 router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff', 'super admin']), async (req, res) => {
-    // ... (Code for fee collection - Uses DB transactions and prorates payment across open invoices)
     const { student_id, amount_paid, payment_mode, notes } = req.body;
     const collectedBy = req.user.id;
     const payAmount = parseFloat(amount_paid);
@@ -289,28 +317,27 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
 /**
  * 3.2 SMART STUDENT DASHBOARD (Auto-Generate/Summary)
  * FIX: Tuition Fee calculation removed; Transport/Hostel mandatory fallback added.
+ * FIX: Uses student's admission_date as issue_date and dynamic due date calculation.
  */
 router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
-    // ... (Code for student dashboard with auto-invoice logic and fee calculation)
     const client = await pool.connect();
     try {
         const { studentId } = req.params;
         const adminId = req.user.id; 
-        const issueDate = moment().format('YYYY-MM-DD');
-        const dueDate = moment().add(30, 'days').format('YYYY-MM-DD');
 
         await client.query('BEGIN');
 
-        // 1. Fetch Student, Structure, Duration AND Assignments
+        // 1. Fetch Student, Structure, Duration AND Assignments (Added s.admission_date)
         const sRes = await client.query(`
             SELECT 
                 s.student_id, 
                 u.username, 
                 s.roll_number,
+                s.admission_date, /* ✅ ADDED: Fetch Admission Date */
                 c.course_name, 
                 b.batch_name,
                 
-                -- Fee Structure Info (omitted for brevity)
+                -- Fee Structure Info
                 fs.id AS fee_structure_id,
                 fs.structure_name,
                 COALESCE(fs.course_duration_months, 12) AS duration,
@@ -321,13 +348,13 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
                 COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
 
-                -- Transport Info (omitted for brevity)
+                -- Transport Info
                 ta.monthly_fee AS transport_assigned_fee,
                 r.monthly_fee AS route_base_fee,
                 r.route_name,
                 ta.is_active AS transport_active,
 
-                -- Hostel Info (omitted for brevity)
+                -- Hostel Info
                 hr.room_fee AS hostel_monthly_rate,
                 hr.rate_name AS hostel_room_name
 
@@ -357,7 +384,20 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
         
         const student = sRes.rows[0];
 
-        // 2. CHECK & AUTO-GENERATE INVOICE LOGIC (Auto-generation logic is implemented here...)
+        // Ensure admission date exists before proceeding (Fixes initialization error if date is missing)
+        if (!student.admission_date) {
+            // Commit to avoid full rollback, but send back empty stats if core data is missing.
+            await client.query('COMMIT'); 
+            return res.json({ 
+                student_name: student.username, roll_number: student.roll_number,
+                total_fees: 0, total_paid: 0, balance: 0, payments: [] 
+            });
+        }
+        
+        // Calculate dates dynamically
+        const { issueDate, dueDate } = calculateDates(student.admission_date, student.duration);
+
+        // 2. CHECK & AUTO-GENERATE INVOICE LOGIC
         if (student.fee_structure_id) {
             
             const invCheck = await client.query(`
@@ -370,7 +410,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 
                 const duration = parseInt(student.duration);
 
-                // A. Base Course Fees - Set to 0 as Tuition is removed
+                // ❌ A. Base Course Fees - Set to 0 as Tuition is removed
                 const totalTuition = 0; 
                 
                 // B. Transport Calculation (Priority: Assigned Active > Structure Mandatory)
@@ -415,11 +455,11 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                     parseFloat(student.exam);
 
                 if (totalAmount > 0) {
-                    // Create Header and Items (omitted for brevity)
+                    // Create Header (Uses dynamically calculated dates)
                     const invRes = await client.query(`
                         INSERT INTO ${DB.INVOICES} 
                         (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
-                        VALUES ($1::uuid, $2, $3, $4, $5, 'Pending', $6::uuid, $7::uuid) 
+                        VALUES ($1::uuid, $2, $3::date, $4::date, $5, 'Pending', $6::uuid, $7::uuid) 
                         RETURNING id;
                     `, [student.student_id, generateInvoiceNumber(), issueDate, dueDate, totalAmount, adminId, student.fee_structure_id]);
                     
@@ -427,7 +467,6 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
                     // Create Items List
                     const items = [
-                        // { d: `Tuition Fee (${duration} Months)`, a: totalTuition }, <-- REMOVED TUITION
                         { d: 'Admission Fee', a: student.admission },
                         { d: 'Registration Fee', a: student.registration },
                         { d: 'Examination Fee', a: student.exam }
@@ -458,7 +497,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
         await client.query('COMMIT');
 
-        // 3. FETCH FINAL TOTALS & 4. Fetch Payment History (omitted for brevity)
+        // 3. FETCH FINAL TOTALS
         const invoiceStats = await pool.query(`
             SELECT 
                 COALESCE(SUM(total_amount), 0) AS total_invoiced,
@@ -506,7 +545,6 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
  * 3.3 PROFESSIONAL RECEIPT GENERATION (A5 Landscape - Fixed Layout)
  */
 router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
-    // ... (PDF Generation Logic - Detailed implementation is quite long)
     const { idOrTxn } = req.params;
     try {
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(idOrTxn);
@@ -557,6 +595,7 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         // --- PDF SETUP ---
         const doc = new PDFDocument({ size: 'A5', layout: 'landscape', margin: 30 });
         res.setHeader('Content-Type', 'application/pdf');
+        // Use safe reference for the filename
         res.setHeader('Content-Disposition', `attachment; filename=Receipt-${receiptRef}.pdf`); 
         doc.pipe(res);
 
@@ -566,8 +605,11 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         // 1. HEADER (MOCK DATA REMOVED - Using dynamic config from JSONB)
         const headerY = 35;
         doc.fillColor('#2c3e50')
+           // Use dynamic school_name (from JSONB)
            .fontSize(18).font("Helvetica-Bold").text(config.school_name || 'SCHOOL ERP SYSTEM', 40, headerY) 
+           // Use dynamic address (from JSONB)
            .fontSize(9).font("Helvetica").text(config.school_address || '', 40, headerY + 20) 
+           // Use dynamic contact details (from JSONB)
            .text(`Phone: ${config.school_phone || ''} | Email: ${config.school_email || ''}`, 40, headerY + 32); 
 
         doc.fillColor('#000')
@@ -648,18 +690,20 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         doc.end();
 
     } catch (e) { 
+        await client.query('ROLLBACK');
         console.error("Receipt Error:", e);
         res.status(500).json({ message: 'PDF Gen Failed' }); 
+    } finally {
+        client.release();
     }
 });
-
 
 
 // =========================================================
 // SECTION 4: SETTINGS & CONFIGURATION (ADMIN CRUD)
 // =========================================================
 
-// 4.1 DISCOUNT MANAGEMENT (CRUD - Omitted for brevity)
+// 4.1 DISCOUNT MANAGEMENT (CRUD)
 router.get('/discounts', authenticateToken, async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.DISCOUNTS} ORDER BY created_at DESC`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -670,7 +714,7 @@ router.delete('/discounts/:id', authenticateToken, authorize(['admin']), async (
     try { await pool.query(`DELETE FROM ${DB.DISCOUNTS} WHERE id=$1::uuid`, [req.params.id]); res.json({message:'Deleted'}); } catch (e) { res.status(500).json({message:'Error'}); }
 });
 
-// 4.2 HOSTEL RATES (CRUD - Omitted for brevity)
+// 4.2 HOSTEL RATES (CRUD)
 router.get('/hostel/rates', authenticateToken, async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.HOSTEL}`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -967,6 +1011,7 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
     try {
         let query = `
             SELECT 
+                s.student_id, /* ✅ FIX: Added student_id for frontend navigation */
                 s.roll_number, 
                 u.username AS student_name, 
                 c.course_name,
@@ -1062,7 +1107,7 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
 // SECTION 6: ADMIN UTILITIES (WAIVERS, DEFAULTERS)
 // =========================================================
 
-// 6.1 WAIVER REQUESTS (CRUD - Omitted for brevity)
+// 6.1 WAIVER REQUESTS (CRUD)
 router.get('/waiver-requests', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.WAIVERS} ORDER BY request_date DESC`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });

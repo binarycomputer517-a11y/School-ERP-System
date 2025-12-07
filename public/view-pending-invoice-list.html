@@ -3,37 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Pending Invoice List</title>
+    <title>Outstanding Invoices | Final ERP</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"> 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        /* --- General Styling & Variables --- */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;600;700&display=swap');
         :root {
-            --primary-color: #4a90e2;
-            --secondary-color: #797d7f;
-            --success-color: #27ae60;
-            --error-color: #c0392b;
-            --warning-color: #f39c12;
-            --light-gray-color: #f4f7f9;
-            --dark-gray-color: #555;
-            --border-color: #dfe6e9;
-            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+            --primary-color: #007bff; /* Bright Blue */
+            --primary-dark: #0056b3;
+            --secondary-color: #495057; /* Dark Gray */
+            --success-color: #28a745;
+            --error-color: #dc3545; /* Red */
+            --warning-color: #ffc107; /* Yellow */
+            --info-color: #17a2b8; /* Cyan Blue for Partial */
+            --light-gray-color: #f8f9fa;
+            --dark-gray-color: #343a30;
+            --border-color: #dee2e6;
+            --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
         }
         body {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'Roboto', sans-serif;
             background-color: var(--light-gray-color);
             color: var(--dark-gray-color);
             line-height: 1.6;
         }
         .container {
-            max-width: 1200px;
+            max-width: 1300px; 
             margin: 30px auto;
             padding: 20px;
         }
         h1 {
-            color: #333;
+            color: var(--primary-dark);
             text-align: center;
-            margin-bottom: 20px;
-            font-weight: 600;
+            margin-bottom: 25px;
+            font-weight: 700;
+            font-size: 2rem;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 10px;
         }
         .nav-links {
             text-align: center;
@@ -41,121 +48,182 @@
         }
         .nav-links a {
             text-decoration: none;
-            color: var(--primary-color);
+            color: var(--secondary-color);
             font-weight: 500;
+            transition: color 0.3s;
         }
+        .nav-links a:hover { color: var(--primary-color); }
+
         .card {
             background-color: #fff;
-            border-radius: 8px;
-            padding: 25px;
-            margin-bottom: 25px;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 30px;
             box-shadow: var(--card-shadow);
-            border: 1px solid var(--border-color);
+            border-left: 5px solid var(--primary-color); 
         }
-        .filter-controls {
-            display: flex;
-            gap: 20px;
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #ecf0f1;
-            border-radius: 5px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .filter-controls select, .filter-controls input {
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid var(--border-color);
-            min-width: 150px;
-        }
-        #invoice-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 15px;
-        }
-        #invoice-table th, #invoice-table td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid var(--border-color);
-            font-size: 0.9em;
-        }
-        #invoice-table th {
-            background-color: var(--primary-color);
-            color: #fff;
+        .card h2 {
+            color: var(--primary-color);
+            font-size: 1.4rem;
+            margin-top: 0;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
             font-weight: 600;
+            font-family: 'Poppins', sans-serif;
         }
-        .status-overdue { color: var(--error-color); font-weight: 600; }
-        .status-pending { color: var(--warning-color); font-weight: 600; }
-        .status-partial { color: #17a2b8; font-weight: 600; }
         
+        /* Filter Controls */
+        .filter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 25px;
+            padding: 20px;
+            background-color: #e9f0f9; 
+            border-radius: 8px;
+            align-items: center;
+            border: 1px dashed var(--border-color);
+        }
+        .filter-controls label { font-weight: 500; color: #343a40; margin-bottom: 5px; font-size: 0.95rem; }
+        .filter-controls select, .filter-controls input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 4px;
+            border: 1px solid #c0c0c0;
+            box-sizing: border-box;
+            background: white;
+        }
+        .btn-apply {
+            padding: 10px 15px;
+            background-color: var(--primary-dark);
+            color: white;
+            font-weight: 600;
+            border-radius: 4px;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            align-self: end;
+        }
+        .btn-apply:hover { background-color: var(--secondary-color); }
+
+
+        /* Table Styling */
+        #invoice-table { border-radius: 8px; overflow: hidden; }
+        #invoice-table th {
+            background-color: var(--secondary-color);
+            color: #fff;
+            font-weight: 700;
+            padding: 15px 12px;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            font-family: 'Poppins', sans-serif;
+        }
+        #invoice-table td {
+            padding: 12px;
+            vertical-align: middle;
+            font-size: 0.95rem;
+        }
+        #invoice-table tbody tr:nth-child(odd) { background-color: #fcfcfc; }
+        #invoice-table tbody tr:hover { background-color: #e9f0f9; }
+        
+        /* Status Badges */
+        .status-badge {
+            display: inline-block;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-size: 0.75em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-overdue { background-color: var(--error-color); color: #fff; }
+        .status-pending { border: 1px solid var(--warning-color); color: var(--warning-color); background: #fffcf4; }
+        .status-partial { background-color: var(--info-color); color: #fff; }
+        
+        /* Amount Due Highlight */
+        .amount-due-highlight { 
+            font-weight: 700; 
+            color: var(--error-color); 
+            font-family: 'Roboto', monospace; 
+        }
+        
+        /* Action Buttons */
         .action-btn {
-            padding: 6px 12px;
+            padding: 8px 12px;
             border: none;
             border-radius: 4px;
             cursor: pointer;
             font-size: 0.85em;
             margin-right: 5px;
             color: white;
+            font-weight: 500;
             transition: 0.3s;
         }
-        .btn-view { background-color: var(--secondary-color); }
-        .btn-pay { background-color: var(--success-color); }
-        .btn-pay:hover { background-color: #219150; }
-        .btn-pay:disabled { background-color: #ccc; cursor: not-allowed; }
+        .btn-ledger { background-color: var(--secondary-color); }
+        .btn-ledger:hover { background-color: #333; }
+        
+        .btn-pay { background-color: var(--success-color); font-weight: 600; }
+        .btn-pay:hover { background-color: #1e7e34; }
 
-        .placeholder-message {
-            text-align: center;
-            padding: 40px 0;
-            color: var(--secondary-color);
-        }
-        .small-text { font-size: 0.8em; color: #888; }
+        .placeholder-message { padding: 40px 0; font-style: italic; }
+        .small-text { font-size: 0.8em; color: var(--secondary-color); opacity: 0.7; }
+        .date-na { color: #888; font-style: italic; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>View Pending Invoice List</h1>
+    <h1><i class="fas fa-money-check-alt"></i> Outstanding Invoices</h1>
     <div class="nav-links">
-        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+        <a href="/finance-dashboard.html"><i class="fas fa-arrow-left"></i> Back to Finance Dashboard</a>
     </div>
 
     <div class="card">
-        <h2>Filter & Search</h2>
+        <h2><i class="fas fa-search-dollar"></i> Filter & Search</h2>
         <div class="filter-controls">
-            <label for="course-filter">Course:</label>
-            <select id="course-filter">
-                <option value="">All Courses</option>
-            </select>
+            <div>
+                <label for="course-filter">Course:</label>
+                <select id="course-filter">
+                    <option value="">All Courses</option>
+                </select>
+            </div>
 
-            <label for="status-filter">Status:</label>
-            <select id="status-filter">
-                <option value="pending" selected>All Pending</option>
-                <option value="overdue">Overdue Only</option>
-            </select>
+            <div>
+                <label for="status-filter">Invoice Status:</label>
+                <select id="status-filter">
+                    <option value="pending" selected>All Pending</option>
+                    <option value="overdue">Overdue Only</option>
+                    <option value="partial">Partial Paid</option>
+                </select>
+            </div>
             
-            <input type="text" id="search-input" placeholder="Name or Roll No">
+            <div>
+                <label for="search-input">Search Student:</label>
+                <input type="text" id="search-input" placeholder="Name or Roll No">
+            </div>
 
-            <button class="action-btn btn-view" id="apply-filters-btn">Apply Filters</button>
+            <button class="btn-apply" id="apply-filters-btn">
+                <i class="fas fa-filter"></i> Apply Filters
+            </button>
         </div>
 
-        <h2>Outstanding Invoices</h2>
-        <table id="invoice-table">
-            <thead>
-                <tr>
-                    <th>Ref ID</th>
-                    <th>Student</th>
-                    <th>Course</th>
-                    <th>Amount Due (₹)</th>
-                    <th>Issued</th>
-                    <th>Due Date</th>
-                    <th>Status</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody id="invoice-tbody">
-                <tr><td colspan="8" class="placeholder-message">Loading pending invoice data...</td></tr>
-            </tbody>
-        </table>
+        <h2><i class="fas fa-list-ul"></i> Invoice Summary</h2>
+        <div style="overflow-x: auto;">
+            <table id="invoice-table">
+                <thead>
+                    <tr>
+                        <th style="width: 10%">Ref ID</th>
+                        <th style="width: 25%">Student</th>
+                        <th style="width: 20%">Course</th>
+                        <th style="width: 20%">Amount Due (₹)</th>
+                        <th style="width: 15%">Status</th>
+                        <th style="width: 10%">Actions</th>
+                        </tr>
+                </thead>
+                <tbody id="invoice-tbody">
+                    <tr><td colspan="6" class="placeholder-message"><i class="fas fa-spinner fa-spin"></i> Loading data...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -178,6 +246,15 @@
         }
         return response.json();
     }
+    
+    // Helper: Currency Formatter
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2
+        }).format(parseFloat(amount));
+    };
 
     // --- 1. LOAD COURSES FOR FILTER ---
     async function loadCourses() {
@@ -186,7 +263,7 @@
             const courses = await handleApi('/api/academicswithfees/courses');
             courses.forEach(course => {
                 const option = document.createElement('option');
-                option.value = course.course_id;
+                option.value = course.course_id; 
                 option.textContent = `${course.course_name} (${course.course_code})`;
                 courseFilter.appendChild(option);
             });
@@ -198,15 +275,28 @@
     // --- 2. FETCH DATA ---
     async function fetchPendingInvoices(filters = {}) {
         const tbody = document.getElementById('invoice-tbody');
-        tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="6" class="placeholder-message"><i class="fas fa-spinner fa-spin"></i> Loading data...</td></tr>';
         
+        // CRITICAL FIX: Ensure all parameters have defined, safe values (empty string)
+        const safeFilters = {
+            course_id: filters.course_id || '', 
+            status: filters.status || 'pending', 
+            q: filters.q || '' 
+        };
+
         try {
-            const queryString = new URLSearchParams(filters).toString();
-            const invoices = await handleApi('/api/invoices/pending?' + queryString);
+            const queryString = new URLSearchParams({
+                course_id: safeFilters.course_id,
+                status_filter: safeFilters.status,
+                search: safeFilters.q
+            }).toString();
+            
+            // Using /api/reports/student-dues as this is the robust report route (Section 5.8)
+            const invoices = await handleApi('/api/reports/student-dues?' + queryString); 
             renderInvoices(invoices);
         } catch (error) {
             console.error('Error fetching invoices:', error);
-            tbody.innerHTML = `<tr><td colspan="8" class="placeholder-message" style="color: var(--error-color);">Error: ${error.message}</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="6" class="placeholder-message" style="color: var(--error-color);"><i class="fas fa-exclamation-triangle"></i> Error: ${error.message}. Please check console for backend details.</td></tr>`;
         }
     }
 
@@ -216,101 +306,95 @@
         tbody.innerHTML = '';
         
         if (!invoices || invoices.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" class="placeholder-message">No pending invoices found.</td></tr>';
+            // Updated colspan to 6
+            tbody.innerHTML = '<tr><td colspan="6" class="placeholder-message"><i class="fas fa-info-circle"></i> No outstanding invoices found matching the criteria.</td></tr>';
             return;
         }
         
+        const today = new Date();
+        
         invoices.forEach(inv => {
-            // Calculate Status and Classes
-            const isOverdue = new Date(inv.due_date) < new Date();
-            let statusClass = isOverdue ? 'status-overdue' : 'status-pending';
-            let statusText = isOverdue ? 'Overdue' : inv.status;
-
-            if (inv.status === 'Partial') {
-                statusClass = 'status-partial';
+            const amountDue = parseFloat(inv.balance_due || 0);
+            
+            if (amountDue <= 0) {
+                return; 
             }
+            
+            let statusClass = 'status-pending';
+            let statusText = 'Pending';
+            
+            const totalPaid = parseFloat(inv.total_paid || 0);
+            const totalBilled = parseFloat(inv.total_billed || 0);
 
-            // Safe Number Formatting
-            const amount = parseFloat(inv.amount_due || 0);
-            const shortId = inv.invoice_id ? inv.invoice_id.substring(0, 8).toUpperCase() : 'N/A';
+            // Mock due date for overdue check (30 days past last payment date, as actual invoice date is missing)
+            const mockDueDate = inv.last_payment_date ? new Date(new Date(inv.last_payment_date).getTime() + (30 * 24 * 60 * 60 * 1000)) : null;
+            
+            // Simplified Status Logic 
+            if (totalPaid > 0 && totalPaid < totalBilled) {
+                 statusClass = 'status-partial'; 
+                 statusText = 'Partial';
+            } else if (mockDueDate && mockDueDate < today) {
+                 statusClass = 'status-overdue'; 
+                 statusText = 'Overdue';
+            }
+            
+            // Using Roll Number or Name portion for a mock Invoice Ref ID
+            const refId = (inv.roll_number || inv.student_name.substring(0, 8)).toUpperCase(); 
+            const studentId = inv.student_id; 
 
             const row = document.createElement('tr');
             row.innerHTML = `
-                <td><span title="${inv.invoice_id}">#${shortId}</span></td>
+                <td><span title="${inv.roll_number}">#${refId}</span></td>
                 <td>
                     ${inv.student_name || 'Unknown'} 
-                    <div class="small-text">${inv.roll_number || ''}</div>
+                    <div class="small-text">Roll: ${inv.roll_number || 'N/A'}</div>
                 </td>
                 <td>${inv.course_name || 'N/A'}</td>
-                <td style="font-weight:bold; color: #333;">₹${amount.toFixed(2)}</td>
-                <td>${inv.bill_date ? new Date(inv.bill_date).toLocaleDateString() : '-'}</td>
-                <td>${inv.due_date ? new Date(inv.due_date).toLocaleDateString() : '-'}</td>
-                <td><span class="${statusClass}">${statusText}</span></td>
+                <td class="amount-due-highlight">${formatCurrency(amountDue)}</td>
+                
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                 <td>
-                    <button class="action-btn btn-view" onclick="viewDetails('${inv.invoice_id}')">View</button>
-                    <button class="action-btn btn-pay" onclick="payNow(this, '${inv.invoice_id}', ${amount})">Pay</button>
+                    <button class="action-btn btn-ledger" onclick="viewLedger('${studentId}')">
+                        <i class="fas fa-file-invoice"></i> Ledger
+                    </button>
+                    <button class="action-btn btn-pay" onclick="window.location.href='/fee-collection.html?studentId=${studentId}'">
+                        <i class fas fa-rupee-sign"></i> Pay
+                    </button>
                 </td>
-            `;
+                `;
             tbody.appendChild(row);
         });
     }
 
-    // --- 4. PAYMENT FUNCTION (REAL) ---
-    async function payNow(btnElement, id, amountDue) {
-        if (!confirm(`Are you sure you want to collect Full Payment of ₹${amountDue} for this invoice?`)) {
-            return;
-        }
-
-        // UI Feedback: Disable button to prevent double clicks
-        const originalText = btnElement.innerText;
-        btnElement.innerText = 'Processing...';
-        btnElement.disabled = true;
-
-        try {
-            // Call Backend API to process payment
-            await handleApi('/api/invoices/pay', {
-                method: 'POST',
-                body: JSON.stringify({
-                    invoice_id: id,
-                    payment_amount: amountDue, 
-                    payment_method: 'Cash' 
-                })
-            });
-
-            alert('✅ Payment Recorded Successfully!');
-            
-            // Refresh list to remove paid invoice
-            document.getElementById('apply-filters-btn').click(); 
-
-        } catch (error) {
-            alert('❌ Payment Failed: ' + error.message);
-            btnElement.innerText = originalText;
-            btnElement.disabled = false;
-        }
-    }
-
-    // --- 5. VIEW DETAILS FUNCTION ---
-    function viewDetails(id) {
-        // Opens the Invoice Details page in a new tab
-        window.open(`/invoice-details.html?id=${id}`, '_blank');
+    // --- 4. VIEW LEDGER DETAILS FUNCTION (Using Student ID) ---
+    function viewLedger(studentId) {
+        // Opens the Student Ledger Report page in a new tab
+        window.open(`/student-wise-payments.html?studentId=${studentId}`, '_blank');
     }
 
     // --- EVENT LISTENERS ---
     document.addEventListener('DOMContentLoaded', () => {
         loadCourses(); 
         
-        // Apply Filters Button Click
-        document.getElementById('apply-filters-btn').addEventListener('click', () => {
-            const filters = {
-                course_id: document.getElementById('course-filter').value,
-                status: document.getElementById('status-filter').value,
-                q: document.getElementById('search-input').value.trim()
-            };
-            fetchPendingInvoices(filters);
+        const courseFilter = document.getElementById('course-filter');
+        const statusFilter = document.getElementById('status-filter');
+        const searchInput = document.getElementById('search-input');
+        const applyBtn = document.getElementById('apply-filters-btn');
+
+        // Function to get current filter values
+        const getFilters = () => ({
+            course_id: courseFilter.value,
+            status: statusFilter.value, 
+            q: searchInput.value.trim()
+        });
+
+        // Event listener for button click
+        applyBtn.addEventListener('click', () => {
+            fetchPendingInvoices(getFilters());
         });
         
-        // Initial Load
-        fetchPendingInvoices(); 
+        // Initial Load (Read values directly from controls)
+        fetchPendingInvoices(getFilters()); 
     });
 </script>
 <script src="js/global-config.js"></script>
