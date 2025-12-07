@@ -31,10 +31,11 @@ const DB = {
     BUDGET_CATS: 'budget_categories',
     BUDGETS: 'annual_budgets',
     EXPENSES: 'expenses',
-    SETTINGS: 'erp_settings'
+    // ✅ FIX: Corrected table name for global settings
+    SETTINGS: 'erp_settings' 
 };
 
-const BASE_TUITION_FEE = 5000.00; 
+// const BASE_TUITION_FEE = 5000.00; // Removed as Tuition is no longer billed
 const FEE_ROLES = ['Admin', 'Staff', 'Super Admin', 'Finance'];
 
 // --- Helper Functions ---
@@ -46,17 +47,9 @@ const generateInvoiceNumber = () => {
 // SECTION 2: CORE TRANSACTIONS (INVOICING, COLLECTION, REFUND)
 // =========================================================
 
-// =========================================================
-// SECTION 2: CORE TRANSACTIONS (INVOICING, COLLECTION, REFUND)
-// =========================================================
-
-// =========================================================
-// SECTION 2: CORE TRANSACTIONS (INVOICING, COLLECTION, REFUND)
-// =========================================================
-
 /**
- * 2.1 FULL COURSE INVOICE GENERATION (One-Time based on Structure)
- * FIX: Ensures monthly fees are multiplied by duration before invoicing.
+ * 2.1 FULL COURSE INVOICE GENERATION (One-Time based on Structure - BULK ADMIN TOOL)
+ * FIX: Tuition Fee calculation removed.
  */
 router.post('/generate-structure-invoice', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
     const adminId = req.user.id;
@@ -78,7 +71,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                 COALESCE(fs.admission_fee, 0) AS admission,
                 COALESCE(fs.registration_fee, 0) AS registration,
                 COALESCE(fs.examination_fee, 0) AS exam,
-                COALESCE(fs.course_duration_months, 1) AS duration, 
+                COALESCE(fs.course_duration_months, 12) AS duration, 
                 COALESCE(fs.transport_fee, 0) AS transport_struct_monthly,
                 COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly
             FROM ${DB.STUDENTS} s
@@ -103,7 +96,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                 continue; 
             }
 
-            // 3. Calculate Grand Total & Prepare Items (Including Monthly x Duration)
+            // 3. Calculate Grand Total & Prepare Items
             let totalAmount = 0;
             const items = [];
             const duration = student.duration;
@@ -121,13 +114,19 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
             addItem('Registration Fee', student.registration);
             addItem('Examination Fee', student.exam);
 
-            // ✅ FIX: Calculate Monthly Fees * Duration
+            // ❌ Tuition Fee is REMOVED from calculation and item list
+            /*
             if (student.tuition_monthly > 0) {
                 addItem(`Tuition Fee (${duration} Months)`, student.tuition_monthly * duration);
             }
+            */
+            
+            // Transport Fee is INCLUDED
             if (student.transport_struct_monthly > 0) {
                 addItem(`Transport Fee (${duration} Months)`, student.transport_struct_monthly * duration);
             }
+            
+            // Hostel Fee is INCLUDED
             if (student.hostel_struct_monthly > 0) {
                 addItem(`Hostel Fee (${duration} Months)`, student.hostel_struct_monthly * duration);
             }
@@ -154,7 +153,6 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
             
             // 5. Insert Line Items
             if (items.length > 0) {
-                // Safely escape single quotes for SQL insertion
                 const itemsValues = items.map(item => `('${invoiceId}', '${item.description.replace(/'/g, "''")}', ${item.amount})`).join(',');
                 await client.query(`INSERT INTO ${DB.ITEMS} (invoice_id, description, amount) VALUES ${itemsValues};`);
             }
@@ -170,9 +168,9 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
         res.status(500).json({ message: 'Failed to generate structure invoices.' });
     } finally { client.release(); }
 });
-// ... (rest of the file remains the same) ...
 
- /* 2.2 FEE COLLECTION
+/**
+ * 2.2 FEE COLLECTION
  */
 router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff', 'super admin']), async (req, res) => {
     const { student_id, amount_paid, payment_mode, notes } = req.body;
@@ -211,7 +209,7 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
                     VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6) RETURNING id;
                 `, [inv.id, paying, payment_mode, batchRef, collectedBy, notes]);
                 
-                if (!paymentId) paymentId = pRes.rows[0].id;
+                if (!paymentId) paymentId = pRes.rows[0].id; 
 
                 const newPaid = parseFloat(inv.paid_amount) + paying;
                 const newStatus = (newPaid >= (parseFloat(inv.total_amount) - 0.01)) ? 'Paid' : 'Partial';
@@ -250,9 +248,9 @@ router.post('/refund', authenticateToken, authorize(['admin', 'finance']), async
 });
 
 
-// =========================================================
-// 2.4 LIST STUDENTS ELIGIBLE FOR REFUND (FINAL FIX)
-// =========================================================
+/**
+ * 2.4 LIST STUDENTS ELIGIBLE FOR REFUND (FINAL FIX - Schema Aligned)
+ */
 router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     try {
         const query = `
@@ -264,7 +262,6 @@ router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']
             FROM ${DB.PAYMENTS} p
             JOIN ${DB.STUDENTS} s ON p.student_id = s.student_id
             JOIN ${DB.USERS} u ON s.user_id = u.id
-            -- FIX APPLIED: Joining students.course_id to courses.id
             LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id 
             ORDER BY u.username ASC
         `;
@@ -295,9 +292,11 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
         res.json(result.rows);
     } catch (e) { res.status(500).json({ message: 'Error' }); }
 });
-// =========================================================
-// 3.2 SMART STUDENT DASHBOARD (Auto-Generate with Schema Fixes)
-// =========================================================
+
+/**
+ * 3.2 SMART STUDENT DASHBOARD (Auto-Generate/Summary)
+ * FIX: Tuition Fee calculation removed; Transport/Hostel mandatory fallback added.
+ */
 router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     const client = await pool.connect();
     try {
@@ -309,7 +308,6 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
         await client.query('BEGIN');
 
         // 1. Fetch Student, Structure, Duration AND Assignments
-        // FIXED: Matched column names with your provided Schema
         const sRes = await client.query(`
             SELECT 
                 s.student_id, 
@@ -326,6 +324,8 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 COALESCE(fs.admission_fee, 0) AS admission,
                 COALESCE(fs.registration_fee, 0) AS registration,
                 COALESCE(fs.examination_fee, 0) AS exam,
+                COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
+                COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
 
                 -- Transport Info (Checking is_active and taking fee from assignment)
                 ta.monthly_fee AS transport_assigned_fee,
@@ -333,8 +333,8 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 r.route_name,
                 ta.is_active AS transport_active,
 
-                -- Hostel Info (Fixed column 'hostel_rate_id')
-                hr.room_fee AS hostel_monthly,
+                -- Hostel Info
+                hr.room_fee AS hostel_monthly_rate,
                 hr.rate_name AS hostel_room_name
 
             FROM ${DB.STUDENTS} s 
@@ -345,11 +345,11 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
             -- Link Fee Structure
             LEFT JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
             
-            -- Link Transport (Schema Fixed: Added is_active check)
+            -- Link Transport 
             LEFT JOIN student_transport_assignments ta ON s.student_id = ta.student_id AND ta.is_active = TRUE
             LEFT JOIN ${DB.ROUTES} r ON ta.route_id = r.id
 
-            -- Link Hostel (Schema Fixed: Used 'hostel_rate_id')
+            -- Link Hostel
             LEFT JOIN student_hostel_assignments ha ON s.student_id = ha.student_id
             LEFT JOIN ${DB.HOSTEL} hr ON ha.hostel_rate_id = hr.id
 
@@ -376,31 +376,44 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 
                 const duration = parseInt(student.duration);
 
-                // A. Base Course Fees
-                const totalTuition = parseFloat(student.monthly_tuition) * duration;
+                // ❌ A. Base Course Fees - Set to 0 as Tuition is removed
+                const totalTuition = 0; 
                 
-                // B. Transport Calculation (Priority: Assignment Fee > Route Fee)
+                // B. Transport Calculation (Priority: Assigned Active > Structure Mandatory)
                 let totalTransport = 0;
                 let transportMonthly = 0;
                 
                 if (student.transport_active) {
-                    // If assignment table has fee > 0, use it. Else use route fee.
                     transportMonthly = parseFloat(student.transport_assigned_fee) > 0 
                         ? parseFloat(student.transport_assigned_fee) 
                         : parseFloat(student.route_base_fee || 0);
-                        
+                    totalTransport = transportMonthly * duration;
+                } 
+                // CRITICAL FIX: Fallback to Structure Fee if Assignment is NOT Active but fee is MANDATORY
+                else if (parseFloat(student.transport_struct_monthly) > 0) { 
+                    transportMonthly = parseFloat(student.transport_struct_monthly);
                     totalTransport = transportMonthly * duration;
                 }
 
-                // C. Hostel Calculation
+                // C. Hostel Calculation (Priority: Assigned Rate > Structure Mandatory)
                 let totalHostel = 0;
-                if (student.hostel_monthly) {
-                    totalHostel = parseFloat(student.hostel_monthly) * duration;
+                let hostelMonthly = 0;
+                
+                if (student.hostel_monthly_rate) { // Use Assigned Rate
+                    hostelMonthly = parseFloat(student.hostel_monthly_rate);
+                } 
+                // CRITICAL FIX: Fallback to Structure Rate if Assignment is NOT found but fee is MANDATORY
+                else if (parseFloat(student.hostel_struct_monthly) > 0) { 
+                    hostelMonthly = parseFloat(student.hostel_struct_monthly);
+                }
+
+                if (hostelMonthly > 0) {
+                    totalHostel = hostelMonthly * duration;
                 }
 
                 // Grand Total
                 let totalAmount = 
-                    totalTuition + 
+                    totalTuition + // totalTuition is 0
                     totalTransport +
                     totalHostel +
                     parseFloat(student.admission) + 
@@ -420,7 +433,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
                     // Create Items List
                     const items = [
-                        { d: `Tuition Fee (${duration} Months)`, a: totalTuition },
+                        // { d: `Tuition Fee (${duration} Months)`, a: totalTuition }, <-- REMOVED TUITION
                         { d: 'Admission Fee', a: student.admission },
                         { d: 'Registration Fee', a: student.registration },
                         { d: 'Examination Fee', a: student.exam }
@@ -428,14 +441,14 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
                     if (totalTransport > 0) {
                         items.push({ 
-                            d: `Transport Fee (${student.route_name || 'Assigned'} - ${duration} Months)`, 
+                            d: `Transport Fee (${student.route_name || 'Mandatory'} - ${duration} Months)`, 
                             a: totalTransport 
                         });
                     }
 
                     if (totalHostel > 0) {
                         items.push({ 
-                            d: `Hostel Fee (${student.hostel_room_name} - ${duration} Months)`, 
+                            d: `Hostel Fee (${student.hostel_room_name || 'Mandatory'} - ${duration} Months)`, 
                             a: totalHostel 
                         });
                     }
@@ -495,9 +508,9 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
     }
 });
 
-// =========================================================
-// 3.3 PROFESSIONAL RECEIPT GENERATION (A5 Landscape - Fixed Layout)
-// =========================================================
+/**
+ * 3.3 PROFESSIONAL RECEIPT GENERATION (A5 Landscape - Fixed Layout)
+ */
 router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
     const { idOrTxn } = req.params;
     try {
@@ -525,6 +538,15 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         if (!rows[0]) return res.status(404).json({ message: 'Receipt Not Found' });
         const data = rows[0];
 
+        // 1. Fetch System Configuration for dynamic header/logo
+        const configRes = await pool.query(`
+            SELECT school_name, school_address, school_phone, school_logo_path, school_email 
+            FROM ${DB.SETTINGS} 
+            LIMIT 1
+        `);
+        const config = configRes.rows[0] || {};
+
+
         // --- PDF SETUP ---
         const doc = new PDFDocument({ size: 'A5', layout: 'landscape', margin: 30 });
         res.setHeader('Content-Type', 'application/pdf');
@@ -534,12 +556,12 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         // Border
         doc.rect(20, 20, 555, 380).lineWidth(1).strokeColor('#333').stroke();
 
-        // 1. HEADER
+        // 1. HEADER (Using dynamic config)
         const headerY = 35;
         doc.fillColor('#2c3e50')
-           .fontSize(18).font("Helvetica-Bold").text('SCHOOL ERP SYSTEM', 40, headerY)
-           .fontSize(9).font("Helvetica").text('123 Education Lane, Kolkata - 700001', 40, headerY + 20)
-           .text('Phone: +91 9876543210', 40, headerY + 32);
+           .fontSize(18).font("Helvetica-Bold").text(config.school_name || 'SCHOOL ERP SYSTEM', 40, headerY)
+           .fontSize(9).font("Helvetica").text(config.school_address || '123 Education Lane, Kolkata - 700001', 40, headerY + 20)
+           .text(`Phone: ${config.school_phone || '+91 9876543210'} | Email: ${config.school_email || 'email@school.com'}`, 40, headerY + 32);
 
         doc.fillColor('#000')
            .fontSize(14).font("Helvetica-Bold").text('MONEY RECEIPT', 400, headerY, { width: 155, align: 'right' })
@@ -555,7 +577,7 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         
         // Col 1
         doc.fontSize(10).font("Helvetica-Bold").text("Name:", 40, infoY);
-        doc.font("Helvetica").text(data.student_name, 80, infoY); // Offset X slightly
+        doc.font("Helvetica").text(data.student_name, 80, infoY); 
         
         // Col 2
         doc.font("Helvetica-Bold").text("Roll No:", 250, infoY);
@@ -579,14 +601,17 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
 
         // Row
         const rowY = tableTop + 25;
+        const amountPaid = parseFloat(data.amount).toFixed(2);
+        const dueBalance = parseFloat(data.due_balance).toFixed(2);
+        
         doc.font("Helvetica").fontSize(10);
         doc.text("01", 50, rowY);
-        doc.text(`Tuition & Fee Payment (Ref: ${data.invoice_number})`, 100, rowY);
-        doc.font("Helvetica-Bold").text(parseFloat(data.amount).toFixed(2), 450, rowY, { width: 95, align: 'right' });
+        doc.text(`Payment received against Invoice ${data.invoice_number}`, 100, rowY);
+        doc.font("Helvetica-Bold").text(amountPaid, 450, rowY, { width: 95, align: 'right' });
 
         doc.moveTo(40, rowY + 20).lineTo(555, rowY + 20).lineWidth(0.5).stroke();
 
-        // 4. TOTALS (FIXED OVERLAP)
+        // 4. TOTALS 
         const totalY = rowY + 35;
         
         // Label Column
@@ -594,14 +619,14 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
            .text("GRAND TOTAL:", 300, totalY, { width: 140, align: 'right' });
         
         // Amount Column (Separate X position)
-        doc.text(`Rs. ${parseFloat(data.amount).toFixed(2)}`, 450, totalY, { width: 95, align: 'right' });
+        doc.text(`Rs. ${amountPaid}`, 450, totalY, { width: 95, align: 'right' });
 
         // Due Balance (Below Total)
         doc.fontSize(9).font("Helvetica").fillColor('#e74c3c')
-           .text(`(Remaining Due: Rs. ${parseFloat(data.due_balance).toFixed(2)})`, 40, totalY + 5);
+           .text(`(Remaining Due: Rs. ${dueBalance})`, 40, totalY + 5);
 
-        // 5. FOOTER (Moved Up for Single Page)
-        const sigY = 300; // Moved up from 340
+        // 5. FOOTER
+        const sigY = 300; 
 
         doc.fillColor('black').lineWidth(1);
         doc.moveTo(60, sigY).lineTo(180, sigY).stroke();
@@ -611,7 +636,7 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         doc.text("Authorized Signature", 400, sigY + 5, { width: 120, align: 'center' });
 
         doc.fontSize(7).fillColor('#888')
-           .text(`Generated on ${moment().format('DD-MMM-YYYY HH:mm A')}`, 20, 360, { align: 'center', width: 555 }); // Moved up to 360
+           .text(`Generated on ${moment().format('DD-MMM-YYYY HH:mm A')}`, 20, 360, { align: 'center', width: 555 }); 
 
         doc.end();
 
@@ -647,15 +672,11 @@ router.delete('/hostel/rates/:id', authenticateToken, authorize(['admin']), asyn
     try { await pool.query(`DELETE FROM ${DB.HOSTEL} WHERE id=$1::uuid`, [req.params.id]); res.json({message:'Deleted'}); } catch (e) { res.status(500).json({message:'Error'}); }
 });
 
-// =========================================================
 // 4.3 LATE FEE CONFIG (CRUD)
-// =========================================================
-
 router.get('/late-fee-config/current', authenticateToken, async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.LATE_FEE} LIMIT 1`); res.json(r.rows[0] || {}); } catch (e) { res.status(500).json({message:'Error'}); }
 });
 
-// Create New Config (Overwrite existing)
 router.post('/late-fee-config', authenticateToken, authorize(['admin']), async (req, res) => {
     try { 
         await pool.query(`DELETE FROM ${DB.LATE_FEE}`); 
@@ -664,7 +685,6 @@ router.post('/late-fee-config', authenticateToken, authorize(['admin']), async (
     } catch (e) { res.status(500).json({message:'Error'}); }
 });
 
-// ✅ ADD THIS NEW ROUTE FOR UPDATE (PUT)
 router.put('/late-fee-config/:id', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { id } = req.params;
     const { grace_days, penalty_type, penalty_value, max_penalty_value, compounding_interval } = req.body;
@@ -712,19 +732,16 @@ router.post('/budget-target', authenticateToken, authorize(['admin', 'finance'])
 // SECTION 5: ANALYTICS & REPORTS
 // =========================================================
 
-// =========================================================
-// 5.1 GLOBAL TRANSACTION HISTORY (FIXED: Added payment_id)
-// =========================================================
+// 5.1 GLOBAL TRANSACTION HISTORY
 router.get('/history', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('month').format('YYYY-MM-DD');
     const end = endDate || moment().endOf('month').format('YYYY-MM-DD');
 
     try {
-        // FIXED: Added 'p.id AS payment_id' so frontend gets the UUID
         const query = `
             SELECT 
-                p.id AS payment_id,  -- This was missing!
+                p.id AS payment_id,  
                 p.transaction_id, 
                 p.amount, 
                 p.payment_date, 
@@ -746,6 +763,7 @@ router.get('/history', authenticateToken, authorize(['admin', 'super admin', 'fi
         res.status(500).json({ message: 'Failed to fetch history.' }); 
     }
 });
+
 // 5.2 REVENUE STREAM
 router.get('/reports/revenue-stream', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { start_date, end_date } = req.query;
@@ -758,12 +776,9 @@ router.get('/reports/revenue-stream', authenticateToken, authorize(['admin', 'fi
     } catch (err) { res.status(500).json({ message: 'Error' }); }
 });
 
-// =========================================================
-// 5.3 ANNUAL BUDGET REPORT (Smart Auto-Merge)
-// =========================================================
+// 5.3 ANNUAL BUDGET REPORT
 router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
     const year = parseInt(req.query.year) || new Date().getFullYear();
-    // Fiscal Year: April 1st to March 31st
     const start = `${year}-04-01`; 
     const end = `${year+1}-03-31`;
 
@@ -776,12 +791,11 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
             WHERE b.fiscal_year=$1
         `, [year]);
         
-        // Create base list from targets
         let reportData = targets.rows.map(t => ({
             name: t.name,
             budgeted: parseFloat(t.budget_amount || 0),
             type: t.type,
-            actual: 0 // Default
+            actual: 0 
         }));
 
         // 2. Calculate & Merge Actual Income
@@ -793,19 +807,12 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
         
         const totalIncome = parseFloat(incomeRes.rows[0].val);
 
-        // Try to find an 'Income' category to attach this value to
         let incomeEntry = reportData.find(d => d.type === 'Income');
         
         if (incomeEntry) {
             incomeEntry.actual = totalIncome;
         } else if (totalIncome > 0) {
-            // Auto-inject Income if no target was configured
-            reportData.push({
-                name: 'Tuition Fee Collection',
-                budgeted: 0,
-                type: 'Income',
-                actual: totalIncome
-            });
+            reportData.push({ name: 'Tuition Fee Collection', budgeted: 0, type: 'Income', actual: totalIncome });
         }
 
         // 3. Calculate & Merge Actual Expenses
@@ -819,19 +826,12 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
 
         expenseRes.rows.forEach(exp => {
             const val = parseFloat(exp.val);
-            // Try to find existing budget item
             let item = reportData.find(d => d.name === exp.name && d.type === 'Expense');
             
             if (item) {
                 item.actual = val;
             } else {
-                // Auto-inject unbudgeted expense
-                reportData.push({
-                    name: exp.name,
-                    budgeted: 0,
-                    type: 'Expense',
-                    actual: val
-                });
+                reportData.push({ name: exp.name, budgeted: 0, type: 'Expense', actual: val });
             }
         });
 
@@ -864,9 +864,7 @@ router.get('/reports/revenue-forecast', authenticateToken, async (req, res) => {
 });
 
 
-// =========================================================
-// 5.6 DASHBOARD QUICK STATS (New Route)
-// =========================================================
+// 5.6 DASHBOARD QUICK STATS 
 router.get('/reports/dashboard-stats', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     try {
         const query = `
@@ -883,15 +881,12 @@ router.get('/reports/dashboard-stats', authenticateToken, authorize(FEE_ROLES), 
         res.status(500).json({ message: 'Stats error' });
     }
 });
-// =========================================================
-// 5.7 STUDENT LEDGER REPORT (Merged Invoices & Payments)
-// =========================================================
+
+// 5.7 STUDENT LEDGER REPORT 
 router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     const { studentId } = req.params;
     
     try {
-        // FIXED: Removed 'created_at' from the query because 'fee_payments' table 
-        // does not have it. We use 'issue_date' and 'payment_date' for sorting.
         const query = `
             SELECT * FROM (
                 -- 1. INVOICES (DEBIT)
@@ -903,7 +898,7 @@ router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async 
                     'Tuition & Fees Generated' AS description,
                     total_amount AS debit,
                     0.00 AS credit,
-                    issue_date::timestamp AS sort_date -- Use issue_date for sorting
+                    issue_date::timestamp AS sort_date 
                 FROM ${DB.INVOICES}
                 WHERE student_id = $1::uuid AND status != 'Waived'
 
@@ -918,12 +913,12 @@ router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async 
                     'Fee Payment Received (' || p.payment_mode || ')' AS description,
                     0.00 AS debit,
                     p.amount AS credit,
-                    p.payment_date::timestamp AS sort_date -- Use payment_date for sorting
+                    p.payment_date::timestamp AS sort_date 
                 FROM ${DB.PAYMENTS} p
                 JOIN ${DB.INVOICES} i ON p.invoice_id = i.id
                 WHERE i.student_id = $1::uuid
             ) combined_data
-            ORDER BY sort_date ASC; -- Sorted by date
+            ORDER BY sort_date ASC;
         `;
 
         const result = await pool.query(query, [studentId]);
@@ -953,9 +948,7 @@ router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async 
     }
 });
 
-// =========================================================
-// 5.8 DETAILED STUDENT DUES REPORT (Filters Support)
-// =========================================================
+// 5.8 DETAILED STUDENT DUES REPORT
 router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
     const { course_id, search } = req.query;
 
@@ -965,11 +958,9 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
                 s.roll_number, 
                 u.username AS student_name, 
                 c.course_name,
-                -- Calculate Totals
                 COALESCE(SUM(i.total_amount), 0) AS total_billed,
                 COALESCE(SUM(i.paid_amount), 0) AS total_paid,
                 (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) AS balance_due,
-                -- Get Last Payment Date
                 MAX(p.payment_date) AS last_payment_date
             FROM ${DB.STUDENTS} s
             JOIN ${DB.USERS} u ON s.user_id = u.id
@@ -982,13 +973,11 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
         const params = [];
         let paramIndex = 1;
 
-        // Filter by Course
         if (course_id && course_id !== 'all') {
             query += ` AND s.course_id = $${paramIndex++}::uuid`;
             params.push(course_id);
         }
 
-        // Filter by Search Name/Roll
         if (search) {
             query += ` AND (LOWER(u.username) LIKE $${paramIndex} OR LOWER(s.roll_number) LIKE $${paramIndex})`;
             params.push(`%${search.toLowerCase()}%`);
@@ -1010,16 +999,13 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
 });
 
 
-// =========================================================
-// 5.9 GENERAL LEDGER EXPORT (Income vs Expense)
-// =========================================================
+// 5.9 GENERAL LEDGER EXPORT
 router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('year').format('YYYY-MM-DD');
     const end = endDate || moment().endOf('year').format('YYYY-MM-DD');
 
     try {
-        // We combine Income (Payments) and Expenses into one timeline
         const query = `
             SELECT * FROM (
                 -- 1. INCOME (Credit)
@@ -1084,20 +1070,18 @@ router.put('/waiver-requests/:requestId/status', authenticateToken, authorize(['
     } catch (e) { await client.query('ROLLBACK'); res.status(500).json({message: e.message}); } finally { client.release(); }
 });
 
-// =========================================================
-// 6.2 DEFAULTERS LIST (FIXED: Correct Columns & Counts)
-// =========================================================
+// 6.2 DEFAULTERS LIST
 router.get('/defaulters', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     try {
         const query = `
             SELECT 
                 s.student_id, 
-                u.username AS student_name,      -- Fixed: Alias for frontend display
+                u.username AS student_name,      
                 s.roll_number, 
-                COALESCE(u.phone_number, 'N/A') AS parent_phone, -- Fixed: Fetch real phone
+                COALESCE(u.phone_number, 'N/A') AS parent_phone, 
                 c.course_name, 
-                b.batch_name,                    -- Fixed: Added Batch Name
-                COUNT(i.id) AS pending_invoices_count, -- Fixed: Added Invoice Count
+                b.batch_name,                    
+                COUNT(i.id) AS pending_invoices_count, 
                 SUM(i.total_amount - i.paid_amount) AS total_due
             FROM ${DB.INVOICES} i
             JOIN ${DB.STUDENTS} s ON i.student_id = s.student_id
@@ -1125,16 +1109,13 @@ router.post('/reminders/send', authenticateToken, async (req, res) => {
 });
 
 
-// =========================================================
-// 6.3 FINANCE AUDIT LOGS (FIXED: NULL Handling in Details)
-// =========================================================
+// 6.3 FINANCE AUDIT LOGS
 router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('month').format('YYYY-MM-DD');
     const end = endDate || moment().endOf('month').format('YYYY-MM-DD');
 
     try {
-        // FIXED: Used COALESCE to prevent NULL values from breaking the description string
         const query = `
             SELECT * FROM (
                 -- 1. PAYMENT ACTIONS
