@@ -6,6 +6,9 @@ const { pool } = require('../database');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 const { authenticateToken, authorize } = require('../authMiddleware');
+const multer = require('multer'); // ADDED: Multer for file uploads
+const path = require('path');     // ADDED: Path module
+const fs = require('fs');         // ADDED: File System module for cleanup
 
 const TEACHERS_TABLE = 'teachers';
 const USERS_TABLE = 'users';
@@ -23,10 +26,54 @@ function getConfigIds(req) {
     return { branch_id, created_by: req.user.id, updated_by: req.user.id };
 }
 
-// routes/teachers.js
+// =========================================================
+// MULTER CONFIGURATION FOR FILE UPLOADS (New Section)
+// =========================================================
+
+// Configure storage destination and filename
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        // NOTE: Ensure this directory exists relative to your server's root
+        if (file.fieldname === 'profile_photo') {
+            cb(null, 'uploads/teacher_photos/'); 
+        } else if (file.fieldname === 'cv_file') {
+            cb(null, 'uploads/teacher_cvs/');
+        }
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ 
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 }, // 5MB file limit
+    fileFilter: (req, file, cb) => {
+        if (file.fieldname === 'profile_photo' && !file.mimetype.startsWith('image')) {
+            return cb(new Error('Only image files are allowed for profile photo.'), false);
+        }
+        if (file.fieldname === 'cv_file' && !file.mimetype.includes('pdf') && !file.mimetype.includes('doc')) {
+            return cb(new Error('Only PDF or Word documents are allowed for CV.'), false);
+        }
+        cb(null, true);
+    }
+});
+
+// Define the fields Multer should expect from the form
+const teacherUploadFields = upload.fields([
+    { name: 'profile_photo', maxCount: 1 },
+    { name: 'cv_file', maxCount: 1 }
+]);
+
+// Helper to clean up files if transaction fails
+const cleanupFiles = (profilePhotoPath, cvFilePath) => {
+    if (profilePhotoPath && fs.existsSync(profilePhotoPath)) fs.unlinkSync(profilePhotoPath);
+    if (cvFilePath && fs.existsSync(cvFilePath)) fs.unlinkSync(cvFilePath);
+};
 
 // =========================================================
-// 1. GET: Main List (Full Details for Table View) - FIX 1 (COLUMN NAME)
+// 1. GET: Main List (Full Details for Table View) 
 // =========================================================
 
 /**
@@ -49,11 +96,12 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
                 t.is_active,
                 t.address,
                 t.department_id, 
+                t.profile_image_path, /* ADDED: Fetch image path for FE display/ID card */
                 u.username, 
                 u.role, 
                 u.id AS user_id,
 
-                -- Data from Department Table (FIX: Changed hd.department_name to hd.name)
+                -- Data from Department Table (FIXED: hd.name is correct)
                 hd.name AS department_name, 
                 hd.description AS department_description, 
 
@@ -69,14 +117,13 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         const result = await pool.query(query);
         res.status(200).json(result.rows);
     } catch (error) {
-        // This is the error point: error: column hd.department_name does not exist
         console.error('Error fetching full teachers list:', error);
         res.status(500).json({ message: 'Failed to retrieve teachers list.' });
     }
 });
 
 // =========================================================
-// 2. GET: Dropdown List - FIX 2
+// 2. GET: Dropdown List (Omitted for brevity)
 // =========================================================
 
 /**
@@ -88,7 +135,7 @@ router.get('/list', authenticateToken, authorize(LIST_ROLES), async (req, res) =
     try {
         const query = `
             SELECT 
-                t.id AS teacher_id, /* Primary Key is 'id', aliased as 'teacher_id' */
+                t.id AS teacher_id, 
                 t.full_name, 
                 u.id AS user_id,
                 u.username,
@@ -106,7 +153,7 @@ router.get('/list', authenticateToken, authorize(LIST_ROLES), async (req, res) =
     }
 });
 
-// --- GET: Single Teacher Details - FIX 3 ---
+// --- GET: Single Teacher Details (Updated to include file paths) ---
 /**
  * @route   GET /api/teachers/:id
  * @desc    Get details for a single teacher (Used for Edit form population).
@@ -119,7 +166,7 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
             SELECT 
                 t.*,
                 u.username, u.role, 
-                hd.name AS department_name /* FIX: Changed hd.department_name to hd.name */
+                hd.name AS department_name 
             FROM ${TEACHERS_TABLE} t
             LEFT JOIN ${USERS_TABLE} u ON t.user_id = u.id
             LEFT JOIN ${DEPARTMENTS_TABLE} hd ON t.department_id = hd.id
@@ -140,7 +187,7 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
 
 
 // =========================================================
-// 3. POST: Create New Teacher (Includes User Creation) - FIX 4
+// 3. POST: Create New Teacher (CRITICALLY UPDATED FOR FILES)
 // =========================================================
 
 /**
@@ -148,7 +195,8 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
  * @desc    Create a new teacher and their linked user account (Transactional).
  * @access  Private (Admin, Super Admin, HR)
  */
-router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
+router.post('/', authenticateToken, authorize(CRUD_ROLES), teacherUploadFields, async (req, res) => {
+    // req.body contains text fields; req.files contains file info
     const {
         username, password, full_name, employee_id, designation, 
         email, phone_number, date_of_birth, address, hire_date,
@@ -156,12 +204,19 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         initial_role = 'Teacher'
     } = req.body;
     
+    // Extract file paths from Multer results
+    const profilePhotoPath = req.files.profile_photo ? req.files.profile_photo[0].path : null;
+    const cvFilePath = req.files.cv_file ? req.files.cv_file[0].path : null;
+    
     const { branch_id, created_by } = getConfigIds(req); 
 
     if (!username || !password || !full_name || !employee_id || !email) {
+        // CRITICAL: Must clean up uploaded files if validation fails
+        cleanupFiles(profilePhotoPath, cvFilePath);
         return res.status(400).json({ message: 'Missing required user/teacher fields.' });
     }
     if (password.length < 6) {
+        cleanupFiles(profilePhotoPath, cvFilePath);
         return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
     }
 
@@ -181,32 +236,41 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         const userResult = await client.query(userQuery, [username, password_hash, initial_role, email, phone_number || null, branch_id]);
         const newUserId = userResult.rows[0].id;
 
-        // 3. Create Teacher Profile 
+        // 3. Create Teacher Profile (INCLUDING NEW PATHS)
         const teacherQuery = `
             INSERT INTO ${TEACHERS_TABLE} (
                 user_id, full_name, employee_id, designation, 
                 email, phone_number, date_of_birth, address, hire_date, created_by,
-                department_id
+                department_id, 
+                profile_image_path, /* NEW COLUMN */
+                cv_resume_path      /* NEW COLUMN */
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             RETURNING id AS teacher_id, full_name, employee_id; 
         `;
         const teacherResult = await client.query(teacherQuery, [
             newUserId, full_name, employee_id, designation || null, 
             email, phone_number || null, date_of_birth || null, address || null, hire_date || null, created_by,
-            department_id || null 
+            department_id || null, 
+            profilePhotoPath, // Path from Multer
+            cvFilePath        // Path from Multer
         ]);
 
         await client.query('COMMIT'); 
 
         res.status(201).json({ 
             message: 'Teacher created successfully', 
-            teacher: teacherResult.rows[0] 
+            teacher: teacherResult.rows[0],
+            profile_image_path: profilePhotoPath,
+            cv_resume_path: cvFilePath
         });
 
     } catch (error) {
         await client.query('ROLLBACK'); 
         console.error('Teacher Creation Error:', error);
+        
+        // CRITICAL: Clean up files if DB transaction fails
+        cleanupFiles(profilePhotoPath, cvFilePath);
         
         let errorMessage = 'Failed to create teacher due to server error.';
         if (error.code === '23505') {
@@ -221,92 +285,151 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
 
 
 // =========================================================
-// 4. PUT: Update Existing Teacher Details - FIX 5
+// 4. PUT: Update Existing Teacher Details (CRITICALLY UPDATED FOR FILES/PASSWORD)
 // =========================================================
 
 /**
  * @route   PUT /api/teachers/:id
  * @desc    Update a teacher's profile and linked user account (Transactional).
  * @access  Private (Admin, Super Admin, HR)
+ * * NOTE: Middleware `teacherUploadFields` processes files first, storing them in req.files
  */
-router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    const teacherId = req.params.id; // This is t.id (UUID)
+router.put('/:id', authenticateToken, authorize(CRUD_ROLES), teacherUploadFields, async (req, res) => {
+    // req.body contains text fields; req.files contains file info
+    const teacherId = req.params.id;
     const {
         full_name, designation, email, phone_number, date_of_birth, address, hire_date, is_active,
-        department_id, new_role 
+        department_id, new_role, password
     } = req.body;
+    
+    // Extract NEW file paths from Multer results
+    const newProfilePhotoPath = req.files.profile_photo ? req.files.profile_photo[0].path : null;
+    const newCvFilePath = req.files.cv_file ? req.files.cv_file[0].path : null;
+
     const { updated_by } = getConfigIds(req);
 
     if (!full_name || !email) {
+        cleanupFiles(newProfilePhotoPath, newCvFilePath);
         return res.status(400).json({ message: 'Missing required fields (Name, Email).' });
     }
 
     const client = await pool.connect();
+    let oldProfilePath = null;
+    let oldCvPath = null;
+
     try {
         await client.query('BEGIN');
 
-        // 1. Update Teacher Profile 
-        const teacherQuery = `
-            UPDATE ${TEACHERS_TABLE} SET
-                full_name = $1, designation = $2, email = $3, phone_number = $4, 
-                date_of_birth = $5, address = $6, hire_date = $7, is_active = $8,
-                department_id = $9, 
-                updated_at = CURRENT_TIMESTAMP, updated_by = $10
-            WHERE id = $11 
-            RETURNING user_id, full_name;
-        `;
-        const teacherResult = await pool.query(teacherQuery, [
-            full_name, designation || null, email, phone_number || null, date_of_birth || null, address || null, hire_date || null, is_active,
-            department_id || null, 
-            updated_by, teacherId
-        ]);
-
-        if (teacherResult.rowCount === 0) {
+        // 0. Fetch existing paths and user_id for updates/cleanup
+        const fetchRes = await client.query(`SELECT user_id, profile_image_path, cv_resume_path FROM ${TEACHERS_TABLE} WHERE id = $1`, [teacherId]);
+        if (fetchRes.rowCount === 0) {
             await client.query('ROLLBACK');
+            cleanupFiles(newProfilePhotoPath, newCvFilePath);
             return res.status(404).json({ message: 'Teacher not found.' });
         }
+        const { user_id } = fetchRes.rows[0];
+        oldProfilePath = fetchRes.rows[0].profile_image_path;
+        oldCvPath = fetchRes.rows[0].cv_resume_path;
 
-        const { user_id } = teacherResult.rows[0];
 
-        // 2. Update Linked User Account
+        // 1. Update Teacher Profile 
+        let teacherUpdateFields = [
+            'full_name = $1', 'designation = $2', 'email = $3', 'phone_number = $4', 
+            'date_of_birth = $5', 'address = $6', 'hire_date = $7', 'is_active = $8',
+            'department_id = $9', 'updated_at = CURRENT_TIMESTAMP', 'updated_by = $10'
+        ];
+        let teacherUpdateValues = [
+            full_name, designation || null, email, phone_number || null, date_of_birth || null, address || null, hire_date || null, is_active,
+            department_id || null, updated_by
+        ];
+        let placeholderIndex = 11;
+
+        // Conditionally update file paths (and track if successful for old file cleanup later)
+        if (newProfilePhotoPath) {
+            teacherUpdateFields.push(`profile_image_path = $${placeholderIndex++}`);
+            teacherUpdateValues.push(newProfilePhotoPath);
+        } else {
+            // Retain the old path if no new file was uploaded
+            teacherUpdateFields.push(`profile_image_path = $${placeholderIndex++}`);
+            teacherUpdateValues.push(oldProfilePath);
+        }
+
+        if (newCvFilePath) {
+            teacherUpdateFields.push(`cv_resume_path = $${placeholderIndex++}`);
+            teacherUpdateValues.push(newCvFilePath);
+        } else {
+             // Retain the old path if no new file was uploaded
+            teacherUpdateFields.push(`cv_resume_path = $${placeholderIndex++}`);
+            teacherUpdateValues.push(oldCvPath);
+        }
+        
+        // Finalize query parameters
+        const teacherUpdateQuery = `
+            UPDATE ${TEACHERS_TABLE} SET
+                ${teacherUpdateFields.join(', ')}
+            WHERE id = $${placeholderIndex++}
+            RETURNING user_id, full_name, profile_image_path, cv_resume_path;
+        `;
+        teacherUpdateValues.push(teacherId); // The WHERE clause ID
+
+        const teacherResult = await client.query(teacherUpdateQuery, teacherUpdateValues);
+        
+        // 2. Update Linked User Account (Email, Status, and OPTIONAL Password/Role)
         if (user_id) {
-            const userUpdateFields = ['email = $1', 'phone_number = $2', 'is_active = $3', 'updated_at = CURRENT_TIMESTAMP'];
-            const userUpdateValues = [email, phone_number || null, is_active];
-            let placeholderIndex = userUpdateValues.length + 1;
+            const userUpdateFields = ['email = $1', 'is_active = $2', 'phone_number = $3', 'updated_at = CURRENT_TIMESTAMP'];
+            const userUpdateValues = [email, is_active, phone_number || null];
+            let userPlaceholderIndex = 4;
 
             if (new_role) {
-                userUpdateFields.push(`role = $${placeholderIndex++}`);
+                userUpdateFields.push(`role = $${userPlaceholderIndex++}`);
                 userUpdateValues.push(new_role);
             }
-            userUpdateValues.push(user_id); 
+            if (password) {
+                if (password.length < 6) throw new Error('New password must be at least 6 characters long.');
+                const password_hash = await bcrypt.hash(password, saltRounds);
+                userUpdateFields.push(`password_hash = $${userPlaceholderIndex++}`);
+                userUpdateValues.push(password_hash);
+            }
+            
+            userUpdateValues.push(user_id); // The WHERE clause ID
 
             const userUpdateQuery = `
                 UPDATE ${USERS_TABLE} SET 
                     ${userUpdateFields.join(', ')}
-                 WHERE id = $${placeholderIndex}
+                 WHERE id = $${userPlaceholderIndex}
             `;
             
             await client.query(userUpdateQuery, userUpdateValues);
         }
 
         await client.query('COMMIT');
+        
+        // 3. Cleanup OLD files after successful COMMIT
+        if (newProfilePhotoPath && oldProfilePath && fs.existsSync(oldProfilePath)) fs.unlinkSync(oldProfilePath);
+        if (newCvFilePath && oldCvPath && fs.existsSync(oldCvPath)) fs.unlinkSync(oldCvPath);
+
         res.status(200).json({ message: `Teacher ${teacherResult.rows[0].full_name} updated successfully.` });
 
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Teacher Update Error:', error);
         
+        // Cleanup NEW files if transaction fails
+        cleanupFiles(newProfilePhotoPath, newCvFilePath);
+
+        let errorMessage = 'Failed to update teacher profile.';
         if (error.code === '23505') {
-            return res.status(409).json({ message: 'Email already exists for another user/teacher.' });
+            errorMessage = 'Email, Employee ID, or Username already exists.';
+            return res.status(409).json({ message: errorMessage });
         }
-        res.status(500).json({ message: 'Failed to update teacher profile.' });
+        res.status(400).json({ message: error.message || 'Update failed due to a server error.' });
     } finally {
         client.release();
     }
 });
 
 // =========================================================
-// 5. DELETE: Soft Delete Teacher - FIX 6
+// 5. DELETE: Soft Delete Teacher (Omitted for brevity)
 // =========================================================
 
 /**

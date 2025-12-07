@@ -5,19 +5,22 @@
     <title>Edit Teacher</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .container { max-width: 600px; margin: auto; padding: 30px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        .container { max-width: 700px; margin: auto; padding: 30px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
         h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-        input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], select {
+        input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], input[type="password"], input[type="file"], select, textarea {
             width: 100%;
             padding: 10px;
             margin-bottom: 10px;
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
+            display: block; /* Ensure inputs/selects take full width */
         }
         button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
         .btn-warning { background-color: #ffc107; color: #333; }
         .btn-secondary { background-color: #6c757d; color: white; }
+        .form-group-custom { margin-bottom: 15px; }
+        .current-path { font-size: 0.8em; color: #555; margin-top: -8px; margin-bottom: 10px; }
     </style>
 </head>
 <body>
@@ -27,9 +30,9 @@
         <a href="/view-teachers.html" class="btn btn-secondary">← Back to Teacher List</a>
     </div>
     
-    <form id="edit-teacher-form">
+    <form id="edit-teacher-form" enctype="multipart/form-data">
         <p id="loading-message">Loading teacher data...</p>
-    </form>
+        </form>
 </div>
 <script>
     const form = document.getElementById('edit-teacher-form');
@@ -67,15 +70,20 @@
             
             // Map DB fields to form fields
             const data = {
+                // Personal/Employment
                 full_name: teacher.full_name || '',
                 employee_id: teacher.employee_id || '',
                 designation: teacher.designation || '',
+                department_id: teacher.department_id || '',
                 email: teacher.email || '',
                 phone_number: teacher.phone_number || '',
                 date_of_birth: formatDate(teacher.date_of_birth),
                 hire_date: formatDate(teacher.hire_date),
                 address: teacher.address || '',
-                is_active: teacher.is_active || false
+                is_active: teacher.is_active || false,
+                // File Paths
+                profile_image_path: teacher.profile_image_path || '',
+                cv_resume_path: teacher.cv_resume_path || ''
             };
 
             if (loadingMessageEl) {
@@ -84,34 +92,78 @@
 
             // --- DYNAMICALLY RENDER FULL FORM AND POPULATE FIELDS ---
             form.innerHTML = `
-                <h3>Editing: ${data.full_name} (Employee ID: ${data.employee_id})</h3>
+                <h3>Editing: ${data.full_name} (ID: ${data.employee_id})</h3>
                 <input type="hidden" name="id" value="${teacherId}">
+                <input type="hidden" name="user_id" value="${teacher.user_id}">
                 
-                <h4 style="margin-top: 20px;">Personal & Contact Details</h4>
-                <input type="text" name="full_name" placeholder="Full Name" value="${data.full_name}" required>
-                <input type="text" name="designation" placeholder="Designation" value="${data.designation}">
-                <input type="email" name="email" placeholder="Email Address" value="${data.email}" required>
-                <input type="tel" name="phone_number" placeholder="Phone Number" value="${data.phone_number}">
+                <h4 style="margin-top: 20px;">Personal & Employment</h4>
+                <div class="form-group-custom">
+                    <label>Full Name:</label>
+                    <input type="text" name="full_name" value="${data.full_name}" required>
+                </div>
+                <div class="form-group-custom">
+                    <label>Designation:</label>
+                    <input type="text" name="designation" value="${data.designation}">
+                </div>
+                <div class="form-group-custom">
+                    <label>Department ID:</label>
+                    <input type="text" name="department_id" placeholder="UUID" value="${data.department_id}">
+                </div>
                 
-                <h4 style="margin-top: 20px;">Dates & Address</h4>
-                <label for="date_of_birth" style="margin-top: 10px; display: block;">Date of Birth:</label>
-                <input type="date" id="date_of_birth" name="date_of_birth" value="${data.date_of_birth}">
+                <h4 style="margin-top: 20px;">Contact Details</h4>
+                <div class="form-group-custom">
+                    <label>Email Address:</label>
+                    <input type="email" name="email" value="${data.email}" required>
+                </div>
+                <div class="form-group-custom">
+                    <label>Phone Number:</label>
+                    <input type="tel" name="phone_number" value="${data.phone_number}">
+                </div>
+                <div class="form-group-custom">
+                    <label>Address:</label>
+                    <input type="text" name="address" value="${data.address}">
+                </div>
                 
-                <label for="hire_date" style="margin-top: 10px; display: block;">Hire Date:</label>
-                <input type="date" id="hire_date" name="hire_date" value="${data.hire_date}">
+                <h4 style="margin-top: 20px;">Dates & Status</h4>
+                <div class="form-group-custom">
+                    <label for="date_of_birth">Date of Birth:</label>
+                    <input type="date" id="date_of_birth" name="date_of_birth" value="${data.date_of_birth}">
+                </div>
                 
-                <input type="text" name="address" placeholder="Address" value="${data.address}" style="margin-top: 10px;">
+                <div class="form-group-custom">
+                    <label for="hire_date">Hire Date:</label>
+                    <input type="date" id="hire_date" name="hire_date" value="${data.hire_date}">
+                </div>
 
-                <h4 style="margin-top: 20px;">Employment Status</h4>
-                <input type="text" name="employee_id" placeholder="Employee ID" value="${data.employee_id}" required readonly style="background-color: #eee;">
+                <div class="form-group-custom">
+                    <label for="is_active">Account Status:</label>
+                    <select name="is_active" id="is_active">
+                        <option value="true" ${data.is_active ? 'selected' : ''}>Active</option>
+                        <option value="false" ${!data.is_active ? 'selected' : ''}>Deactivated / On Leave</option>
+                    </select>
+                </div>
                 
-                <label for="is_active" style="margin-top: 10px; display: block;">Account Status:</label>
-                <select name="is_active" id="is_active">
-                    <option value="true" ${data.is_active ? 'selected' : ''}>Active</option>
-                    <option value="false" ${!data.is_active ? 'selected' : ''}>Deactivated / On Leave</option>
-                </select>
+                <h4 style="margin-top: 30px;">Files & Password</h4>
+                
+                <div class="form-group-custom">
+                    <label for="password">New Password (Leave blank to keep existing):</label>
+                    <input type="password" id="password" name="password" placeholder="Enter new password">
+                </div>
 
-                <button type="submit" class="btn-warning" style="margin-top: 20px;">Save Changes</button>
+                <div class="form-group-custom">
+                    <label for="profile_photo">Profile Photo (.jpg/.png):</label>
+                    <input type="file" id="profile_photo" name="profile_photo" accept="image/*">
+                    ${data.profile_image_path ? `<p class="current-path">Current: <a href="${data.profile_image_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
+                </div>
+
+                <div class="form-group-custom">
+                    <label for="cv_file">CV / Resume (.pdf/.doc):</label>
+                    <input type="file" id="cv_file" name="cv_file" accept=".pdf,.doc,.docx">
+                    ${data.cv_resume_path ? `<p class="current-path">Current: <a href="${data.cv_resume_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
+                </div>
+                
+                <button type="submit" class="btn-warning" style="margin-top: 30px;">Save Changes</button>
+                <input type="text" name="employee_id_display" value="Employee ID: ${data.employee_id}" readonly style="background-color: #eee; margin-top: 10px;">
             `;
 
         } catch (error) {
@@ -128,28 +180,34 @@
 
     form.addEventListener('submit', async function(event) {
         event.preventDefault();
-
+        
+        // 1. CRITICAL: Use FormData for submission as files are present
         const formData = new FormData(this); 
         
+        // 2. Client-side Validation Check (before submission)
         const fullName = formData.get('full_name');
         const emailAddress = formData.get('email');
-
         if (!fullName || fullName.trim() === '' || !emailAddress || emailAddress.trim() === '') {
-            alert('Client-side block: Full Name and Email are required fields and cannot be empty. Please fill them out.');
+            alert('Full Name and Email are required fields.');
             return;
         }
+
+        // 3. Convert FormData to a URLSearchParams object for key checking (OPTIONAL)
+        // Note: For PUT with files, the body must remain FormData, but we check values.
         
-        const data = Object.fromEntries(formData.entries());
-        data.is_active = data.is_active === 'true'; 
+        // 4. Update the is_active status to boolean string, which backend expects
+        const isActiveValue = document.getElementById('is_active').value;
+        formData.set('is_active', isActiveValue);
 
         try {
+            // NOTE: The backend (routes/teachers.js) must handle PUT requests with multipart/form-data
             const response = await fetch(API_URL, {
                 method: 'PUT',
                 headers: { 
-                    'Authorization': `Bearer ${TOKEN}`,
-                    'Content-Type': 'application/json'
+                    'Authorization': `Bearer ${TOKEN}`
+                    // IMPORTANT: DO NOT set 'Content-Type': 'multipart/form-data'. Browser sets it automatically.
                 },
-                body: JSON.stringify(data)
+                body: formData // Send the raw FormData containing files and text
             });
 
             if (response.ok) {
@@ -157,7 +215,13 @@
                 window.location.href = '/view-teachers.html';
             } else {
                 const errorText = await response.text();
-                alert(errorText || `Update failed: HTTP Status ${response.status}`);
+                // Attempt to parse JSON error if available, fallback to raw text
+                try {
+                     const errorJson = JSON.parse(errorText);
+                     alert(errorJson.message || 'Update failed.');
+                } catch {
+                     alert(`Update failed: HTTP Status ${response.status}. ${errorText.substring(0, 50)}...`);
+                }
             }
         } catch (error) {
             alert('A network error occurred during update.');

@@ -122,16 +122,14 @@
 </head>
 <body>
     <div class="container">
-        <h1>Add New Teacher / Staff</h1>
+        <h1 class="global-school-name">Add New Teacher / Staff</h1>
         <div class="nav-links" style="margin-bottom: 20px; display: flex; gap: 10px;">
             <a href="/view-teachers.html" class="btn btn-secondary">← Back to Teacher List</a>
             
             <a href="/manage-departments.html" class="btn-info-link">🏢 Manage Departments</a>
             
         </div>
-        <form id="add-teacher-form">
-
-            <h3 class="section-header">Personal & Professional Info</h3>
+        <form id="add-teacher-form" enctype="multipart/form-data"> <h3 class="section-header">Personal & Professional Info</h3>
 
             <div class="form-group">
                 <label for="full_name">Full Name *</label>
@@ -171,8 +169,23 @@
                 <label for="hire_date">Hire Date</label>
                 <input type="date" id="hire_date" name="hire_date">
             </div>
+            
+            <div class="form-group">
+                <label for="profile_photo">Profile Photo</label>
+                <input type="file" id="profile_photo" name="profile_photo" accept="image/*">
+            </div>
 
             <div class="form-group">
+                <label for="cv_file">CV / Resume</label>
+                <input type="file" id="cv_file" name="cv_file" accept=".pdf,.doc,.docx">
+            </div>
+            
+            <div class="form-group full-width">
+                <label for="address">Address</label>
+                <input type="text" id="address" name="address">
+            </div>
+            
+            <h3 class="section-header">Contact & System Access</h3> <div class="form-group">
                 <label for="email">Email *</label>
                 <input type="email" id="email" name="email" required>
             </div>
@@ -182,8 +195,6 @@
                 <input type="tel" id="phone_number" name="phone_number">
             </div>
             
-            <h3 class="section-header">System Access & Login</h3>
-
             <div class="form-group">
                 <label for="username">Login Username *</label>
                 <input type="text" id="username" name="username" required autocomplete="off">
@@ -193,11 +204,6 @@
                 <label for="password">Initial Password *</label>
                 <input type="password" id="password" name="password" required autocomplete="new-password">
             </div>
-            
-            <div class="form-group full-width">
-                <label for="address">Address</label>
-                <input type="text" id="address" name="address">
-            </div>
 
             <button type="submit" class="full-width" id="submit-button">Add Teacher</button>
             <p id="error-msg" class="full-width" style="color: red;"></p>
@@ -206,7 +212,8 @@
 
     <script>
         const token = localStorage.getItem('erp-token');
-        const API_DEPARTMENTS_URL = '/api/hr/departments'; // ASSUMED API ENDPOINT for departments
+        const API_DEPARTMENTS_URL = '/api/hr/departments';
+        const API_TEACHERS_URL = '/api/teachers'; 
         const DEPT_SELECT_ID = 'department_select';
         const DEPT_CONTAINER_ID = 'department_input_container';
 
@@ -216,12 +223,20 @@
         }
         
         const headers = {
-            'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`
+            // NOTE: Content-Type is NOT set here for POST, as the browser handles 'multipart/form-data'
         };
 
         async function handleApi(url, options = {}) {
-            options.headers = { ...headers, ...options.headers };
+            // Apply Authorization header, but prevent Content-Type for GET/DELETE
+            if (!options.method || options.method === 'GET' || options.method === 'DELETE') {
+                 options.headers = { 'Authorization': `Bearer ${token}` };
+            } else {
+                 // For POST/PUT with JSON, we must explicitly set Content-Type.
+                 // For file uploads (FormData), we rely on the browser's multipart setting.
+                 options.headers = { ...headers, ...options.headers };
+            }
+            
             const response = await fetch(url, options);
             if (response.status === 401 || response.status === 403) {
                 localStorage.clear();
@@ -231,11 +246,15 @@
             return response;
         }
         
-        // --- FEATURE: Fetch and Populate Departments ---
+        // --- FEATURE: Fetch and Populate Departments (Adjusted handleApi call for GET) ---
         async function fetchAndPopulateDepartments() {
             try {
                 const departmentSelect = document.getElementById(DEPT_SELECT_ID);
-                const response = await handleApi(API_DEPARTMENTS_URL, { method: 'GET' });
+                // Use fetch directly for GET to avoid incorrect header handling
+                const response = await fetch(API_DEPARTMENTS_URL, { 
+                    method: 'GET', 
+                    headers: {'Authorization': `Bearer ${token}`} 
+                }); 
 
                 if (!response.ok) {
                     console.warn('Failed to fetch departments. Switching to text input mode.');
@@ -246,13 +265,11 @@
                 const departments = await response.json();
 
                 if (Array.isArray(departments)) {
-                    // Remove dynamically inserted options before re-inserting
                     const optionsToRemove = departmentSelect.querySelectorAll('option:not([value=""]):not([value="new_department_prompt"])');
                     optionsToRemove.forEach(opt => opt.remove());
 
                     departments.sort((a, b) => a.name.localeCompare(b.name));
                     
-                    // Re-insert the fetched options before the "Add New" prompt
                     departments.forEach(dept => {
                         const option = document.createElement('option');
                         option.value = dept.name;
@@ -263,46 +280,42 @@
                 }
             } catch (err) {
                 console.error('Department loading error:', err);
-                switchToTextInput(); // Switch to text input on error
+                switchToTextInput(); 
             }
         }
 
-        // --- FEATURE: Swap Dropdown to Text Input ---
+        // --- FEATURE: Swap Dropdown to Text Input (Unchanged) ---
         function switchToTextInput() {
             const container = document.getElementById(DEPT_CONTAINER_ID);
             
-            // If it's already a text input, do nothing
             if (document.getElementById('department_name_text')) return;
 
-            // Create the new text input
             const newInput = document.createElement('input');
             newInput.type = 'text';
             newInput.id = 'department_name_text';
-            newInput.name = 'department_name'; // Use the same name attribute for form submission
+            newInput.name = 'department_name';
             newInput.placeholder = 'Type new department name here...';
             newInput.required = true;
             
-            // Remove old dropdown and insert new input
             container.innerHTML = '';
             container.appendChild(newInput);
             
-            // Add a note below the input
             const note = document.createElement('small');
             note.textContent = 'This name will be submitted. The backend should create the new department if it does not exist.';
-            note.style.color = '#007bff';
+            note.style.color = '#005A9C';
             note.style.display = 'block';
             note.style.marginTop = '5px';
             container.appendChild(note);
         }
 
-        // --- Add listener for the "Add New" option ---
+        // --- Add listener for the "Add New" option (Unchanged) ---
         document.addEventListener('change', function(event) {
             if (event.target.id === DEPT_SELECT_ID && event.target.value === 'new_department_prompt') {
                 switchToTextInput();
             }
         });
 
-        // --- Form Submission Handler ---
+        // --- Form Submission Handler (CRITICAL UPDATE: Using FormData for file upload) ---
         document.getElementById('add-teacher-form').addEventListener('submit', async function(event) {
             event.preventDefault();
             const errorMsg = document.getElementById('error-msg');
@@ -310,68 +323,55 @@
             errorMsg.textContent = '';
             submitBtn.disabled = true;
 
-            const formData = new FormData(event.target);
-            const data = Object.fromEntries(formData.entries());
+            const formData = new FormData(event.target); // Captures files automatically
 
-            // Simple validation check for password
-            if (data.password.length < 6) {
-                errorMsg.textContent = 'Password must be at least 6 characters long.';
-                submitBtn.disabled = false;
-                return;
-            }
-            
             // --- Department Data Handling Logic ---
             const deptSelect = document.getElementById(DEPT_SELECT_ID);
             const deptTextInput = document.getElementById('department_name_text');
             
-            data.department_id = null; // Reset ID for clarity
-
-            // Case 1: Select dropdown is visible (existing department chosen)
-            if (deptSelect && deptSelect.parentNode.id === DEPT_CONTAINER_ID && data.department_name) {
-                if (data.department_name === 'new_department_prompt') {
-                     // Should be unreachable if the change event worked correctly, but handle defensively
-                     data.department_name = null;
+            let departmentNameValue = formData.get('department_name');
+            
+            // 1. Process Department Name/ID
+            if (deptSelect && deptSelect.parentNode.id === DEPT_CONTAINER_ID && departmentNameValue) {
+                if (departmentNameValue === 'new_department_prompt') {
+                    formData.set('department_name', ''); // Clear invalid prompt value
                 } else {
-                     const selectedOption = deptSelect.querySelector(`option[value="${data.department_name}"]`);
-                     data.department_id = selectedOption ? selectedOption.dataset.id : null;
+                    const selectedOption = deptSelect.querySelector(`option[value="${departmentNameValue}"]`);
+                    const departmentIdValue = selectedOption ? selectedOption.dataset.id : '';
+                    formData.set('department_id', departmentIdValue);
                 }
-            } 
-            // Case 2: Text input is visible (new department typed)
-            else if (deptTextInput && deptTextInput.parentNode.id === DEPT_CONTAINER_ID) {
-                data.department_name = deptTextInput.value || null;
-                data.department_id = null; // Ensure ID is null for creation
+            } else if (deptTextInput && deptTextInput.parentNode.id === DEPT_CONTAINER_ID) {
+                // Text input is used, department_id remains empty
+                formData.set('department_id', '');
             } else {
-                // Case 3: No department selected/typed
-                data.department_name = null;
-                data.department_id = null;
+                formData.set('department_name', '');
+                formData.set('department_id', '');
             }
             
-            // --- General Data cleanup/validation for DB compatibility ---
-            data.date_of_birth = data.date_of_birth || null;
-            data.hire_date = data.hire_date || new Date().toISOString().substring(0, 10);
-            data.address = data.address || null;
-            data.designation = data.designation || 'Teacher';
-            data.phone_number = data.phone_number || null;
+            // 2. Add other defaults needed by the backend
+            if (!formData.get('hire_date')) formData.set('hire_date', new Date().toISOString().substring(0, 10));
+            if (!formData.get('designation')) formData.set('designation', 'Teacher');
+            formData.set('initial_role', 'Teacher');
             
-            // Final check on required fields that might become null
-            data.department_name = data.department_name || null;
-            
-            data.initial_role = 'Teacher';
-
+            // 3. Final validation check for password
+            if (formData.get('password').length < 6) {
+                errorMsg.textContent = 'Password must be at least 6 characters long.';
+                submitBtn.disabled = false;
+                return;
+            }
 
             try {
-                // API route: POST /api/teachers
-                const response = await handleApi('/api/teachers', {
+                // API route: POST /api/teachers - Submitting as multipart/form-data
+                const response = await handleApi(API_TEACHERS_URL, {
                     method: 'POST',
-                    body: JSON.stringify(data)
+                    body: formData // Send FormData directly
                 });
 
                 const result = await response.json();
 
                 if (response.ok) {
-                    alert(`✅ Success! Staff ${result.teacher.full_name} (${result.teacher.employee_id}) created with login ${data.username}.`);
+                    alert(`✅ Success! Staff ${result.teacher.full_name} (${result.teacher.employee_id}) created with login ${formData.get('username')}.`);
                     event.target.reset(); 
-                    // Refresh department list in case a new one was created
                     fetchAndPopulateDepartments(); 
                 } else {
                     errorMsg.textContent = result.message || 'Failed to add teacher.';

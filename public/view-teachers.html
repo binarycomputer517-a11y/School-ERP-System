@@ -49,11 +49,47 @@
         /* ID Card Styles - For Print */
         .id-card-template { 
             width: 320px; height: 540px; border: 1px solid #000; border-radius: 0; margin: 20px auto; position: relative; text-align: center; font-size: 14px; 
+            color: #000; 
             box-shadow: 2px 2px 5px #888; background-color: #fff; padding: 0; overflow: hidden;
         }
         .id-card-header { background-color: #005A9C; color: white; padding: 10px 0; font-size: 1.5em; }
+        .id-card-header h2 { margin: 0; font-size: 1.2em; }
+        .id-card-contact { font-size: 0.8em; margin-top: 5px; }
         .id-card-role { background-color: #ffc107; color: #333; padding: 5px 0; font-weight: bold; font-size: 1.1em; }
         
+        /* Watermark Body Style */
+        .id-card-body {
+            padding: 15px; 
+            text-align: center; 
+            position: relative;
+            z-index: 1;
+        }
+        
+        .id-card-watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 80%; 
+            height: 80%;
+            transform: translate(-50%, -50%);
+            opacity: 0.15; 
+            background-repeat: no-repeat;
+            background-size: contain; 
+            background-position: center;
+            z-index: 0; 
+        }
+
+        /* Photo Style for Card */
+        .card-photo {
+            width: 100px; 
+            height: 100px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid #005A9C; 
+            margin: 15px auto 10px;
+            display: block;
+        }
+
         @media print {
             body > *:not(.print-container) { display: none; }
             .print-container { display: block !important; width: 100%; text-align: center; }
@@ -64,11 +100,12 @@
 <body>
     <div class="container">
         <div class="header-controls">
-            <h1>Staff Directory & Management</h1>
+            <h1><span class="global-school-name">Staff Directory & Management</span></h1>
+            
             <div class="nav-links" style="margin-bottom: 20px; display: flex; gap: 10px;">
                 <a href="/admin-dashboard.html" class="btn btn-secondary">← Dashboard</a>
                 
-                <a href="/manage-departments.html" class="btn btn-info-link">🏢 Manage Departments</a>
+                <a href="/manage-departments.html" class="btn-info-link">🏢 Manage Departments</a>
                 
                 <a href="/add-teacher.html" class="btn btn-success">➕ Add New Staff</a>
             </div>
@@ -104,13 +141,71 @@
     </div>
 
     <script>
+        // --- GLOBAL CONFIGURATION ALIGNMENT ---
         const API_URL = '/api/teachers';
         const TOKEN = localStorage.getItem('erp-token');
+        
         let allTeachers = [];
         let currentSortKey = 'employee_id';
         let isAscending = true;
 
-        // --- Utility function for authenticated fetch ---
+        // Helper to get configuration data directly from localStorage (applied by global-config.js)
+        function getGlobalConfig() {
+            try {
+                const settings = localStorage.getItem('erp_settings');
+                return settings ? JSON.parse(settings) : {};
+            } catch (e) {
+                console.error("Error reading global settings from cache:", e);
+                return {};
+            }
+        }
+        
+        /**
+         * Helper: Generates a local canvas avatar (Data URL) to avoid CORS issues with html2canvas.
+         */
+        function createLocalAvatar(name) {
+            const canvas = document.createElement('canvas');
+            const size = 100;
+            canvas.width = size;
+            canvas.height = size;
+            const ctx = canvas.getContext('2d');
+            
+            // 1. Background (matching the ID card header blue)
+            ctx.fillStyle = '#005A9C'; 
+            ctx.fillRect(0, 0, size, size);
+            
+            // 2. Initials (White text)
+            const initials = name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+            
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = 'bold 48px Times New Roman, serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(initials, size / 2, size / 2);
+            
+            return canvas.toDataURL('image/png');
+        }
+
+        /**
+         * Returns the image source for the ID card.
+         */
+        function getTeacherPhotoUrl(teacher) {
+            const photoPath = teacher.profile_image_path || teacher.photo_path; 
+            const API_BASE_URL = window.API_BASE_URL || '/api'; 
+
+            if (photoPath) {
+                // Return local/uploaded path
+                if (!photoPath.startsWith('http') && !photoPath.startsWith('data:image')) {
+                    return `${API_BASE_URL.replace(/\/api\/?$/, '')}${photoPath.startsWith('/') ? photoPath : '/' + photoPath}`;
+                }
+                return photoPath;
+            }
+            
+            // FALLBACK: Generate local canvas avatar to avoid CORS block by html2canvas
+            return createLocalAvatar(teacher.full_name || teacher.username || 'Staff');
+        }
+
+        // --- Utility function for authenticated fetch (Omitted for brevity) ---
         async function authenticatedFetch(url, options = {}) {
             options.headers = { 
                 'Authorization': `Bearer ${TOKEN}`,
@@ -124,16 +219,14 @@
                 window.location.href = '/login';
                 throw new Error('Unauthorized');
             }
-            // CRITICAL FIX: The 500 error from backend will be caught here
             if (!response.ok) {
                 const error = await response.json().catch(() => ({ message: response.statusText }));
-                // Custom error message to help diagnose backend issue
                 throw new Error(`Failed to retrieve teachers list. Server responded with: ${response.status} ${error.message || response.statusText}`);
             }
             return response;
         }
         
-        // --- 1. DATA FETCHING AND INITIAL RENDER ---
+        // --- 1. DATA FETCHING AND INITIAL RENDER (Omitted for brevity) ---
         async function fetchTeachers() {
             const tbody = document.getElementById('teachers-list');
             try {
@@ -147,7 +240,6 @@
 
             } catch(e) { 
                 console.error('Error fetching teachers:', e);
-                // Display the custom error message received from the backend/fetch utility
                 tbody.innerHTML = `<tr><td colspan="8" style="text-align: center; color: red;">Error: ${e.message}. (Check API/Token)</td></tr>`;
             }
         }
@@ -169,8 +261,8 @@
                     <td>${t.hire_date ? new Date(t.hire_date).toLocaleDateString() : 'N/A'}</td>
                     <td><span class="status-badge status-active">${t.is_active ? 'Active' : 'Inactive'}</span></td>
                     <td>
-                        <button class="btn-warning" onclick="window.location.href='/edit-teacher.html?id=${t.id}'">Edit</button>
-                        <button class="btn-danger" onclick="deleteTeacher('${t.id}', '${t.full_name}')">Delete</button>
+                        <button class="btn-warning" onclick="window.location.href='/edit-teacher.html?id=${t.teacher_id}'">Edit</button>
+                        <button class="btn-danger" onclick="deleteTeacher('${t.teacher_id}', '${t.full_name}')">Delete</button>
                     </td>
                 </tr>
             `).join('');
@@ -182,7 +274,6 @@
                 departmentFilter.remove(1);
             }
             
-            // NOTE: This relies on the API providing 'department_name' field via JOIN.
             const departments = [...new Set(teachers.map(t => t.department_name).filter(Boolean))].sort();
             
             departments.forEach(dept => {
@@ -193,7 +284,7 @@
             });
         }
 
-        // --- 2. SORTING LOGIC ---
+        // --- 2. SORTING LOGIC (Omitted for brevity) ---
         function getSortValue(teacher, key) {
             const value = teacher[key];
             if (key === 'hire_date' && value) return new Date(value).getTime();
@@ -237,7 +328,7 @@
             }
         });
 
-        // --- 3. FILTERING LOGIC ---
+        // --- 3. FILTERING LOGIC (Omitted for brevity) ---
         function applyFilters(teachers) {
             const searchInput = document.getElementById('search-input').value.toLowerCase();
             const departmentFilter = document.getElementById('department-filter').value;
@@ -268,7 +359,7 @@
             sortAndRender(allTeachers, currentSortKey, isAscending);
         });
 
-        // --- 4. DELETE ACTION ---
+        // --- 4. DELETE ACTION (Omitted for brevity) ---
         async function deleteTeacher(id, name) {
             if (!confirm(`Are you sure you want to delete staff member: ${name}? This action cannot be undone.`)) {
                 return;
@@ -290,28 +381,48 @@
         }
         window.deleteTeacher = deleteTeacher; 
 
-        // --- 5. ID CARD PRINTING LOGIC ---
+        // --- 5. ID CARD PRINTING LOGIC (Using full dynamic config + Watermark + Photo) ---
         function createIdCardElement(teacher) {
+            // Get configuration data using the helper
+            const config = getGlobalConfig();
+            
+            const schoolName = config.school_name || 'SCHOOL ERP SYSTEM';
+            const address = config.school_address || '123 School Lane, City';
+            const phone = config.school_phone || 'N/A';
+            const email = config.school_email || 'contact@school.com';
+            const logoPath = config.school_logo_path || ''; 
+            
+            // Get photo URL (uses local canvas fallback if path is empty)
+            const photoUrl = getTeacherPhotoUrl(teacher);
+
             const card = document.createElement('div');
             card.className = 'id-card-template';
             
+            // Set the background watermark style dynamically
+            const watermarkStyle = logoPath ? `background-image: url('${logoPath}');` : '';
+
             card.innerHTML = `
                 <div class="id-card-header">
-                    <h2>Your School Name</h2>
+                    <h2>${schoolName}</h2>
+                    <div class="id-card-contact">
+                        ${address} | Phone: ${phone}
+                    </div>
                 </div>
                 <div class="id-card-role">
                     STAFF ID CARD
                 </div>
-                <div style="padding: 15px; text-align: center;">
-                    <div style="width: 100px; height: 100px; background-color: #DDD; border: 1px solid #333; margin: 15px auto 10px; display: flex; align-items: center; justify-content: center; font-size: 0.8em;">
-                        [Photo Area]
-                    </div>
+                
+                <div class="id-card-watermark" style="${watermarkStyle}"></div>
+                
+                <div class="id-card-body">
+                    <img src="${photoUrl}" class="card-photo" alt="Staff Photo">
+                    
                     <h3 style="margin: 5px 0; color: #000; font-size: 1.4em;">${teacher.full_name}</h3>
                     <p style="margin: 5px 0;"><strong>ID:</strong> ${teacher.employee_id}</p>
                     <p style="margin: 5px 0;"><strong>Role:</strong> ${teacher.designation || 'Staff'}</p>
                     <p style="margin: 5px 0;"><strong>Dept:</strong> ${teacher.department_name || 'N/A'}</p>
                     <div style="margin-top: 30px; font-size: 12px; border-top: 1px dashed #CCC; padding-top: 10px;">
-                        <p style="margin-bottom: 5px;">This card is school property.</p>
+                        <p style="margin-bottom: 5px;">Email: ${email}</p>
                         <div style="width: 100px; height: 30px; border-bottom: 1px solid #000; margin: 5px auto;"></div>
                         <p>Authorized Signature</p>
                     </div>
@@ -333,12 +444,13 @@
             document.body.appendChild(tempContainer);
             
             const cardPromises = allTeachers.map(teacher => {
-                const cardElement = createIdCardElement(teacher);
+                const cardElement = createIdCardElement(teacher); 
                 tempContainer.appendChild(cardElement);
 
                 return html2canvas(cardElement, { 
                     scale: 3, 
-                    useCORS: true 
+                    useCORS: true,
+                    // No need for allowTaint if we use the local canvas fallback
                 }).then(canvas => {
                     const img = document.createElement('img');
                     img.src = canvas.toDataURL('image/png');
@@ -376,7 +488,10 @@
         document.getElementById('print-all-id-btn').addEventListener('click', printAllIdCards);
 
         // --- Initialization ---
-        document.addEventListener('DOMContentLoaded', fetchTeachers); 
+        document.addEventListener('DOMContentLoaded', () => {
+            // Wait briefly for global-config.js to set the name before fetching the list
+            setTimeout(fetchTeachers, 50); 
+        });
     </script>
     <script src="js/global-config.js"></script>
 </body>
