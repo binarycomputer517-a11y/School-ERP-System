@@ -10,14 +10,15 @@ const moment = require('moment');
 const APPLICATIONS_TABLE = 'applications';
 const APPLICATION_FEES_TABLE = 'application_fees';
 const USERS_TABLE = 'users';
-const COURSES_TABLE = 'courses'; // Needed for join
-const BATCHES_TABLE = 'batches'; // Needed for join
+const COURSES_TABLE = 'courses'; 
+const BATCHES_TABLE = 'batches'; 
+const STUDENTS_TABLE = 'students'; 
 
 
 // Constants
-const APPLICATION_FEE_AMOUNT = 50.00; // Example fee
+const APPLICATION_FEE_AMOUNT = 50.00;
 const APPLICATION_STATUSES = ['Draft', 'Submitted', 'Under Review', 'Accepted', 'Rejected', 'Enrolled'];
-const APPROVER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Registrar']; // Added Registrar/Coordinator for access
+const APPROVER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Registrar'];
 
 
 // =========================================================
@@ -25,7 +26,7 @@ const APPROVER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Registrar']; // 
 // =========================================================
 router.post('/apply', async (req, res) => {
     const { 
-        applicant_name, applicant_email, course_id, dob, parent_name, parent_contact, batch_id // Include batch_id if mandatory
+        applicant_name, applicant_email, course_id, dob, parent_name, parent_contact, batch_id
     } = req.body;
 
     if (!applicant_name || !applicant_email || !course_id || !dob || !parent_name) {
@@ -47,7 +48,7 @@ router.post('/apply', async (req, res) => {
             applicant_name, 
             applicant_email, 
             course_id, 
-            batch_id || null, // Allow null if not strictly enforced at this stage
+            batch_id || null, 
             dob, 
             parent_name, 
             parent_contact || null
@@ -99,7 +100,7 @@ router.put('/fee/:feeId/pay', async (req, res) => {
             WHERE id = $2 AND status = 'Pending'
             RETURNING application_id;
         `;
-        const updateResult = await client.query(feeUpdateQuery, [
+        const updateResult = await client.query(updateQuery, [
             req.body.transaction_id || `TRX-${new Date().getTime()}`, 
             feeId
         ]);
@@ -139,8 +140,8 @@ router.put('/fee/:feeId/pay', async (req, res) => {
 router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES), async (req, res) => {
     const { applicationId } = req.params;
     const { new_status, reason } = req.body;
-    // NOTE: This assumes the user ID in the token is the user_id (not userId)
     const adminId = req.user.id; 
+    let newUserId = null; 
 
     if (!APPLICATION_STATUSES.includes(new_status) || new_status === 'Submitted' || new_status === 'Draft') {
         return res.status(400).json({ message: 'Invalid or restricted status transition.' });
@@ -164,7 +165,7 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
         }
         const application = appRes.rows[0];
 
-        // 2. Update Application Status
+        // 2. Update Application Status (This is where 'Accepted' is set)
         const updateQuery = `
             UPDATE ${APPLICATIONS_TABLE} SET
                 status = $1, review_notes = $2, reviewer_id = $3, updated_at = CURRENT_TIMESTAMP
@@ -175,15 +176,14 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
 
         // 3. SPECIAL CASE: Enrollment (Create Student/User)
         if (new_status === 'Enrolled' && application.status === 'Accepted') {
-            // Check if user already exists (by email) to avoid duplicates
+            
+            // Check if user already exists (by email)
             let existingUser = await client.query(`SELECT id FROM ${USERS_TABLE} WHERE email = $1`, [application.applicant_email]);
-            let newUserId;
-
+            
             if (existingUser.rowCount === 0) {
-                // Create a new User login (temporary username/password needed for Student creation)
-                // NOTE: We need to use a strong default password and a generated username
+                // Create new User account
                 const defaultUsername = application.applicant_email.split('@')[0] + Math.floor(Math.random() * 100);
-                const tempPasswordHash = '$2a$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; // Placeholder hash for a temporary password
+                const tempPasswordHash = '$2a$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; 
 
                 const newUserQuery = `
                     INSERT INTO ${USERS_TABLE} (username, password_hash, email, role, date_of_birth)
@@ -202,18 +202,17 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
                 newUserId = existingUser.rows[0].id;
             }
             
-            // Link the user ID back to the application record and create student profile
+            // Link the user ID back to the application record 
             await client.query(`UPDATE ${APPLICATIONS_TABLE} SET user_id = $1 WHERE id = $2`, [newUserId, applicationId]);
 
-            // *** CRITICAL STEP: Create the Student profile (assumes 'students' table is correct) ***
-            // NOTE: A real Student INSERT needs many fields (roll_number, branch_id, etc.)
+            // *** CRITICAL STEP: Create the Student profile ***
             await client.query(
-                `INSERT INTO students (user_id, first_name, last_name, email, phone_number, dob, course_id, batch_id) 
+                `INSERT INTO ${STUDENTS_TABLE} (user_id, first_name, last_name, email, phone_number, dob, course_id, batch_id) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (user_id) DO NOTHING`,
                 [
                     newUserId, 
-                    application.applicant_name.split(' ')[0], // First name approximation
-                    application.applicant_name.split(' ').slice(-1).join(''), // Last name approximation
+                    application.applicant_name.split(' ')[0], 
+                    application.applicant_name.split(' ').slice(-1).join(''), 
                     application.applicant_email,
                     application.parent_contact,
                     application.dob,
@@ -226,15 +225,18 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
 
 
         await client.query('COMMIT');
+        
+        // 💡 FIX: Return the new user ID for front-end redirect
         res.status(200).json({ 
             message: `Application status updated to "${new_status}".`, 
             application_id: applicationId,
-            new_status: new_status
+            new_status: new_status,
+            new_user_id: newUserId // This is the ID used for the Add-Student redirect
         });
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Admission Review Error:', error);
+        console.error('Admission Review Error (Status Write Failure):', error);
         res.status(500).json({ message: 'Failed to update application status.' });
     } finally {
         client.release();
@@ -248,8 +250,6 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
 
 /**
  * @route   GET /api/admission/applications/pending
- * @desc    Get all applications needing review ('Under Review' status).
- * @access  Private (Admin, Coordinator, Super Admin, Registrar)
  */
 router.get('/applications/pending', authenticateToken, authorize(APPROVER_ROLES), async (req, res) => {
     try {
@@ -257,19 +257,20 @@ router.get('/applications/pending', authenticateToken, authorize(APPROVER_ROLES)
             SELECT 
                 a.id, 
                 a.applicant_name, 
-                a.applicant_email AS contact_email,   /* Uses alias for the email expected by frontend */
-                a.parent_contact AS contact_phone,   /* Uses alias for the phone expected by frontend */
-                a.application_date,                  /* Column now exists in DB */
+                a.applicant_email AS contact_email,   
+                a.parent_contact AS contact_phone,   
+                a.application_date,                  
                 a.status,
                 a.dob,
-                c.course_name,                       /* Result of join on courses */
-                b.batch_name,                        /* Result of join on batches */
+                c.course_name,                       
+                b.batch_name,                        
                 af.status AS fee_status,
                 af.amount AS fee_amount,
                 af.id AS fee_id
             FROM ${APPLICATIONS_TABLE} a
-            LEFT JOIN ${COURSES_TABLE} c ON a.course_id = c.id
-            LEFT JOIN ${BATCHES_TABLE} b ON a.batch_id = b.id
+            /* CRITICAL FIX: Explicitly cast the Foreign Key columns to UUID */
+            LEFT JOIN ${COURSES_TABLE} c ON a.course_id::uuid = c.id
+            LEFT JOIN ${BATCHES_TABLE} b ON a.batch_id::uuid = b.id
             LEFT JOIN ${APPLICATION_FEES_TABLE} af ON a.id = af.application_id
             WHERE a.status IN ('Under Review', 'Submitted')
             ORDER BY a.application_date ASC;
@@ -277,7 +278,6 @@ router.get('/applications/pending', authenticateToken, authorize(APPROVER_ROLES)
         const result = await pool.query(query);
         res.status(200).json(result.rows);
     } catch (error) {
-        // Log the actual SQL error for deep debugging if the crash continues
         console.error('CRASHING ADMISSION QUERY ERROR:', error);
         res.status(500).json({ message: 'Failed to retrieve pending applications.' });
     }
@@ -285,13 +285,9 @@ router.get('/applications/pending', authenticateToken, authorize(APPROVER_ROLES)
 
 /**
  * @route   GET /api/admission/application/:applicationId
- * @desc    Get details of a specific application.
- * @access  Private (Admin, Coordinator, Super Admin, Registrar) or Public (Applicant via email token/ID)
  */
 router.get('/application/:applicationId', async (req, res) => {
     const { applicationId } = req.params;
-    
-    // NOTE: In a secure implementation, non-admin users would need a validation token here.
     
     try {
         const query = `

@@ -88,7 +88,7 @@
                 <thead>
                     <tr>
                         <th>Applicant</th>
-                        <th>Course</th>
+                        <th>Course (Batch)</th>
                         <th>Submitted</th>
                         <th>Fee Status</th>
                         <th>Current Status</th>
@@ -185,7 +185,7 @@
     <script>
         // NOTE: Adjusted API_BASE to reflect mounting in server.js
         const API_BASE = '/api/admission';
-        const COURSES_API_BASE = '/api/courses'; // For fetching dynamic course list
+        const COURSES_API_BASE = '/api/courses'; // Corrected base path
         const TOKEN = localStorage.getItem('erp-token');
         const USER_ROLE = localStorage.getItem('user-role');
         
@@ -238,8 +238,8 @@
         
         async function loadCoursesForApplication() {
             try {
-                // Fetch from the general /api/courses endpoint
-                const courses = await handleApi(`${COURSES_API_BASE}`).catch(() => []);
+                // 🛑 FIX: Corrected API path from /api/courses/courses to /api/courses
+                const courses = await handleApi(COURSES_API_BASE).catch(() => []);
                 
                 courseSelect.innerHTML = '<option value="">-- Select Course --</option>'; // Reset
                 
@@ -326,11 +326,17 @@
                     throw new Error('Email does not match the application ID.');
                 }
                 
+                // 🛑 FIX: Add safety check for fee_amount before calling toFixed()
+                const feeAmountDisplay = (result.fee_amount && !isNaN(result.fee_amount)) 
+                    ? parseFloat(result.fee_amount).toFixed(2) 
+                    : '0.00';
+
+
                 trackingResult.innerHTML = `
                     <p><strong>Applicant:</strong> ${result.applicant_name}</p>
                     <p><strong>Course:</strong> ${result.course_id}</p>
                     <p><strong>Status:</strong> <span class="status-badge status-${result.status.replace(/\s/g, '_')}">${result.status}</span></p>
-                    <p><strong>Fee Payment:</strong> <span class="status-badge status-${result.fee_status}">${result.fee_status} (₹${result.fee_amount.toFixed(2)})</span></p>
+                    <p><strong>Fee Payment:</strong> <span class="status-badge status-${result.fee_status}">${result.fee_status} (₹${feeAmountDisplay})</span></p>
                     ${result.review_notes ? `<p><strong>Reviewer Notes:</strong> ${result.review_notes}</p>` : ''}
                     <p>Submitted: ${new Date(result.created_at).toLocaleDateString()}</p>
                 `;
@@ -357,6 +363,7 @@
                 // Simulating payment relies on a PUT endpoint
                 const result = await handleApi(`${API_BASE}/fee/${feeId}/pay`, { method: 'PUT', body: JSON.stringify({}) });
                 alert(result.message);
+                fetchPendingApplications(); // Refresh dashboard list after payment
                 trackingForm.dispatchEvent(new Event('submit', { cancelable: true }));
              } catch (error) {
                  alert(`Fee payment failed: ${error.message}`);
@@ -383,12 +390,23 @@
                     
                     const reviewEnabled = feePaid && (app.status === 'Submitted' || app.status === 'Under Review');
                     const enrollEnabled = app.status === 'Accepted';
+                    
+                    // 💡 FIXES for rendering undefined/Invalid Date
+                    const courseDisplay = app.course_name || app.course_id || 'N/A';
+                    const batchDisplay = app.batch_name || 'N/A';
+                    
+                    let dateDisplay = 'N/A';
+                    if (app.application_date) {
+                        const date = new Date(app.application_date);
+                        // Safely format date, avoiding 'Invalid Date' output
+                        dateDisplay = date instanceof Date && !isNaN(date) ? date.toLocaleDateString() : 'Invalid Date';
+                    }
 
                     return `
                         <tr>
-                            <td><strong>${app.applicant_name}</strong> (${app.applicant_email})</td>
-                            <td>${app.course_id}</td>
-                            <td>${new Date(app.created_at).toLocaleDateString()}</td>
+                            <td><strong>${app.applicant_name}</strong> (${app.applicant_email || 'N/A'})</td>
+                            <td>${courseDisplay} (${batchDisplay})</td>
+                            <td>${dateDisplay}</td>
                             <td><span class="status-badge ${feeStatusClass}">${app.fee_status}</span></td>
                             <td><span class="status-badge ${statusClass}">${app.status}</span></td>
                             <td>
@@ -434,25 +452,31 @@
                 
                 alert(`Status successfully updated to ${result.new_status}.`);
                 reviewModal.style.display = 'none';
-                fetchPendingApplications(); // Refresh list
+                fetchPendingApplications(); // Refresh list to update button status
 
             } catch (error) {
                 alert(`Failed to update status: ${error.message}`);
             }
         });
 
+        // 🚀 CRITICAL CHANGE: Redirect to Add-Student.html upon successful Enrollment
         window.processEnrollment = async function(applicationId) {
             if (!confirm('This will finalize acceptance and create a new Student user account. Confirm Enrollment?')) return;
             
             try {
-                // This route requires auth token
+                // 1. Enrollment API call
                 const result = await handleApi(`${API_BASE}/review/${applicationId}`, { 
                     method: 'PUT', 
                     body: JSON.stringify({ new_status: 'Enrolled' }) 
                 });
                 
-                alert(`Enrollment complete! New user account created for ${result.applicant_name || 'the applicant'}.`);
-                fetchPendingApplications(); // Refresh list
+                // Assuming the backend returns the newly created user's ID or student ID 
+                const newUserId = result.new_user_id || ''; 
+                
+                alert(`Enrollment complete for ${result.applicant_name || 'the applicant'}. Redirecting to Add-Student page...`);
+                
+                // 2. Redirect to Add-Student.html, passing application and user IDs
+                window.location.href = `/Add-Student.html?appId=${applicationId}&userId=${newUserId}`;
 
             } catch (error) {
                 alert(`Failed to complete enrollment: ${error.message}`);
