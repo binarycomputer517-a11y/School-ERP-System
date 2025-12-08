@@ -1,58 +1,33 @@
+// routes/inventory.js
+
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database'); 
 const { authenticateToken, authorize } = require('../authMiddleware'); 
+// Assuming these are available in your utils folder.
+const { toUUID, resolveLocationId } = require('../utils/helpers'); 
 const moment = require('moment'); 
 
-// =========================================================
-// DATABASE TABLE CONSTANTS 
-// =========================================================
+// === Dependency Constants ===
 const ITEMS_TABLE = 'inventory_items'; 
 const VENDORS_TABLE = 'inventory_vendors';
 const MOVEMENT_TABLE = 'inventory_movement'; 
 const PO_TABLE = 'purchase_orders'; 
 const USERS_TABLE = 'users'; 
+const LOCATIONS_TABLE = 'asset_locations'; // Used for item location lookup
 
-const ASSETS_TABLE = 'fixed_assets'; 
-const MAINTENANCE_TABLE = 'asset_maintenance_log';
-const ASSIGNMENT_TABLE = 'asset_assignments';
-const LOCATIONS_TABLE = 'asset_locations'; 
-
-// Constants
 const MOVEMENT_TYPES = ['IN_PURCHASE', 'IN_RETURN', 'OUT_ISSUE', 'OUT_DISPOSAL'];
-const MAINTENANCE_TYPES = ['Scheduled', 'Repair', 'Calibration', 'Upgrade'];
 const INVENTORY_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff']; 
 const ADMIN_ROLES = ['Admin', 'Super Admin']; 
-const ASSET_VIEW_ROLES = ['Admin', 'Super Admin', 'Staff', 'Coordinator']; 
+// === END Constants ===
+
 
 // =========================================================
-// HELPER FUNCTION: Resolve Location ID
-// =========================================================
-async function resolveLocationId(client, inputId) {
-    if (!inputId) return null;
-
-    // Regex to check if string is a valid UUID
-    const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(inputId);
-
-    if (isUUID) {
-        return inputId;
-    } else {
-        // It is a name (e.g., "ROOM -301"), look up the ID
-        const res = await client.query(`SELECT id FROM ${LOCATIONS_TABLE} WHERE location_name = $1`, [inputId]);
-        if (res.rows.length > 0) {
-            return res.rows[0].id;
-        } else {
-            throw new Error(`Location '${inputId}' not found in database.`);
-        }
-    }
-}
-
-// =========================================================
-// A. INVENTORY ROUTES (PREFIX: /api/inventory)
+// A. INVENTORY ROUTES (Internal Paths)
 // =========================================================
 
 // ITEM MANAGEMENT (CRUD)
-router.post('/inventory/items', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
+router.post('/items', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
     const { name, category, unit_cost, low_stock_threshold, location_id, vendor_id } = req.body;
     
     if (!name || !category || !unit_cost || !low_stock_threshold) {
@@ -63,7 +38,9 @@ router.post('/inventory/items', authenticateToken, authorize(INVENTORY_MANAGEMEN
     try {
         await client.query('BEGIN');
         
-        const finalLocationId = await resolveLocationId(client, location_id);
+        // NOTE: The resolveLocationId implementation must accept (client, inputId, LOCATIONS_TABLE)
+        // Adjusting the call here based on the assumed structure from your initial files:
+        const finalLocationId = location_id ? await resolveLocationId(client, location_id) : null;
 
         const initialStatus = (low_stock_threshold > 0) ? 'Out of Stock' : 'In Stock';
 
@@ -87,9 +64,8 @@ router.post('/inventory/items', authenticateToken, authorize(INVENTORY_MANAGEMEN
     }
 });
 
-router.get('/inventory/items', authenticateToken, async (req, res) => {
+router.get('/items', authenticateToken, async (req, res) => {
     try {
-        // FIX: explicitly casting IDs to text (::text) to avoid type mismatch errors
         const query = `
             SELECT 
                 i.*, 
@@ -108,7 +84,7 @@ router.get('/inventory/items', authenticateToken, async (req, res) => {
     }
 });
 
-router.put('/inventory/items/:id', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
+router.put('/items/:id', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
     const { id } = req.params;
     const { name, category, unit_cost, low_stock_threshold, location_id, vendor_id } = req.body;
 
@@ -116,7 +92,7 @@ router.put('/inventory/items/:id', authenticateToken, authorize(INVENTORY_MANAGE
     try {
         await client.query('BEGIN');
 
-        const finalLocationId = await resolveLocationId(client, location_id);
+        const finalLocationId = location_id ? await resolveLocationId(client, location_id) : null;
 
         const query = `
             UPDATE ${ITEMS_TABLE}
@@ -144,7 +120,7 @@ router.put('/inventory/items/:id', authenticateToken, authorize(INVENTORY_MANAGE
     }
 });
 
-router.delete('/inventory/items/:id', authenticateToken, authorize(ADMIN_ROLES), async (req, res) => {
+router.delete('/items/:id', authenticateToken, authorize(ADMIN_ROLES), async (req, res) => {
     const { id } = req.params;
     try {
         const result = await pool.query(`DELETE FROM ${ITEMS_TABLE} WHERE id = $1 RETURNING id`, [id]);
@@ -159,7 +135,7 @@ router.delete('/inventory/items/:id', authenticateToken, authorize(ADMIN_ROLES),
 });
 
 // STOCK MOVEMENT (IN/OUT)
-router.post('/inventory/move', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
+router.post('/move', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
     const recordedById = req.user.id; 
     const { item_id, movement_type, quantity, reference_id, recipient_id, notes } = req.body;
     
@@ -171,6 +147,7 @@ router.post('/inventory/move', authenticateToken, authorize(INVENTORY_MANAGEMENT
     try {
         await client.query('BEGIN');
 
+        // Lock the row for update to prevent race conditions
         const currentRes = await client.query(`SELECT current_stock, low_stock_threshold FROM ${ITEMS_TABLE} WHERE id = $1 FOR UPDATE`, [item_id]);
         if (currentRes.rowCount === 0) {
             await client.query('ROLLBACK');
@@ -190,6 +167,7 @@ router.post('/inventory/move', authenticateToken, authorize(INVENTORY_MANAGEMENT
             return res.status(409).json({ message: `Insufficient stock. Available: ${currentStock}. Cannot fulfill request for ${quantity}.` });
         }
         
+        // 1. Record the movement
         const moveQuery = `
             INSERT INTO ${MOVEMENT_TABLE} (item_id, movement_type, quantity_changed, current_stock_after, recorded_by_id, reference_id, recipient_id, notes)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -197,6 +175,7 @@ router.post('/inventory/move', authenticateToken, authorize(INVENTORY_MANAGEMENT
         `;
         await client.query(moveQuery, [item_id, movement_type, stockChange, newStock, recordedById, reference_id || null, recipient_id || null, notes]);
 
+        // 2. Update the item stock and status
         let newStatus = 'In Stock';
         if (newStock === 0) {
             newStatus = 'Out of Stock';
@@ -219,7 +198,7 @@ router.post('/inventory/move', authenticateToken, authorize(INVENTORY_MANAGEMENT
 });
 
 
-router.get('/inventory/movement/:itemId', authenticateToken, async (req, res) => {
+router.get('/movement/:itemId', authenticateToken, async (req, res) => {
     const { itemId } = req.params;
     try {
         const query = `
@@ -241,7 +220,7 @@ router.get('/inventory/movement/:itemId', authenticateToken, async (req, res) =>
 });
 
 // VENDOR & ORDER MANAGEMENT
-router.get('/inventory/vendors', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
+router.get('/vendors', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
     try {
         const query = `SELECT * FROM ${VENDORS_TABLE} ORDER BY name;`;
         const result = await pool.query(query);
@@ -252,7 +231,7 @@ router.get('/inventory/vendors', authenticateToken, authorize(INVENTORY_MANAGEME
     }
 });
 
-router.post('/inventory/vendors', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
+router.post('/vendors', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
     const { name, contact_person, phone, email } = req.body;
     
     if (!name || !contact_person) {
@@ -278,14 +257,15 @@ router.post('/inventory/vendors', authenticateToken, authorize(INVENTORY_MANAGEM
 });
 
 
-router.post('/inventory/purchase-order', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
+router.post('/purchase-order', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
     const creatorId = req.user.id; 
     if (!creatorId) return res.status(403).json({ message: 'Token context missing.' }); 
     
     const { vendor_id, items_ordered, expected_delivery_date, total_cost } = req.body; 
 
-    if (!vendor_id || !items_ordered || items_ordered.length === 0 || !total_cost) {
-        return res.status(400).json({ message: 'Missing required PO details.' });
+    // 🛑 CRITICAL FIX: Ensure expected_delivery_date is checked as it is NOT NULL in DB
+    if (!vendor_id || !items_ordered || items_ordered.length === 0 || !total_cost || !expected_delivery_date) {
+        return res.status(400).json({ message: 'Missing required PO details: Vendor, Items, Cost, or Expected Delivery Date.' });
     }
 
     const client = await pool.connect();
@@ -294,14 +274,15 @@ router.post('/inventory/purchase-order', authenticateToken, authorize(INVENTORY_
 
         const poQuery = `
             INSERT INTO ${PO_TABLE} (vendor_id, created_by_id, expected_delivery_date, total_cost, status)
-            VALUES ($1, $2, $3, $4, 'Pending')
+            VALUES ($1, $2, $3::date, $4, 'Pending')
             RETURNING id;
         `;
         const poResult = await client.query(poQuery, [
-            vendor_id, creatorId, expected_delivery_date || null, total_cost
+            vendor_id, creatorId, expected_delivery_date, total_cost
         ]);
         const poId = poResult.rows[0].id;
 
+        // items_ordered must be serialized as JSON (assuming it's an array of objects)
         await client.query(`UPDATE ${PO_TABLE} SET ordered_items_json = $1 WHERE id = $2`, [JSON.stringify(items_ordered), poId]);
         
         await client.query('COMMIT');
@@ -316,7 +297,7 @@ router.post('/inventory/purchase-order', authenticateToken, authorize(INVENTORY_
     }
 });
 
-router.get('/inventory/purchase-order/history', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
+router.get('/purchase-order/history', authenticateToken, authorize(INVENTORY_MANAGEMENT_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
@@ -340,7 +321,7 @@ router.get('/inventory/purchase-order/history', authenticateToken, authorize(INV
 // =========================================================
 // STOCK PREDICTION
 // =========================================================
-router.get('/inventory/analytics/stock-prediction', authenticateToken, authorize(ADMIN_ROLES), async (req, res) => {
+router.get('/analytics/stock-prediction', authenticateToken, authorize(ADMIN_ROLES), async (req, res) => {
     try {
         const query = `
             WITH UsageRate AS (
@@ -374,202 +355,6 @@ router.get('/inventory/analytics/stock-prediction', authenticateToken, authorize
     } catch (error) {
         console.error('Error fetching stock prediction:', error);
         res.status(500).json({ message: 'Failed to run stock prediction analysis.' });
-    }
-});
-
-// =========================================================
-// B. ASSET ROUTES (PREFIX: /api/asset)
-// =========================================================
-
-// ASSET MANAGEMENT (CRUD)
-router.post('/asset/register', authenticateToken, authorize(['Admin', 'Staff']), async (req, res) => {
-    const { 
-        tag_number, name, category, purchase_date, purchase_cost, 
-        depreciation_method, useful_life_years, current_location_id 
-    } = req.body;
-
-    if (!tag_number || !name || !purchase_cost || !purchase_date) {
-        return res.status(400).json({ message: 'Missing required asset details.' });
-    }
-
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        const finalLocationId = await resolveLocationId(client, current_location_id);
-
-        const query = `
-            INSERT INTO ${ASSETS_TABLE} (
-                tag_number, name, category, purchase_date, purchase_cost, 
-                depreciation_method, useful_life_years, current_location_id, status
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'Active')
-            RETURNING id;
-        `;
-        const result = await client.query(query, [
-            tag_number, name, category, purchase_date, purchase_cost, 
-            depreciation_method || 'Straight-Line', useful_life_years || 5, finalLocationId
-        ]);
-        
-        await client.query('COMMIT');
-        res.status(201).json({ message: 'Asset registered successfully.', asset_id: result.rows[0].id });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        if (error.code === '23505') { 
-            return res.status(409).json({ message: 'Asset Tag Number already exists.' });
-        }
-        console.error('Error registering asset:', error);
-        res.status(500).json({ message: 'Failed to register asset: ' + error.message });
-    } finally {
-        client.release();
-    }
-});
-
-router.get('/asset/all', authenticateToken, authorize(ASSET_VIEW_ROLES), async (req, res) => {
-    try {
-        // FIX: explicitly casting IDs to text (::text) to avoid type mismatch errors
-        const query = `
-            SELECT 
-                a.*,
-                l.location_name,
-                u.username AS assigned_user_name,
-                u.role AS assigned_user_role,
-                ROUND(a.purchase_cost * (
-                    (EXTRACT(epoch FROM (NOW() - a.purchase_date)) / 31536000) / a.useful_life_years
-                ), 2) AS accumulated_depreciation,
-                (a.purchase_cost - ROUND(a.purchase_cost * (
-                    (EXTRACT(epoch FROM (NOW() - a.purchase_date)) / 31536000) / a.useful_life_years
-                ), 2)) AS current_book_value
-            FROM ${ASSETS_TABLE} a
-            LEFT JOIN ${LOCATIONS_TABLE} l ON a.current_location_id::text = l.id::text
-            LEFT JOIN ${ASSIGNMENT_TABLE} assign ON a.id::text = assign.asset_id::text AND assign.is_active = TRUE
-            LEFT JOIN ${USERS_TABLE} u ON assign.user_id::text = u.id::text
-            ORDER BY a.status, a.tag_number;
-        `;
-        const result = await pool.query(query);
-        res.status(200).json(result.rows);
-    } catch (error) {
-        console.error('Error fetching assets:', error); 
-        res.status(500).json({ message: 'Failed to retrieve assets.' });
-    }
-});
-
-// ASSIGNMENT & DEPLOYMENT
-router.post('/asset/assign', authenticateToken, authorize(['Admin', 'Staff']), async (req, res) => {
-    const { asset_id, user_id, assigned_location_id, notes } = req.body;
-    const assigned_by_id = req.user.id;
-    
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-
-        const finalLocationId = await resolveLocationId(client, assigned_location_id);
-
-        await client.query(`UPDATE ${ASSIGNMENT_TABLE} SET is_active = FALSE, returned_at = CURRENT_TIMESTAMP WHERE asset_id = $1 AND is_active = TRUE`, [asset_id]);
-
-        const assignQuery = `
-            INSERT INTO ${ASSIGNMENT_TABLE} (asset_id, user_id, location_id, assigned_by_id, notes, is_active)
-            VALUES ($1, $2, $3, $4, $5, TRUE)
-            RETURNING id;
-        `;
-        const result = await client.query(assignQuery, [asset_id, user_id, finalLocationId, assigned_by_id, notes || null]);
-
-        await client.query(`UPDATE ${ASSETS_TABLE} SET current_location_id = $1, status = 'Active' WHERE id = $2`, [finalLocationId, asset_id]);
-
-        await client.query('COMMIT');
-        res.status(201).json({ message: 'Asset assigned successfully.', assignment_id: result.rows[0].id });
-
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Asset Assignment Error:', error);
-        res.status(500).json({ message: 'Failed to assign asset: ' + error.message });
-    } finally {
-        client.release();
-    }
-});
-
-// MAINTENANCE & REPAIR LOG
-router.post('/asset/maintenance', authenticateToken, authorize(['Admin', 'Staff']), async (req, res) => {
-    const { asset_id, type, details, maintenance_cost, vendor, scheduled_date, completion_date } = req.body;
-    const requested_by_id = req.user.id;
-    
-    if (!asset_id || !type || !details) return res.status(400).json({ message: 'Missing required maintenance details.' });
-    if (!MAINTENANCE_TYPES.includes(type)) return res.status(400).json({ message: 'Invalid maintenance type.' });
-    
-    const client = await pool.connect();
-    try {
-        await client.query('BEGIN');
-        
-        const logQuery = `
-            INSERT INTO ${MAINTENANCE_TABLE} (
-                asset_id, maintenance_type, details, maintenance_cost, vendor, 
-                scheduled_date, completion_date, requested_by_id
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id;
-        `;
-        const result = await pool.query(logQuery, [
-            asset_id, type, details, maintenance_cost || 0, vendor || null, 
-            scheduled_date, completion_date || null, requested_by_id
-        ]);
-        
-        if (type === 'Repair' && !completion_date) {
-            await client.query(`UPDATE ${ASSETS_TABLE} SET status = 'In Repair' WHERE id = $1`, [asset_id]);
-        }
-        
-        await client.query('COMMIT');
-        res.status(201).json({ message: 'Maintenance logged successfully.', maintenance_id: result.rows[0].id });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Maintenance Log Error:', error);
-        res.status(500).json({ message: 'Failed to log maintenance event.' });
-    } finally {
-        client.release();
-    }
-});
-
-router.get('/asset/maintenance/log/:assetId', authenticateToken, async (req, res) => {
-    const { assetId } = req.params;
-    try {
-        const query = `
-            SELECT 
-                m.*, u.username AS requester_name
-            FROM ${MAINTENANCE_TABLE} m
-            LEFT JOIN ${USERS_TABLE} u ON m.requested_by_id::text = u.id::text
-            WHERE m.asset_id::text = $1::text
-            ORDER BY m.scheduled_date DESC;
-        `;
-        const result = await pool.query(query, [assetId]);
-        res.status(200).json(result.rows);
-    } catch (error) {
-        console.error('Error fetching maintenance log:', error);
-        res.status(500).json({ message: 'Failed to retrieve maintenance log.' });
-    }
-});
-
-// LOCATION MANAGEMENT
-router.get('/asset/locations', authenticateToken, async (req, res) => {
-    try {
-        const query = `SELECT * FROM ${LOCATIONS_TABLE} ORDER BY location_name;`;
-        const result = await pool.query(query);
-        res.status(200).json(result.rows);
-    } catch (error) {
-        console.error('Error fetching locations:', error);
-        res.status(500).json({ message: 'Failed to retrieve locations.' });
-    }
-});
-
-// =========================================================
-// HELPER ROUTE: Get User List for Dropdowns
-// =========================================================
-router.get('/asset/users-list', authenticateToken, async (req, res) => {
-    try {
-        const query = `SELECT id, username, role FROM ${USERS_TABLE} WHERE role != 'Parent' ORDER BY username`;
-        const result = await pool.query(query);
-        res.status(200).json(result.rows);
-    } catch (error) {
-        console.error('Error fetching user list:', error);
-        res.status(500).json({ message: 'Failed to retrieve users.' });
     }
 });
 

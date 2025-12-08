@@ -167,7 +167,7 @@
 
 
     // -----------------------------------------------------------
-    // --- 4. RENDER & LOGIC ---
+    // --- 4. RENDER & LOGIC (Updated for Small Picture/Avatar) ---
     // -----------------------------------------------------------
 
     function getFilteredAndSortedData() {
@@ -227,12 +227,25 @@
                 paymentBadge = `<span class="badge bg-danger">Due: ₹${parseFloat(student.total_fees_due).toFixed(2)}</span>`;
             }
 
-            // Avatar Logic
-            let avatar = `<div class="avatar-circle bg-light text-secondary d-flex align-items-center justify-content-center fw-bold border" style="width:40px;height:40px;border-radius:50%;font-size:16px;">${student.first_name.charAt(0)}</div>`;
+            // --- AVATAR LOGIC (Small Picture Based) ---
+            let avatar = `<div class="avatar-circle bg-light text-secondary d-flex align-items-center justify-content-center fw-bold border" style="width:40px;height:40px;border-radius:50%;font-size:16px;">${(student.first_name || 'N').charAt(0)}</div>`;
             if (student.profile_image) {
                 let imgUrl = student.profile_image.startsWith('http') ? student.profile_image : `${API_BASE_URL}/${student.profile_image}`;
                 avatar = `<img src="${imgUrl}" class="rounded-circle border" style="width:40px;height:40px;object-fit:cover;">`;
             }
+            // --- END AVATAR LOGIC ---
+            
+            // --- ACTION CELL HTML (Inline Icon Only) ---
+            const actionCellHtml = `
+                <td class="align-middle action-cell">
+                    <a class="action-link view-btn" href="student-profile.html?id=${student.student_id}" title="View Profile"><i class="fas fa-eye"></i></a>
+                    <a class="action-link edit-btn" href="edit-student.html?id=${student.student_id}" title="Edit Details"><i class="fas fa-pen"></i></a>
+                    <a class="action-link print-btn" href="id-card.html?id=${student.student_id}" target="_blank" title="Print ID Card"><i class="fas fa-id-badge"></i></a>
+                    <a class="action-link delete-btn del-btn" href="#" data-id="${student.student_id}" title="Delete Record"><i class="fas fa-trash-alt"></i></a>
+                </td>
+            `;
+            // --- END ACTION CELL HTML ---
+
 
             const row = `
                 <tr>
@@ -260,18 +273,7 @@
                     <td class="align-middle">
                         <span class="badge bg-${getStatusColor(student.status)} text-uppercase">${student.status || 'Active'}</span>
                     </td>
-                    <td class="align-middle text-end">
-                        <div class="dropdown">
-                            <button class="btn btn-sm btn-light border" data-bs-toggle="dropdown"><i class="fas fa-ellipsis-v"></i></button>
-                            <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                                <li><a class="dropdown-item py-2" href="student-profile.html?id=${student.student_id}"><i class="fas fa-user-circle text-info me-2"></i> View Profile</a></li>
-                                <li><a class="dropdown-item py-2" href="edit-student.html?id=${student.student_id}"><i class="fas fa-pen text-warning me-2"></i> Edit Details</a></li>
-                                <li><a class="dropdown-item py-2" href="id-card.html?id=${student.student_id}" target="_blank"><i class="fas fa-id-badge text-primary me-2"></i> Print ID Card</a></li>
-                                <li><hr class="dropdown-divider"></li>
-                                <li><a class="dropdown-item py-2 text-danger del-btn" href="#" data-id="${student.student_id}"><i class="fas fa-trash-alt me-2"></i> Delete Record</a></li>
-                            </ul>
-                        </div>
-                    </td>
+                    ${actionCellHtml}
                 </tr>
             `;
             studentTableBody.innerHTML += row;
@@ -299,11 +301,12 @@
             });
         });
 
-        // Delete Buttons
+        // Delete Buttons (Now targets the inline 'del-btn' link)
         document.querySelectorAll('.del-btn').forEach(el => {
             el.addEventListener('click', async (e) => {
                 e.preventDefault();
-                const id = e.target.closest('a').dataset.id;
+                // Get data-id from the link element itself
+                const id = e.currentTarget.dataset.id; 
                 if(confirm("Are you sure? This will deactivate the student.")) {
                     try {
                         await handleApi(`${STUDENTS_API_ENDPOINT}/${id}`, { method: 'DELETE' });
@@ -347,7 +350,7 @@
         if (bulkIdBtn) {
             bulkIdBtn.innerHTML = `<i class="fas fa-id-card me-2"></i> Generate ID Cards (${count})`;
             bulkIdBtn.disabled = count === 0;
-            bulkIdBtn.className = count > 0 ? 'btn btn-primary shadow-sm' : 'btn btn-secondary';
+            // The class name update relies on existing CSS classes for styling
         }
     }
 

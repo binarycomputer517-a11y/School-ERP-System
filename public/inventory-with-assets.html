@@ -5,120 +5,89 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ERP Management Portal - Inventory & Assets</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-    
+    <link rel="stylesheet" href="/css/style.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
         /* BASE STYLES */
         body { 
             font-family: 'Times New Roman', serif; 
-            margin: 0; 
-            padding: 2em; 
-            background-color: #F8F8F8; 
-            color: #333; 
-            line-height: 1.6;
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; color: #333; line-height: 1.6;
         }
         .container { 
-            max-width: 1300px; 
-            margin: auto; 
-            padding: 30px; 
-            background-color: #FFFFFF; 
-            border: 2px solid #333; 
-            box-shadow: 6px 6px 0 #AAA; 
-            border-radius: 0; 
+            max-width: 1300px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; border-radius: 0; 
         }
         h1 { 
-            color: #C0392B; 
-            font-weight: bold; 
-            text-transform: uppercase; 
-            text-align: center; 
-            border-bottom: 5px double #000; 
-            padding-bottom: 15px; 
-            margin-bottom: 30px; 
-            font-size: 2.2em;
+            color: #C0392B; font-weight: bold; text-transform: uppercase; 
+            text-align: center; border-bottom: 5px double #000; 
+            padding-bottom: 15px; margin-bottom: 30px; font-size: 2.2em;
         }
         h2 { 
-            color: #005A9C; 
-            font-weight: bold; 
-            border-bottom: 2px solid #999; 
-            padding-bottom: 5px; 
-            margin-top: 25px; 
-            margin-bottom: 15px;
+            color: #005A9C; font-weight: bold; border-bottom: 2px solid #999; 
+            padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px;
         }
         
         /* TAB NAVIGATION */
         .tab-buttons { 
-            display: flex; 
-            margin-bottom: 20px; 
-            border-bottom: 2px solid #333; 
-            background-color: #E8E8E8;
-            padding-top: 5px;
+            display: flex; margin-bottom: 20px; border-bottom: 2px solid #333; 
+            background-color: #E8E8E8; padding-top: 5px;
         }
         .tab-button { 
-            padding: 8px 15px; 
-            margin-right: -1px; 
-            border: 1px solid #333; 
-            border-bottom: none; 
-            background-color: #F0F0F0; 
-            cursor: pointer;
-            border-radius: 0; 
-            font-weight: bold; transition: all 0.15s;
-            box-shadow: none;
+            padding: 8px 15px; margin-right: -1px; border: 1px solid #333; 
+            border-bottom: none; background-color: #F0F0F0; cursor: pointer;
+            border-radius: 0; font-weight: bold; transition: all 0.15s; box-shadow: none;
         }
         .tab-button.active { 
-            background-color: #005A9C; 
-            color: white; 
-            border: 2px solid #000; 
-            border-bottom: 2px solid #fff; 
-            margin-bottom: -2px; 
-            position: relative;
-            z-index: 1;
+            background-color: #005A9C; color: white; border: 2px solid #000; 
+            border-bottom: 2px solid #fff; margin-bottom: -2px; position: relative; z-index: 1;
         }
         .tab-content { padding-top: 10px; border-top: none; }
         .tab-pane { display: none; }
         .tab-pane.active { display: block; }
 
+        /* 🛑 MAIN TWO-COLUMN LAYOUT */
+        .grid-main { 
+            display: grid; 
+            grid-template-columns: 3fr 1fr; 
+            gap: 30px; 
+        }
+        @media (max-width: 1000px) {
+            .grid-main {
+                grid-template-columns: 1fr;
+            }
+        }
+
         /* COMMON LAYOUT & FORM STYLES */
-        .grid-main { display: grid; grid-template-columns: 3fr 1fr; gap: 30px; }
         .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-        .grid-inv-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-        .grid-po { display: grid; grid-template-columns: 3fr 1fr; gap: 15px; }
+        .grid-inv-form { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+        .grid-po { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
+        .po-item-row { display: flex; align-items: center; margin-bottom: 10px; }
+        .po-item-row select, .po-item-row input { margin-bottom: 0; }
+        .po-item-row input.po-quantity, .po-item-row input.po-price { width: 80px; margin-right: 5px; }
+        .action-btns button { font-size: 11px; }
 
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; }
         input, select, textarea { 
-            padding: 8px; 
-            margin-top: 5px; 
-            box-sizing: border-box; 
-            border: 1px solid #555; 
-            border-radius: 0; 
-            width: 100%; 
-            margin-bottom: 10px;
-            display: block;
+            padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #555; 
+            border-radius: 0; width: 100%; margin-bottom: 10px; display: block;
         }
         
         /* BUTTON STYLES */
         button { 
-            background-color: #005A9C; 
-            color: white; 
-            padding: 10px 15px; 
-            border: 2px solid #000; 
-            border-radius: 0; 
-            cursor: pointer; 
-            margin-top: 15px; 
-            box-shadow: 2px 2px 0 #000; 
-            font-weight: bold;
-            transition: box-shadow 0.1s, transform 0.1s, background-color 0.3s;
+            background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; 
+            border-radius: 0; cursor: pointer; margin-top: 15px; box-shadow: 2px 2px 0 #000; 
+            font-weight: bold; transition: box-shadow 0.1s, transform 0.1s, background-color 0.3s;
         }
         button:hover { 
-            background-color: #003366; 
-            box-shadow: 1px 1px 0 #000; 
-            transform: translate(1px, 1px);
+            background-color: #003366; box-shadow: 1px 1px 0 #000; transform: translate(1px, 1px);
         }
         .inv-btn { background-color: #C0392B; }
         .inv-btn:hover { background-color: #9A2C1F; }
         .card { 
-            padding: 20px; 
-            border: 1px solid #333; 
-            border-radius: 0; 
-            margin-top: 20px; 
+            padding: 20px; border: 1px solid #333; border-radius: 0; margin-top: 20px; 
             background-color: #fcfdff; 
         }
         
@@ -126,28 +95,19 @@
         .message-box { padding: 15px; border-radius: 0; margin-top: 10px; font-weight: bold; border: 1px solid; }
         .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
         .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .info { background-color: #cce5ff; color: #004085; border-color: #b8daff; }
+        .warning-text { font-size: 0.85em; color: #C0392B; margin-top: 5px; }
 
         /* TABLE & STATUS STYLES */
         table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #333; }
         th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
         th { background-color: #333; color: white; text-transform: uppercase; }
-
+        
         .status-Active { color: #28a745; font-weight: bold; }
         .status-In_Repair { color: #ffc107; font-weight: bold; }
-        .status-Retired { color: #6c757d; font-weight: bold; }
-        .status-Missing { color: #C0392B; font-weight: bold; }
-
         .inv-table th { background-color: #333; color: white; }
         .status-In_Stock { color: #155724; font-weight: bold; }
         .status-Low_Stock { color: #ff9800; font-weight: bold; }
         .status-Out_of_Stock { color: #721c24; font-weight: bold; }
-        
-        .action-btns button { 
-            margin: 2px; padding: 5px 8px; font-size: 12px; 
-            border: 1px solid #000; border-radius: 0; 
-            box-shadow: 1px 1px 0 #000; margin-top: 0;
-        }
 
         /* MODAL STYLES */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7); }
@@ -180,6 +140,7 @@
         <div class="tab-content">
             <div id="inventory" class="tab-pane active">
                 <div class="grid-main">
+                    
                     <div>
                         <div class="card">
                             <h2 style="color: #C0392B;">All Inventory Items</h2>
@@ -187,7 +148,7 @@
                                 <thead>
                                     <tr>
                                         <th>Name / Category</th>
-                                        <th>Current Stock</th>
+                                        <th>Stock</th>
                                         <th>Threshold</th>
                                         <th>Status</th>
                                         <th>Unit Cost</th>
@@ -256,11 +217,11 @@
                                     </tr>
                                 </thead>
                                 <tbody id="po-history-tbody">
-                                    <tr><td colspan="6">Click Load History button below...</td></tr>
+                                    <tr><td colspan="6">Loading history...</td></tr>
                                 </tbody>
                             </table>
                             <div style="display: flex; justify-content: space-between; gap: 10px;">
-                                <button id="load-po-history-btn" class="inv-btn" style="flex-grow: 1;">Load History</button>
+                                <button id="load-po-history-btn" class="inv-btn" style="flex-grow: 1;">Reload History</button>
                                 <button id="export-po-csv-btn" class="inv-btn" style="flex-grow: 1; background-color: #005A9C;">Export CSV</button>
                             </div>
                         </div>
@@ -300,7 +261,8 @@
                                     </div>
                                     <div>
                                         <label for="delivery-date">Expected Date:</label>
-                                        <input type="date" id="delivery-date" name="expected_delivery_date">
+                                        <input type="date" id="delivery-date" name="expected_delivery_date" required>
+                                        <p class="warning-text">Must be a future date (DB constraint).</p>
                                     </div>
                                 </div>
                                 
@@ -338,7 +300,8 @@
             </div>
             
             <div id="assets" class="tab-pane">
-                <div class="grid-main" style="grid-template-columns: 3fr 1fr;">
+                <div class="grid-main">
+                    
                     <div>
                         <div class="card">
                             <h2>Asset Registry</h2>
@@ -497,6 +460,18 @@
 </div>
 
     <script>
+        // Set max date for purchase and expected delivery dates
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            const futureDateInput = document.getElementById('delivery-date');
+            if (futureDateInput) {
+                futureDateInput.setAttribute('min', today);
+            }
+            document.querySelectorAll('input[name="purchase_date"]').forEach(input => {
+                 input.setAttribute('max', today);
+            });
+        });
+
         const API_BASE_INV = '/api/inventory';
         const API_BASE_ASSET = '/api/asset';
         const TOKEN = localStorage.getItem('erp-token');
@@ -523,6 +498,7 @@
         const locationIdSelects = document.querySelectorAll('#location-id-select, #assigned-location-select');
         const poPrintContent = document.getElementById('po-print-content');
 
+        // --- CORE API HANDLER ---
         async function handleApi(url, options = {}) {
             const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
             const response = await fetch(url, { ...options, headers: authHeaders });
@@ -542,6 +518,7 @@
             element.textContent = text;
             element.className = `message-box ${type}`;
             element.style.display = 'block';
+            setTimeout(() => element.style.display = 'none', 5000); // Auto-hide after 5 seconds
         }
         
         function closeModal(id) { document.getElementById(id).style.display = 'none'; }
@@ -556,7 +533,7 @@
             evt.currentTarget.className += " active";
             
             if (tabName === 'assets') { loadLocations().then(() => loadAssets()); } 
-            else if (tabName === 'inventory') { loadVendors().then(() => loadItems()); }
+            else if (tabName === 'inventory') { loadVendors().then(() => { loadItems(); loadPoHistory(); }); } 
         }
 
         // --- DROPDOWN HELPERS ---
@@ -568,7 +545,7 @@
                 users.forEach(user => {
                     const option = document.createElement('option');
                     option.value = user.id;
-                    option.textContent = `${user.username} (${user.role})`;
+                    option.textContent = `${user.display_name} (${user.role})`; 
                     userSelect.appendChild(option);
                 });
             } catch (error) {
@@ -608,7 +585,8 @@
                             <td>${asset.assigned_user_name || 'Unassigned'}</td>
                             <td class="${statusClass}">${asset.status}</td>
                             <td class="action-btns">
-                                <button onclick="openMaintenanceLogModal('${asset.id}', '${asset.tag_number}')" style="background-color: #ffc107;">Maint Log</button>
+                                <button onclick="openMaintenanceLogModal('${asset.id}', '${asset.tag_number}')" style="background-color: #ffc107;"><i class="fas fa-wrench"></i> Maint Log</button>
+                                <button onclick="alert('TODO: Implement Edit Asset')" style="background-color: #005A9C;"><i class="fas fa-edit"></i> Edit</button>
                             </td>
                         </tr>`;
                 });
@@ -632,7 +610,9 @@
 
         // --- INVENTORY LOGIC ---
         async function loadStockPredictions() {
-            try { stockPredictions = await handleApi(`${API_BASE_INV}/analytics/stock-prediction`); } 
+            try { 
+                stockPredictions = await handleApi(`${API_BASE_INV}/analytics/stock-prediction`); 
+            } 
             catch (error) { stockPredictions = []; }
         }
 
@@ -643,7 +623,7 @@
                     select.innerHTML = '<option value="">-- Select Vendor (Optional) --</option>';
                     allVendors.forEach(v => select.innerHTML += `<option value="${v.id}">${v.name}</option>`);
                 });
-            } catch (error) { console.error(error); }
+            } catch (error) { console.error("Error loading vendors:", error); }
         }
 
         async function loadItems() {
@@ -666,8 +646,8 @@
                             <td>₹${parseFloat(item.unit_cost).toFixed(2)}</td>
                             <td>${predictionHtml}</td>
                             <td class="action-btns">
-                                <button onclick="openEditItemModal('${item.id}')" class="inv-btn" style="background-color: #005A9C;">Edit</button>
-                                <button onclick="openLogModal('${item.id}', '${item.name}')" class="inv-btn" style="background-color: #ffc107;">History</button>
+                                <button onclick="openEditItemModal('${item.id}')" class="inv-btn" style="background-color: #005A9C;"><i class="fas fa-edit"></i> Edit</button>
+                                <button onclick="openLogModal('${item.id}', '${item.name}')" class="inv-btn" style="background-color: #ffc107;"><i class="fas fa-history"></i> History</button>
                             </td>
                         </tr>`;
                     moveItemIdSelect.innerHTML += `<option value="${item.id}">${item.name} (Stock: ${item.current_stock})</option>`;
@@ -765,33 +745,79 @@
             link.click();
         }
 
+        // FIX: Finalized PDF generation logic with aggressive html2canvas settings
         async function generatePoPdf(poId) {
             const poData = poHistoryRecords.find(p => p.id === poId);
             if (!poData) return;
             const items = poData.ordered_items_json || [];
-            const itemsRows = items.map((item, i) => `<tr><td style="padding:10px;border:1px solid #333">${i+1}</td><td style="padding:10px;border:1px solid #333">${item.item_name||item.item_id.slice(0,8)}</td><td style="padding:10px;border:1px solid #333">${item.quantity}</td><td style="padding:10px;border:1px solid #333">₹${parseFloat(item.price).toFixed(2)}</td><td style="padding:10px;border:1px solid #333">₹${(item.quantity*item.price).toFixed(2)}</td></tr>`).join('');
             
-            poPrintContent.innerHTML = `
+            // 1. Build the items table rows
+            const itemsRows = items.map((item, i) => `
+                <tr>
+                    <td style="padding:10px;border:1px solid #333">${i + 1}</td>
+                    <td style="padding:10px;border:1px solid #333">${item.item_name || item.item_id.slice(0, 8)}</td>
+                    <td style="padding:10px;border:1px solid #333">${item.quantity}</td>
+                    <td style="padding:10px;border:1px solid #333">₹${parseFloat(item.price).toFixed(2)}</td>
+                    <td style="padding:10px;border:1px solid #333">₹${(item.quantity * item.price).toFixed(2)}</td>
+                </tr>`).join('');
+            
+            // 2. Build the final HTML structure
+            const poHtml = `
                 <div style="width:100%;padding:30px;font-family:'Times New Roman',serif;color:#333;">
                     <h1 style="font-size:2.2em;color:#C0392B;text-align:center;border-bottom:5px double #000;margin-bottom:30px;">PURCHASE ORDER</h1>
                     <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
-                        <div><strong>PO:</strong> ${poData.id.slice(0,8).toUpperCase()}<br><strong>Date:</strong> ${new Date(poData.created_at).toLocaleDateString()}</div>
-                        <div style="text-align:right;"><strong>Status:</strong> ${poData.status}<br><strong>Delivery:</strong> ${poData.expected_delivery_date||'N/A'}</div>
+                        <div><strong>PO:</strong> ${poData.id.slice(0, 8).toUpperCase()}<br><strong>Date:</strong> ${new Date(poData.created_at).toLocaleDateString()}</div>
+                        <div style="text-align:right;"><strong>Status:</strong> ${poData.status}<br><strong>Delivery:</strong> ${poData.expected_delivery_date || 'N/A'}</div>
                     </div>
                     <div style="margin-bottom:20px;border:1px solid #333;padding:15px;background-color:#F0F0F0;">
                         <strong>Vendor:</strong> ${poData.vendor_name}<br><strong>Created By:</strong> ${poData.created_by_name}
                     </div>
                     <table style="width:100%;border-collapse:collapse;border:1px solid #333;">
                         <thead style="background:#333;color:white;"><tr><th style="padding:10px;border:1px solid #333">#</th><th style="padding:10px;border:1px solid #333">Item</th><th style="padding:10px;border:1px solid #333">Qty</th><th style="padding:10px;border:1px solid #333">Price</th><th style="padding:10px;border:1px solid #333">Total</th></tr></thead>
-                        <tbody>${itemsRows}<tr><td colspan="4" style="text-align:right;font-weight:bold;padding:10px;border:1px solid #333;background:#E8E8E8;">GRAND TOTAL</td><td style="padding:10px;border:1px solid #333">₹${parseFloat(poData.total_cost).toFixed(2)}</td></tr></tbody>
+                        <tbody>
+                            ${itemsRows}
+                            <tr><td colspan="4" style="text-align:right;font-weight:bold;padding:10px;border:1px solid #333;background:#E8E8E8;">GRAND TOTAL</td><td style="padding:10px;border:1px solid #333">₹${parseFloat(poData.total_cost).toFixed(2)}</td></tr>
+                        </tbody>
                     </table>
+                    <div style="margin-top: 50px; font-size: 0.9em; text-align: right;">
+                        <strong>Authorized Signature:</strong> ______________________
+                    </div>
                 </div>`;
-            await new Promise(r => setTimeout(r, 500));
-            html2pdf().set({ margin:0.5, filename:`PO_${poData.id.slice(0,8)}.pdf`, jsPDF:{ unit:'in', format:'A4' }}).from(document.getElementById('po-print-view')).save();
+
+            // 3. Insert and wait for rendering
+            poPrintContent.innerHTML = poHtml;
+            // CRITICAL: Wait 100ms for the DOM to update before PDF generation
+            await new Promise(r => setTimeout(r, 100)); 
+
+            // 4. Generate the PDF with aggressive settings
+            html2pdf().set({ 
+                margin: 0.5, 
+                filename: `PO_${poData.id.slice(0, 8)}.pdf`, 
+                html2canvas: {
+                    scale: 2,           // Higher resolution capture
+                    dpi: 192,           // Higher DPI
+                    letterRendering: true,
+                    useCORS: true       // Allows capture of images from the /uploads folder
+                },
+                jsPDF: { 
+                    unit: 'in', 
+                    format: 'A4' 
+                } 
+            }).from(document.getElementById('po-print-view')).save();
         }
 
         // --- INITIALIZATION ---
         document.addEventListener('DOMContentLoaded', () => {
+            // Set max date for purchase and min date for expected delivery (Moved inside DOMContentLoaded for reliability)
+            const today = new Date().toISOString().split('T')[0];
+            const futureDateInput = document.getElementById('delivery-date');
+            if (futureDateInput) {
+                futureDateInput.setAttribute('min', today);
+            }
+            document.querySelectorAll('input[name="purchase_date"]').forEach(input => {
+                 input.setAttribute('max', today);
+            });
+            
             userRoleDisplay.textContent = USER_ROLE;
             
             // Listeners
@@ -810,8 +836,9 @@
 
             document.getElementById('assign-asset-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const assetId = getAssetIdByTag(e.target.elements.asset_tag.value.trim());
-                if (!assetId) return showMessage(document.getElementById('assign-message'), `❌ Asset Tag not found.`, 'error');
+                const assetTag = e.target.elements.asset_tag.value.trim();
+                const assetId = getAssetIdByTag(assetTag);
+                if (!assetId) return showMessage(document.getElementById('assign-message'), `❌ Asset Tag "${assetTag}" not found in registry.`, 'error');
                 const data = { asset_id: assetId, user_id: e.target.elements.user_id.value, assigned_location_id: e.target.elements.assigned_location_id.value, notes: e.target.elements.notes.value };
                 try {
                     const res = await handleApi(`${API_BASE_ASSET}/assign`, { method: 'POST', body: JSON.stringify(data) });
@@ -821,8 +848,9 @@
 
             document.getElementById('maintenance-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
-                const assetId = getAssetIdByTag(e.target.elements['maint-asset-tag'].value.trim());
-                if (!assetId) return showMessage(document.getElementById('maint-message'), `❌ Asset Tag not found.`, 'error');
+                const assetTag = e.target.elements['maint-asset-tag'].value.trim();
+                const assetId = getAssetIdByTag(assetTag);
+                if (!assetId) return showMessage(document.getElementById('maint-message'), `❌ Asset Tag "${assetTag}" not found.`, 'error');
                 const data = { asset_id: assetId, type: e.target.elements.type.value, details: e.target.elements.details.value, maintenance_cost: e.target.elements.maintenance_cost.value, scheduled_date: e.target.elements.scheduled_date.value };
                 try {
                     const res = await handleApi(`${API_BASE_ASSET}/maintenance`, { method: 'POST', body: JSON.stringify(data) });
@@ -859,10 +887,12 @@
                 e.preventDefault();
                 const itemsOrdered = [];
                 e.target.querySelectorAll('.po-item-row').forEach(row => {
-                    const item_id = row.querySelector('.po-item-id').value;
+                    const itemSelect = row.querySelector('.po-item-id');
+                    const item_id = itemSelect.value;
+                    const item_name = itemSelect.options[itemSelect.selectedIndex].textContent.split(' (')[0]; 
                     const quantity = parseFloat(row.querySelector('.po-quantity').value);
                     const price = parseFloat(row.querySelector('.po-price').value);
-                    if (item_id && quantity > 0) itemsOrdered.push({ item_id, quantity, price });
+                    if (item_id && quantity > 0) itemsOrdered.push({ item_id, quantity, price, item_name });
                 });
                 if (itemsOrdered.length === 0) return showMessage(document.getElementById('po-message'), '❌ Add at least one item.', 'error');
                 const data = { vendor_id: e.target.elements.vendor_id.value, items_ordered: itemsOrdered, expected_delivery_date: e.target.elements.expected_delivery_date.value, total_cost: poTotalCostInput.value };
@@ -875,14 +905,21 @@
             document.getElementById('edit-item-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const data = Object.fromEntries(new FormData(e.target)); const id = data.id; delete data.id;
-                try { await handleApi(`${API_BASE_INV}/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }); closeModal('edit-item-modal'); loadItems(); alert('Updated!'); } 
-                catch (err) { alert(err.message); }
+                try { 
+                    await handleApi(`${API_BASE_INV}/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }); 
+                    closeModal('edit-item-modal'); loadItems(); showMessage(document.getElementById('item-message'), `✅ Item updated successfully.`, 'success'); 
+                } 
+                catch (err) { showMessage(document.getElementById('item-message'), `❌ ${err.message}`, 'error'); }
             });
 
             // Init Load
             loadUserDropdown();
             loadLocations().then(() => loadAssets());
-            loadVendors().then(() => loadItems());
+            // Load Vendors, Items, AND PO History concurrently
+            loadVendors().then(() => {
+                loadItems();
+                loadPoHistory(); // Load history automatically on initialization
+            });
             document.querySelector('.tab-button').click();
         });
     </script>

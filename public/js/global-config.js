@@ -7,57 +7,80 @@
 
 const SETTINGS_CACHE_KEY = 'erp_settings';
 const GLOBAL_CONFIG_API = '/api/settings/config/current'; 
+const MAX_CACHE_AGE_MS = 3600000; // 1 hour (3600 seconds * 1000 ms)
+
+// Global exposure of settings and utilities
+window.erpSettings = null;
 
 // Run immediately when DOM is ready
 document.addEventListener('DOMContentLoaded', async () => {
-    await initGlobalSettings();
+    window.erpSettings = await initGlobalSettings();
 });
 
+// Helper function to check if the cached data is too old
+function isCacheExpired(cachedData) {
+    if (!cachedData || !cachedData.timestamp) return true;
+    const cacheTime = new Date(cachedData.timestamp).getTime();
+    return (Date.now() - cacheTime) > MAX_CACHE_AGE_MS;
+}
+
 async function initGlobalSettings() {
-    let settings = localStorage.getItem(SETTINGS_CACHE_KEY);
+    let settingsData = localStorage.getItem(SETTINGS_CACHE_KEY);
+    let settings = null;
     
-    // 1. If Cache Miss (First time load or Cache Cleared)
+    // 1. Load from Cache or Fetch
+    if (settingsData) {
+        let cached = JSON.parse(settingsData);
+        if (!isCacheExpired(cached)) {
+            // Load from non-expired cache
+            settings = cached.data;
+        } else {
+            // Cache expired, needs refresh
+            localStorage.removeItem(SETTINGS_CACHE_KEY); 
+        }
+    }
+
+    // 2. Fetch from API if settings are null (cache miss or expired)
     if (!settings) {
-        // FIX: Changed 'token' to 'erp-token' to match your Login System
         const token = localStorage.getItem('erp-token');
         
-        // Only fetch if user is logged in
         if (token) {
             try {
                 const res = await fetch(GLOBAL_CONFIG_API, { 
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                // --- SECURITY UPDATE: PREVENT AUTO LOGOUT ---
                 if (res.status === 401) {
-                    console.warn("Session warning: Server returned 401.");
-                    // We DO NOT redirect here automatically to prevent issues during server restarts
-                    // window.location.href = '/login.html'; 
-                    return;
+                    // Log session warning but allow the page to load with default styles
+                    console.warn("Session warning: Authentication required to fetch current settings.");
+                    return null;
                 }
 
-                if (!res.ok) throw new Error("Failed to fetch settings");
+                if (!res.ok) throw new new Error(`Failed to fetch settings. Status: ${res.status}`);
 
                 const data = await res.json();
                 
-                // Save to Cache for faster load next time
-                localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify(data));
+                // Save to Cache with timestamp
+                localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({
+                    data: data,
+                    timestamp: new Date().toISOString()
+                }));
                 settings = data;
                 
             } catch (e) { 
                 console.error("Global Config: Failed to sync settings", e);
-                return; 
+                // Return null if fetch failed
+                return null; 
             }
         }
-    } else {
-        // Load from Cache
-        settings = JSON.parse(settings);
     }
 
-    // 2. Apply Settings to the UI
+    // 3. Apply Settings to the UI and return the object
     if(settings) {
         applySettingsToUI(settings);
+        return settings; // Expose settings globally via the return value
     }
+    return null;
 }
 
 function applySettingsToUI(config) {
@@ -65,8 +88,9 @@ function applySettingsToUI(config) {
     // --- A. Branding (Logo & Favicon) ---
     if (config.school_logo_path) {
         // Update all logo images on the page
-        document.querySelectorAll('.global-school-logo, #global-school-logo').forEach(img => {
+        document.querySelectorAll('.global-school-logo').forEach(img => {
             img.src = config.school_logo_path;
+            img.alt = config.school_name || "School Logo"; // Accessibility improvement
         });
 
         // Update Browser Tab Icon (Favicon)
@@ -80,35 +104,38 @@ function applySettingsToUI(config) {
     }
 
     // --- B. Currency Formatting ---
-    const symbol = config.currency === 'USD' ? '$' : (config.currency === 'EUR' ? '€' : '₹');
+    const symbol = config.currency === 'USD' ? '$' : (config.currency === 'EUR' ? '€' : (config.currency === 'INR' ? '₹' : config.currency || '₹'));
     document.querySelectorAll('.currency-symbol').forEach(el => {
         el.innerText = symbol;
     });
 
     // --- C. School Identity (Name, Address, Contact) ---
-    if (config.school_name) {
-        document.querySelectorAll('.global-school-name').forEach(el => el.innerText = config.school_name);
-    }
-    if (config.school_address) {
-        document.querySelectorAll('.global-school-address').forEach(el => el.innerText = config.school_address);
-    }
-    if (config.school_email) {
-        document.querySelectorAll('.global-school-email').forEach(el => el.innerText = config.school_email);
-    }
-    if (config.school_phone) {
-        document.querySelectorAll('.global-school-phone').forEach(el => el.innerText = config.school_phone);
+    const identityMap = {
+        school_name: '.global-school-name',
+        school_address: '.global-school-address',
+        school_email: '.global-school-email',
+        school_phone: '.global-school-phone'
+    };
+    
+    for (const key in identityMap) {
+        if (config[key]) {
+            document.querySelectorAll(identityMap[key]).forEach(el => el.innerText = config[key]);
+        }
     }
     
     // --- D. Global Footer Text ---
     if (config.email_global_footer) {
         const footerEl = document.getElementById('global-footer-text');
-        if(footerEl) footerEl.innerHTML = config.email_global_footer;
+        // Use textContent for safety unless rich HTML is expected
+        if(footerEl) footerEl.textContent = config.email_global_footer; 
     }
 
     // --- E. Feature Toggles (Hide/Show Modules) ---
+    // Hide Multi-Tenant fields if disabled
     if (config.multi_tenant_mode === false) {
         document.querySelectorAll('.module-tenant-switch').forEach(el => el.style.display = 'none');
     }
+    // Hide SMS panel if no provider is configured
     if (!config.sms_provider) {
         document.querySelectorAll('.module-sms-panel').forEach(el => el.style.display = 'none');
     }
@@ -116,6 +143,8 @@ function applySettingsToUI(config) {
     // --- F. Theme Colors (Advanced CSS Variables) ---
     if (config.theme_primary_color) {
         document.documentElement.style.setProperty('--primary-color', config.theme_primary_color);
+    }
+    if (config.theme_secondary_color) {
         document.documentElement.style.setProperty('--classic-gold', config.theme_secondary_color);
     }
 }
@@ -125,5 +154,9 @@ function applySettingsToUI(config) {
  */
 function refreshGlobalSettings() {
     localStorage.removeItem(SETTINGS_CACHE_KEY);
-    initGlobalSettings();
+    // Reload the page to re-run the initialization logic
+    window.location.reload(); 
 }
+
+// Optionally expose the refresh function globally
+window.refreshGlobalSettings = refreshGlobalSettings;

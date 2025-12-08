@@ -12,7 +12,7 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
-const path = require('path'); // <-- This is correctly imported
+const path = require('path');
 const fs = require('fs');
 const morgan = require('morgan'); 
 
@@ -31,8 +31,7 @@ const UPLOAD_DIRS = [
     path.join(__dirname, 'uploads', 'documents'),
     path.join(__dirname, 'uploads', 'media')
 ];
-// Define the path to the backup files (sibling to the routes/ directory)
-const BACKUP_DIR = path.join(__dirname, 'backups'); // Define backups directory here
+const BACKUP_DIR = path.join(__dirname, 'backups');
 
 // --- Router Imports (NEW and existing) ---
 const authRouter = require('./routes/auth');
@@ -49,11 +48,10 @@ const studentsRouter = require('./routes/students');
 const admissionRouter = require('./routes/admission');
 const teachersRouter = require('./routes/teachers');
 
-// --- NEW GLOBAL FEATURE ROUTERS ---
+// --- GLOBAL MANAGEMENT MODULES (NEW) ---
 const branchesRouter = require('./routes/branches'); 
 const systemLogsRouter = require('./routes/systemLogs'); 
 const backupRestoreRouter = require('./routes/backupRestore'); 
-// ... (All other router imports remain the same) ...
 const coursesRouter = require('./routes/courses');
 const subjectsRouter = require('./routes/subjects');
 const sectionsRouter = require('./routes/sections');
@@ -80,7 +78,11 @@ const transportRouter = require('./routes/transport');
 const hostelRouter = require('./routes/hostel');
 const cafeteriaRouter = require('./routes/cafeteria');
 const libraryRouter = require('./routes/library');
-const inventoryRouter = require('./routes/inventory-with-assets');
+// 🛑 CRITICAL FIX: Use the correct split router imports
+const inventoryRouter = require('./routes/inventory'); // Mapped to /api/inventory
+const assetRouter = require('./routes/asset');         // Mapped to /api/asset
+// 🛑 END CRITICAL FIX
+
 const itHelpdeskRouter = require('./routes/it-helpdesk');
 const enquiriesRouter = require('./routes/enquiries');
 const clubsEventsRouter = require('./routes/clubsEvents');
@@ -91,6 +93,7 @@ const reportsRouter = require('./routes/reports');
 const feedbackRouter = require('./routes/feedback');
 const placementsRouter = require('./routes/placements');
 const healthRouter = require('./routes/health');
+
 // --- App Initialization ---
 const app = express();
 const server = http.createServer(app);
@@ -121,8 +124,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// 💡 ADD THE BACKUP STATIC ROUTE HERE
-app.use('/backups', express.static(BACKUP_DIR)); // <-- NEW: Serves files from the /backups folder
+// Serve files from the /backups folder
+app.use('/backups', express.static(BACKUP_DIR));
 
 
 // ===================================
@@ -146,6 +149,7 @@ app.use('/api/users', usersRouter);
 app.use('/api/vms', vmsRouter); 
 app.use('/api/public/verify', verifyRouter); 
 app.use('/api/health-records', healthRouter);
+
 // --- B. PROTECTED ROUTES (JWT Token Required) ---
 // All routes mounted below require a valid Bearer Token
 app.use('/api', authenticateToken);
@@ -155,6 +159,7 @@ app.use('/api/branches', branchesRouter);
 app.use('/api/system/logs', systemLogsRouter); 
 app.use('/api/system/backup', backupRestoreRouter); 
 app.use('/api/feedback', feedbackRouter);
+
 // Core Modules
 app.use('/api/settings', settingsRouter);
 app.use('/api/media', mediaRouter);
@@ -176,6 +181,7 @@ app.use('/api/attendance', attendanceRouter);
 app.use('/api/leave', leaveRouter);
 app.use('/api/ptm', ptmRouter);
 app.use('/api/placements', placementsRouter);
+
 // Exam Modules
 app.use('/api/exams', examsRouter);
 app.use('/api/online-exam', onlineExamRouter);
@@ -199,8 +205,11 @@ app.use('/api/hostel', hostelRouter);
 app.use('/api/cafeteria', cafeteriaRouter);
 app.use('/api/library', libraryRouter);
 
-// Inventory & IT
-app.use('/api/inventory', inventoryRouter);
+// 🛑 CRITICAL FIX: Inventory & Asset Mounting
+app.use('/api/inventory', inventoryRouter); // Mapped to routes/inventory.js
+app.use('/api/asset', assetRouter);         // Mapped to routes/asset.js
+// 🛑 END CRITICAL FIX
+
 app.use('/api/it-helpdesk', itHelpdeskRouter);
 
 // General Modules
