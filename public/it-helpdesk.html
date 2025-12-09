@@ -57,10 +57,40 @@
         .btn-action { background: none; border: none; cursor: pointer; transition: 0.2s; font-size: 1.1em; padding: 5px; }
         .btn-resolve { color: #27ae60; }
         .btn-delete { color: #e74c3c; }
+        .btn-assign { color: #3a7bd5; } /* New Assign Button Style */
         .btn-action:hover { transform: scale(1.2); }
 
         .nav-links a { text-decoration: none; color: #666; display: inline-flex; align-items: center; gap: 5px; margin-bottom: 20px; transition: 0.3s; }
         .nav-links a:hover { color: #3a7bd5; }
+
+        /* MODAL STYLES */
+        .modal { 
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0; top: 0; 
+            width: 100%; height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.4); 
+            display: flex; /* Use flex to center the modal */
+            align-items: center; 
+            justify-content: center; 
+        }
+        .modal-content { 
+            background-color: #fefefe; 
+            margin: auto; 
+            padding: 20px; 
+            border: 1px solid #888; 
+            width: 80%; 
+            max-width: 400px; 
+            border-radius: 8px;
+            position: relative;
+        }
+        .close-btn { 
+            color: #aaa; float: right; 
+            font-size: 28px; font-weight: bold; 
+            cursor: pointer; 
+        }
     </style>
 </head>
 <body>
@@ -162,7 +192,7 @@
                 <th>Description</th>
                 <th>Priority</th>
                 <th>Status</th>
-                <th>Actions</th>
+                <th>Assigned To</th> <th>Actions</th>
             </tr>
         </thead>
         <tbody id="ticket-list-body">
@@ -170,6 +200,23 @@
     </table>
 </div>
 
+<div id="assign-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close-btn" onclick="document.getElementById('assign-modal').style.display='none'">&times;</span>
+        <h3 style="color:#3a7bd5;">Assign Ticket: <span id="modal-ticket-id"></span></h3>
+        <form id="assign-form">
+            <div class="form-group">
+                <label for="staff-select">Select Staff Member:</label>
+                <select id="staff-select" name="assigned_to_user_id" required>
+                    <option value="">-- Loading Staff... --</option>
+                </select>
+            </div>
+            <button type="submit" class="submit-btn" style="width: 100%; margin-top: 20px;">
+                <i class="fas fa-user-check"></i> Confirm Assignment
+            </button>
+        </form>
+    </div>
+</div>
 <script>
     const authHeaders = { 
         'Authorization': `Bearer ${token}`,
@@ -178,6 +225,7 @@
 
     // Store fetched data globally for filtering
     let allTickets = [];
+    let currentAssignTicketId = null; // Used by the modal logic
 
     async function loadTickets() {
         try {
@@ -199,7 +247,7 @@
         tbody.innerHTML = '';
 
         if (data.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:20px;">No tickets found.</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px;">No tickets found.</td></tr>'; 
             return;
         }
 
@@ -208,21 +256,34 @@
             const statusClass = ticket.status === 'Open' ? 'status-open' : 'status-closed';
             const statusIcon = ticket.status === 'Open' ? '<i class="fas fa-clock"></i> Open' : '<i class="fas fa-check"></i> Resolved';
 
+            // Logic for Assignment Display
+            // NOTE: The backend API (GET /api/it-helpdesk) needs to join and return the assigned staff's name (assigned_to_user_name)
+            const assignedDisplay = ticket.assigned_to_user_name || (ticket.assigned_to_user_id ? `User: ${ticket.assigned_to_user_id.slice(0, 8)}...` : 'Unassigned');
+
+            // Resolve Button Logic
             const resolveBtn = ticket.status === 'Open' 
-                ? `<button class="btn-action btn-resolve" onclick="resolveTicket(${ticket.id})" title="Mark Resolved"><i class="fas fa-check-square"></i></button>`
+                ? `<button class="btn-action btn-resolve" onclick="resolveTicket('${ticket.id}')" title="Mark Resolved"><i class="fas fa-check-square"></i></button>`
                 : `<button class="btn-action" style="color:#aaa; cursor:not-allowed;"><i class="fas fa-lock"></i></button>`;
+            
+            // Assign Button Logic (Only available for Open tickets)
+            const assignBtn = ticket.status === 'Open' 
+                ? `<button class="btn-action btn-assign" onclick="openAssignModal('${ticket.id}')" title="Assign Ticket"><i class="fas fa-user-plus"></i></button>`
+                : '';
+
 
             tbody.innerHTML += `
                 <tr>
-                    <td><b>#${ticket.id}</b></td>
+                    <td><b>#${ticket.id.slice(0, 8)}...</b></td>
                     <td>${ticket.category}</td>
                     <td>${ticket.location}</td>
                     <td>${ticket.description}</td>
                     <td><span class="badge ${badgeClass}">${ticket.priority}</span></td>
                     <td class="${statusClass}">${statusIcon}</td>
+                    <td>${assignedDisplay}</td> 
                     <td>
+                        ${assignBtn}
                         ${resolveBtn}
-                        <button class="btn-action btn-delete" onclick="deleteTicket(${ticket.id})" title="Delete"><i class="fas fa-trash"></i></button>
+                        <button class="btn-action btn-delete" onclick="deleteTicket('${ticket.id}')" title="Delete"><i class="fas fa-trash"></i></button>
                     </td>
                 </tr>
             `;
@@ -270,7 +331,6 @@
         if(!confirm('Mark this issue as Resolved? This cannot be undone.')) return;
         
         try {
-            // Assumes a route like PATCH /api/it-helpdesk/:id/resolve exists
             const res = await fetch(`/api/it-helpdesk/${id}/resolve`, {
                 method: 'PATCH', 
                 headers: authHeaders
@@ -306,17 +366,89 @@
         }
     }
 
+
+    // --- ASSIGN MODAL LOGIC ---
+    
+    // NOTE: ADJUST THIS ENDPOINT to match your users router (e.g., /api/users?role=Staff)
+    const STAFF_API = '/api/users/staff'; 
+
+    async function loadStaffUsers() {
+        const select = document.getElementById('staff-select');
+        select.innerHTML = '<option value="">-- Loading Staff... --</option>';
+        
+        try {
+            const res = await fetch(STAFF_API, { headers: { 'Authorization': authHeaders.Authorization } });
+            if(!res.ok) throw new Error('Failed to load staff list.');
+            
+            const staffList = await res.json();
+            
+            select.innerHTML = '<option value="">-- Select Staff --</option>';
+            
+            staffList.forEach(user => {
+                const name = user.full_name || user.username || user.email; 
+                select.innerHTML += `<option value="${user.id}">${name}</option>`;
+            });
+
+        } catch (error) {
+            console.error('Error loading staff:', error);
+            select.innerHTML = '<option value="">-- Error Loading Staff --</option>';
+            // Note: Error alert removed to prevent repeated alerts on failed endpoint
+        }
+    }
+
+    function openAssignModal(id) {
+        currentAssignTicketId = id;
+        document.getElementById('modal-ticket-id').innerText = `#${id.slice(0, 8)}...`;
+        document.getElementById('assign-modal').style.display = 'flex';
+        loadStaffUsers(); // Load staff list every time
+    }
+
+    document.getElementById('assign-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const assigned_to_user_id = document.getElementById('staff-select').value;
+
+        if (!assigned_to_user_id) {
+            alert('Please select a staff member.');
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/it-helpdesk/${currentAssignTicketId}/assign`, {
+                method: 'PATCH',
+                headers: authHeaders,
+                body: JSON.stringify({ assigned_to_user_id: assigned_to_user_id })
+            });
+
+            if (res.ok) {
+                alert('Ticket Assigned Successfully!');
+                document.getElementById('assign-modal').style.display = 'none';
+                loadTickets(); // Refresh the list
+            } else {
+                const err = await res.json();
+                alert('Error: ' + (err.error || 'Failed to assign ticket'));
+            }
+        } catch (error) {
+            console.error('Assignment Error:', error);
+            alert('Network error during assignment.');
+        }
+    });
+    // --- END ASSIGN MODAL LOGIC ---
+
+
     // --- CLIENT SIDE FILTER ---
     function filterTickets() {
         const term = document.getElementById('search-input').value.toLowerCase();
         const statusFilter = document.getElementById('filter-status').value;
 
         const filtered = allTickets.filter(t => {
+            const assignedName = t.assigned_to_user_name ? t.assigned_to_user_name.toLowerCase() : '';
+            
             const matchesTerm = 
                 t.description.toLowerCase().includes(term) || 
                 t.location.toLowerCase().includes(term) || 
                 t.id.toString().includes(term) ||
-                t.category.toLowerCase().includes(term);
+                t.category.toLowerCase().includes(term) ||
+                assignedName.includes(term); 
                 
             const matchesStatus = statusFilter === 'All' || t.status === statusFilter;
             

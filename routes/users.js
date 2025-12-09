@@ -247,4 +247,106 @@ router.get('/hosts', async (req, res) => { // <--- NO authenticateToken MIDDLEWA
 });
 
 
+// routes/users.js (SECTION 7: GET: Staff List for Assignment)
+
+// ---------------------------------------------------------
+// 7. GET: Staff List for Assignment (FIX for Helpdesk) 🎯
+// ---------------------------------------------------------
+/**
+ * @route   GET /api/users/staff
+ * @desc    Get a list of assignable staff (Admin, Super Admin, HR, Teacher, Staff roles).
+ * @access  Private (Requires authentication, typically used by Admin/Staff)
+ */
+router.get('/staff', authenticateToken, async (req, res) => {
+    try {
+        const STAFF_ROLES = ['Admin', 'Super Admin', 'HR', 'Teacher', 'Staff', 'Coordinator'];
+        
+        // CRITICAL FIX: Explicitly cast u.role to TEXT using '::text' for comparison
+        const query = `
+            SELECT 
+                u.id, 
+                u.username, 
+                u.email, 
+                u.role,
+                COALESCE(t.full_name, u.username) AS full_name
+            FROM ${USERS_TABLE} u
+            LEFT JOIN ${TEACHERS_TABLE} t ON u.id = t.user_id 
+            WHERE u.role::text = ANY($1::text[]) AND u.is_active = TRUE AND u.deleted_at IS NULL
+            ORDER BY full_name;
+        `;
+        
+        const result = await pool.query(query, [STAFF_ROLES]);
+        
+        // The front-end expects objects with {id, username/full_name, email}
+        res.status(200).json(result.rows);
+    } catch (error) {
+        // Log the detailed error from the database crash
+        console.error('SQL Error fetching staff list for assignment (500):', error);
+        res.status(500).json({ message: 'Failed to retrieve assignable staff list due to a server error.', details: error.message });
+    }
+});
+
+// ---------------------------------------------------------
+// 8. PUT: Update User Details (Admin Only)
+// ---------------------------------------------------------
+/**
+ * @route   PUT /api/users/:id
+ * @desc    Admin/HR update a user's role, phone, or active status.
+ * @access  Private (Admin, Super Admin, HR)
+ */
+router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']), async (req, res) => {
+    const userIdToUpdate = req.params.id;
+    const { role, phone_number, is_active } = req.body;
+    
+    let fields = [];
+    let values = [];
+    let paramIndex = 1;
+
+    // Build dynamic query fields
+    if (role !== undefined) {
+        fields.push(`role = $${paramIndex++}`);
+        values.push(role);
+    }
+    if (phone_number !== undefined) {
+        fields.push(`phone_number = $${paramIndex++}`);
+        values.push(phone_number);
+    }
+    if (is_active !== undefined) {
+        // Ensure is_active is treated as a boolean if it comes in as a string
+        const isActiveBool = (is_active === 'true' || is_active === true);
+        fields.push(`is_active = $${paramIndex++}`);
+        values.push(isActiveBool);
+    }
+
+    if (fields.length === 0) {
+        return res.status(400).json({ error: 'No update fields provided.' });
+    }
+    
+    // Add updated_at and user ID to the query
+    fields.push(`updated_at = CURRENT_TIMESTAMP`);
+    values.push(userIdToUpdate); // User ID is the last parameter
+
+    try {
+        const query = `
+            UPDATE ${USERS_TABLE} SET ${fields.join(', ')} WHERE id = $${paramIndex} RETURNING id, username, role, is_active
+        `;
+        
+        const result = await pool.query(query, values);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ error: 'User not found.' });
+        }
+
+        res.status(200).json({ 
+            message: `User ${result.rows[0].username} updated successfully.`,
+            user: result.rows[0]
+        });
+
+    } catch (err) {
+        console.error('Error updating user details:', err);
+        res.status(500).json({ error: 'Server error occurred while updating user details.' });
+    }
+});
+
+
 module.exports = router;

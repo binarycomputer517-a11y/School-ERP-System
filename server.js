@@ -47,7 +47,7 @@ const messagingRouter = require('./routes/messaging');
 const studentsRouter = require('./routes/students');
 const admissionRouter = require('./routes/admission');
 const teachersRouter = require('./routes/teachers');
-
+const utilsRouter = require('./routes/utils');
 // --- GLOBAL MANAGEMENT MODULES (NEW) ---
 const branchesRouter = require('./routes/branches'); 
 const systemLogsRouter = require('./routes/systemLogs'); 
@@ -159,7 +159,7 @@ app.use('/api/branches', branchesRouter);
 app.use('/api/system/logs', systemLogsRouter); 
 app.use('/api/system/backup', backupRestoreRouter); 
 app.use('/api/feedback', feedbackRouter);
-
+app.use('/api/utils', utilsRouter);
 // Core Modules
 app.use('/api/settings', settingsRouter);
 app.use('/api/media', mediaRouter);
