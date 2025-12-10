@@ -21,20 +21,27 @@ const NOTICE_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Staff'];
 
 
 // =========================================================
-// 1. NOTICE CREATION WITH TARGETING (POST) - UPDATED for Scheduling, Action, History
+// Helper Function: Sanitize Content for JSONB Insertion (FINAL FIX for 22P02)
+// =========================================================
+const sanitizeForJsonb = (str) => {
+    if (typeof str !== 'string') return '';
+    // Removes double quotes, backslashes, newlines, and tabs which break JSONB insertion
+    return str.replace(/"/g, '').replace(/\\/g, '').replace(/[\n\r\t]/g, ' ').trim();
+};
+
+
+// =========================================================
+// 1. NOTICE CREATION WITH TARGETING (POST) - FINAL
 // =========================================================
 router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
     const creatorId = req.user.id; 
-    // Assuming req.user also has full_name or username
     const creatorName = req.user.full_name || req.user.username || 'System Admin'; 
 
     const { 
         title, content, target_role, expiry_date, delivery_channels = [],
-        // NEW FIELDS from Frontend
         scheduled_at, required_action, notice_type 
     } = req.body;
 
-    // Validation checks remain the same
     if (!title || !content || !TARGET_ROLES.includes(target_role)) {
         return res.status(400).json({ message: 'Missing title, content, or invalid target role.' });
     }
@@ -43,23 +50,22 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
     }
 
     const is_scheduled = !!scheduled_at; 
-    // Set initial active status: Inactive if scheduled, Active if immediate
     const initial_active_status = !is_scheduled; 
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // Initial revision entry (JSONB array)
+        // Initial revision entry (JSONB array) - SANITIZED
         const initialRevision = [{
             timestamp: new Date().toISOString(),
             user: creatorName,
             action: is_scheduled ? 'Scheduled' : 'Created',
-            title: title,
-            content: content
+            title: sanitizeForJsonb(title),
+            content: sanitizeForJsonb(content) 
         }];
 
-        // 1. Insert Notice (Content) - Using all new fields
+        // 1. Insert Notice (Content)
         const noticeQuery = `
             INSERT INTO ${NOTICES_TABLE} (
                 title, content, posted_by, target_role, expiry_date, 
@@ -69,9 +75,16 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
             RETURNING id;
         `;
         const noticeResult = await client.query(noticeQuery, [
-            title, content, creatorId, target_role, expiry_date || null,
-            initial_active_status, scheduled_at || null, required_action || null,
-            notice_type || 'General', initialRevision 
+            title,                                       // $1
+            content,                                     // $2
+            creatorId,                                   // $3 
+            target_role,                                 // $4
+            expiry_date || null,                         // $5
+            initial_active_status,                       // $6
+            scheduled_at || null,                        // $7
+            required_action || null,                     // $8
+            notice_type || 'General',                    // $9
+            JSON.stringify(initialRevision)              // $10 (Must be stringified for consistent JSONB insert)
         ]);
         const noticeId = noticeResult.rows[0].id;
 
@@ -79,10 +92,11 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
         if (!is_scheduled) {
             let targetUsersQuery = `SELECT id, email, phone_number FROM ${USERS_TABLE}`;
             if (target_role !== 'All') {
-                targetUsersQuery += ` WHERE role = $1`;
+                targetUsersQuery += ` WHERE role::text = $1`;
             }
             
-            const targetUsersRes = await pool.query(targetUsersQuery, target_role !== 'All' ? [target_role] : []);
+            // FIX 1: Use client.query for SELECT inside the transaction
+            const targetUsersRes = await client.query(targetUsersQuery, target_role !== 'All' ? [target_role] : []);
             const targetUsers = targetUsersRes.rows;
 
             // 3. Log Initial Delivery Status 
@@ -91,7 +105,8 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
                     for (const channel of delivery_channels) {
                         const initialStatus = channel === 'In-App' ? 'Delivered' : 'Pending';
                         
-                        await pool.query(`
+                        // FIX 2: Use client.query for INSERT INTO delivery_log
+                        await client.query(`
                             INSERT INTO ${DELIVERY_LOG_TABLE} (notice_id, user_id, channel, status)
                             VALUES ($1, $2, $3, $4);
                         `, [noticeId, user.id, channel, initialStatus]);
@@ -116,7 +131,7 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
 });
 
 // =========================================================
-// 2. TARGETED VIEWING (GET) - No change
+// 2. TARGETED VIEWING (GET) - FINAL
 // =========================================================
 
 router.get('/my-feed', authenticateToken, async (req, res) => {
@@ -126,12 +141,12 @@ router.get('/my-feed', authenticateToken, async (req, res) => {
     try {
         const query = `
             SELECT 
-                n.id, n.title, n.content, n.created_at, n.expiry_date,
+                n.id, n.title, n.content, n.created_at, n.expiry_date, n.required_action,
                 (SELECT status FROM ${DELIVERY_LOG_TABLE} WHERE notice_id = n.id AND user_id = $1 AND channel = 'In-App') AS delivery_status
             FROM ${NOTICES_TABLE} n
             WHERE (n.target_role = $2 OR n.target_role = 'All')
             AND (n.expiry_date IS NULL OR n.expiry_date >= CURRENT_DATE)
-            AND n.is_active = TRUE -- Only show active notices in the feed
+            AND n.is_active = TRUE 
             ORDER BY n.created_at DESC;
         `;
         const result = await pool.query(query, [userId, userRole]);
@@ -166,7 +181,7 @@ router.put('/mark-read/:noticeId', authenticateToken, async (req, res) => {
 
 
 // =========================================================
-// 3. MANAGEMENT & AUDIT ROUTES - UPDATED for Read Rate, Schedule
+// 3. MANAGEMENT & AUDIT ROUTES - FINAL
 // =========================================================
 
 /**
@@ -176,13 +191,13 @@ router.put('/mark-read/:noticeId', authenticateToken, async (req, res) => {
  */
 router.get('/all-management', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
     try {
-        // Query to calculate Read Rate and Total Audience dynamically (Requires role::text casting fix)
+        // Query implements necessary casting (role::text) and joins for read rate calculation
         const query = `
             WITH TargetAudience AS (
                 SELECT 
                     role, COUNT(id) AS total_users 
                 FROM ${USERS_TABLE} 
-                WHERE is_active = TRUE AND role::text != 'Parent' 
+                WHERE is_active = TRUE AND role::text NOT IN ('Parent', 'Archive') 
                 GROUP BY role
             ),
             ReadCounts AS (
@@ -194,7 +209,7 @@ router.get('/all-management', authenticateToken, authorize(NOTICE_MANAGEMENT_ROL
             )
             SELECT 
                 n.id, n.title, n.content, n.created_at, n.target_role, n.is_active, 
-                n.scheduled_at, n.required_action, n.notice_type, -- New fields
+                n.scheduled_at, n.required_action, n.notice_type, n.revision_history, 
                 COALESCE(rc.read_count, 0) AS read_rate,
                 CASE n.target_role
                     WHEN 'All' THEN (SELECT SUM(total_users) FROM TargetAudience)
@@ -239,49 +254,55 @@ router.get('/log/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLE
 
 
 // =========================================================
-// 4. UTILITY ROUTES (Birthdays) - No change
+// 4. UTILITY ROUTES (Birthdays) - FINAL
 // =========================================================
 
 router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
-    const query = `
-        -- 1. Get STUDENT Birthdays (from students table)
-        SELECT 
-            s.student_id::text AS entity_id, 
-            s.first_name || ' ' || s.last_name AS full_name, 
-            'Student' AS role, 
-            s.dob AS dob_date
-        FROM ${STUDENTS_TABLE} s
-        WHERE 
-            s.deleted_at IS NULL AND s.dob IS NOT NULL AND
-            EXTRACT(MONTH FROM s.dob) = EXTRACT(MONTH FROM CURRENT_DATE) AND
-            EXTRACT(DAY FROM s.dob) = EXTRACT(DAY FROM CURRENT_DATE)
+    try {
+        const query = `
+            -- 1. Get STUDENT Birthdays (from students table)
+            SELECT 
+                s.student_id::text AS entity_id, 
+                s.first_name || ' ' || s.last_name AS full_name, 
+                'Student' AS role, 
+                s.dob AS dob_date
+            FROM ${STUDENTS_TABLE} s
+            WHERE 
+                s.deleted_at IS NULL AND s.dob IS NOT NULL AND
+                EXTRACT(MONTH FROM s.dob) = EXTRACT(MONTH FROM CURRENT_DATE) AND
+                EXTRACT(DAY FROM s.dob) = EXTRACT(DAY FROM CURRENT_DATE)
 
-        UNION ALL
+            UNION ALL
 
-        -- 2. Get STAFF/ADMIN Birthdays (Joining users and teachers table for DOB and Name)
-        SELECT 
-            u.id::text AS entity_id,             
-            t.full_name,                        
-            u.role, 
-            t.date_of_birth AS dob_date         
-        FROM ${USERS_TABLE} u
-        JOIN ${TEACHERS_TABLE} t ON u.id = t.user_id     
-        WHERE 
-            u.deleted_at IS NULL AND
-            t.date_of_birth IS NOT NULL AND
-            u.role::text NOT IN ('Student', 'Parent') AND
-            EXTRACT(MONTH FROM t.date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE) AND
-            EXTRACT(DAY FROM t.date_of_birth) = EXTRACT(DAY FROM CURRENT_DATE)
+            -- 2. Get STAFF/ADMIN Birthdays (Joining users and teachers table for DOB and Name)
+            SELECT 
+                u.id::text AS entity_id,             
+                t.full_name,                        
+                u.role, 
+                t.date_of_birth AS dob_date         
+            FROM ${USERS_TABLE} u
+            JOIN ${TEACHERS_TABLE} t ON u.id = t.user_id     
+            WHERE 
+                u.deleted_at IS NULL AND
+                t.date_of_birth IS NOT NULL AND
+                u.role::text NOT IN ('Student', 'Parent') AND
+                EXTRACT(MONTH FROM t.date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE) AND
+                EXTRACT(DAY FROM t.date_of_birth) = EXTRACT(DAY FROM CURRENT_DATE)
+            
+            ORDER BY role, full_name;
+        `;
         
-        ORDER BY role, full_name;
-    `;
-    
-    // ... (rest of the birthday route logic)
+        const { rows } = await pool.query(query);
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Birthday Fetch Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve today\'s birthdays due to a server error.' });
+    }
 });
 
 
 // =========================================================
-// 5. GET SINGLE NOTICE DETAILS - Needs Update to select all fields
+// 5. GET SINGLE NOTICE DETAILS - FINAL
 // =========================================================
 
 router.get('/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
@@ -293,7 +314,7 @@ router.get('/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), 
                 n.scheduled_at, n.required_action, n.notice_type, n.revision_history, 
                 u.username AS posted_by_user
             FROM ${NOTICES_TABLE} n
-            JOIN ${USERS_TABLE} u ON n.posted_by = u.id
+            LEFT JOIN ${USERS_TABLE} u ON n.posted_by = u.id -- Changed to LEFT JOIN for robustness
             WHERE n.id = $1;
         `;
         const result = await pool.query(query, [noticeId]);
@@ -311,7 +332,7 @@ router.get('/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), 
 
 
 // =========================================================
-// 6. DELETE NOTICE - No change
+// 6. DELETE NOTICE - FINAL
 // =========================================================
 
 router.delete('/:noticeId', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
@@ -345,7 +366,7 @@ router.delete('/:noticeId', authenticateToken, authorize(['Admin', 'Super Admin'
 });
 
 // =========================================================
-// 7. UPDATE NOTICE CONTENT (PATCH) - UPDATED for History and new fields
+// 7. UPDATE NOTICE CONTENT (PATCH) - FINAL
 // =========================================================
 /**
  * @route   PATCH /api/notices/:noticeId
@@ -392,13 +413,13 @@ router.patch('/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES)
         }
         const currentNotice = currentNoticeRes.rows[0];
 
-        // 2. Create new revision entry
+        // 2. Create new revision entry - SANITIZED
         const newRevision = {
             timestamp: new Date().toISOString(),
             user: updaterName,
             action: 'Updated',
-            title: title || currentNotice.title,
-            content: content || currentNotice.content
+            title: sanitizeForJsonb(title || currentNotice.title),
+            content: sanitizeForJsonb(content || currentNotice.content)
         };
         
         // 3. Append new revision to history array (JSONB concatenation)
@@ -435,7 +456,7 @@ router.patch('/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES)
 
 
 // =========================================================
-// 8. TOGGLE NOTICE ACTIVE STATUS (PATCH)
+// 8. TOGGLE NOTICE ACTIVE STATUS (PATCH) - FINAL
 // =========================================================
 /**
  * @route   PATCH /api/notices/:noticeId/status
@@ -466,7 +487,7 @@ router.patch('/:noticeId/status', authenticateToken, authorize(NOTICE_MANAGEMENT
             return res.status(404).json({ message: 'Notice not found.' });
         }
         
-        // Optional: Log the status change in the revision history as well
+        // Log the status change in the revision history
         const updaterName = req.user.full_name || req.user.username || 'System Admin';
         const statusChangeRevision = {
             timestamp: new Date().toISOString(),
@@ -495,7 +516,7 @@ router.patch('/:noticeId/status', authenticateToken, authorize(NOTICE_MANAGEMENT
 });
 
 // =========================================================
-// 9. GET REVISION HISTORY (GET) - NEW ROUTE
+// 9. GET REVISION HISTORY (GET) - FINAL
 // =========================================================
 /**
  * @route   GET /api/notices/:noticeId/history
