@@ -7,6 +7,7 @@ const { pool } = require('../database');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 const { authenticateToken, authorize } = require('../authMiddleware');
+const moment = require('moment'); // Required for POST route
 
 // --- Constants: Database Tables ---
 const STUDENTS_TABLE = 'students';
@@ -15,8 +16,8 @@ const BRANCHES_TABLE = 'branches';
 const COURSES_TABLE = 'courses';
 const BATCHES_TABLE = 'batches';
 const FEE_STRUCTURES_TABLE = 'fee_structures'; 
-const INVOICES_TABLE = 'student_invoices'; // ✅ Added for clarity
-const PAYMENTS_TABLE = 'fee_payments';     // ✅ Added for clarity
+const INVOICES_TABLE = 'student_invoices'; 
+const PAYMENTS_TABLE = 'fee_payments';     
 
 // --- Constants: Access Control ---
 const CRUD_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar'];
@@ -93,7 +94,7 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
                 b.batch_name, 
                 br.branch_name,
                 
-                -- ✅ CRITICAL FIX: Calculate total fees including monthly charges multiplied by duration
+                -- CRITICAL FIX: Calculate total fees including monthly charges multiplied by duration
                 (
                     -- One-Time Fees
                     COALESCE(fs.admission_fee, 0) + COALESCE(fs.registration_fee, 0) + COALESCE(fs.examination_fee, 0)
@@ -112,7 +113,7 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
             LEFT JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
             LEFT JOIN ${BRANCHES_TABLE} br ON s.branch_id = br.id
-            -- 🛑 CRITICAL JOIN: Link to Fee Structures based on Course AND Batch
+            -- CRITICAL JOIN: Link to Fee Structures based on Course AND Batch
             LEFT JOIN ${FEE_STRUCTURES_TABLE} fs ON fs.course_id = s.course_id AND fs.batch_id = s.batch_id
             
             WHERE u.deleted_at IS NULL
@@ -189,7 +190,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
                 profile_image_path, signature_path, id_document_path, aadhaar_number, nationality,
                 city, state, zip_code, country, religion, blood_group, caste_category,
                 parent_first_name, parent_last_name, parent_phone_number, parent_email, parent_occupation, guardian_relation,
-                admission_date /* Add admission date here if available in body, for fee calculation */
+                admission_date
             )
             VALUES ($1::uuid, $2, $3, $4, $5, $6, $7::date, $8, $9, $10::uuid, $11::uuid, $12::uuid, $13::uuid, $14, $15::uuid, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35::date)
             RETURNING student_id, first_name, last_name, enrollment_no;
@@ -484,7 +485,6 @@ router.get('/:id/fees', authenticateToken, async (req, res) => {
     }
 });
 
-
 // =========================================================
 // 7. GET: Library Books (Dashboard/Profile Support)
 // =========================================================
@@ -570,8 +570,6 @@ router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 
         console.error('Error fetching student lookup data:', e);
         res.status(500).json({ message: 'Failed to retrieve student list for dropdowns.' });
     }
-}); // <--- The file must end cleanly here.
-
-
+});
 
 module.exports = router;

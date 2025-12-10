@@ -65,6 +65,12 @@
             transition: background-color 0.3s, transform 0.2s;
         }
         button:hover { background-color: #00457E; transform: translateY(-1px); }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
 
         /* Status & Message Boxes */
         .message-box { padding: 15px; border-radius: 4px; margin-top: 10px; font-weight: 600; border: 1px solid transparent; }
@@ -474,11 +480,75 @@
             }
         }
 
-        // --- Birthday Feature (Existing logic) ---
+        // =========================================================
+        // 10. BIRTHDAY FEATURE IMPLEMENTATION (FINAL FIX)
+        // =========================================================
         
-        // (The implementation of loadTodayBirthdays and sendBirthdayWishBtn.addEventListener goes here)
-        // Leaving it out to save space, assuming it's correctly placed in your full file.
+        /**
+         * 1. Loads today's birthdays from the backend API.
+         */
+        async function loadTodayBirthdays() {
+            birthdayList.innerHTML = '<li>Fetching birthdays...</li>'; 
+            sendBirthdayWishBtn.disabled = true;
 
+            try {
+                // Calls the correct backend route: GET /api/notices/birthdays/today
+                const data = await handleApi(`${API_BASE}/birthdays/today`); 
+                todayBirthdays = data;
+
+                if (todayBirthdays.length > 0) {
+                    let listHtml = '';
+                    todayBirthdays.forEach(person => {
+                        // Formatting name and role for display
+                        const dob = new Date(person.dob_date).toLocaleDateString();
+                        listHtml += `<li>✅ ${person.full_name} (${person.role}) - DOB: ${dob}</li>`;
+                    });
+                    birthdayList.innerHTML = listHtml;
+                    sendBirthdayWishBtn.disabled = false;
+                } else {
+                    birthdayList.innerHTML = '<li>No birthdays today.</li>';
+                    sendBirthdayWishBtn.disabled = true;
+                }
+
+            } catch (error) {
+                console.error('Birthday Fetch Error:', error);
+                birthdayList.innerHTML = '<li>❌ Error loading birthdays. Check console.</li>';
+                sendBirthdayWishBtn.disabled = true;
+            }
+        }
+
+
+        /**
+         * 2. Handles sending the bulk birthday wish notice.
+         */
+        sendBirthdayWishBtn.addEventListener('click', async () => {
+            if (todayBirthdays.length === 0) {
+                showMessage(birthdayMessage, 'No recipients found to send wishes.', 'info');
+                return;
+            }
+            
+            sendBirthdayWishBtn.disabled = true;
+            showMessage(birthdayMessage, `Sending wishes to ${todayBirthdays.length} recipients...`, 'info');
+
+            try {
+                // Calls the correct backend route: POST /api/notices/birthdays/send-wish
+                const result = await handleApi(`${API_BASE}/birthdays/send-wish`, {
+                    method: 'POST',
+                    body: JSON.stringify({ /* API only needs authentication, data is fetched internally */ })
+                });
+
+                showMessage(birthdayMessage, `✅ ${result.message}`, 'success');
+                // After sending, refresh the notices list
+                loadRecentNotices(); 
+
+            } catch (error) {
+                showMessage(birthdayMessage, `❌ Failed to send wishes: ${error.message}`, 'error');
+            } finally {
+                sendBirthdayWishBtn.disabled = false;
+                // Reload the birthday list to clear the current list after successful sending
+                loadTodayBirthdays(); 
+            }
+        });
 
         // --- 1. Notice Creation ---
 
@@ -641,7 +711,8 @@
 
         window.viewDeliveryLog = async function(noticeId, noticeTitle) {
              auditTbody.innerHTML = '<tr><td colspan="4" class="info">Fetching audit log...</td></tr>';
-             // ... (Implementation from previous response)
+             // *** Your implementation for fetching and displaying the delivery log ***
+             // NOTE: Implementation of this function is required here.
         }
 
         window.openEditModal = async function(noticeId) {
@@ -706,17 +777,18 @@
         });
 
         window.deleteNotice = async function(noticeId, noticeTitle) {
-             // ... (Implementation from previous response)
+             // *** Your implementation for deleting a notice ***
+             // NOTE: Implementation of this function is required here.
         }
-
 
         // --- Initialization ---
 
         document.addEventListener('DOMContentLoaded', () => {
             userRoleDisplay.textContent = USER_ROLE;
             
-            // NOTE: Add loadTodayBirthdays implementation here if needed.
+            // 🛑 CRITICAL ACTION: Load the necessary data on page load
             loadRecentNotices();
+            loadTodayBirthdays(); 
             
             analyzeContent(contentTextarea.value); 
             checkDeliveryChannelHealth();

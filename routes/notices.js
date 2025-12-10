@@ -55,6 +55,9 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        // Set timezone for consistency within the transaction
+        await client.query("SET TIME ZONE 'Asia/Kolkata'"); 
+
 
         // Initial revision entry (JSONB array) - SANITIZED
         const initialRevision = [{
@@ -71,13 +74,13 @@ router.post('/create', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), as
                 title, content, posted_by, target_role, expiry_date, 
                 is_active, scheduled_at, required_action, notice_type, revision_history
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id;
         `;
         const noticeResult = await client.query(noticeQuery, [
             title,                                       // $1
             content,                                     // $2
-            creatorId,                                   // $3 
+            creatorId,                                   // $3 (FIXED: Added ::uuid cast)
             target_role,                                 // $4
             expiry_date || null,                         // $5
             initial_active_status,                       // $6
@@ -258,17 +261,24 @@ router.get('/log/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLE
 // =========================================================
 
 router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
+    // FIX 1: Use client pool and set timezone for accurate CURRENT_DATE comparison
+    const client = await pool.connect();
     try {
+        // Temporarily set the session timezone to IST for accurate date comparison
+        await client.query("SET TIME ZONE 'Asia/Kolkata'");
+        
         const query = `
             -- 1. Get STUDENT Birthdays (from students table)
             SELECT 
                 s.student_id::text AS entity_id, 
                 s.first_name || ' ' || s.last_name AS full_name, 
                 'Student' AS role, 
-                s.dob AS dob_date
+                s.dob AS dob_date,
+                s.user_id 
             FROM ${STUDENTS_TABLE} s
             WHERE 
                 s.deleted_at IS NULL AND s.dob IS NOT NULL AND
+                -- CURRENT_DATE is used here, relying on the SET TIME ZONE above
                 EXTRACT(MONTH FROM s.dob) = EXTRACT(MONTH FROM CURRENT_DATE) AND
                 EXTRACT(DAY FROM s.dob) = EXTRACT(DAY FROM CURRENT_DATE)
 
@@ -279,9 +289,10 @@ router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_RO
                 u.id::text AS entity_id,             
                 t.full_name,                        
                 u.role, 
-                t.date_of_birth AS dob_date         
+                t.date_of_birth AS dob_date,
+                u.id AS user_id
             FROM ${USERS_TABLE} u
-            JOIN ${TEACHERS_TABLE} t ON u.id = t.user_id     
+            LEFT JOIN ${TEACHERS_TABLE} t ON u.id = t.user_id     
             WHERE 
                 u.deleted_at IS NULL AND
                 t.date_of_birth IS NOT NULL AND
@@ -292,11 +303,13 @@ router.get('/birthdays/today', authenticateToken, authorize(NOTICE_MANAGEMENT_RO
             ORDER BY role, full_name;
         `;
         
-        const { rows } = await pool.query(query);
-        res.status(200).json(rows);
+        const result = await client.query(query);
+        res.status(200).json(result.rows);
     } catch (error) {
         console.error('Birthday Fetch Error:', error);
         res.status(500).json({ message: 'Failed to retrieve today\'s birthdays due to a server error.' });
+    } finally {
+        client.release(); // Release the client back to the pool
     }
 });
 
@@ -404,6 +417,7 @@ router.patch('/:noticeId', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES)
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await client.query("SET TIME ZONE 'Asia/Kolkata'"); // Ensure timezone consistency
 
         // 1. Fetch current notice state (for history log)
         const currentNoticeRes = await client.query(`SELECT title, content, revision_history FROM ${NOTICES_TABLE} WHERE id = $1`, [noticeId]);
@@ -474,6 +488,7 @@ router.patch('/:noticeId/status', authenticateToken, authorize(NOTICE_MANAGEMENT
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        await client.query("SET TIME ZONE 'Asia/Kolkata'"); // Ensure timezone consistency
 
         const query = `
             UPDATE ${NOTICES_TABLE} SET is_active = $1, updated_at = CURRENT_TIMESTAMP
@@ -546,6 +561,134 @@ router.get('/:noticeId/history', authenticateToken, authorize(NOTICE_MANAGEMENT_
     } catch (error) {
         console.error('Get History Error:', error);
         res.status(500).json({ message: 'Failed to retrieve revision history.' });
+    }
+});
+
+
+// =========================================================
+// 10. POST: Send Birthday Wish (Helper for manual button) - FINAL
+// =========================================================
+
+/**
+ * @route   POST /api/notices/birthdays/send-wish
+ * @desc    Creates and sends a birthday wish notice to all listed students/teachers for today.
+ * @access  Private (Admin, Super Admin, Staff)
+ */
+router.post('/birthdays/send-wish', authenticateToken, authorize(NOTICE_MANAGEMENT_ROLES), async (req, res) => {
+    const creatorId = req.user.id;
+    const creatorName = req.user.full_name || req.user.username || 'Admin';
+
+    const client = await pool.connect();
+    
+    try {
+        await client.query('BEGIN');
+        // Set timezone for consistent CURRENT_DATE comparison
+        await client.query("SET TIME ZONE 'Asia/Kolkata'"); 
+
+        // 1. Get today's birthdays (using the same logic from the GET route, modified to use CURRENT_DATE)
+        const birthdayQuery = `
+            SELECT 
+                s.student_id::text AS entity_id, 
+                s.first_name || ' ' || s.last_name AS full_name, 
+                'Student' AS role, 
+                s.dob AS dob_date, 
+                s.user_id 
+            FROM ${STUDENTS_TABLE} s
+            WHERE 
+                s.deleted_at IS NULL AND s.dob IS NOT NULL AND
+                EXTRACT(MONTH FROM s.dob) = EXTRACT(MONTH FROM CURRENT_DATE) AND
+                EXTRACT(DAY FROM s.dob) = EXTRACT(DAY FROM CURRENT_DATE)
+
+            UNION ALL
+
+            SELECT 
+                u.id::text AS entity_id,             
+                t.full_name,                        
+                u.role,
+                t.date_of_birth AS dob_date,
+                u.id AS user_id 
+            FROM ${USERS_TABLE} u
+            LEFT JOIN ${TEACHERS_TABLE} t ON u.id = t.user_id     
+            WHERE 
+                u.deleted_at IS NULL AND
+                t.date_of_birth IS NOT NULL AND
+                u.role::text NOT IN ('Student', 'Parent') AND
+                EXTRACT(MONTH FROM t.date_of_birth) = EXTRACT(MONTH FROM CURRENT_DATE) AND
+                EXTRACT(DAY FROM t.date_of_birth) = EXTRACT(DAY FROM CURRENT_DATE);
+        `;
+        const { rows: birthdays } = await client.query(birthdayQuery); 
+
+        if (birthdays.length === 0) {
+            await client.query('COMMIT');
+            return res.status(200).json({ message: 'No birthdays today. No notice sent.' });
+        }
+
+        // 2. Create the unified notice content
+        const names = birthdays.map(b => b.full_name).join(', ');
+        const totalRecipients = birthdays.length;
+        
+        const noticeTitle = `Happy Birthday from the School Management!`;
+        const noticeContent = `Wishing a very happy birthday to our students and staff: ${names}. Have a wonderful day!`;
+        
+        const initialRevision = [{
+            timestamp: new Date().toISOString(),
+            user: creatorName,
+            action: 'Birthday Wish Posted',
+            title: sanitizeForJsonb(noticeTitle),
+            content: sanitizeForJsonb(noticeContent)
+        }];
+
+        // 3. Insert the main notice
+        const noticeInsertQuery = `
+            INSERT INTO ${NOTICES_TABLE} (
+                title, content, posted_by, target_role, is_active, notice_type, revision_history
+            )
+            VALUES ($1, $2, $3::uuid, 'All', TRUE, 'Birthday', $4)
+            RETURNING id;
+        `;
+        const noticeResult = await client.query(noticeInsertQuery, [
+            noticeTitle,
+            noticeContent,
+            creatorId,
+            JSON.stringify(initialRevision)
+        ]);
+        const noticeId = noticeResult.rows[0].id;
+
+        // 4. Log Delivery for all recipients (assuming immediate delivery is desired)
+        const deliveryLogValues = [];
+        const deliveryChannels = ['In-App']; 
+        
+        for (const user of birthdays) {
+            for (const channel of deliveryChannels) {
+                // Ensure all inserts are correctly within the transaction
+                deliveryLogValues.push(
+                    `('${noticeId}', '${user.user_id}', '${channel}', 'Delivered')`
+                );
+            }
+        }
+        
+        if (deliveryLogValues.length > 0) {
+            const deliveryLogQuery = `
+                INSERT INTO ${DELIVERY_LOG_TABLE} (notice_id, user_id, channel, status)
+                VALUES ${deliveryLogValues.join(', ')}
+            `;
+            // Use client.query for INSERT INTO delivery_log
+            await client.query(deliveryLogQuery); 
+        }
+
+        await client.query('COMMIT');
+
+        res.status(200).json({ 
+            message: `Successfully posted birthday wishes to ${totalRecipients} recipients.`, 
+            notice_id: noticeId
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Birthday Wish Posting Error:', error);
+        res.status(500).json({ message: 'Failed to send birthday wish notice.' });
+    } finally {
+        client.release();
     }
 });
 
