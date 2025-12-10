@@ -6,6 +6,7 @@
     <title>Payment History</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        /* ... (Your existing styles) ... */
         body {
             background-color: #eef1f5;
         }
@@ -68,7 +69,7 @@
         <div class="row g-3">
             <div class="col-md-4">
                 <div class="summary-card">
-                    <div class="summary-label">TOTAL DUE</div>
+                    <div class="summary-label">TOTAL BILLED (DUE + PAID)</div>
                     <div class="summary-value" id="total-due">Loading...</div>
                 </div>
             </div>
@@ -91,7 +92,7 @@
                 <thead class="table-dark">
                     <tr>
                         <th scope="col">Date</th>
-                        <th scope="col">Receipt No.</th>
+                        <th scope="col">Receipt Ref.</th>
                         <th scope="col">Description</th>
                         <th scope="col">Method</th>
                         <th scope="col">Status</th>
@@ -108,12 +109,12 @@
     </div>
 
     <script>
-        const studentId = localStorage.getItem('profile-id'); // ⭐ Use the consistent 'profile-id' key
+        const studentId = localStorage.getItem('profile-id'); 
         const token = localStorage.getItem('erp-token');
         const errorMessageDiv = document.getElementById('error-message');
         const tableBody = document.getElementById('payment-table-body');
 
-        // --- Helper function for API calls ---
+        // --- Helper function for API calls (Remains the same) ---
         async function handleApi(url) {
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -131,20 +132,29 @@
         }
 
         function showStatus(status) {
-            const statusClass = status.toLowerCase();
+            const statusClass = (status || 'Success').toLowerCase();
             if (statusClass.includes('success') || statusClass.includes('paid')) {
-                return `<span class="status-success">${status}</span>`;
+                return `<span class="status-success">Paid</span>`;
             } else if (statusClass.includes('pending') || statusClass.includes('processing')) {
-                return `<span class="status-pending">${status}</span>`;
+                return `<span class="status-pending">Pending</span>`;
             } else if (statusClass.includes('failed') || statusClass.includes('cancelled')) {
-                return `<span class="status-failed">${status}</span>`;
+                return `<span class="status-failed">Failed</span>`;
             }
             return status;
         }
         
-        function formatCurrency(amount) {
+        // 🚨 CRITICAL FIX: Renamed function to localFormatCurrency to prevent recursion
+        function localFormatCurrency(amount) {
+            const globalFormatter = window.formatCurrency;
+
+            // Check if globalFormatter exists AND is not an unexpected circular reference
+            if (typeof globalFormatter === 'function') {
+                return globalFormatter(amount);
+            }
+            
+            // Fallback logic
             if (amount === undefined || amount === null) return 'N/A';
-            return `₹${Number(amount).toFixed(2).toLocaleString('en-IN')}`;
+            return `₹${Number(amount || 0).toFixed(2)}`;
         }
 
         async function loadPaymentHistory() {
@@ -156,9 +166,9 @@
             }
 
             try {
-                // Fetch consolidated fee summary and payment transactions
-                // Assumes a single endpoint that returns both:
-                const data = await handleApi(`/api/finance/student/${studentId}/payments/history`);
+                // Correct API ENDPOINT: /api/students/:id/fees
+                const API_ENDPOINT = `/api/students/${studentId}/fees`; 
+                const data = await handleApi(API_ENDPOINT);
                 
                 if (!data) {
                     tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">No financial records found.</td></tr>';
@@ -166,40 +176,39 @@
                 }
 
                 // --- 1. Update Summary Cards ---
-                const summary = data.summary || {};
-                const totalDue = summary.total_due || 0;
-                const totalPaid = summary.total_paid || 0;
-                const balance = totalDue - totalPaid;
+                const totalBilled = data.total_billed || 0;
+                const totalPaid = data.total_paid || 0;
+                const balance = data.balance_due || (totalBilled - totalPaid);
 
-                document.getElementById('total-due').textContent = formatCurrency(totalDue);
-                document.getElementById('total-paid').textContent = formatCurrency(totalPaid);
+                // 🚨 FIX: Use localFormatCurrency
+                document.getElementById('total-due').textContent = localFormatCurrency(totalBilled);
+                document.getElementById('total-paid').textContent = localFormatCurrency(totalPaid);
                 
                 const balanceElement = document.getElementById('balance-due');
-                balanceElement.textContent = formatCurrency(balance);
+                balanceElement.textContent = localFormatCurrency(balance);
                 balanceElement.classList.remove('text-success', 'text-danger');
                 if (balance > 0) {
                     balanceElement.classList.add('text-danger');
-                } else if (balance <= 0) {
+                } else {
                     balanceElement.classList.add('text-success');
                 }
 
                 // --- 2. Render Transaction History ---
-                const transactions = data.transactions || [];
+                const transactions = data.payment_history || []; 
 
                 if (transactions.length === 0) {
                     tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">No payment transactions found.</td></tr>';
                     return;
                 }
-
+                
                 tableBody.innerHTML = transactions.map(t => `
                     <tr>
-                        <td>${new Date(t.payment_date).toLocaleDateString()}</td>
-                        <td>${t.receipt_number || 'N/A'}</td>
+                        <td>${new Date(t.payment_date || t.date).toLocaleDateString()}</td> 
+                        <td>${t.ref || t.transaction_id || 'N/A'}</td>
                         <td>${t.description || 'Fee Payment'}</td>
-                        <td>${t.payment_method || 'Online'}</td>
-                        <td>${showStatus(t.status)}</td>
-                        <td class="text-end">${formatCurrency(t.amount)}</td>
-                    </tr>
+                        <td>${t.mode || t.payment_mode || 'Online'}</td>
+                        <td>${showStatus(t.status || 'Paid')}</td> 
+                        <td class="text-end">${localFormatCurrency(t.amount)}</td> </tr>
                 `).join('');
 
 
@@ -213,6 +222,7 @@
 
         document.addEventListener('DOMContentLoaded', loadPaymentHistory);
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/global-config.js"></script>
 </body>
 </html>

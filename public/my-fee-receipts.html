@@ -69,6 +69,7 @@
             });
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
+                     // Unauthorized/Session Expired
                      alert('Session expired or unauthorized. Please log in again.');
                      window.location.href = '/login.html';
                      throw new Error('Unauthorized');
@@ -100,8 +101,10 @@
             }
 
             try {
-                // API endpoint to fetch list of downloadable receipts
-                const receipts = await handleApi(`/api/finance/student/${PROFILE_ID}/receipts`);
+                // ✅ CORRECT API ENDPOINT: Using the fees module to get student receipts
+                // NOTE: This assumes you will implement this route in routes/fees.js
+                const API_ENDPOINT = `/api/fees/student/${PROFILE_ID}/receipts`;
+                const receipts = await handleApi(API_ENDPOINT);
                 
                 if (!receipts || receipts.length === 0) {
                     tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">No downloadable receipts found.</td></tr>';
@@ -111,10 +114,10 @@
                 tableBody.innerHTML = receipts.map(r => `
                     <tr>
                         <td>${new Date(r.payment_date).toLocaleDateString()}</td>
-                        <td>${r.receipt_number || 'N/A'}</td>
+                        <td>${r.receipt_number || r.payment_id || 'N/A'}</td>
                         <td>${r.description || 'Fee Payment'}</td>
                         <td class="text-end">${formatCurrency(r.amount)}</td>
-                        <td><span class="${getStatusClass(r.status)}">${r.status}</span></td>
+                        <td><span class="${getStatusClass(r.status)}">${r.status || 'Paid'}</span></td>
                         <td>
                             <a href="/api/finance/receipt/download/${r.receipt_id}" 
                                class="btn btn-sm btn-outline-success" 

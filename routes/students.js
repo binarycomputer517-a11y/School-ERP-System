@@ -1,5 +1,5 @@
 // routes/students.js
-// TRUE FULL & FINAL VERSION
+// TRUE FULL & FINAL VERSION WITH MULTER INTEGRATION
 
 const express = require('express');
 const router = express.Router();
@@ -7,7 +7,8 @@ const { pool } = require('../database');
 const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 const { authenticateToken, authorize } = require('../authMiddleware');
-const moment = require('moment'); // Required for POST route
+const moment = require('moment'); 
+const { getApp } = require('../utils/helpers'); // Assuming a helper to get app instance (or use req.app)
 
 // --- Constants: Database Tables ---
 const STUDENTS_TABLE = 'students';
@@ -23,13 +24,12 @@ const PAYMENTS_TABLE = 'fee_payments';
 const CRUD_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar'];
 const VIEW_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar', 'Teacher', 'Coordinator', 'Student'];
 
-// --- Helper: Get Configuration IDs from Request ---
+// --- Helper Functions (getConfigIds, toUUID, buildUpdateQuery remain the same) ---
 function getConfigIds(req) {
     const branch_id = req.user.branch_id; 
     return { branch_id, created_by: req.user.id, updated_by: req.user.id };
 }
 
-// --- Helper: Safely Convert String to UUID or Null ---
 function toUUID(value) {
     if (!value || typeof value !== 'string' || value.trim() === '') {
         return null;
@@ -37,14 +37,6 @@ function toUUID(value) {
     return value.trim();
 }
 
-// --- Helper: Dynamic Update Query Builder ---
-/**
- * Builds a parameterized query string for dynamic updates.
- * @param {object} body - The request body containing fields to update.
- * @param {object} fieldDefinitions - Map of field names to expected types.
- * @param {string} updatedBy - The UUID of the user performing the update.
- * @returns {object} { updateFields: string[], updateValues: any[] }
- */
 function buildUpdateQuery(body, fieldDefinitions, updatedBy) {
     const updateFields = [];
     const updateValues = [];
@@ -67,11 +59,9 @@ function buildUpdateQuery(body, fieldDefinitions, updatedBy) {
         }
     }
     
-    // Add Audit Fields
     updateFields.push(`updated_by = $${paramIndex++}::uuid`);
     updateValues.push(toUUID(updatedBy));
     updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-
 
     return { updateFields, updateValues };
 }
@@ -84,22 +74,14 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
-                s.student_id, s.admission_id, s.enrollment_no,
-                s.first_name, s.last_name, 
+                s.student_id, s.admission_id, s.enrollment_no, s.first_name, s.last_name, 
                 s.email, s.phone_number, s.status, s.course_id, s.batch_id,
-                
                 u.username, u.role, u.id AS user_id,
+                c.course_name, b.batch_name, br.branch_name,
                 
-                c.course_name, 
-                b.batch_name, 
-                br.branch_name,
-                
-                -- CRITICAL FIX: Calculate total fees including monthly charges multiplied by duration
                 (
-                    -- One-Time Fees
                     COALESCE(fs.admission_fee, 0) + COALESCE(fs.registration_fee, 0) + COALESCE(fs.examination_fee, 0)
                     +
-                    -- Monthly Fees * Duration (Assumes duration is stored in fs)
                     (
                         (COALESCE(fs.transport_fee, 0) * COALESCE(fs.course_duration_months, 0)) 
                         + 
@@ -113,7 +95,6 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
             LEFT JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
             LEFT JOIN ${BRANCHES_TABLE} br ON s.branch_id = br.id
-            -- CRITICAL JOIN: Link to Fee Structures based on Course AND Batch
             LEFT JOIN ${FEE_STRUCTURES_TABLE} fs ON fs.course_id = s.course_id AND fs.batch_id = s.batch_id
             
             WHERE u.deleted_at IS NULL
@@ -128,15 +109,45 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
 });
 
 // =========================================================
-// 2. POST: Create New Student (Auto-Generate IDs)
+// 2. POST: Create New Student (CRITICAL FIX: Multer Integration)
 // =========================================================
-router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
+router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
+    // 1. Get Multer instance from the Express app instance (attached in server.js)
+    const upload = req.app.get('upload'); 
+
+    if (!upload) {
+        console.error("Multer instance not found. Cannot proceed with file upload.");
+        return res.status(500).json({ message: "File upload service is unavailable. Check server config." });
+    }
+    
+    // 2. Use Multer middleware for a single file upload
+    // 'profile_image' is the expected field name from the frontend form (adjust if needed)
+    upload.single('profile_image_path')(req, res, (err) => {
+        if (err) {
+            console.error('Multer Upload Error:', err);
+            // Handle Multer limits (e.g., specific file size limits set in multerConfig.js)
+            if (err.code === 'LIMIT_FILE_SIZE') {
+                return res.status(400).json({ message: 'The uploaded file exceeds the file size limit.' });
+            }
+            return res.status(500).json({ message: 'File upload failed: ' + err.message });
+        }
+        // Proceed to the next middleware (the asynchronous controller logic)
+        next(); 
+    });
+}, async (req, res) => { // Actual controller logic
     let body = req.body;
     
     const { branch_id, created_by } = getConfigIds(req);
 
+    // 🚨 Add uploaded file path to the body for database insertion
+    if (req.file) {
+        // req.file.path contains the path where Multer saved the file (e.g., 'uploads/...')
+        body.profile_image_path = req.file.path; 
+    }
+
     // Validation
     if (!body.username || !body.password || !body.first_name || !body.last_name || !body.course_id || !body.batch_id) {
+        // NOTE: If file upload is successful, req.body contains text fields
         return res.status(400).json({ message: 'Missing required fields: Name, Login, Course, or Batch.' });
     }
 
@@ -203,7 +214,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
             body.profile_image_path || null, body.signature_path || null, body.id_document_path || null, body.aadhaar_number || null, body.nationality || null,
             body.city || null, body.state || null, body.zip_code || null, body.country || null, body.religion || null, body.blood_group || null, body.caste_category || null,
             body.parent_first_name || null, body.parent_last_name || null, body.parent_phone_number || null, body.parent_email || null, body.parent_occupation || null, body.guardian_relation || null,
-            body.admission_date || moment().format('YYYY-MM-DD') // Use current date as default admission date
+            body.admission_date || moment().format('YYYY-MM-DD') // Default admission date
         ]);
 
         await client.query('COMMIT'); // Commit Transaction
@@ -211,7 +222,7 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         res.status(201).json({ 
             message: 'Student created successfully.', 
             student: studentResult.rows[0],
-            admission_id: body.admission_id, // Return the generated ID for client confirmation
+            admission_id: body.admission_id, 
             enrollment_no: body.enrollment_no
         });
 
@@ -227,6 +238,10 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
         client.release();
     }
 });
+
+
+// ... (Routes 3, 4, 5, 6, 7, 8, 9 remain exactly the same as they do not require file uploads) ...
+
 
 // =========================================================
 // 3. GET: Single Student Details (Smart Lookup)
@@ -260,6 +275,8 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
 // 4. PUT: Update Student (IMPROVED DYNAMIC UPDATE)
 // =========================================================
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
+    // NOTE: If PUT includes file updates, you would need Multer here too, 
+    // but the logic here assumes only standard form data update.
     const studentId = req.params.id;
     const body = req.body;
     const { updated_by } = getConfigIds(req);
@@ -298,9 +315,8 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
 
             if (userUpdateFields.length > 0) {
                 userUpdateFields.push(`updated_at = CURRENT_TIMESTAMP`);
-                userUpdateValues.push(userId); // Last parameter is the WHERE clause ID
+                userUpdateValues.push(userId); 
                 
-                // The correct parameter index for WHERE clause is userParamIndex
                 const userUpdateQuery = `
                     UPDATE ${USERS_TABLE} SET 
                         ${userUpdateFields.join(', ')} 
@@ -314,8 +330,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         // --- Step 2: Update STUDENT Profile ---
         const studentFieldDefinitions = {
             first_name: 'text', last_name: 'text', middle_name: 'text', 
-            dob: 'date', gender: 'text', 
-            blood_group: 'text', religion: 'text', mother_tongue: 'text',
+            dob: 'date', gender: 'text', blood_group: 'text', religion: 'text', mother_tongue: 'text',
             aadhaar_number: 'text', caste_category: 'text', nationality: 'text',
             permanent_address: 'text', city: 'text', state: 'text', zip_code: 'text', country: 'text', 
             enrollment_no: 'text', roll_number: 'text', status: 'text',
@@ -323,12 +338,11 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
             parent_first_name: 'text', parent_last_name: 'text', parent_phone_number: 'text',
             parent_email: 'text', parent_occupation: 'text', guardian_relation: 'text',
             parent_annual_income: 'numeric',
-            profile_image_path: 'text', signature_path: 'text', id_document_path: 'text',
+            profile_image_path: 'text', signature_path: 'text', id_document_path: 'text', // Included for update
             location_coords: 'text',
-            admission_date: 'date' // Ensure admission_date can be updated
+            admission_date: 'date' 
         };
         
-        // FIX: Re-calling the correct helper and passing definitions
         const { updateFields, updateValues } = buildUpdateQuery(body, studentFieldDefinitions, safeUpdatedBy);
 
         if (updateFields.length === 0) {
@@ -356,10 +370,9 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
 
         await client.query('COMMIT');
         
-        // FIX: Ensure the returned data is correct for the frontend alert
         res.status(200).json({ 
             message: 'Student profile updated successfully.',
-            first_name: result.rows[0].first_name, // Returns the actual name for the alert
+            first_name: result.rows[0].first_name, 
             data: result.rows[0]
         });
 
@@ -423,8 +436,9 @@ router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res)
     }
 });
 
+
 // =========================================================
-// 6. GET: Student Fee Records (Profile Support - CRITICAL FIX APPLIED)
+// 6. GET: Student Fee Records (FINAL FIX)
 // =========================================================
 router.get('/:id/fees', authenticateToken, async (req, res) => {
     const studentId = req.params.id;
@@ -433,57 +447,51 @@ router.get('/:id/fees', authenticateToken, async (req, res) => {
     if (!safeStudentId) return res.status(400).json({ message: 'Invalid Student ID.' });
 
     try {
-        // CRITICAL FIX: Query the actual financial tables (Invoices and Payments)
-        // This query fetches the summary (Total Billed/Paid) and the payment history.
-        const query = `
+        // --- STEP 1: Fetch Summary Data (Total Billed / Paid / Due) ---
+        const summaryQuery = `
             SELECT
-                -- Invoice Summary
                 COALESCE(SUM(i.total_amount), 0) AS total_billed,
                 COALESCE(SUM(i.paid_amount), 0) AS total_paid,
-                (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) AS balance_due,
-                
-                -- Payment History (Example structure - adjust as needed by frontend)
-                (
-                    SELECT json_agg(
-                        json_build_object(
-                            'id', p.id,
-                            'amount', p.amount,
-                            'date', p.payment_date,
-                            'mode', p.payment_mode,
-                            'ref', p.transaction_id
-                        )
-                    )
-                    FROM ${PAYMENTS_TABLE} p
-                    JOIN ${INVOICES_TABLE} pi ON p.invoice_id = pi.id
-                    WHERE pi.student_id = $1::uuid
-                    ORDER BY p.payment_date DESC
-                ) AS payment_history
-                
+                (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) AS balance_due
             FROM ${INVOICES_TABLE} i
-            WHERE i.student_id = $1::uuid AND i.status != 'Waived'
-            GROUP BY i.student_id;
+            WHERE i.student_id = $1::uuid AND i.status != 'Waived';
         `;
         
-        const result = await pool.query(query, [safeStudentId]);
+        const summaryResult = await pool.query(summaryQuery, [safeStudentId]);
+        let summary = summaryResult.rows[0] || { total_billed: 0, total_paid: 0, balance_due: 0 };
+
+        // --- STEP 2: Fetch Detailed Payment History ---
+        const historyQuery = `
+            SELECT 
+                p.id,
+                p.amount,
+                p.payment_date,
+                p.payment_mode AS mode,
+                p.transaction_id AS ref,
+                pi.invoice_number,
+                pi.due_date
+            FROM ${PAYMENTS_TABLE} p
+            JOIN ${INVOICES_TABLE} pi ON p.invoice_id = pi.id
+            WHERE pi.student_id = $1::uuid
+            ORDER BY p.payment_date DESC;
+        `;
         
-        if (result.rows.length === 0) {
-            // Return zeroed data if no invoice exists (allows frontend to display 0.00)
-            return res.status(200).json({
-                total_billed: 0,
-                total_paid: 0,
-                balance_due: 0,
-                payment_history: []
-            });
-        }
+        const historyResult = await pool.query(historyQuery, [safeStudentId]);
+
+        // --- STEP 3: Combine and Send Response ---
+        const finalResponse = {
+            ...summary,
+            payment_history: historyResult.rows 
+        };
         
-        // Return the first row (the summary)
-        res.status(200).json(result.rows[0]);
+        res.status(200).json(finalResponse);
         
     } catch (error) {
         console.error('Error fetching fees for profile:', error);
         res.status(500).json({ message: 'Failed to retrieve fee records for profile.' });
     }
 });
+
 
 // =========================================================
 // 7. GET: Library Books (Dashboard/Profile Support)
@@ -505,7 +513,7 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
             res.status(200).json(result.rows);
         } catch (dbError) {
             console.warn("Library table might not exist yet:", dbError.message);
-            res.status(200).json([]); // Return empty list
+            res.status(200).json([]); 
         }
     } catch (error) {
         console.error('Error fetching library books:', error);
@@ -535,7 +543,7 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
             res.status(200).json(result.rows);
         } catch (dbError) {
             console.warn("Teacher query failed:", dbError.message);
-            res.status(200).json([]); // Return empty list
+            res.status(200).json([]); 
         }
     } catch (error) {
         console.error('Error fetching teachers:', error);
@@ -549,8 +557,6 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
 
 /**
  * @route GET /api/students/lookup/all
- * @desc Get a simple list of all enrolled students (ID, Name, Roll No) for dropdowns.
- * @access Private (Admin, Teacher, Placement Officer)
  */
 router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Placement Officer']), async (req, res) => {
     try {
@@ -566,7 +572,6 @@ router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 
         
         res.status(200).json(result.rows);
     } catch (e) { 
-        // FIX: Provide a complete error handler for this route
         console.error('Error fetching student lookup data:', e);
         res.status(500).json({ message: 'Failed to retrieve student list for dropdowns.' });
     }

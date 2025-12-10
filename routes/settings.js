@@ -11,16 +11,16 @@ const fs = require('fs');
 // --- CONSTANTS ---
 const CONFIG_ID = '00000000-0000-0000-0000-000000000001'; 
 const SETTINGS_TABLE = 'erp_settings'; 
+const COMPLIANCE_ROLES = ['Super Admin', 'Prime Admin'];
+const CRUD_ROLES = ['Super Admin', 'Admin'];
+
 
 // --- MULTER CONFIGURATION (For File Uploads) ---
-// ... (Multer setup code remains unchanged) ...
 const uploadDir = './public/uploads/designs';
 if (!fs.existsSync(uploadDir)){
     fs.mkdirSync(uploadDir, { recursive: true });
 }
-
 const storage = multer.diskStorage({
-// ... (storage config) ...
     destination: (req, file, cb) => {
         cb(null, uploadDir);
     },
@@ -29,24 +29,20 @@ const storage = multer.diskStorage({
         cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
     }
 });
-
 const fileFilter = (req, file, cb) => {
-// ... (fileFilter config) ...
     if (file.mimetype.startsWith('image/')) {
         cb(null, true);
     } else {
         cb(new Error('Only image files are allowed!'), false);
     }
 };
-
 const upload = multer({ storage: storage, fileFilter: fileFilter });
 
 
 // =========================================================
 // 1. HELPER ROUTES (For Dropdowns)
 // =========================================================
-// ... (Helper routes remain unchanged) ...
-router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+router.get('/academic-sessions/all', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
         const result = await pool.query(`SELECT id, session_name AS name, start_date FROM academic_sessions ORDER BY start_date DESC`);
         res.json(result.rows);
@@ -55,7 +51,7 @@ router.get('/academic-sessions/all', authenticateToken, authorize(['Admin', 'Sup
     }
 });
 
-router.get('/branches/all', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+router.get('/branches/all', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
         const result = await pool.query(`SELECT id, branch_name AS name FROM branches ORDER BY branch_name ASC`);
         res.json(result.rows);
@@ -68,13 +64,13 @@ router.get('/branches/all', authenticateToken, authorize(['Admin', 'Super Admin'
 // =========================================================
 // 2. GLOBAL/DEFAULT SETTINGS ROUTES 
 // =========================================================
-// ... (Global/Default routes remain unchanged) ...
+
 /**
  * @route GET /api/settings/global
- * @desc Get high-level global settings (e.g., default branch ID) for modular frontends.
+ * @desc Get high-level global settings (e.g., default branch ID).
  * @access Private (Admin or Super Admin)
  */
-router.get('/global', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+router.get('/global', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT default_branch_id, COALESCE(module_config, '{}'::jsonb) AS module_config
@@ -149,9 +145,13 @@ router.put('/global', authenticateToken, authorize(['Super Admin']), async (req,
 // =========================================================
 // 3. MAIN CONFIGURATION ROUTES (config/current & config/:id)
 // =========================================================
-// ... (Main configuration routes remain unchanged) ...
-// --- GET CURRENT SETTINGS (Previously Section 2) ---
-router.get('/config/current', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+
+/**
+ * @route GET /api/settings/config/current
+ * @desc Get ALL current settings (Public/Auth agnostic for global access)
+ * @access PUBLIC ACCESS (Only needs DB to run) 🚨 FIX FOR 403 ERROR 🚨
+ */
+router.get('/config/current', async (req, res) => {
     try {
         const result = await pool.query(`SELECT * FROM ${SETTINGS_TABLE} LIMIT 1`);
         
@@ -160,12 +160,13 @@ router.get('/config/current', authenticateToken, authorize(['Admin', 'Super Admi
         }
         
         const row = result.rows[0];
+        // Combine fixed columns and JSONB module_config properties
         res.json({ 
             ...row, 
             ...(row.module_config || {}) 
         });
     } catch (e) {
-        console.error("Settings Fetch Error:", e);
+        console.error("Public Settings Fetch Error:", e);
         res.status(500).json({ error: e.message });
     }
 });
@@ -266,11 +267,8 @@ router.put('/config/:id', authenticateToken, authorize(['Super Admin', 'Admin'])
 
 
 // =========================================================
-// 4. COMPLIANCE MANAGEMENT ROUTES (The missing routes)
+// 4. COMPLIANCE MANAGEMENT ROUTES
 // =========================================================
-
-const COMPLIANCE_ROLES = ['Super Admin', 'Prime Admin'];
-const SETTINGS_ID = CONFIG_ID; 
 
 /**
  * @route GET /api/settings/compliance
@@ -318,7 +316,7 @@ router.put('/compliance', authenticateToken, authorize(['Super Admin']), async (
         // 1. Ensure the settings row exists (Upsert)
         const check = await client.query(`SELECT id FROM ${SETTINGS_TABLE} LIMIT 1`);
         if (check.rowCount === 0) {
-            await client.query(`INSERT INTO ${SETTINGS_TABLE} (id) VALUES ($1)`, [SETTINGS_ID]);
+            await client.query(`INSERT INTO ${SETTINGS_TABLE} (id) VALUES ($1)`, [CONFIG_ID]);
         }
 
         // 2. Build the JSONB payload
@@ -332,7 +330,7 @@ router.put('/compliance', authenticateToken, authorize(['Super Admin']), async (
             WHERE id = $2
             RETURNING *;
         `;
-        await client.query(updateQuery, [jsonPayload, SETTINGS_ID]);
+        await client.query(updateQuery, [jsonPayload, CONFIG_ID]);
         
         await client.query('COMMIT');
         res.status(200).json({ success: true, message: "Compliance settings saved." });

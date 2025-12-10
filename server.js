@@ -1,7 +1,7 @@
 /**
  * SERVER.JS
  * Entry point for the School ERP System
- * Final Updated Version: Incorporating all Global Feature Routers AND Backup Static File Route
+ * Final Updated Version: Incorporating Size Limit (1MB) and all Feature Routers
  */
 
 // ===================================
@@ -33,7 +33,7 @@ const UPLOAD_DIRS = [
 ];
 const BACKUP_DIR = path.join(__dirname, 'backups');
 
-// --- Router Imports (NEW and existing) ---
+// --- Router Imports (All Modules) ---
 const authRouter = require('./routes/auth');
 const dashboardRouter = require('./routes/dashboard'); 
 const usersRouter = require('./routes/users'); 
@@ -48,7 +48,6 @@ const studentsRouter = require('./routes/students');
 const admissionRouter = require('./routes/admission');
 const teachersRouter = require('./routes/teachers');
 const utilsRouter = require('./routes/utils');
-// --- GLOBAL MANAGEMENT MODULES (NEW) ---
 const branchesRouter = require('./routes/branches'); 
 const systemLogsRouter = require('./routes/systemLogs'); 
 const backupRestoreRouter = require('./routes/backupRestore'); 
@@ -78,11 +77,8 @@ const transportRouter = require('./routes/transport');
 const hostelRouter = require('./routes/hostel');
 const cafeteriaRouter = require('./routes/cafeteria');
 const libraryRouter = require('./routes/library');
-// 🛑 CRITICAL FIX: Use the correct split router imports
-const inventoryRouter = require('./routes/inventory'); // Mapped to /api/inventory
-const assetRouter = require('./routes/asset');         // Mapped to /api/asset
-// 🛑 END CRITICAL FIX
-
+const inventoryRouter = require('./routes/inventory'); 
+const assetRouter = require('./routes/asset');         
 const itHelpdeskRouter = require('./routes/it-helpdesk');
 const enquiriesRouter = require('./routes/enquiries');
 const clubsEventsRouter = require('./routes/clubsEvents');
@@ -114,10 +110,16 @@ app.use(morgan('dev'));
 
 // Security & Parsing
 app.use(cors());
+
+// ✅ CRITICAL FIX: Set Size Limit to 10MB 
 app.use(express.json({
+    limit: '10mb', // JSON body limit
     verify: (req, res, buf) => { req.rawBody = buf.toString(); } 
 }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ 
+    limit: '10mb', // URL-encoded body limit
+    extended: true 
+}));
 
 // Static File Serving
 app.use(express.static(path.join(__dirname, 'public')));
@@ -154,7 +156,7 @@ app.use('/api/health-records', healthRouter);
 // All routes mounted below require a valid Bearer Token
 app.use('/api', authenticateToken);
 
-// --- GLOBAL MANAGEMENT MODULES (NEW) ---
+// --- GLOBAL MANAGEMENT MODULES ---
 app.use('/api/branches', branchesRouter); 
 app.use('/api/system/logs', systemLogsRouter); 
 app.use('/api/system/backup', backupRestoreRouter); 
@@ -205,10 +207,9 @@ app.use('/api/hostel', hostelRouter);
 app.use('/api/cafeteria', cafeteriaRouter);
 app.use('/api/library', libraryRouter);
 
-// 🛑 CRITICAL FIX: Inventory & Asset Mounting
-app.use('/api/inventory', inventoryRouter); // Mapped to routes/inventory.js
-app.use('/api/asset', assetRouter);         // Mapped to routes/asset.js
-// 🛑 END CRITICAL FIX
+// Inventory & Asset
+app.use('/api/inventory', inventoryRouter); 
+app.use('/api/asset', assetRouter);         
 
 app.use('/api/it-helpdesk', itHelpdeskRouter);
 
@@ -219,6 +220,8 @@ app.use('/api/alumni', alumniRouter);
 app.use('/api/discipline', disciplineRouter);
 app.use('/api/compliance', complianceRouter);
 app.use('/api/reports', reportsRouter);
+app.use('/api/health-records', healthRouter);
+
 
 // ===================================
 // 5. FRONTEND ROUTING (SPA Support)
@@ -252,10 +255,16 @@ app.use((req, res, next) => {
 app.use((err, req, res, next) => {
     console.error("🔥 Global Error:", err.stack);
     
-    // Handle specific multer errors
+    // Handle specific multer errors (e.g., file size limit exceeded)
     if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ success: false, message: 'File too large' });
     }
+    
+    // Handle the 413 error specifically if it originates from body-parser limits
+    if (err.type === 'entity.too.large') {
+        return res.status(413).json({ success: false, message: 'Request Entity Too Large (Max 1MB allowed)' });
+    }
+
 
     const statusCode = err.status || 500;
     res.status(statusCode).json({

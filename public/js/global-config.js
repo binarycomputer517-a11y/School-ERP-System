@@ -1,7 +1,7 @@
 /**
  * Global Configuration Loader (Enterprise ERP)
  * ---------------------------------------------
- * Final Version: Fixed Token Key Mismatch ('erp-token')
+ * Final Version: Fixed Token, Cache, and Recursion Errors.
  * This script runs on EVERY page load to apply settings globally.
  */
 
@@ -32,46 +32,40 @@ async function initGlobalSettings() {
     if (settingsData) {
         let cached = JSON.parse(settingsData);
         if (!isCacheExpired(cached)) {
-            // Load from non-expired cache
             settings = cached.data;
         } else {
-            // Cache expired, needs refresh
             localStorage.removeItem(SETTINGS_CACHE_KEY); 
         }
     }
 
     // 2. Fetch from API if settings are null (cache miss or expired)
     if (!settings) {
+        // Since /api/settings/config/current is now PUBLIC (403 fix)
+        // We fetch it without relying on the JWT token.
         const token = localStorage.getItem('erp-token');
+        const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
         
-        if (token) {
-            try {
-                const res = await fetch(GLOBAL_CONFIG_API, { 
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
+        try {
+            const res = await fetch(GLOBAL_CONFIG_API, { headers });
 
-                if (res.status === 401) {
-                    // Log session warning but allow the page to load with default styles
-                    console.warn("Session warning: Authentication required to fetch current settings.");
-                    return null;
-                }
-
-                if (!res.ok) throw new new Error(`Failed to fetch settings. Status: ${res.status}`);
-
-                const data = await res.json();
-                
-                // Save to Cache with timestamp
-                localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({
-                    data: data,
-                    timestamp: new Date().toISOString()
-                }));
-                settings = data;
-                
-            } catch (e) { 
-                console.error("Global Config: Failed to sync settings", e);
-                // Return null if fetch failed
-                return null; 
+            if (!res.ok) {
+                // ✅ FIX: Removed extra 'new' keyword to fix TypeError
+                throw new Error(`Failed to fetch settings. Status: ${res.status}`);
             }
+
+            const data = await res.json();
+            
+            // Save to Cache with timestamp
+            localStorage.setItem(SETTINGS_CACHE_KEY, JSON.stringify({
+                data: data,
+                timestamp: new Date().toISOString()
+            }));
+            settings = data;
+            
+        } catch (e) { 
+            console.error("Global Config: Failed to sync settings", e);
+            // Return null if fetch failed (use default UI state)
+            return null; 
         }
     }
 
@@ -80,6 +74,8 @@ async function initGlobalSettings() {
         applySettingsToUI(settings);
         return settings; // Expose settings globally via the return value
     }
+    
+    // If no settings are found or fetched, return null
     return null;
 }
 
@@ -87,10 +83,9 @@ function applySettingsToUI(config) {
     
     // --- A. Branding (Logo & Favicon) ---
     if (config.school_logo_path) {
-        // Update all logo images on the page
         document.querySelectorAll('.global-school-logo').forEach(img => {
             img.src = config.school_logo_path;
-            img.alt = config.school_name || "School Logo"; // Accessibility improvement
+            img.alt = config.school_name || "School Logo";
         });
 
         // Update Browser Tab Icon (Favicon)
@@ -105,6 +100,14 @@ function applySettingsToUI(config) {
 
     // --- B. Currency Formatting ---
     const symbol = config.currency === 'USD' ? '$' : (config.currency === 'EUR' ? '€' : (config.currency === 'INR' ? '₹' : config.currency || '₹'));
+    
+    // Globally define a currency formatter function for other scripts
+    window.formatCurrency = (amount) => {
+        if (amount === undefined || amount === null) return `${symbol} 0.00`;
+        return `${symbol}${Number(amount).toFixed(2).toLocaleString('en-IN')}`;
+    };
+
+    // Apply currency symbol to static elements
     document.querySelectorAll('.currency-symbol').forEach(el => {
         el.innerText = symbol;
     });
@@ -126,16 +129,13 @@ function applySettingsToUI(config) {
     // --- D. Global Footer Text ---
     if (config.email_global_footer) {
         const footerEl = document.getElementById('global-footer-text');
-        // Use textContent for safety unless rich HTML is expected
         if(footerEl) footerEl.textContent = config.email_global_footer; 
     }
 
     // --- E. Feature Toggles (Hide/Show Modules) ---
-    // Hide Multi-Tenant fields if disabled
     if (config.multi_tenant_mode === false) {
         document.querySelectorAll('.module-tenant-switch').forEach(el => el.style.display = 'none');
     }
-    // Hide SMS panel if no provider is configured
     if (!config.sms_provider) {
         document.querySelectorAll('.module-sms-panel').forEach(el => el.style.display = 'none');
     }
@@ -154,7 +154,6 @@ function applySettingsToUI(config) {
  */
 function refreshGlobalSettings() {
     localStorage.removeItem(SETTINGS_CACHE_KEY);
-    // Reload the page to re-run the initialization logic
     window.location.reload(); 
 }
 

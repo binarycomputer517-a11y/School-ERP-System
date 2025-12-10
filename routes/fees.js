@@ -1258,4 +1258,80 @@ router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 
         res.status(500).json({ message: 'Failed to fetch audit logs.' });
     }
 });
+
+function toUUID(value) {
+    if (!value || typeof value !== 'string' || value.trim() === '') return null;
+    return value.trim();
+}
+
+// routes/fees.js (Excerpt focusing on the fixed receipt route)
+
+// ... (Other imports and constants)
+
+// --- Helper: Safely Convert String to UUID or Null ---
+function toUUID(value) {
+    if (!value || typeof value !== 'string' || value.trim() === '') return null;
+    return value.trim();
+}
+
+// ... (Other sections 1 and 2 remain the same) ...
+
+// =========================================================
+// SECTION 3: STUDENT DATA & RECEIPTS
+// =========================================================
+
+// ... (Routes 3.1 and 3.2 remain the same) ...
+
+
+/**
+ * 3.3 GET STUDENT RECEIPTS LIST (Final Fix Applied)
+ * @route   GET /api/fees/student/:studentId/receipts
+ * @desc    Get a list of successfully completed payments (receipts) for a student.
+ * @access  Private (Student Self-View, Admin)
+ */
+router.get('/student/:studentId/receipts', authenticateToken, authorize(['Student', 'Admin', 'Accountant']), async (req, res) => {
+    const studentId = req.params.studentId;
+    const safeStudentId = toUUID(studentId);
+
+    if (!safeStudentId) {
+        return res.status(400).json({ message: 'Invalid Student ID.' });
+    }
+
+    try {
+        const query = `
+            SELECT
+                p.id AS receipt_id, 
+                p.payment_date,
+                p.amount,
+                p.payment_mode,
+                p.transaction_id,
+                
+                -- ✅ FIX 1: COALESCE handles missing p.receipt_number
+                COALESCE(p.transaction_id, p.id::text) AS receipt_number, 
+                
+                i.invoice_number,
+                -- ✅ FIX 2: Replaced non-existent i.description with i.invoice_number
+                i.invoice_number AS description,
+                i.status 
+            FROM ${DB.PAYMENTS} p
+            JOIN ${DB.INVOICES} i ON p.invoice_id = i.id
+            -- Ensure i.student_id (UUID) is correctly compared with $1::uuid
+            WHERE i.student_id = $1::uuid AND i.status != 'Waived'
+            ORDER BY p.payment_date DESC;
+        `;
+        
+        const result = await pool.query(query, [safeStudentId]); 
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Error fetching student receipts (Final Check):', error);
+        res.status(500).json({ 
+            message: 'Failed to retrieve fee receipt history. Database integrity check required.', 
+            error: error.message 
+        });
+    }
+});
+
+// ... (Rest of the file remains the same) ...
+
 module.exports = router;
