@@ -41,6 +41,7 @@ const upload = multer({ storage: storage, fileFilter: fileFilter });
 
 // =========================================================
 // 1. HELPER ROUTES (For Dropdowns)
+// (These require authentication as they fetch specific data)
 // =========================================================
 router.get('/academic-sessions/all', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
@@ -149,9 +150,9 @@ router.put('/global', authenticateToken, authorize(['Super Admin']), async (req,
 /**
  * @route GET /api/settings/config/current
  * @desc Get ALL current settings (Public/Auth agnostic for global access)
- * @access PUBLIC ACCESS (Only needs DB to run) 🚨 FIX FOR 403 ERROR 🚨
+ * @access PUBLIC ACCESS 
  */
-router.get('/config/current', async (req, res) => {
+router.get('/config/current', async (req, res) => { // ✅ FIX: authenticateToken is correctly removed here
     try {
         const result = await pool.query(`SELECT * FROM ${SETTINGS_TABLE} LIMIT 1`);
         
