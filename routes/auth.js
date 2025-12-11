@@ -117,7 +117,7 @@ router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     const TOKEN_EXPIRY_MINUTES = 60; 
     // 🚨 IMPORTANT: Use the actual URL of your deployed frontend (e.g., https://erp.yourschool.com)
-    const FRONTEND_URL = 'http://localhost:3000'; 
+    const FRONTEND_URL = 'http://localhost:3005'; 
 
     if (!email) return res.status(400).json({ message: 'Email address is required.' });
 
