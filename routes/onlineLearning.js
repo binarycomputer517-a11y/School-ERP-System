@@ -3,16 +3,14 @@
 const express = require('express');
 const router = express.Router();
 
-// --- CRITICAL FIX: LIVE DEPENDENCIES ---
-// Uncomment or ensure these lines correctly link to your live implementation.
 const { pool } = require('../database'); 
 const { authenticateToken, authorize } = require('../authMiddleware'); 
-// --- END LIVE DEPENDENCIES ---
 
 
 const MODULES_TABLE = 'online_learning_modules';
+const ASSIGNMENTS_CORE_TABLE = 'homework_assignments'; 
+const SUBMISSIONS_TABLE = 'assignment_submissions';    
 const MODULE_CONFIG_TABLE = 'online_module_configurations'; 
-const ASSIGNMENTS_TABLE = 'student_assignments'; 
 
 // --- Role Definitions ---
 const MANAGER_ROLES = ['Super Admin', 'Admin', 'Teacher'];
@@ -73,20 +71,43 @@ router.get('/modules/:id', authenticateToken, authorize(MANAGER_ROLES), async (r
  * @access  Private (Student, Admin, Super Admin)
  */
 router.get('/assignments/student/:studentId', authenticateToken, authorize(['Student', 'Admin', 'Super Admin']), async (req, res) => {
+    // The studentId parameter is the user_id (UUID)
     const { studentId } = req.params;
 
     try {
         const query = `
             SELECT
-                sa.module_id, sa.due_date, sa.completion_date, sa.status, 
-                olm.title, olm.content_type, s.subject_name
-            FROM ${ASSIGNMENTS_TABLE} sa
-            JOIN ${MODULES_TABLE} olm ON sa.module_id = olm.id
-            LEFT JOIN subjects s ON olm.subject_id = s.id
-            WHERE sa.student_id = $1
-            ORDER BY sa.due_date;
+                ha.id AS assignment_id,
+                ha.title, 
+                ha.due_date,
+                ha.instructions,
+                s.subject_name,
+                s.subject_code,
+                ha.max_marks,
+                sub.submission_date, -- Assumed to be fixed/added in DB
+                sub.status AS submission_status, -- Assumed to be fixed/added in DB
+                sub.marks_obtained,
+                ha.created_at
+            FROM ${ASSIGNMENTS_CORE_TABLE} ha
+            
+            -- 1. Get student's current enrollment details
+            JOIN students stud ON stud.user_id = $1  -- $1 parameter
+            
+            -- 2. Get subject name
+            LEFT JOIN subjects s ON ha.subject_id = s.id
+            
+            -- 3. Get submission status
+            LEFT JOIN ${SUBMISSIONS_TABLE} sub 
+                ON sub.assignment_id = ha.id 
+                AND sub.student_id = $2  -- ✅ FIX: Use $2 here
+            
+            -- 4. Filter: Only show assignments published for the student's current course and batch
+            WHERE ha.course_id = stud.course_id AND ha.batch_id = stud.batch_id
+            
+            ORDER BY ha.due_date DESC;
         `;
-        const result = await pool.query(query, [studentId]);
+        // ✅ CORRECT CALL: Supplying two parameters ($1 and $2)
+        const result = await pool.query(query, [studentId, studentId]); 
         
         res.status(200).json(result.rows);
     } catch (error) {
@@ -98,6 +119,7 @@ router.get('/assignments/student/:studentId', authenticateToken, authorize(['Stu
 
 // =========================================================
 // 2. CRUD OPERATIONS
+// ... (Your other CRUD routes remain the same)
 // =========================================================
 
 /**
@@ -194,7 +216,7 @@ router.delete('/modules/:id', authenticateToken, authorize(MANAGER_ROLES), async
 
 
 // =========================================================
-// 3. FEATURE/BULK ROUTES
+// 3. FEATURE/BULK ROUTES 
 // =========================================================
 
 /**
@@ -393,21 +415,25 @@ router.post('/unassign', authenticateToken, authorize(ADMIN_ONLY_ROLES), async (
 
     try {
         if (target_type === 'batch' && target_batch_id) {
-            // Delete assignments for all students in the target batch
+            // Delete submissions for assignments related to the target batch
             query = `
-                DELETE FROM ${ASSIGNMENTS_TABLE} 
-                WHERE module_id = $1 AND student_id IN (
-                    SELECT student_id FROM students_in_batch WHERE batch_id = $2
+                DELETE FROM ${SUBMISSIONS_TABLE} 
+                WHERE assignment_id IN (
+                    SELECT id FROM ${ASSIGNMENTS_CORE_TABLE} WHERE batch_id = $2 AND module_id = $1
+                )
+                AND student_id IN (
+                    SELECT user_id FROM students WHERE batch_id = $2
                 )
                 RETURNING student_id;
             `;
             const result = await pool.query(query, [module_id, target_batch_id]);
             unassignedCount = result.rowCount;
         } else if (target_type === 'individual' && Array.isArray(target_students) && target_students.length > 0) {
-            // Delete assignments for a list of individual students
+            // Delete submissions for a list of individual students
             query = `
-                DELETE FROM ${ASSIGNMENTS_TABLE} 
-                WHERE module_id = $1 AND student_id = ANY($2::text[])
+                DELETE FROM ${SUBMISSIONS_TABLE} 
+                WHERE assignment_id IN (SELECT id FROM ${ASSIGNMENTS_CORE_TABLE} WHERE module_id = $1)
+                AND student_id = ANY($2::text[])
                 RETURNING student_id;
             `;
             const result = await pool.query(query, [module_id, target_students]);

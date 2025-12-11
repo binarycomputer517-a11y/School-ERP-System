@@ -132,7 +132,8 @@
 
                 examSelect.innerHTML = '<option value="">-- Select an Exam Series --</option>';
                 relevantExams.forEach(exam => {
-                    const examTotalMarks = exam.max_theory_marks + (exam.max_practical_marks || 0);
+                    // Assuming max_theory_marks and max_practical_marks are numbers
+                    const examTotalMarks = (exam.max_theory_marks || 0) + (exam.max_practical_marks || 0); 
                     examSelect.innerHTML += `
                         <option value="${exam.exam_id}" 
                                 data-name="${exam.exam_name}"
@@ -184,7 +185,6 @@
 
             try {
                 // Uses API endpoint from exams.js: GET /api/exams/schedule/:exam_id
-                // NOTE: This endpoint MUST also be authorized for the 'Student' role in exams.js
                 const schedules = await handleApi(`/api/exams/schedule/${examId}`);
                 
                 if (schedules.length === 0) {
@@ -195,19 +195,33 @@
                 }
 
                 schedules.forEach(schedule => {
-                    const startTime = new Date(`2000/01/01 ${schedule.start_time}`);
-                    const endTime = new Date(`2000/01/01 ${schedule.end_time}`);
-                    // Calculate duration in minutes for display
-                    const durationMinutes = (endTime - startTime) / 60000; 
+                    
+                    // --- 🐞 FIX: Duration Calculation ---
+                    // Create Date objects using the same base date, then compare times
+                    const [startHour, startMinute] = schedule.start_time.split(':').map(Number);
+                    const [endHour, endMinute] = schedule.end_time.split(':').map(Number);
+
+                    const startDate = new Date(2000, 0, 1, startHour, startMinute);
+                    let endDate = new Date(2000, 0, 1, endHour, endMinute);
+                    
+                    // Handle exam crossing midnight (optional, but safer)
+                    if (endDate.getTime() < startDate.getTime()) {
+                        endDate.setDate(endDate.getDate() + 1);
+                    }
+
+                    const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60000; 
                     const durationText = durationMinutes > 0 ? `${durationMinutes} minutes` : 'N/A';
+                    // --- End Fix ---
                     
                     // Format Date
                     const examDate = new Date(schedule.exam_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
                     
                     // Format Time (e.g., 09:00 AM - 12:00 PM)
                     const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
-                    const startTimeFormatted = startTime.toLocaleTimeString('en-US', timeOptions);
-                    const endTimeFormatted = endTime.toLocaleTimeString('en-US', timeOptions);
+                    
+                    // Use the parsed Date objects for locale time formatting
+                    const startTimeFormatted = startDate.toLocaleTimeString('en-US', timeOptions);
+                    const endTimeFormatted = endDate.toLocaleTimeString('en-US', timeOptions);
 
                     scheduleBody.innerHTML += `
                         <tr>
@@ -215,7 +229,7 @@
                             <td>${examDate}</td>
                             <td>${startTimeFormatted} - ${endTimeFormatted}</td>
                             <td>${durationText}</td>
-                            <td>${schedule.exam_center} - ${schedule.room_number}</td>
+                            <td>${schedule.room_number}</td>
                         </tr>
                     `;
                 });

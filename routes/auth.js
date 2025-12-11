@@ -52,7 +52,13 @@ router.post('/login', async (req, res) => {
         const tokenPayload = { 
             id: user.id,
             role: user.role, 
-            branch_id: user.branch_id
+            branch_id: user.branch_id,
+            
+            // ✅ CRITICAL FIX: Explicitly add student_id to the token payload
+            // This satisfies the authorization check in modules like online-exam.js
+            ...(user.role === 'Student' && { 
+                student_id: user.id 
+            }),
         };
         
         const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' });
@@ -124,7 +130,6 @@ router.post('/forgot-password', async (req, res) => {
 
         if (!user) {
             await client.query('COMMIT');
-            // ✅ FIX: Removed client.release() here
             return res.json({ message: 'If a matching account was found, a password reset link has been sent to the associated email address.' });
         }
 
@@ -143,16 +148,13 @@ router.post('/forgot-password', async (req, res) => {
         await sendPasswordResetEmail(user.email, resetURL); 
         
         await client.query('COMMIT');
-        // ✅ FIX: Removed client.release() here
         return res.json({ message: 'A password reset link has been sent to your registered email address.' });
 
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Forgot Password Server Error:', err);
-        // ✅ FIX: Removed client.release() here
         return res.status(500).json({ message: 'An internal error occurred during token generation or email dispatch.' });
     } finally {
-        // ✅ Only client.release() call remains here
         client.release(); 
     }
 });
@@ -177,7 +179,6 @@ router.post('/reset-password', async (req, res) => {
             decoded = jwt.verify(token, JWT_SECRET); 
         } catch (jwtError) {
              await client.query('ROLLBACK');
-             // ✅ FIX: Removed client.release() here
              return res.status(400).json({ message: 'Error: The password reset link has expired or is invalid. Please request a new link.' });
         }
 
@@ -192,7 +193,6 @@ router.post('/reset-password', async (req, res) => {
 
         if (!user) {
             await client.query('ROLLBACK');
-            // ✅ FIX: Removed client.release() here
             return res.status(400).json({ message: 'Invalid password reset link. Already used or revoked.' });
         }
         
@@ -219,10 +219,8 @@ router.post('/reset-password', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Reset Password Server Error:', err);
-        // ✅ FIX: Removed client.release() here
         res.status(500).json({ message: 'An internal error occurred during password update.' });
     } finally {
-        // ✅ Only client.release() call remains here
         client.release(); 
     }
 });

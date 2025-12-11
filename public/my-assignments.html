@@ -68,8 +68,12 @@
 
         /**
          * Determines the assignment status based on due date and completion date.
+         * @param {string} dueDateStr - The assignment due date.
+         * @param {string} completionDateStr - The submission date (renamed from submission_date).
+         * @param {string} currentStatus - Status provided by the backend.
          */
         function getAssignmentStatus(dueDateStr, completionDateStr, currentStatus) {
+            // ✅ FIX: Use completionDateStr (which is sub.created_at from backend)
             if (completionDateStr) return 'Completed';
             if (currentStatus === 'Completed') return 'Completed';
 
@@ -113,11 +117,15 @@
                 listElement.innerHTML = ''; // Clear loading message
 
                 assignments.forEach(assignment => {
-                    const status = getAssignmentStatus(assignment.due_date, assignment.completion_date, assignment.status);
+                    // ✅ FIX: Read the completion date from the new column name (completion_date)
+                    const completionDateStr = assignment.completion_date; 
+                    
+                    const status = getAssignmentStatus(assignment.due_date, completionDateStr, assignment.submission_status);
+                    
                     const dueDate = assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'N/A';
-                    const completionDate = assignment.completion_date ? new Date(assignment.completion_date).toLocaleDateString() : 'N/A';
+                    const completionDate = completionDateStr ? new Date(completionDateStr).toLocaleDateString() : 'N/A';
 
-                    const actionUrl = `/student/module-viewer.html?id=${assignment.module_id}`;
+                    const actionUrl = `/student/assignment-viewer.html?id=${assignment.assignment_id}`; // Assuming a dedicated viewer page
                     
                     listElement.innerHTML += `
                         <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -127,7 +135,7 @@
                                 </h5>
                                 <p class="mb-0 small text-muted">
                                     Subject: <strong>${assignment.subject_name || 'N/A'}</strong> &bull; 
-                                    Type: ${assignment.content_type || 'Module'}
+                                    Max Marks: ${assignment.max_marks || 'N/A'}
                                 </p>
                                 <p class="mb-0 small">Due: ${dueDate}</p>
                             </div>
@@ -135,7 +143,7 @@
                             <div class="d-flex flex-column align-items-end">
                                 <span class="status-badge status-${status} mb-2">${status.toUpperCase()}</span>
                                 <a href="${actionUrl}" class="btn btn-sm btn-outline-secondary">
-                                    ${status === 'Completed' ? 'View Content' : 'Start/Resume'}
+                                    ${status === 'Completed' ? 'View Grade/Content' : 'Start/Submit'}
                                 </a>
                             </div>
                         </li>

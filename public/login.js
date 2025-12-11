@@ -29,7 +29,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         }
 
         // 4. Validate Critical Data
-        // NOTE: We do NOT check data.userBranchId here because it might be empty for Admins
         if (data.token && data.role && data.activeSessionId) {
             
             console.log("Login Successful, saving session data...");
@@ -44,6 +43,12 @@ document.getElementById('login-form').addEventListener('submit', async function(
             const userId = data['user-id'] || data.userId || data.reference_id;
             if (userId) {
                 localStorage.setItem('profile-id', userId); 
+
+                // ✅ CRITICAL FIX: Save Student ID if the user is a student
+                if (data.role === 'Student') {
+                    // This ensures other student-specific modules (like exam schedule) find the ID.
+                    localStorage.setItem('student-id', userId); 
+                }
             }
 
             // --- C. Save Configuration IDs ---
