@@ -1,3 +1,5 @@
+// routes/announcements.js (FINAL FIX)
+
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -16,20 +18,22 @@ router.get('/role/:roleName', authenticateToken, async (req, res) => {
             SELECT title, content, created_at
             FROM announcements
             WHERE 
-                -- Check for announcements for the specific role (e.g., 'Student')
-                (visible_to_role ILIKE $1) 
+                -- ✅ FIX: Use ANY to check if the roleName is present in the array
+                ($1 = ANY (visible_to_role)) 
                 OR 
-                -- Also include announcements for 'All'
-                (visible_to_role ILIKE 'All')
+                -- ✅ FIX: Use the special 'All' string to check if the announcement targets everyone
+                ('All' = ANY (visible_to_role)) 
             ORDER BY created_at DESC
             LIMIT 5; -- Get the 5 most recent
         `;
         
-        const result = await pool.query(query, [roleName]);
+        // Pass the roleName parameter to the query
+        const result = await pool.query(query, [roleName]); 
         res.json(result.rows);
         
     } catch (error) {
         console.error(`Error fetching announcements for role ${roleName}:`, error);
+        // If the error is still '42P01' (table missing), this will show a 500
         res.status(500).json({ message: 'Server error while fetching announcements.' });
     }
 });
