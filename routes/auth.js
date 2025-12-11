@@ -106,12 +106,10 @@ router.post('/register', async (req, res) => {
 
 // =================================================================
 // 3. FORGOT PASSWORD (POST /api/auth/forgot-password)
-// (JWT Token Mechanism - Generates link and sends email)
 // =================================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     
-    // ✅ FIX: Use localhost:3000 for local dev frontend access
     const FRONTEND_URL = 'http://localhost:3005'; 
     const TOKEN_EXPIRY_MINUTES = 60; 
 
@@ -126,10 +124,11 @@ router.post('/forgot-password', async (req, res) => {
 
         if (!user) {
             await client.query('COMMIT');
+            // ✅ FIX: Removed client.release() here
             return res.json({ message: 'If a matching account was found, a password reset link has been sent to the associated email address.' });
         }
 
-        // 2. ✅ Use JWT for built-in expiry check
+        // 2. Use JWT for built-in expiry check
         const resetToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' }); 
         const expiryTime = moment().add(TOKEN_EXPIRY_MINUTES, 'minutes').toISOString();
 
@@ -144,20 +143,22 @@ router.post('/forgot-password', async (req, res) => {
         await sendPasswordResetEmail(user.email, resetURL); 
         
         await client.query('COMMIT');
+        // ✅ FIX: Removed client.release() here
         return res.json({ message: 'A password reset link has been sent to your registered email address.' });
 
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Forgot Password Server Error:', err);
+        // ✅ FIX: Removed client.release() here
         return res.status(500).json({ message: 'An internal error occurred during token generation or email dispatch.' });
     } finally {
-        client.release();
+        // ✅ Only client.release() call remains here
+        client.release(); 
     }
 });
 
 // =================================================================
 // 4. RESET PASSWORD (POST /api/auth/reset-password)
-// (JWT Token Mechanism - Validates token and updates password)
 // =================================================================
 router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body; 
@@ -170,20 +171,18 @@ router.post('/reset-password', async (req, res) => {
     try {
         await client.query('BEGIN'); 
 
-        // 1. JWT Validation (Handles expiry check automatically)
+        // 1. JWT Validation
         let decoded;
         try {
             decoded = jwt.verify(token, JWT_SECRET); 
         } catch (jwtError) {
              await client.query('ROLLBACK');
-             client.release();
-             // If JWT is expired or invalid
+             // ✅ FIX: Removed client.release() here
              return res.status(400).json({ message: 'Error: The password reset link has expired or is invalid. Please request a new link.' });
         }
 
-        // 2. Find the user based on the DB check (Check if the token string matches the stored token for this user)
+        // 2. Find the user based on the DB check
         const userResult = await client.query(
-            // ✅ FIX: Removed all comments from the SQL string to avoid 42601 syntax error
             `SELECT id FROM ${USERS_TABLE} 
              WHERE reset_password_token = $1 AND id = $2::uuid`,
             [token, decoded.id] 
@@ -193,6 +192,7 @@ router.post('/reset-password', async (req, res) => {
 
         if (!user) {
             await client.query('ROLLBACK');
+            // ✅ FIX: Removed client.release() here
             return res.status(400).json({ message: 'Invalid password reset link. Already used or revoked.' });
         }
         
@@ -201,7 +201,6 @@ router.post('/reset-password', async (req, res) => {
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         // 4. Update Password AND Revoke Token
-        // ✅ FIX: Removed all comments from the SQL string to avoid 42601 syntax error
         await client.query(`
             UPDATE ${USERS_TABLE} 
              SET password_hash = $1, 
@@ -220,9 +219,11 @@ router.post('/reset-password', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Reset Password Server Error:', err);
+        // ✅ FIX: Removed client.release() here
         res.status(500).json({ message: 'An internal error occurred during password update.' });
     } finally {
-        client.release();
+        // ✅ Only client.release() call remains here
+        client.release(); 
     }
 });
 
