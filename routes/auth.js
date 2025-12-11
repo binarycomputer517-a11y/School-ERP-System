@@ -1,11 +1,13 @@
+// routes/auth.js
+
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const crypto = require('crypto'); // Used for generating reset tokens (Database mechanism)
-const { pool } = require('../database'); // Database pool connection
-const { authenticateToken } = require('../authMiddleware'); // For protected routes
-const { sendPasswordResetEmail } = require('../utils/notificationService'); // Email sending utility
+const { pool } = require('../database'); 
+const { authenticateToken } = require('../authMiddleware');
+const { sendPasswordResetEmail } = require('../utils/notificationService');
+const moment = require('moment'); 
 
 // --- Configuration Constants ---
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -14,7 +16,6 @@ const USERS_TABLE = 'users';
 // Helper: Finds user by username or email and verifies password
 async function findUserAndVerifyPassword(loginInput, password) {
     const userResult = await pool.query(
-        // Searches by username OR email and ensures the user is active
         `SELECT id, username, password_hash, role, branch_id FROM ${USERS_TABLE} WHERE (username = $1 OR email = $1) AND is_active = TRUE`,
         [loginInput]
     );
@@ -22,7 +23,6 @@ async function findUserAndVerifyPassword(loginInput, password) {
     const user = userResult.rows[0];
     if (!user) return null;
     
-    // Compares the provided password with the stored hash
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
     return passwordMatch ? user : null;
 }
@@ -35,22 +35,20 @@ router.post('/login', async (req, res) => {
     const password = req.body.password;
     
     try {
-        // --- A. NORMAL LOGIN ---
         const user = await findUserAndVerifyPassword(loginInput, password);
 
         if (!user) return res.status(401).json({ message: 'Invalid username or password.' });
         
-        // --- B. Fetch Active Session (Necessary for frontend context) ---
+        // --- Fetch Active Session ---
         let activeSessionId = null;
         try {
             const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
             activeSessionId = sessionRes.rows[0]?.id || null;
         } catch (e) {
-            // Log this, but don't fail login if the session table is missing
             console.warn("Active Session ID could not be retrieved.");
         }
         
-        // --- C. Generate Token (Payload includes ID, Role, Branch) ---
+        // --- Generate Token ---
         const tokenPayload = { 
             id: user.id,
             role: user.role, 
@@ -59,17 +57,16 @@ router.post('/login', async (req, res) => {
         
         const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' });
 
-        // --- D. Send Response ---
+        // --- Send Response ---
         const responsePayload = {
             token: token,
             role: user.role, 
             username: user.username,
-            'user-id': user.id, // For frontend compatibility
+            'user-id': user.id, 
             userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',     
         };
 
-        // Update last login timestamp
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
         return res.status(200).json(responsePayload);
         
@@ -80,18 +77,16 @@ router.post('/login', async (req, res) => {
 });
 
 // =================================================================
-// 2. USER REGISTRATION ROUTE (Placeholder - requires auth check for actual use)
+// 2. USER REGISTRATION ROUTE (Placeholder)
 // =================================================================
 router.post('/register', async (req, res) => {
     const { username, password, role, email } = req.body;
     if (!username || !password || !role) return res.status(400).json({ message: 'Missing required fields.' });
 
     try {
-        // Use SALT_ROUNDS from environment variables
         const saltRounds = parseInt(process.env.SALT_ROUNDS || 10);
         const passwordHash = await bcrypt.hash(password, saltRounds);
         
-        // TODO: Replace with dynamic/configured default branch ID
         const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
 
         const query = `
@@ -111,32 +106,35 @@ router.post('/register', async (req, res) => {
 
 // =================================================================
 // 3. FORGOT PASSWORD (POST /api/auth/forgot-password)
-// (Database Token Mechanism - Generates link and sends email)
+// (JWT Token Mechanism - Generates link and sends email)
 // =================================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
-    const TOKEN_EXPIRY_MINUTES = 60; 
-    // 🚨 IMPORTANT: Use the actual URL of your deployed frontend (e.g., https://erp.yourschool.com)
+    
+    // ✅ FIX: Use localhost:3000 for local dev frontend access
     const FRONTEND_URL = 'http://localhost:3005'; 
+    const TOKEN_EXPIRY_MINUTES = 60; 
 
     if (!email) return res.status(400).json({ message: 'Email address is required.' });
+    const client = await pool.connect();
 
     try {
-        const result = await pool.query(`SELECT id, email FROM ${USERS_TABLE} WHERE email = $1 AND is_active = TRUE`, [email]);
+        await client.query('BEGIN');
+        
+        const result = await client.query(`SELECT id, email FROM ${USERS_TABLE} WHERE email = $1 AND is_active = TRUE`, [email]);
         const user = result.rows[0];
 
-        // 1. Safety Check (Always return a success message if the user is not found)
         if (!user) {
-            // Prevents attackers from verifying valid email addresses
+            await client.query('COMMIT');
             return res.json({ message: 'If a matching account was found, a password reset link has been sent to the associated email address.' });
         }
 
-        // 2. Generate Unique Token (using crypto, not JWT)
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const expiryTime = new Date(Date.now() + TOKEN_EXPIRY_MINUTES * 60 * 1000); 
+        // 2. ✅ Use JWT for built-in expiry check
+        const resetToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' }); 
+        const expiryTime = moment().add(TOKEN_EXPIRY_MINUTES, 'minutes').toISOString();
 
-        // 3. Store Token in Database (Revocable Token)
-        await pool.query(
+        // 3. Store Token in Database 
+        await client.query(
             `UPDATE ${USERS_TABLE} SET reset_password_token = $1, reset_token_expiry = $2 WHERE id = $3::uuid`,
             [resetToken, expiryTime, user.id]
         );
@@ -145,70 +143,95 @@ router.post('/forgot-password', async (req, res) => {
         const resetURL = `${FRONTEND_URL}/reset-password.html?token=${resetToken}`;
         await sendPasswordResetEmail(user.email, resetURL); 
         
+        await client.query('COMMIT');
         return res.json({ message: 'A password reset link has been sent to your registered email address.' });
 
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Forgot Password Server Error:', err);
-        // If email sending failed, inform the user about the internal error
         return res.status(500).json({ message: 'An internal error occurred during token generation or email dispatch.' });
+    } finally {
+        client.release();
     }
 });
 
 // =================================================================
 // 4. RESET PASSWORD (POST /api/auth/reset-password)
-// (Database Token Mechanism - Validates token and updates password)
+// (JWT Token Mechanism - Validates token and updates password)
 // =================================================================
 router.post('/reset-password', async (req, res) => {
-    // Frontend sends 'token' and 'password' (newPassword is mapped to password in frontend JS)
     const { token, password } = req.body; 
+    const client = await pool.connect();
 
     if (!token || !password) {
         return res.status(400).json({ message: 'Token and new password are required.' });
     }
 
     try {
-        // 1. Validate Token and Expiry against Database (Check if token exists and is not expired)
-        const userResult = await pool.query(
-            `SELECT id FROM ${USERS_TABLE} WHERE reset_password_token = $1 AND reset_token_expiry > CURRENT_TIMESTAMP`,
-            [token]
+        await client.query('BEGIN'); 
+
+        // 1. JWT Validation (Handles expiry check automatically)
+        let decoded;
+        try {
+            decoded = jwt.verify(token, JWT_SECRET); 
+        } catch (jwtError) {
+             await client.query('ROLLBACK');
+             client.release();
+             // If JWT is expired or invalid
+             return res.status(400).json({ message: 'Error: The password reset link has expired or is invalid. Please request a new link.' });
+        }
+
+        // 2. Find the user based on the DB check (Check if the token string matches the stored token for this user)
+        const userResult = await client.query(
+            // ✅ FIX: Removed all comments from the SQL string to avoid 42601 syntax error
+            `SELECT id FROM ${USERS_TABLE} 
+             WHERE reset_password_token = $1 AND id = $2::uuid`,
+            [token, decoded.id] 
         );
 
         const user = userResult.rows[0];
 
         if (!user) {
-            // Handles invalid, expired, or already-used tokens
-            return res.status(400).json({ message: 'Invalid or expired password reset link. Please request a new one.' });
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: 'Invalid password reset link. Already used or revoked.' });
         }
         
-        // 2. Hash New Password
+        // 3. Hash New Password
         const saltRounds = parseInt(process.env.SALT_ROUNDS || 10);
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // 3. Update Password AND Revoke Token
-        await pool.query(
-            `UPDATE ${USERS_TABLE} 
+        // 4. Update Password AND Revoke Token
+        // ✅ FIX: Removed all comments from the SQL string to avoid 42601 syntax error
+        await client.query(`
+            UPDATE ${USERS_TABLE} 
              SET password_hash = $1, 
                  reset_password_token = NULL, 
                  reset_token_expiry = NULL, 
                  updated_at = CURRENT_TIMESTAMP 
-             WHERE id = $2::uuid`, 
-            [hashedPassword, user.id]
-        );
+             WHERE id = $2::uuid
+        `, [
+            hashedPassword, 
+            user.id
+        ]);
 
+        await client.query('COMMIT');
         res.json({ message: 'Password has been updated successfully.' });
         
     } catch (err) {
+        await client.query('ROLLBACK');
         console.error('Reset Password Server Error:', err);
         res.status(500).json({ message: 'An internal error occurred during password update.' });
+    } finally {
+        client.release();
     }
 });
+
 
 // =================================================================
 // 5. VALIDATE TOKEN (PROFILE) (GET /api/auth/me)
 // =================================================================
 router.get('/me', authenticateToken, async (req, res) => {
     try {
-        // req.user comes from authMiddleware which already verified the token payload
         const user = await pool.query('SELECT id, username, role, email FROM users WHERE id = $1', [req.user.id]);
         if (user.rows.length === 0) return res.status(404).json({ message: 'User not found' });
         res.json({ user: user.rows[0] });
