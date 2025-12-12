@@ -552,6 +552,55 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
 });
 
 // =========================================================
+// 8.5. GET: Students by Course/Batch (For Marks Entry - FINAL FIX)
+// =========================================================
+
+/**
+ * @route   GET /api/students/course/:courseId/batch/:batchId
+ * @desc    Get list of enrolled students for a specific course and batch (used by Marks Entry).
+ * @access  Private (Admin, Teacher)
+ */
+router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator']), async (req, res) => {
+    const { courseId, batchId } = req.params;
+    const safeCourseId = toUUID(courseId);
+    const safeBatchId = toUUID(batchId);
+
+    if (!safeCourseId || !safeBatchId) {
+        return res.status(400).json({ message: 'Invalid Course ID or Batch ID format.' });
+    }
+
+    try {
+        const query = `
+            SELECT 
+                s.student_id AS id, 
+                s.first_name, 
+                s.last_name, 
+                s.admission_id,
+                s.roll_number,
+                (s.first_name || ' ' || s.last_name) AS full_name
+            FROM ${STUDENTS_TABLE} s
+            WHERE s.course_id = $1::uuid 
+              AND s.batch_id = $2::uuid 
+              AND s.status = 'Enrolled'
+            ORDER BY s.roll_number, s.first_name;
+        `;
+        // NOTE: Assuming 'batch_id' in students table is used for batch/section linkage
+        const result = await pool.query(query, [safeCourseId, safeBatchId]);
+
+        if (result.rows.length === 0) {
+            // Important: Return 200 with empty array, or 404/400. We choose 404 as the endpoint implies expected results.
+            return res.status(404).json({ message: 'No enrolled students found for this class and section.' });
+        }
+        
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Error fetching students by course/batch:', error);
+        res.status(500).json({ message: 'Failed to retrieve student list for marks entry.', details: error.message });
+    }
+});
+
+// =========================================================
 // 9. GET: Student Lookup (FIXED SYNTAX)
 // =========================================================
 
