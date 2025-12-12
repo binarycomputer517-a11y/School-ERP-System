@@ -1,7 +1,7 @@
 /**
  * SERVER.JS
  * Entry point for the School ERP System
- * Final Updated Version: Incorporating Size Limit (1MB) and all Feature Routers
+ * Final Updated Version: Incorporating Size Limit (10MB) and all Feature Routers
  */
 
 // ===================================
@@ -194,7 +194,7 @@ app.use('/api/assignments', assignmentsRouter);
 app.use('/api/online-learning', onlineLearningRouter);
 
 // Finance Modules
-app.use('/api/fees', feesRouter);
+app.use('/api/finance', feesRouter);      // ✅ FIX: Mapped feesRouter to /api/finance
 app.use('/api/payments', paymentsRouter);
 app.use('/api/invoices', invoicesRouter); 
 app.use('/api/payroll', payrollRouter);

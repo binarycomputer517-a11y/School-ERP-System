@@ -119,7 +119,10 @@
                 if (response.status === 403 || response.status === 401) {
                     // Specific error handling for Authentication/Authorization
                     const errorDetails = await response.json().catch(() => ({ message: 'No message provided' }));
-                    throw new Error(`Authentication/Authorization Failed. Status ${response.status}. Please check your token validity. ${errorDetails.message}`);
+                    // Alert the user and redirect to login
+                    alert(`Authentication/Authorization Failed. Status ${response.status}. Please log in again. ${errorDetails.message}`);
+                    window.location.href = '/login.html';
+                    return null; // Return null to prevent further execution
                 }
                 
                 if (!response.ok) {
@@ -190,11 +193,31 @@
         document.addEventListener('DOMContentLoaded', () => {
             
             const payload = decodeJwtPayload(token);
-            if (payload && payload.userId) {
-                currentUserId = payload.userId;
+            let idToUse = null;
+            
+            // ✅ FIX: Use payload.id (the core UUID) instead of the non-existent payload.userId
+            if (payload) {
+                idToUse = payload.id; 
+                
+                // Optional: If you use student_id for student-specific routes, you might prioritize it.
+                // For a general 'user' report, 'id' is safer.
+                if (!idToUse && payload.student_id) {
+                    idToUse = payload.student_id;
+                }
+            }
+
+            // --- Apply the extracted ID ---
+            if (idToUse) {
+                currentUserId = idToUse;
                 document.getElementById('reportStatus').textContent = `Ready to view records for User ID: ${currentUserId}`;
+                
+                // Optional: Automatically load attendance on page load for convenience
+                // loadUserAttendance(); 
             } else {
                  document.getElementById('reportStatus').textContent = "Error: Authentication token is missing or invalid. Please log in again.";
+                 // ❌ Triggers the alert for the missing ID, prompting the user to log in
+                 alert("Authentication required. User ID is missing. Please refresh the page or log in again.");
+                 window.location.href = '/login.html'; // Redirect to login if ID is missing
             }
 
             // Set default date range (last 30 days)
@@ -208,7 +231,26 @@
             document.getElementById('startDate').value = formatDate(lastMonth);
             
             hideLoading();
+            
+            // Now load subjects for the dropdown (assuming API for subjects exists)
+            // loadSubjectsForDropdown(); 
         });
+
+        // Placeholder for loading subjects (requires a separate API route)
+        /*
+        async function loadSubjectsForDropdown() {
+            const subjects = await handleApi('/subjects/list'); // Assuming this route exists
+            if (subjects) {
+                const select = document.getElementById('subjectSelect');
+                subjects.forEach(sub => {
+                    const option = document.createElement('option');
+                    option.value = sub.id;
+                    option.textContent = sub.subject_name;
+                    select.appendChild(option);
+                });
+            }
+        }
+        */
     </script>
     <script src="js/global-config.js"></script>
 </body>

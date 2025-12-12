@@ -1332,6 +1332,46 @@ router.get('/student/:studentId/receipts', authenticateToken, authorize(['Studen
     }
 });
 
-// ... (Rest of the file remains the same) ...
+/**
+ * 3.4 GET STUDENT SCHOLARSHIPS
+ * @route   GET /api/fees/student/:studentId/scholarships
+ * @desc    Fetches scholarship application/award details for a specific student.
+ * @access  Private (Student, Admin, Finance)
+ */
+router.get('/student/:studentId/scholarships', authenticateToken, authorize(['Student', 'Admin', 'Finance', 'student']), async (req, res) => {
+    const { studentId } = req.params;
+    
+    // Security Check (Self-view or authorized role)
+    const isSelf = String(req.user.id) === studentId;
+    const isAuthorized = req.user.role.includes('admin') || req.user.role.includes('finance');
+    
+    if (!isSelf && !isAuthorized) {
+        return res.status(403).json({ message: 'Forbidden: Access denied to other student records.' });
+    }
 
+    try {
+        const query = `
+            SELECT 
+                ss.scholarship_id,
+                sc.scholarship_name, 
+                ss.application_date,
+                ss.status,
+                ss.award_amount,
+                ss.next_disbursal_date
+            FROM student_scholarships ss
+            -- Assuming the student_scholarships table uses student_id for linking
+            JOIN scholarships sc ON ss.scholarship_id = sc.id 
+            WHERE ss.student_id = $1::uuid
+            ORDER BY ss.application_date DESC;
+        `;
+        
+        // Use studentId (which is the UUID) for the query
+        const { rows } = await pool.query(query, [studentId]); 
+
+        res.status(200).json(rows);
+    } catch (error) {
+        console.error('Error fetching student scholarship:', error);
+        res.status(500).json({ message: 'Failed to retrieve scholarship status due to internal server error.' });
+    }
+});
 module.exports = router;

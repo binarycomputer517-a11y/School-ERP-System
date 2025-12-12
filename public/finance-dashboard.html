@@ -190,7 +190,8 @@
 
 <script>
     const token = localStorage.getItem('erp-token');
-    const API_BASE_URL = '/api';
+    // ✅ FIX: The backend is mapped to /api/finance, so we use that.
+    const API_BASE_URL = '/api/finance'; 
     
     // Auth Check
     if (!token) window.location.href = '/login.html';
@@ -202,7 +203,8 @@
         btn.innerText = '...';
         btn.disabled = true;
 
-        fetch(`${API_BASE_URL}/fees/receipt/${txnId.trim()}`, {
+        // ✅ FIX: Use API_BASE_URL
+        fetch(`${API_BASE_URL}/receipt/${txnId.trim()}`, {
              headers: { 'Authorization': `Bearer ${token}` }
         })
         .then(res => res.ok ? res.blob() : Promise.reject('Receipt not found.'))
@@ -221,10 +223,11 @@
     async function loadStats() {
         const today = new Date().toISOString().split('T')[0];
         const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-
+        
         try {
             // Revenue Today
-            const tRes = await fetch(`${API_BASE_URL}/fees/history?startDate=${today}&endDate=${today}`, { headers: { 'Authorization': `Bearer ${token}` }});
+            // ✅ FIX: Use API_BASE_URL
+            const tRes = await fetch(`${API_BASE_URL}/history?startDate=${today}&endDate=${today}`, { headers: { 'Authorization': `Bearer ${token}` }});
             if(tRes.ok) {
                 const data = await tRes.json();
                 const total = data.reduce((s, i) => s + parseFloat(i.amount), 0);
@@ -232,7 +235,8 @@
             }
 
             // Month Revenue
-            const mRes = await fetch(`${API_BASE_URL}/fees/history?startDate=${firstDay}&endDate=${today}`, { headers: { 'Authorization': `Bearer ${token}` }});
+            // ✅ FIX: Use API_BASE_URL
+            const mRes = await fetch(`${API_BASE_URL}/history?startDate=${firstDay}&endDate=${today}`, { headers: { 'Authorization': `Bearer ${token}` }});
             if(mRes.ok) {
                 const data = await mRes.json();
                 const total = data.reduce((s, i) => s + parseFloat(i.amount), 0);
@@ -240,7 +244,8 @@
             }
 
             // Outstanding Dues
-            const sRes = await fetch(`${API_BASE_URL}/fees/reports/dashboard-stats`, { headers: { 'Authorization': `Bearer ${token}` }});
+            // ✅ FIX: Use API_BASE_URL
+            const sRes = await fetch(`${API_BASE_URL}/reports/dashboard-stats`, { headers: { 'Authorization': `Bearer ${token}` }});
             if(sRes.ok) {
                 const stats = await sRes.json();
                 document.getElementById('metric-outstanding-dues').innerText = `₹${parseFloat(stats.total_outstanding || 0).toLocaleString('en-IN')}`;

@@ -1,11 +1,10 @@
-// routes/reportcard.js
+// routes/reportCard.js
 
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
-// NOTE: You must install Puppeteer (npm install puppeteer) and uncomment the line below 
-const puppeteer = require('puppeteer'); // UNCOMMENTED and REQUIRED
+const puppeteer = require('puppeteer'); 
 
 
 // =========================================================
@@ -24,10 +23,11 @@ async function fetchReportDetails(studentId, examId) {
             c.course_name, b.batch_name, 
             e.exam_name, e.exam_date
         FROM students s
-        JOIN courses c ON s.course_id = c.id
-        JOIN batches b ON s.batch_id = b.id
-        JOIN exams e ON e.id = $2
-        WHERE s.id = $1;
+        LEFT JOIN courses c ON s.course_id = c.id
+        LEFT JOIN batches b ON s.batch_id = b.id
+        LEFT JOIN exams e ON e.id = $2::uuid
+        -- FIX: Use s.student_id (or the primary key used in the students table)
+        WHERE s.student_id = $1::uuid; 
     `;
     const headerResult = await pool.query(headerQuery, [studentId, examId]);
     if (headerResult.rows.length === 0) {
@@ -47,9 +47,9 @@ async function fetchReportDetails(studentId, examId) {
             es.max_marks AS total_max_marks,
             m.is_absent
         FROM marks m
-        JOIN subjects sub ON m.subject_id = sub.id
+        LEFT JOIN subjects sub ON m.subject_id = sub.id
         LEFT JOIN exam_schedules es ON m.exam_id = es.exam_id AND m.subject_id = es.subject_id
-        WHERE m.student_id = $1 AND m.exam_id = $2
+        WHERE m.student_id = $1::uuid AND m.exam_id = $2::uuid
         ORDER BY sub.subject_code;
     `;
     const marksResult = await pool.query(marksDetailQuery, [studentId, examId]);
@@ -79,7 +79,7 @@ async function fetchReportDetails(studentId, examId) {
 
 
 // =========================================================
-// 1. REPORT CARD AVAILABLE EXAMS (Dropdown Data)
+// 1. REPORT CARD AVAILABLE EXAMS (Dropdown Data) - FINAL FIX
 // =========================================================
 
 /**
@@ -91,7 +91,6 @@ router.get('/exams/student/:studentId', authenticateToken, authorize(['Admin', '
     const { studentId } = req.params;
     
     try {
-        // Query to find all distinct exams for which this student has marks recorded.
         const query = `
             SELECT DISTINCT 
                 e.id AS exam_id, 
@@ -100,11 +99,12 @@ router.get('/exams/student/:studentId', authenticateToken, authorize(['Admin', '
                 c.course_name,
                 b.batch_name
             FROM marks m
-            JOIN exams e ON m.exam_id = e.id
-            JOIN students s ON m.student_id = s.id
+            LEFT JOIN exams e ON m.exam_id = e.id
+            -- FIX: Changed s.id to s.student_id to resolve "column s.id does not exist" error (Line 112)
+            LEFT JOIN students s ON m.student_id = s.student_id 
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
-            WHERE m.student_id = $1
+            WHERE m.student_id = $1::uuid 
             ORDER BY e.exam_date DESC;
         `;
         
@@ -112,7 +112,7 @@ router.get('/exams/student/:studentId', authenticateToken, authorize(['Admin', '
         
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching available exams for report card:', error);
+        console.error('SQL Error fetching available exams for report card:', error);
         res.status(500).json({ message: 'Failed to retrieve available exams for report card.' });
     }
 });

@@ -1,3 +1,5 @@
+// routes/onlineExam.js
+
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -14,17 +16,22 @@ const RESULTS_TABLE = 'student_quiz_results';
 // --- UTILITY FUNCTIONS FOR SECURITY ---
 async function checkAttemptOwnership(attemptId, studentId) {
     const result = await pool.query(
+        // Assuming student_id in ATTEMPT_TABLE stores the user's UUID
         `SELECT student_id, quiz_id FROM ${ATTEMPT_TABLE} WHERE attempt_id = $1;`,
         [attemptId]
     );
 
     if (result.rowCount === 0) {
         console.error(`Attempt ownership check failed: Attempt ID ${attemptId} not found.`);
-        throw new Error('Attempt not found or unauthorized.', 404);
+        const error = new Error('Attempt not found or unauthorized.');
+        error.status = 404;
+        throw error;
     }
     if (String(result.rows[0].student_id) !== String(studentId)) {
         console.error(`Attempt ownership check failed: Attempt ID ${attemptId} belongs to student ${result.rows[0].student_id}, but accessed by student ${studentId}.`);
-        throw new Error('Unauthorized access to this attempt.', 403);
+        const error = new Error('Unauthorized access to this attempt.');
+        error.status = 403;
+        throw error;
     }
     return result.rows[0]; // Returns { student_id, quiz_id }
 }
@@ -340,7 +347,7 @@ router.put('/quizzes/:id/link-questions', authenticateToken, authorize(['Super A
  * @access  Private (Student)
  */
 router.post('/exam/start', authenticateToken, authorize(['Student']), async (req, res) => {
-    const student_id = req.user.reference_id || req.user.id; 
+    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
     const { quiz_id, live_image_data, room_number, system_id } = req.body;
 
     if (!student_id || !quiz_id) { 
@@ -424,7 +431,7 @@ router.post('/exam/start', authenticateToken, authorize(['Student']), async (req
  */
 router.get('/attempts/:attemptId/questions', authenticateToken, authorize(['Student']), async (req, res) => {
     const { attemptId } = req.params;
-    const student_id = req.user.reference_id || req.user.userId || req.user.id; 
+    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
 
     try {
         // 1. SECURITY CHECK: Ensure the student owns the attempt and get quiz_id
@@ -466,7 +473,7 @@ router.get('/attempts/:attemptId/questions', authenticateToken, authorize(['Stud
  */
 router.post('/block-exam/:attemptId', authenticateToken, authorize(['Student']), async (req, res) => {
     const { attemptId } = req.params;
-    const student_id = req.user.reference_id || req.user.id; 
+    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
     const { reason } = req.body;
 
     try {
@@ -498,7 +505,7 @@ router.post('/block-exam/:attemptId', authenticateToken, authorize(['Student']),
  */
 router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student']), async (req, res) => {
     const { attemptId } = req.params;
-    const student_id = req.user.reference_id || req.user.id; 
+    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
     const { answers } = req.body; 
 
     if (!Array.isArray(answers)) {
@@ -619,15 +626,18 @@ router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student
  * @access  Private (Student)
  */
 router.get('/quizzes/student', authenticateToken, authorize(['Student']), async (req, res) => {
-    const studentId = req.user.reference_id; 
+    // This is the user UUID from the JWT payload
+    const studentId = req.user.student_id; 
 
     if (!studentId) {
+        // This is a safety check; should not happen with the fixed Auth middleware
         return res.status(403).json({ message: 'Forbidden: Student ID not found in token.' });
     }
 
     try {
         // Step 1: Find the student's course ID
-        const studentInfoQuery = 'SELECT course_id FROM students WHERE id = $1'; 
+        // FIX: The query now assumes students table links to users via user_id
+        const studentInfoQuery = 'SELECT course_id FROM students WHERE user_id = $1'; 
         const studentInfoResult = await pool.query(studentInfoQuery, [studentId]);
 
         if (studentInfoResult.rows.length === 0) {

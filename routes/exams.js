@@ -7,8 +7,7 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Roles Configuration ---
 const EXAM_MANAGER_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
-const EXAM_VIEWER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Teacher'];
-
+const EXAM_VIEWER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Teacher', 'Student'];
 // =======================================================================================
 // 1. EXAM CRUD ROUTES
 // =======================================================================================

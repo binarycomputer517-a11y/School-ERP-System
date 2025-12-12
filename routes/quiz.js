@@ -7,6 +7,17 @@ let monitoringInterval = null;
 let audioMonitor = null;
 
 // --- Helper Functions ---
+
+/**
+ * Helper to get URL parameter
+ */
+function getUrlParameter(name) {
+    name = name.replace(/[\[]/, '\\[').replace(/[\]]/, '\\]');
+    const regex = new RegExp('[\\?&]' + name + '=([^&#]*)');
+    const results = regex.exec(location.search);
+    return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
+}
+
 async function handleApi(url, method = 'GET', body = null) {
     const token = localStorage.getItem('erp-token');
     const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -20,6 +31,15 @@ async function handleApi(url, method = 'GET', body = null) {
     const response = await fetch(url, options);
     if (!response.ok) {
         const errorBody = await response.json().catch(() => ({ message: 'Server Error' }));
+        // Log the 403 error clearly, then throw
+        console.error(`API response failed with status ${response.status}:`, errorBody.message);
+        
+        // Handle token expiration/auth failure
+        if (response.status === 401 || response.status === 403) {
+            alert('Session expired or unauthorized. Please log in again.');
+            window.location.href = '/login.html';
+        }
+        
         throw new Error(`API call failed: ${errorBody.message}`);
     }
     return response.json();
@@ -63,6 +83,8 @@ function setupAudioMonitoring() {
         })
         .catch(err => {
             console.error("Audio access denied:", err);
+            // Non-critical block, but warns the user
+            document.getElementById('verification-message').textContent = "Warning: Audio access denied. Ensure headphones/mic are connected.";
         });
 }
 
@@ -72,7 +94,7 @@ function setupAudioMonitoring() {
 async function blockExam(reason) {
     if (attemptId) {
         clearInterval(monitoringInterval);
-        clearInterval(audioMonitor);
+        // Clear audio monitor logic if implemented
         
         // Report violation to the backend
         try {
@@ -102,22 +124,35 @@ async function startVerification() {
     const messageDiv = document.getElementById('verification-message');
     messageDiv.textContent = 'Verification in progress... (Checking credentials and live image)';
 
+    // ✅ FIX: Get LIVE Data from URL and Local Storage
+    const quizId = getUrlParameter('quiz'); 
+    const userId = localStorage.getItem('user-id') || localStorage.getItem('profile-id'); 
+    
+    if (!quizId || !userId) {
+        messageDiv.textContent = '❌ Missing Quiz ID or User ID. Please restart from the main quiz list.';
+        document.getElementById('start-verification-btn').disabled = false;
+        return;
+    }
+
     try {
-        // 1. Data Collection (MOCK DATA - Must be replaced with actual user session data)
+        // 1. Data Collection (FIXED)
         const studentData = {
-            student_id: 12345, 
-            quiz_id: 201,      
-            course_id: 10,
-            batch_id: 5,
-            room_number: 'R-A101',
+            quiz_id: quizId,
+            student_id: userId, // The user UUID from localStorage, which matches the JWT 'student_id'
+            
+            // Mock data for system identification
+            room_number: 'R-A101', 
             system_id: 'SYS-05',
-            live_image_data: await captureImage() // Live image for comparison
+            live_image_data: await captureImage()
         };
 
         // 2. API Call to Backend for Verification (Performs all checks: ID match, Schedule, FIM)
         const verificationResult = await handleApi(`${QUIZ_API}/exam/start`, 'POST', studentData);
 
         attemptId = verificationResult.attempt_id;
+        
+        // Display quiz details (e.g., title, time limit) on screen if needed
+        document.getElementById('quiz-title-display').textContent = verificationResult.quiz_details.title;
 
         // 3. Setup Proctored Monitoring (Motion/Sound/Focus)
         setupMonitoring(attemptId);
@@ -134,6 +169,8 @@ async function startVerification() {
     } catch (error) {
         messageDiv.textContent = `❌ Access Denied: ${error.message}`;
         document.getElementById('start-verification-btn').disabled = false;
+        // If start fails, clear attempt ID safety measure
+        attemptId = null; 
     }
 }
 
@@ -147,6 +184,11 @@ async function loadQuizQuestions(currentAttemptId) {
         const mcqArea = document.getElementById('mcq-area');
         mcqArea.innerHTML = '';
         
+        if (questions.length === 0) {
+             mcqArea.innerHTML = '<p class="text-center text-danger">No questions found for this exam.</p>';
+             return;
+        }
+
         questions.forEach((q, index) => {
             // Renders questions based on the structure defined in the SQL schema
             mcqArea.innerHTML += `
@@ -228,6 +270,9 @@ async function submitQuiz() {
 }
 
 // --- Initial setup on load ---
-document.addEventListener('DOMContentLoaded', async () => {
-    // Initial display logic
-});
+// NOTE: We don't call startVerification() automatically on DOMContentLoaded 
+// because we need the user to click the "Start Verification" button first.
+// The button in public/quiz.html should call startVerification().
+// document.addEventListener('DOMContentLoaded', async () => {
+//     // Initial display logic
+// });

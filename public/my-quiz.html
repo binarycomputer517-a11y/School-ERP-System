@@ -4,122 +4,92 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>My Available Exams & Quizzes</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f8f9fa; padding-top: 20px; }
-        .container { max-width: 900px; }
-        .quiz-card {
-            background-color: white;
-            border: 1px solid #dee2e6;
-            border-radius: .375rem;
-            margin-bottom: 1rem;
-            padding: 1.5rem;
-            box-shadow: 0 .125rem .25rem rgba(0,0,0,.075);
-        }
-        .quiz-card h5 { margin-bottom: 0.5rem; color: #0d6efd; }
-        .quiz-details span { margin-right: 15px; font-size: 0.9em; color: #6c757d; }
-        .start-button { float: right; }
-        .loading, .error { text-align: center; margin-top: 2rem; }
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 800px; margin: auto; background-color: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; }
+        .quiz-list { list-style: none; padding: 0; }
+        .quiz-item { padding: 10px; border: 1px solid #ddd; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; }
+        .quiz-item button { padding: 8px 15px; background-color: #007bff; color: white; border: none; cursor: pointer; }
+        .quiz-item button:hover { background-color: #0056b3; }
+        .loading { text-align: center; color: #555; }
+        .back-link { margin-bottom: 20px; display: inline-block; text-decoration: none; color: #007bff; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1 class="mb-4">My Available Exams & Quizzes</h1>
-        <a href="/student-dashboard.html">← Back to Dashboard</a>
-        <hr>
-
-        <div id="quiz-list-container">
-            <p class="loading">Loading available exams...</p>
-            </div>
+        <a href="/dashboard.html" class="back-link">&leftarrow; Back to Dashboard</a>
+        <h1>My Available Exams & Quizzes</h1>
+        <p class="loading">Loading available exams...</p>
+        <ul class="quiz-list" id="quiz-list"></ul>
     </div>
 
     <script>
-        // Helper function for API calls
-        async function handleApi(url, options = {}) {
-            // ⭐ Authentication relies purely on the token, which the server must validate
-            const token = localStorage.getItem('erp-token'); 
-            
-            if (!token) {
-                window.location.href = '/login.html'; 
-                throw new Error('Authentication token not found.');
-            }
-            options.headers = { ...options.headers, 'Authorization': `Bearer ${token}` };
-            
+        const token = localStorage.getItem('erp-token');
+        const studentId = localStorage.getItem('student_id');
+
+        if (!token || !studentId) {
+            alert('Session expired or unauthorized. Please log in again.');
+            window.location.href = '/login.html';
+        }
+
+        async function loadQuizzes() {
+            const loadingElement = document.querySelector('.loading');
+            const quizList = document.getElementById('quiz-list');
+            loadingElement.style.display = 'block';
+            quizList.innerHTML = '';
+
             try {
-                const response = await fetch(url, options);
+                // ✅ FIX: The route structure is /api/online-exam/student/:studentId/quizzes
+                const response = await fetch(`/api/online-exam/student/${studentId}/quizzes`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.status === 403) {
+                    throw new Error('Authorization failed. Token expired.');
+                }
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ message: response.statusText }));
-                    // This will correctly show the 403 error message from the server
-                    throw new Error(`API Error (${response.status}): ${errorData.message}`);
+                    throw new Error(`Failed to load quizzes: ${response.statusText}`);
                 }
-                if (response.status === 204) {
-                    return null; 
-                }
-                return response.json();
-            } catch (error) {
-                console.error("API Fetch Error:", error);
-                throw error; 
-            }
-        }
 
-        // Function to format date and time 
-        function formatDateTime(dateTimeString) {
-            if (!dateTimeString) return 'N/A';
-            try {
-                const options = { year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
-                return new Date(dateTimeString).toLocaleString('en-US', options);
-            } catch (e) {
-                return 'Invalid Date';
-            }
-        }
+                const quizzes = await response.json();
+                loadingElement.style.display = 'none';
 
-        // Main function to load quizzes
-        async function loadAvailableQuizzes() {
-            const quizListContainer = document.getElementById('quiz-list-container');
-            const token = localStorage.getItem('erp-token');
-
-            if (!token) {
-                quizListContainer.innerHTML = '<p class="error" style="color: red;">❌ Authentication required to view quizzes.</p>';
-                return;
-            }
-
-            // The API URL is the direct endpoint that relies on the TOKEN for student identification.
-            const apiUrl = '/api/online-exam/quizzes/student';
-
-            try {
-                const quizzes = await handleApi(apiUrl); 
-
-                if (!quizzes || quizzes.length === 0) {
-                    quizListContainer.innerHTML = '<p>No exams are currently available for you.</p>';
+                if (quizzes.length === 0) {
+                    quizList.innerHTML = '<p style="text-align: center;">No exams or quizzes are currently available.</p>';
                     return;
                 }
 
-                let quizHtml = '';
                 quizzes.forEach(quiz => {
-                    quizHtml += `
-                        <div class="quiz-card">
-                            <a href="/quiz.html?quiz=${quiz.id}" class="btn btn-success start-button">Start Exam</a>
-                            <h5>${quiz.title}</h5>
-                            <div class="quiz-details">
-                                <span><strong>Subject:</strong> ${quiz.subject_name || 'N/A'}</span>
-                                <span><strong>Duration:</strong> ${quiz.time_limit_minutes || 'N/A'} min</span>
-                                <span><strong>Available From:</strong> ${formatDateTime(quiz.available_from)}</span>
-                                <span><strong>Available Until:</strong> ${formatDateTime(quiz.available_to)}</span>
-                            </div>
-                        </div>
+                    const listItem = document.createElement('li');
+                    listItem.className = 'quiz-item';
+                    listItem.innerHTML = `
+                        <span><strong>${quiz.title}</strong> (${quiz.subject_name || 'General'}) - Available until: ${new Date(quiz.end_date).toLocaleDateString()}</span>
+                        <button onclick="startQuiz('${quiz.id}')">Start Exam</button>
                     `;
+                    quizList.appendChild(listItem);
                 });
-                quizListContainer.innerHTML = quizHtml;
 
             } catch (error) {
-                console.error('Failed to load quizzes:', error);
-                // Displays the specific server error message
-                quizListContainer.innerHTML = `<p class="error" style="color: red;">❌ Error loading exams: ${error.message}.</p>`;
+                console.error("Quiz Load Error:", error);
+                loadingElement.innerText = "Error loading data. Please try logging in again.";
+                if (error.message.includes('Token expired')) {
+                     alert('Session expired or unauthorized. Please log in again.');
+                     window.location.href = '/login.html';
+                }
             }
         }
 
-        // Run the function when the page loads
-        document.addEventListener('DOMContentLoaded', loadAvailableQuizzes);
+        function startQuiz(quizId) {
+            // Placeholder: Implement logic to navigate to the quiz interface
+            alert(`Starting Quiz: ${quizId}`);
+            // window.location.href = `/quiz-interface.html?quizId=${quizId}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', loadQuizzes);
     </script>
     <script src="js/global-config.js"></script>
 </body>
