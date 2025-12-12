@@ -651,4 +651,73 @@ router.post('/attendance', authenticateToken, authorize(['Admin', 'Super Admin']
     }
 });
 
+
+// =========================================================
+// 9. STUDENT/USER VIEW ROUTES (FIX FOR my-bus.html)
+// =========================================================
+
+/**
+ * @route   GET /api/transport/my-bus
+ * @desc    Fetch the current transport assignment for the logged-in student.
+ * @access  Private (Student, Super Admin)
+ */
+router.get('/my-bus', authenticateToken, authorize(['Student', 'Super Admin']), async (req, res) => {
+    const userId = req.user.id; // Logged-in User ID
+    
+    // IMPORTANT: Ensure your transport table constants are correctly defined at the top of transport.js
+    const STUDENTS_TABLE = 'students'; 
+    const ASSIGNMENTS_TABLE = 'student_transport_assignments'; 
+    const ROUTES_TABLE = 'transport_routes';
+    const VEHICLES_TABLE = 'transport_vehicles';
+    const DRIVERS_TABLE = 'transport_drivers';
+
+    try {
+        // 1. Get the student_id linked to the logged-in user_id
+        const studentRes = await pool.query(`SELECT student_id FROM ${STUDENTS_TABLE} WHERE user_id = $1::uuid`, [userId]);
+        const studentProfileId = studentRes.rows[0]?.student_id; 
+
+        if (!studentProfileId) {
+            return res.status(404).json({ message: 'Student profile not found or not linked.' });
+        }
+
+        // 2. Fetch the current active assignment details
+        const query = `
+            SELECT
+                a.id AS assignment_id, a.boarding_stop, a.dropping_stop,
+                r.route_name, v.vehicle_number, d.full_name AS driver_name,
+                r.route_schedule, r.monthly_fee
+            FROM ${ASSIGNMENTS_TABLE} a
+            JOIN ${ROUTES_TABLE} r ON a.route_id = r.id
+            JOIN ${VEHICLES_TABLE} v ON r.vehicle_id = v.id
+            LEFT JOIN ${DRIVERS_TABLE} d ON v.assigned_driver_id = d.id
+            WHERE a.student_id = $1::uuid AND a.is_active = TRUE;
+        `;
+        
+        const { rows } = await pool.query(query, [studentProfileId]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ message: 'No active bus assignment found for this student.' });
+        }
+        
+        // Add mock live location for demonstration
+        const responseData = {
+            ...rows[0],
+            liveLocation: { 
+                lat: 34.0522 + Math.random() * 0.05, 
+                lng: -118.2437 + Math.random() * 0.05 
+            },
+            status: 'In Transit'
+        };
+
+        res.status(200).json(responseData);
+
+    } catch (err) {
+        console.error('Error fetching student bus details:', err);
+        // If the error is 'column does not exist' (as seen in logs), the 500 error remains.
+        res.status(500).json({ error: 'Failed to retrieve transport details.', details: err.message });
+    }
+});
+
+
+
 module.exports = router;

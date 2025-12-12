@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hostel Leave Application</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css"> 
+    <style>
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
+        .container { max-width: 1000px; margin-top: 50px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #800080; border-bottom: 2px solid #800080; padding-bottom: 10px; margin-bottom: 30px; }
+        
+        .grid-2 { display: grid; grid-template-columns: 1fr 2fr; gap: 30px; }
+        
+        /* Form Card */
+        .card { 
+            border: 1px solid #ddd; 
+            padding: 20px; 
+            border-radius: 8px; 
+            background: #fdfdff;
+        }
+        .form-group { margin-bottom: 15px; }
+        .form-label { display: block; font-weight: bold; margin-bottom: 5px; }
+        .form-control { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+
+        /* Table Styles */
+        .table-responsive { margin-top: 30px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #800080; color: white; padding: 10px; text-align: left; }
+        td { border-bottom: 1px solid #eee; padding: 10px; }
+        
+        /* Status Badges */
+        .status-Pending { color: #ffc107; font-weight: bold; }
+        .status-Approved { color: #28a745; font-weight: bold; }
+        .status-Rejected { color: #dc3545; font-weight: bold; }
+        
+        .nav-links a { color: #0056b3; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role'); // Get role for client-side check
+        
+        // **Client-side check: Only allow Student role access**
+        if (!token || userRole !== 'Student') {
+            window.location.href = '/login.html';
+        }
+        
+        // NOTE: The server-side route POST /api/hostel/leave/apply will perform 
+        // the CRITICAL check to ensure the user is actively allocated to a hostel room.
+    </script>
+    
+    <div class="container">
+        <div class="nav-links">
+            <a href="/student-dashboard.html">← Back to Dashboard</a>
+        </div>
+        
+        <h1><i class="fas fa-bed"></i> Hostel Leave & Out-Pass</h1>
+        
+        <div class="grid-2">
+            <div class="card">
+                <h2>New Leave Request</h2>
+                <form id="leave-application-form">
+                    <div class="form-group">
+                        <label for="leave_type" class="form-label">Leave Type</label>
+                        <select id="leave_type" name="leave_type" class="form-control" required>
+                            <option value="Home Leave">Home Leave</option>
+                            <option value="Local Outing">Local Outing (Out-Pass)</option>
+                            <option value="Emergency">Emergency</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="reason" class="form-label">Reason for Leave *</label>
+                        <textarea id="reason" name="reason" class="form-control" rows="3" required></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label for="start_date" class="form-label">Start Date & Time *</label>
+                        <input type="datetime-local" id="start_date" name="start_date" class="form-control" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="end_date" class="form-label">End Date & Time *</label>
+                        <input type="datetime-local" id="end_date" name="end_date" class="form-control" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary" style="background-color: #800080; color: white;">
+                        <i class="fas fa-paper-plane"></i> Submit Request
+                    </button>
+                    <p id="form-status-message" class="text-center mt-3"></p>
+                </form>
+            </div>
+            
+            <div>
+                <h2>Leave History</h2>
+                <div class="table-responsive">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Type</th>
+                                <th>Dates</th>
+                                <th>Reason</th>
+                                <th>Status</th>
+                                <th>Warden Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="request-history-tbody">
+                            <tr><td colspan="5" class="text-center text-info">Loading requests...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = '/api/hostel';
+        const AUTH_TOKEN = localStorage.getItem('erp-token');
+        const historyTbody = document.getElementById('request-history-tbody');
+        const formStatus = document.getElementById('form-status-message');
+        
+        // --- Helper API Fetcher ---
+        async function api(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${AUTH_TOKEN}` };
+            const response = await fetch(url, { ...options, headers });
+            
+            if (response.status === 401 || response.status === 403) {
+                // If unauthorized or forbidden after a request, redirect to login
+                localStorage.clear();
+                window.location.href = '/login';
+                throw new Error('Session Expired/Unauthorized.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                throw new Error(errorBody.message);
+            }
+            return response.json();
+        }
+
+        // --- 1. Load History ---
+        async function fetchRequests() {
+            historyTbody.innerHTML = '<tr><td colspan="5" class="text-center text-info"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+            try {
+                const requests = await api(`${API_BASE_URL}/leave/my-requests`);
+                
+                if (requests.length === 0) {
+                    historyTbody.innerHTML = '<tr><td colspan="5" class="text-center text-secondary">No previous leave requests found.</td></tr>';
+                    return;
+                }
+
+                historyTbody.innerHTML = requests.map(req => {
+                    const statusClass = `status-${req.status}`;
+                    const dates = `${new Date(req.start_time).toLocaleDateString()} to ${new Date(req.end_time).toLocaleDateString()}`;
+                    
+                    // Truncate long reason text
+                    const displayReason = req.reason.length > 50 ? req.reason.substring(0, 50) + '...' : req.reason;
+                    
+                    return `
+                        <tr>
+                            <td>${req.leave_type}</td>
+                            <td>${dates}</td>
+                            <td>${displayReason}</td>
+                            <td><span class="${statusClass}">${req.status}</span></td>
+                            <td>${req.warden_notes || 'N/A'}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error("Error fetching leave requests:", error);
+                // The 403 error (Not a hostel student) will be caught here
+                historyTbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger">Error fetching history: ${error.message}. (Are you allocated to a hostel?)</td></tr>`;
+            }
+        }
+
+        // --- 2. Handle Form Submission ---
+        document.getElementById('leave-application-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            
+            formStatus.textContent = 'Submitting...';
+            formStatus.className = 'text-info mt-3';
+
+            // Simple validation
+            if (new Date(data.start_date) >= new Date(data.end_date)) {
+                 formStatus.textContent = 'Error: Start Date must be before End Date.';
+                 formStatus.className = 'text-danger mt-3';
+                 return;
+            }
+
+            try {
+                const result = await api(`${API_BASE_URL}/leave/apply`, {
+                    method: 'POST',
+                    body: JSON.stringify(data)
+                });
+                
+                formStatus.textContent = 'Request submitted successfully! Status: Pending';
+                formStatus.className = 'text-success mt-3';
+                form.reset();
+                fetchRequests(); // Refresh the list
+                
+            } catch (error) {
+                console.error("Leave Application Error:", error);
+                formStatus.textContent = `Submission Failed: ${error.message}`;
+                formStatus.className = 'text-danger mt-3';
+            }
+        });
+
+        document.addEventListener('DOMContentLoaded', fetchRequests);
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

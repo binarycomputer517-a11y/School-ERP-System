@@ -718,6 +718,72 @@ router.put('/fines/:circulationId/waive', authenticateToken, authorize(MANAGER_R
     }
 });
 
+
+/**
+ * @route   POST /api/library/request
+ * @desc    Handle request/issue of an available book.
+ * @access  Private (Student, Staff)
+ */
+router.post('/request', authenticateToken, authorize(LIBRARY_ROLES), async (req, res) => {
+    const { book_id } = req.body; // book_id is the catalog ID from the frontend
+    const userId = req.user.id;
+    
+    // NOTE: This is a simplified stub. Real implementation requires checking user limits, 
+    // finding an available inventory item, and creating a circulation record.
+
+    try {
+        // Step 1: Find the student's actual ID from the user ID
+        const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
+        const studentProfileId = studentRes.rows[0]?.student_id;
+
+        if (!studentProfileId) {
+            return res.status(400).json({ message: "User profile not found." });
+        }
+        
+        // Step 2: Find one available inventory item for this book_id
+        const inventoryRes = await pool.query(
+            `SELECT id, accession_number FROM ${INVENTORY_TABLE} WHERE book_id = $1 AND status = 'Available' LIMIT 1`, 
+            [book_id]
+        );
+
+        if (inventoryRes.rows.length === 0) {
+            // If none available, this should become a reservation instead
+            return res.status(409).json({ message: "Book is currently unavailable for immediate issue. Try reserving." });
+        }
+        
+        const inventoryId = inventoryRes.rows[0].id;
+        
+        // Step 3: Get config and calculate due date
+        const { maxDays } = await getFineConfig();
+        const dueDate = moment().add(maxDays, 'days').format('YYYY-MM-DD');
+
+        // Step 4: Create Circulation Record
+        const client = await pool.connect();
+        await client.query('BEGIN');
+        
+        const issueQuery = `
+            INSERT INTO ${CIRCULATION_TABLE} (inventory_id, student_id, issue_date, due_date)
+            VALUES ($1, $2, CURRENT_DATE, $3)
+            RETURNING id, due_date;
+        `;
+        const issueResult = await client.query(issueQuery, [inventoryId, studentProfileId, dueDate]);
+        
+        // Step 5: Update Inventory Status
+        await client.query(`UPDATE ${INVENTORY_TABLE} SET status = 'Issued' WHERE id = $1`, [inventoryId]);
+        await client.query('COMMIT');
+        
+        res.status(200).json({ 
+            message: 'Book issued successfully.', 
+            circulation_id: issueResult.rows[0].id, 
+            due_date: issueResult.rows[0].due_date 
+        });
+
+    } catch (error) {
+        // ... (error handling)
+        res.status(500).json({ message: 'Failed to process request.', details: error.message });
+    }
+});
+
 // =========================================================
 // 6. RENEWAL/RESERVATION (Reservation Stubs)
 // =========================================================

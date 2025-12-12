@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track My Child's Bus</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <title>Track My Bus (Live)</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link rel="stylesheet" href="/css/style.css">
     <style>
         /* Container and Map Styles */
         .container { max-width: 1000px; margin: 40px auto; padding: 20px; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; background-color: #FFFFFF; }
@@ -26,7 +27,7 @@
 </script>
 
 <div class="container">
-    <h1>Track My Child's Bus</h1>
+    <h1>Track My Bus (Live)</h1>
     <div class="nav-links"><a href="/student-dashboard.html">← Back to Dashboard</a></div> 
     
     <div id="error-box" style="display: none;"></div>
@@ -37,6 +38,7 @@
             <p><strong>Schedule:</strong> <span id="route-schedule">...</span></p>
             <p><strong>Vehicle Number:</strong> <span id="vehicle-number">...</span></p>
             <p><strong>Driver Name:</strong> <span id="driver-name">...</span></p>
+            <p><strong>Status:</strong> <span id="status" class="badge bg-warning">Initializing...</span></p>
             <div class="last-updated">Last Updated: <span id="last-updated-time">...</span></div>
         </div>
         <div id="map"></div>
@@ -45,8 +47,10 @@
 
 <script>
     const authHeaders = { 'Authorization': `Bearer ${token}` };
-    const DEFAULT_LOCATION = [26.72, 88.43]; // Darjeeling area, if no data is available
+    // Default location (e.g., Kolkata or a central school location)
+    const DEFAULT_LOCATION = [22.57, 88.36]; 
     
+    // Initialize map on the default location (will be updated by bus data)
     const map = L.map('map').setView(DEFAULT_LOCATION, 13); 
     let busMarker = null;
     let initialLoadComplete = false;
@@ -55,7 +59,7 @@
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
     }).addTo(map);
 
-    // Custom icon for the bus
+    // Custom icon for the bus (using SVG for better styling)
     function createBusIcon() {
         return L.divIcon({
             html: `
@@ -80,8 +84,7 @@
             const res = await fetch('/api/transport/my-bus', { headers: authHeaders });
 
             if (!res.ok) {
-                // Handle 404 (No assignment) or 403/500 errors gracefully
-                const errorBody = await res.json().catch(() => ({ message: 'No assignment or server error.' }));
+                const errorBody = await res.json().catch(() => ({ message: res.statusText || 'No assignment or server error.' }));
                 
                 trackingInfo.style.display = 'none';
                 errorBox.style.display = 'block';
@@ -89,13 +92,11 @@
                 let errorMessage;
                 if (res.status === 404) {
                     errorMessage = 'No active bus assignment found for your profile.';
-                } else if (res.status === 500) {
-                    errorMessage = `Server Error: ${errorBody.details || errorBody.message || 'Check your database configuration.'}`;
                 } else {
-                    errorMessage = `Access Denied: ${errorBody.message || 'Please log in again.'}`;
+                    errorMessage = `Server Error (${res.status}): ${errorBody.details || errorBody.message || 'Could not retrieve data.'}`;
                 }
                 
-                errorBox.innerHTML = `<p class="error-message">${errorMessage}</p>`;
+                errorBox.innerHTML = `<p class="error-message"><i class="fas fa-exclamation-triangle"></i> ${errorMessage}</p>`;
                 return;
             }
 
@@ -107,9 +108,15 @@
 
             // --- Update Text Details ---
             document.getElementById('route-name').textContent = data.route_name || 'N/A';
-            document.getElementById('route-schedule').textContent = data.route_schedule || 'N/A'; // FIX: Display route schedule
+            document.getElementById('route-schedule').textContent = data.route_schedule || 'N/A';
             document.getElementById('vehicle-number').textContent = data.vehicle_number || 'N/A';
             document.getElementById('driver-name').textContent = data.driver_name || 'N/A';
+            
+            const statusElement = document.getElementById('status');
+            const statusText = data.status || 'Active';
+            statusElement.textContent = statusText;
+            statusElement.className = `badge ${statusText === 'In Transit' ? 'bg-primary' : statusText === 'Stopped' ? 'bg-warning' : 'bg-success'}`;
+            
             document.getElementById('last-updated-time').textContent = new Date().toLocaleTimeString();
 
             // --- Update Map Location ---
@@ -119,7 +126,7 @@
             const latLng = [lat, lng];
 
             if (isNaN(lat) || isNaN(lng)) {
-                console.warn('Invalid coordinates received from API.');
+                console.warn('Invalid coordinates received from API. Using default map location.');
                 if (!initialLoadComplete) map.setView(DEFAULT_LOCATION, 13);
                 return; 
             }
@@ -127,11 +134,11 @@
             if (!busMarker) {
                 // Initial marker creation
                 busMarker = L.marker(latLng, { icon: createBusIcon() }).addTo(map);
-                busMarker.bindPopup(`<b>${data.vehicle_number}</b><br>Status: ${data.status || 'Active'}`).openPopup();
+                busMarker.bindPopup(`<b>${data.vehicle_number}</b><br>Status: ${statusText}`).openPopup();
             } else {
                 // Update marker position
                 busMarker.setLatLng(latLng);
-                busMarker.getPopup().setContent(`<b>${data.vehicle_number}</b><br>Status: ${data.status || 'Active'}<br>Last updated: ${new Date().toLocaleTimeString()}`);
+                busMarker.getPopup().setContent(`<b>${data.vehicle_number}</b><br>Status: ${statusText}<br>Last updated: ${new Date().toLocaleTimeString()}`);
             }
             
             // --- Map Centering Logic ---
@@ -145,9 +152,11 @@
 
         } catch (error) {
             console.error('Failed to load bus details:', error);
-            trackingInfo.style.display = 'none';
-            errorBox.style.display = 'block';
-            errorBox.innerHTML = `<p class="error-message">Connection Error: Could not reach the service.</p>`;
+            if (!errorBox.style.display || errorBox.style.display === 'none') {
+                 trackingInfo.style.display = 'none';
+                 errorBox.style.display = 'block';
+                 errorBox.innerHTML = `<p class="error-message">Connection Error: Could not reach the service.</p>`;
+            }
         }
     }
 

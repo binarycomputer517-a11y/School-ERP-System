@@ -189,6 +189,7 @@
             <div class="user-controls">
                 <span id="current-date">...</span> | 
                 Role: <strong id="user-role-display">Guest</strong> |
+                <a href="/admin-dashboard.html" class="btn btn-outline" style="padding: 2px 8px; font-size: 0.8em; margin-right: 5px;">Back to ERP</a>
                 <button class="btn btn-danger" onclick="logout()" style="padding: 2px 8px; font-size: 0.8em;">Logout</button>
             </div>
         </header>
@@ -224,7 +225,7 @@
                             <div class="card-body">
                                 <div class="form-group">
                                     <label class="form-label">Customer ID:</label>
-                                    <select id="wallet-id" class="form-control cust-dropdown"><option>Loading...</option></select>
+                                    <select id="wallet-id" class="form-control cust-dropdown" onchange="checkBal()"><option>Loading...</option></select>
                                 </div>
                                 <div class="digital-readout" id="bal-display">₹0.00</div>
                                 <button onclick="checkBal()" class="btn btn-outline w-full" style="margin-bottom: 15px;">Check Balance</button>
@@ -238,6 +239,7 @@
                                         </div>
                                     </div>
                                     <button onclick="topUp()" class="btn btn-success w-full">ADD FUNDS</button>
+                                    <p id="topup-status" class="error-message hidden"></p>
                                 </div>
                             </div>
                         </div>
@@ -270,6 +272,7 @@
                                     <select id="order-user-id" class="form-control cust-dropdown"><option>Loading...</option></select>
                                 </div>
                                 <button onclick="placeOrder()" class="btn btn-danger w-full">CONFIRM ORDER</button>
+                                <p id="order-status" class="error-message hidden"></p>
                             </div>
                         </div>
                     </div>
@@ -321,7 +324,7 @@
                                 </div>
                                 <div class="form-group"><label class="form-label">Select Item</label><select id="editor-item-select" class="form-control"><option>Select...</option></select></div>
                                 <div class="row form-group">
-                                    <select id="editor-meal-select" class="form-control" style="flex:2"><option>Breakfast</option><option>Lunch</option><option>Snack</option></select>
+                                    <select id="editor-meal-select" class="form-control" style="flex:2"><option>Breakfast</option><option>Lunch</option><option>Snack</option><option>Dinner</option></select>
                                     <button onclick="addToDaily()" class="btn btn-primary" style="flex:1">Add</button>
                                 </div>
                                 <div id="daily-list" style="background:#fff; border:2px inset #ccc; padding:10px; min-height:100px; margin-bottom:15px; font-family: 'Courier New', monospace;"></div>
@@ -329,6 +332,7 @@
                                     <button onclick="deleteDaily()" class="btn btn-danger col">Clear Day</button>
                                     <button onclick="saveDaily()" class="btn btn-warning col">Publish Menu</button>
                                 </div>
+                                <p id="planner-status" class="error-message hidden" style="margin-top:10px;"></p>
                             </div>
                         </div>
                     </div>
@@ -350,6 +354,7 @@
                                     <div class="col"><label class="form-label">Shift Type</label><select id="shift-select" class="form-control"><option>Loading...</option></select></div>
                                 </div>
                                 <button onclick="assignShift()" class="btn btn-success w-full">Add to Roster</button>
+                                <p id="shift-assign-status" class="error-message hidden" style="margin-top:10px;"></p>
                                 <div class="table-responsive" style="margin-top:20px; background: white;">
                                     <table id="schedule-table"><thead><tr><th>Shift</th><th>Name</th><th>Time</th><th></th></tr></thead><tbody></tbody></table>
                                 </div>
@@ -425,11 +430,27 @@
         let TOKEN = localStorage.getItem('token');
         let cart = [];
         let dailyMenuTemp = {};
+        let ALL_MENU_ITEMS = []; // Global store for POS menu data
+
+        // Utility function to show/hide messages
+        function toggleMessage(id, message, isError = true) {
+            const el = document.getElementById(id);
+            el.textContent = message;
+            el.classList.remove('hidden', 'btn-success', 'btn-danger');
+            el.classList.add(isError ? 'btn-danger' : 'btn-success');
+            el.style.display = 'block';
+            setTimeout(() => el.classList.add('hidden'), 5000);
+        }
 
         document.addEventListener('DOMContentLoaded', () => {
             const today = moment().format('YYYY-MM-DD');
             document.getElementById('current-date').innerText = moment().format('MMM Do, YYYY');
             document.querySelectorAll('input[type="date"]').forEach(i => i.value = today);
+
+            // Set default date range for reports (last 7 days)
+            document.getElementById('rep-start').value = moment().subtract(7, 'days').format('YYYY-MM-DD');
+            document.getElementById('rep-end').value = today;
+
 
             if (!TOKEN) document.getElementById('login-overlay').classList.remove('hidden');
             else initApp();
@@ -440,7 +461,10 @@
                     const res = await fetch(`${AUTH_API}/login`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username:document.getElementById('login-email').value, password:document.getElementById('login-pass').value}) });
                     const data = await res.json();
                     if(!res.ok) throw new Error(data.message);
-                    localStorage.setItem('token', data.token); localStorage.setItem('role', data.role); TOKEN = data.token;
+                    localStorage.setItem('token', data.token); 
+                    localStorage.setItem('role', data.role); 
+                    localStorage.setItem('user-role', data.role); // Ensure consistent role storage
+                    TOKEN = data.token;
                     document.getElementById('login-overlay').classList.add('hidden'); initApp();
                 } catch(err) { document.getElementById('login-error').innerText = err.message; document.getElementById('login-error').style.display='block'; }
             });
@@ -449,7 +473,7 @@
         function logout() { localStorage.clear(); location.reload(); }
         function initApp() {
             document.getElementById('user-role-display').innerText = localStorage.getItem('role') || 'User';
-            loadItems(); loadCustomers(); loadStaffAndShifts();
+            loadItems(); loadCustomers(); loadStaffAndShifts(); loadDailyMenuPOS();
             setInterval(() => { if(document.getElementById('kds').classList.contains('active')) loadKDS(); }, 10000);
         }
         async function api(url, opts={}) {
@@ -465,40 +489,360 @@
             document.getElementById(id).classList.add('active');
             btn.classList.add('active'); 
             if(id === 'kds') loadKDS();
+            if(id === 'reports') genReport();
         }
 
         // OPS
-        async function loadCustomers() { try { const u = await api(`${API}/customers`); const o='<option value="">-- Select --</option>'+u.map(x=>`<option value="${x.id}">${x.username} [${x.role}]</option>`).join(''); document.querySelectorAll('.cust-dropdown').forEach(s=>s.innerHTML=o); } catch(e){} }
-        async function checkBal() { try { const r = await api(`${API}/balance/${document.getElementById('wallet-id').value}`); document.getElementById('bal-display').innerText = `₹${r.current_balance}`; } catch(e){alert(e.message);} }
-        async function topUp() { try { await api(`${API}/top-up`, {method:'POST', body:JSON.stringify({user_id:document.getElementById('wallet-id').value, amount:document.getElementById('topup-amt').value, payment_method:document.getElementById('payment-method').value})}); alert("Success"); checkBal(); } catch(e){alert(e.message);} }
-        async function loadDailyMenuPOS() { const s=document.getElementById('pos-items'); try { const m=await api(`${API}/menu/${moment().format('YYYY-MM-DD')}`); s.innerHTML='<option value="">Select Item</option>'; m.forEach(g=>g.items.forEach(i=>{ const o=document.createElement('option'); o.value=i.menu_item_id; o.text=`${i.item_name} (₹${i.price})`; o.dataset.p=i.price; o.dataset.n=i.item_name; s.appendChild(o); })); } catch(e){alert("No Menu");} }
-        function addToCart() { const s=document.getElementById('pos-items'); const o=s.options[s.selectedIndex]; if(!o.value)return; const x=cart.find(i=>i.menu_item_id===o.value); if(x)x.quantity++; else cart.push({menu_item_id:o.value, name:o.dataset.n, price:parseFloat(o.dataset.p), quantity:1}); renderCart(); }
-        function renderCart() { const t=document.getElementById('cart-list'); t.innerHTML=''; let tot=0; if(cart.length===0)t.innerHTML='<tr><td colspan="3" style="text-align:center; padding:20px;">[ NO ITEMS ]</td></tr>'; else cart.forEach((i,x)=>{ tot+=i.price*i.quantity; t.innerHTML+=`<tr><td>${i.name} x${i.quantity}</td><td style="text-align:right">₹${(i.price*i.quantity).toFixed(2)}</td><td><i onclick="cart.splice(${x},1);renderCart()" class="fas fa-trash" style="color:red; cursor:pointer;"></i></td></tr>`}); document.getElementById('cart-total').innerText = `₹${tot.toFixed(2)}`; }
-        async function placeOrder() { try { const tot=cart.reduce((a,b)=>a+(b.price*b.quantity),0); await api(`${API}/order`, {method:'POST', body:JSON.stringify({user_id:document.getElementById('order-user-id').value, total_cost:tot, order_items:cart})}); alert("Order Sent!"); cart=[]; renderCart(); } catch(e){alert(e.message);} }
+        async function loadCustomers() { try { const u = await api(`${API}/customers`); const o='<option value="">-- Select Customer --</option>'+u.map(x=>`<option value="${x.id}">${x.username} [${x.role}]</option>`).join(''); document.querySelectorAll('.cust-dropdown').forEach(s=>s.innerHTML=o); } catch(e){} }
+        async function checkBal() { 
+            const userId = document.getElementById('wallet-id').value;
+            document.getElementById('bal-display').innerText = `Checking...`;
+            if (!userId) {
+                document.getElementById('bal-display').innerText = `₹0.00`;
+                return;
+            }
+            try { 
+                const r = await api(`${API}/balance/${userId}`); 
+                document.getElementById('bal-display').innerText = `₹${parseFloat(r.current_balance).toFixed(2)}`; 
+            } catch(e){
+                document.getElementById('bal-display').innerText = `₹0.00 (Error)`;
+                toggleMessage('topup-status', `Balance check failed: ${e.message}`, true);
+            } 
+        }
+        async function topUp() { 
+            const userId = document.getElementById('wallet-id').value;
+            const amount = parseFloat(document.getElementById('topup-amt').value);
+            if (!userId || amount <= 0 || isNaN(amount)) {
+                toggleMessage('topup-status', 'Select user and enter valid amount.', true);
+                return;
+            }
+            try { 
+                const r = await api(`${API}/top-up`, {method:'POST', body:JSON.stringify({user_id:userId, amount:amount, payment_method:document.getElementById('payment-method').value})}); 
+                toggleMessage('topup-status', `Top-Up Success! New Balance: ₹${parseFloat(r.new_balance).toFixed(2)}`, false); 
+                checkBal(); 
+            } catch(e){
+                toggleMessage('topup-status', `Top-Up Failed: ${e.message}`, true);
+            } 
+        }
+        async function loadDailyMenuPOS() { 
+            const s=document.getElementById('pos-items'); s.innerHTML='<option value="">Loading Menu...</option>';
+            try { 
+                // We use the editable daily menu for POS, as it lists all available items for today
+                const m=await api(`${API}/menu/items`); 
+                ALL_MENU_ITEMS = m.filter(item => item.is_available);
+                s.innerHTML='<option value="">Select Item</option>'; 
+                
+                if (ALL_MENU_ITEMS.length === 0) {
+                     s.innerHTML = '<option value="">No available items today.</option>';
+                     return;
+                }
+
+                ALL_MENU_ITEMS.forEach(i=>{ 
+                    const o=document.createElement('option'); 
+                    o.value=i.id; 
+                    o.text=`${i.name} (₹${parseFloat(i.price).toFixed(2)})`; 
+                    o.dataset.p=i.price; 
+                    o.dataset.n=i.name; 
+                    s.appendChild(o); 
+                }); 
+            } catch(e){
+                s.innerHTML='<option value="">Error loading menu</option>';
+                alert("Failed to load POS Menu: " + e.message);
+            } 
+        }
+        function addToCart() { 
+            const s=document.getElementById('pos-items'); 
+            const o=s.options[s.selectedIndex]; 
+            if(!o || !o.value) return; 
+
+            const itemId = o.value;
+            const existingItem = cart.find(i => i.menu_item_id === itemId);
+            
+            if(existingItem) {
+                existingItem.quantity++; 
+            } else {
+                cart.push({
+                    menu_item_id: itemId, 
+                    name: o.dataset.n, 
+                    price: parseFloat(o.dataset.p), 
+                    quantity: 1
+                });
+            }
+            renderCart(); 
+        }
+        function renderCart() { 
+            const t=document.getElementById('cart-list'); 
+            t.innerHTML=''; 
+            let tot=0; 
+            
+            if(cart.length===0){
+                t.innerHTML='<tr><td colspan="3" style="text-align:center; padding:20px;">[ NO ITEMS ]</td></tr>';
+            } else {
+                cart.forEach((i,x)=>{ 
+                    tot+=i.price*i.quantity; 
+                    t.innerHTML+=`<tr>
+                        <td>${i.name} x${i.quantity}</td>
+                        <td style="text-align:right">₹${(i.price*i.quantity).toFixed(2)}</td>
+                        <td>
+                            <i onclick="removeItemFromCart(${x})" class="fas fa-trash" style="color:red; cursor:pointer;"></i>
+                        </td>
+                    </tr>`;
+                });
+            }
+            document.getElementById('cart-total').innerText = `₹${tot.toFixed(2)}`; 
+        }
+        function removeItemFromCart(index) {
+            cart.splice(index, 1);
+            renderCart();
+        }
+
+        async function placeOrder() { 
+            const userId = document.getElementById('order-user-id').value;
+            const totalCost = cart.reduce((a,b)=>a+(b.price*b.quantity),0);
+
+            if (!userId) {
+                toggleMessage('order-status', 'Please select a user to bill the order to.', true);
+                return;
+            }
+            if (cart.length === 0) {
+                 toggleMessage('order-status', 'The cart is empty.', true);
+                 return;
+            }
+
+            try { 
+                const r = await api(`${API}/order`, {method:'POST', body:JSON.stringify({user_id:userId, total_cost:totalCost, order_items:cart})}); 
+                toggleMessage('order-status', `Order Placed! New Balance: ₹${parseFloat(r.new_balance).toFixed(2)}`, false); 
+                cart=[]; renderCart(); 
+                checkBal(); // Refresh the balance box if the user ID matches
+            } catch(e){
+                toggleMessage('order-status', `Order Failed: ${e.message}`, true);
+            } 
+        }
 
         // KDS
-        async function loadKDS() { const c=document.getElementById('kds-container'); try { const o=await api(`${API}/kds/live`); if(o.length===0){c.innerHTML='<div style="color:#999; grid-column:1/-1; text-align:center; padding: 40px; border: 2px dashed #ccc;">No Pending Tickets</div>'; return;} c.innerHTML=o.map(x=>{ const l=x.order_details_json.map(i=>`<li><span>${i.quantity}x ${i.name}</span></li>`).join(''); const b=x.order_status==='PENDING'?`<button onclick="upStatus('${x.id}','PREPARING')" class="btn btn-warning w-full">Start Order</button>`:`<button onclick="upStatus('${x.id}','COMPLETED')" class="btn btn-success w-full">Order Ready</button>`; return `<div class="ticket ${x.order_status==='PREPARING'?'preparing':''}"><div class="ticket-head"><span>TKT #${x.id.slice(-4)}</span><span>${moment(x.created_at).format('h:mm A')}</span></div><div class="ticket-body"><ul class="ticket-list">${l}</ul></div><div class="ticket-foot">${b}</div></div>` }).join(''); } catch(e){} }
+        async function loadKDS() { 
+            const c=document.getElementById('kds-container'); 
+            try { 
+                const o=await api(`${API}/kds/live`); 
+                if(o.length===0){c.innerHTML='<div style="color:#999; grid-column:1/-1; text-align:center; padding: 40px; border: 2px dashed #ccc;">No Pending Tickets</div>'; return;} 
+                c.innerHTML=o.map(x=>{ 
+                    const items = JSON.parse(x.order_details_json);
+                    const l=items.map(i=>`<li><span>${i.quantity}x ${i.name}</span></li>`).join(''); 
+                    const b=x.order_status==='PENDING'?`<button onclick="upStatus('${x.id}','PREPARING')" class="btn btn-warning w-full">Start Order</button>`:`<button onclick="upStatus('${x.id}','COMPLETED')" class="btn btn-success w-full">Order Ready</button>`; 
+                    return `<div class="ticket ${x.order_status==='PREPARING'?'preparing':''}"><div class="ticket-head"><span>TKT #${x.id.slice(-4)}</span><span>${moment(x.created_at).format('h:mm A')}</span></div><div class="ticket-body"><ul class="ticket-list">${l}</ul></div><div class="ticket-foot">${b}</div></div>` 
+                }).join(''); 
+            } catch(e){
+                c.innerHTML = '<div style="color:red; grid-column:1/-1; text-align:center; padding:10px;">Failed to load KDS: ' + e.message + '</div>';
+            } 
+        }
         async function upStatus(id, s) { await api(`${API}/kds/status/${id}`, {method:'PUT', body:JSON.stringify({status:s})}); loadKDS(); }
 
         // MENU, STAFF, RECIPE, REPORTS logic remains same.
-        async function loadItems() { try { const i=await api(`${API}/menu/items`); const t=document.getElementById('item-table').querySelector('tbody'); const s=document.getElementById('editor-item-select'); t.innerHTML=''; s.innerHTML='<option>Select</option>'; i.forEach(x=>{ t.innerHTML+=`<tr><td>${x.name}</td><td>₹${x.price}</td><td><button onclick="openRec('${x.id}','${x.name}')" class="btn btn-outline">Recipe</button></td></tr>`; s.innerHTML+=`<option value="${x.id}">${x.name}</option>`; }); } catch(e){} }
-        async function addItem() { await api(`${API}/menu/add-item`, {method:'POST', body:JSON.stringify({name:document.getElementById('new-name').value, price:document.getElementById('new-price').value, category:document.getElementById('new-cat').value})}); loadItems(); }
-        async function loadDailyEditor() { try { dailyMenuTemp=await api(`${API}/menu/daily-editable/${document.getElementById('planner-date').value}`); renderDaily(); } catch(e){ dailyMenuTemp={}; renderDaily(); } }
-        function addToDaily() { const s=document.getElementById('editor-item-select'); const id=s.value; if(!id)return; const m=document.getElementById('editor-meal-select').value; if(!dailyMenuTemp[m])dailyMenuTemp[m]=[]; dailyMenuTemp[m].push({item_id:id, item_name:s.options[s.selectedIndex].text}); renderDaily(); }
-        function renderDaily() { const d=document.getElementById('daily-list'); d.innerHTML=''; Object.keys(dailyMenuTemp).forEach(k=>d.innerHTML+=`<p><strong>${k}:</strong> ${dailyMenuTemp[k].map(i=>i.item_name).join(', ')}</p>`); }
-        async function saveDaily() { const a=[]; Object.keys(dailyMenuTemp).forEach(k=>dailyMenuTemp[k].forEach(i=>a.push({meal_type:k, item_id:i.item_id}))); await api(`${API}/menu/daily`, {method:'POST', body:JSON.stringify({menu_date:document.getElementById('planner-date').value, menu_data:a})}); alert("Published"); }
-        async function deleteDaily() { if(confirm("Clear?")) await api(`${API}/menu/daily/${document.getElementById('planner-date').value}`, {method:'DELETE'}); dailyMenuTemp={}; renderDaily(); }
+        async function loadItems() { 
+            try { 
+                const i=await api(`${API}/menu/items`); 
+                const t=document.getElementById('item-table').querySelector('tbody'); 
+                const s=document.getElementById('editor-item-select'); 
+                t.innerHTML=''; s.innerHTML='<option value="">Select</option>'; 
+                i.forEach(x=>{ 
+                    t.innerHTML+=`<tr><td>${x.name}</td><td>₹${x.price}</td><td><button onclick="openRec('${x.id}','${x.name.replace(/'/g, "\\'")}')" class="btn btn-outline">Recipe</button></td></tr>`; 
+                    s.innerHTML+=`<option value="${x.id}">${x.name}</option>`; 
+                }); 
+                // Also update global ALL_MENU_ITEMS for POS
+                ALL_MENU_ITEMS = i.filter(item => item.is_available);
+                loadDailyMenuPOS(); // Reload POS menu with new availability
+            } catch(e){} 
+        }
+        async function addItem() { 
+            try {
+                await api(`${API}/menu/add-item`, {
+                    method:'POST', 
+                    body:JSON.stringify({
+                        name:document.getElementById('new-name').value, 
+                        price:document.getElementById('new-price').value, 
+                        category:document.getElementById('new-cat').value,
+                        food_type:document.getElementById('new-type').value,
+                        allergens:document.getElementById('new-allergens').value,
+                        calories:document.getElementById('new-cal').value
+                    })
+                }); 
+                alert("Item Added"); 
+                document.getElementById('add-catalog-form').reset();
+                loadItems(); 
+            } catch(e) {
+                alert("Add Item Failed: " + e.message);
+            }
+        }
+        async function loadDailyEditor() { 
+            const date = document.getElementById('planner-date').value;
+            try { 
+                dailyMenuTemp=await api(`${API}/menu/daily-editable/${date}`); 
+                renderDaily(); 
+            } catch(e){ 
+                dailyMenuTemp={}; 
+                renderDaily(); 
+            } 
+        }
+        function addToDaily() { 
+            const s=document.getElementById('editor-item-select'); 
+            const id=s.value; 
+            if(!id)return; 
+            const m=document.getElementById('editor-meal-select').value; 
+            if(!dailyMenuTemp[m])dailyMenuTemp[m]=[]; 
+            dailyMenuTemp[m].push({item_id:id, item_name:s.options[s.selectedIndex].text}); 
+            renderDaily(); 
+        }
+        function renderDaily() { 
+            const d=document.getElementById('daily-list'); d.innerHTML=''; 
+            if (Object.keys(dailyMenuTemp).length === 0) {
+                 d.innerHTML = '<em>No items assigned for this day.</em>';
+                 return;
+            }
+            Object.keys(dailyMenuTemp).forEach(k=>d.innerHTML+=`<p><strong>${k}:</strong> ${dailyMenuTemp[k].map(i=>i.item_name).join(', ')}</p>`); 
+        }
+        async function saveDaily() { 
+            const a=[]; 
+            const date = document.getElementById('planner-date').value;
+            Object.keys(dailyMenuTemp).forEach(k=>dailyMenuTemp[k].forEach(i=>a.push({meal_type:k, item_id:i.item_id}))); 
+            try {
+                await api(`${API}/menu/daily`, {
+                    method:'POST', 
+                    body:JSON.stringify({menu_date:date, menu_data:a})
+                }); 
+                toggleMessage('planner-status', "Menu Published Successfully!", false);
+            } catch(e) {
+                toggleMessage('planner-status', "Publish Failed: " + e.message, true);
+            }
+        }
+        async function deleteDaily() { 
+            const date = document.getElementById('planner-date').value;
+            if(confirm(`Are you sure you want to clear the menu for ${date}?`)) {
+                try {
+                    await api(`${API}/menu/daily/${date}`, {method:'DELETE'}); 
+                    dailyMenuTemp={}; 
+                    renderDaily();
+                    toggleMessage('planner-status', "Menu Cleared", false);
+                } catch(e) {
+                    toggleMessage('planner-status', "Clear Failed: " + e.message, true);
+                }
+            }
+        }
         
-        async function openRec(id,name) { document.getElementById('recipe-modal').classList.remove('hidden'); document.getElementById('rec-id').value=id; document.getElementById('rec-item-name').innerText=name; try { const i=await api(`${INVENTORY_API}/items`); const s=document.getElementById('inv-select'); s.innerHTML=''; i.forEach(x=>s.innerHTML+=`<option value="${x.id}">${x.name} (${x.unit||'unit'})</option>`); loadRecList(id); } catch(e){alert("Inventory Error");} }
-        async function loadRecList(id) { const d=await api(`${API}/recipe/${id}`); document.getElementById('rec-list').innerHTML=d.map(x=>`<tr><td>${x.ingredient_name}</td><td>${x.quantity_required}</td></tr>`).join(''); }
-        async function saveRecipe() { await api(`${API}/recipe`, {method:'POST', body:JSON.stringify({menu_item_id:document.getElementById('rec-id').value, inventory_item_id:document.getElementById('inv-select').value, quantity:parseFloat(document.getElementById('inv-qty').value)})}); loadRecList(document.getElementById('rec-id').value); }
+        async function openRec(id,name) { 
+            document.getElementById('recipe-modal').classList.remove('hidden'); 
+            document.getElementById('rec-id').value=id; 
+            document.getElementById('rec-item-name').innerText=name; 
+            try { 
+                const i=await api(`${INVENTORY_API}/items`); 
+                const s=document.getElementById('inv-select'); 
+                s.innerHTML='<option>Select</option>'; 
+                i.forEach(x=>s.innerHTML+=`<option value="${x.id}">${x.name} (${x.unit||'unit'})</option>`); 
+                loadRecList(id); 
+            } catch(e){alert("Inventory Error: Check API endpoint");} 
+        }
+        async function loadRecList(id) { 
+            const d=await api(`${API}/recipe/${id}`); 
+            document.getElementById('rec-list').innerHTML=d.map(x=>`<tr><td>${x.ingredient_name}</td><td>${x.quantity_required} ${x.unit||''}</td></tr>`).join(''); 
+        }
+        async function saveRecipe() { 
+            const menuId = document.getElementById('rec-id').value;
+            const inventoryId = document.getElementById('inv-select').value;
+            const quantity = parseFloat(document.getElementById('inv-qty').value);
+            if (!inventoryId || quantity <= 0) return;
+            
+            try {
+                await api(`${API}/recipe`, {
+                    method:'POST', 
+                    body:JSON.stringify({
+                        menu_item_id: menuId, 
+                        inventory_item_id: inventoryId, 
+                        quantity: quantity
+                    })
+                }); 
+                loadRecList(menuId); 
+            } catch(e) {
+                alert("Recipe Save Failed: " + e.message);
+            }
+        }
 
-        async function loadStaffAndShifts() { try { const st=await api(`${API}/staff-list`); const sh=await api(`${API}/shifts/type`); const s1=document.getElementById('staff-select'); s1.innerHTML='<option>Select</option>'; st.forEach(x=>s1.innerHTML+=`<option value="${x.id}">${x.name}</option>`); const s2=document.getElementById('shift-select'); s2.innerHTML='<option>Select</option>'; sh.forEach(x=>s2.innerHTML+=`<option value="${x.id}">${x.shift_name}</option>`); } catch(e){} }
-        async function loadSchedule() { try { const d=await api(`${API}/shifts/schedule/${document.getElementById('shift-date').value}`); document.getElementById('schedule-table').querySelector('tbody').innerHTML=d.map(x=>`<tr><td>${x.shift_name}</td><td>${x.staff_name}</td><td>${x.start_time}-${x.end_time}</td><td><button class="btn btn-danger" onclick="delShift('${x.assignment_id}')">X</button></td></tr>`).join(''); } catch(e){} }
-        async function assignShift() { await api(`${API}/shifts/assign`, {method:'POST', body:JSON.stringify({shift_date:document.getElementById('shift-date').value, staff_id:document.getElementById('staff-select').value, shift_id:document.getElementById('shift-select').value, notes:''})}); loadSchedule(); }
-        async function createShiftType() { await api(`${API}/shifts/type`, {method:'POST', body:JSON.stringify({shift_name:document.getElementById('new-shift-name').value, start_time:document.getElementById('new-shift-start').value, end_time:document.getElementById('new-shift-end').value})}); alert("Shift Created"); loadStaffAndShifts(); }
-        async function delShift(id) { await api(`${API}/shifts/assignment/${id}`, {method:'DELETE'}); loadSchedule(); }
-        async function genReport() { try { const d=await api(`${API}/reports/sales-summary?start_date=${document.getElementById('rep-start').value}&end_date=${document.getElementById('rep-end').value}`); document.getElementById('rep-sales').innerHTML=`Sales: ₹${d.PURCHASE.total||0} | TopUp: ₹${d.TOP_UP.total||0}`; const t=await api(`${API}/reports/top-selling-items?start_date=${document.getElementById('rep-start').value}&end_date=${document.getElementById('rep-end').value}`); document.getElementById('rep-top-table').querySelector('tbody').innerHTML=t.map(x=>`<tr><td>${x.item_name}</td><td class="text-right">${x.total_quantity_sold}</td></tr>`).join(''); } catch(e){} }
+        async function loadStaffAndShifts() { 
+            try { 
+                const st=await api(`${API}/staff-list`); 
+                const sh=await api(`${API}/shifts/type`); 
+                const s1=document.getElementById('staff-select'); 
+                s1.innerHTML='<option value="">Select Staff</option>'; 
+                st.forEach(x=>s1.innerHTML+=`<option value="${x.id}">${x.name}</option>`); 
+                const s2=document.getElementById('shift-select'); 
+                s2.innerHTML='<option value="">Select Shift</option>'; 
+                sh.forEach(x=>s2.innerHTML+=`<option value="${x.id}">${x.shift_name}</option>`); 
+            } catch(e){} 
+        }
+        async function loadSchedule() { 
+            const date = document.getElementById('shift-date').value;
+            try { 
+                const d=await api(`${API}/shifts/schedule/${date}`); 
+                const tbody = document.getElementById('schedule-table').querySelector('tbody');
+                tbody.innerHTML = '';
+                if (d.length === 0) {
+                     tbody.innerHTML = '<tr><td colspan="4">No shifts assigned for this day.</td></tr>';
+                     return;
+                }
+                tbody.innerHTML=d.map(x=>`<tr><td>${x.shift_name}</td><td>${x.staff_name}</td><td>${x.start_time}-${x.end_time}</td><td><button class="btn btn-danger" onclick="delShift('${x.assignment_id}')">X</button></td></tr>`).join(''); 
+            } catch(e){} 
+        }
+        async function assignShift() { 
+            const date = document.getElementById('shift-date').value;
+            const staffId = document.getElementById('staff-select').value;
+            const shiftId = document.getElementById('shift-select').value;
+
+            if (!date || !staffId || !shiftId) {
+                toggleMessage('shift-assign-status', 'Select date, staff, and shift.', true);
+                return;
+            }
+
+            try { 
+                await api(`${API}/shifts/assign`, {method:'POST', body:JSON.stringify({shift_date:date, staff_id:staffId, shift_id:shiftId, notes:''})}); 
+                toggleMessage('shift-assign-status', "Shift Assigned Successfully", false);
+                loadSchedule(); 
+            } catch(e) {
+                 toggleMessage('shift-assign-status', `Assignment Failed: ${e.message}`, true);
+            } 
+        }
+        async function createShiftType() { 
+             try {
+                await api(`${API}/shifts/type`, {method:'POST', body:JSON.stringify({shift_name:document.getElementById('new-shift-name').value, start_time:document.getElementById('new-shift-start').value, end_time:document.getElementById('new-shift-end').value})}); 
+                alert("Shift Created"); 
+                document.getElementById('new-shift-name').value = '';
+                document.getElementById('new-shift-start').value = '';
+                document.getElementById('new-shift-end').value = '';
+                loadStaffAndShifts(); 
+            } catch(e) {
+                alert("Creation Failed: " + e.message);
+            }
+        }
+        async function delShift(id) { 
+            if (!confirm("Confirm delete shift?")) return;
+            await api(`${API}/shifts/assignment/${id}`, {method:'DELETE'}); 
+            loadSchedule(); 
+        }
+        async function genReport() { 
+            try { 
+                const startDate = document.getElementById('rep-start').value;
+                const endDate = document.getElementById('rep-end').value;
+
+                document.getElementById('rep-sales').innerHTML = '...Calculating...';
+                document.getElementById('rep-top-table').querySelector('tbody').innerHTML = '<tr><td colspan="2">...</td></tr>';
+
+                const d=await api(`${API}/reports/sales-summary?start_date=${startDate}&end_date=${endDate}`); 
+                document.getElementById('rep-sales').innerHTML=`<p>Sales: <strong>₹${parseFloat(d.PURCHASE.total||0).toFixed(2)}</strong></p><p>TopUp: <strong>₹${parseFloat(d.TOP_UP.total||0).toFixed(2)}</strong></p>`; 
+                
+                const t=await api(`${API}/reports/top-selling-items?start_date=${startDate}&end_date=${endDate}`); 
+                document.getElementById('rep-top-table').querySelector('tbody').innerHTML=t.map(x=>`<tr><td>${x.item_name}</td><td style="text-align:right">${x.total_quantity_sold}</td></tr>`).join('') || '<tr><td colspan="2">No items sold.</td></tr>'; 
+            } catch(e){
+                document.getElementById('rep-sales').innerHTML = `<span style="color:red; font-size:0.9em;">Report Failed: ${e.message}</span>`;
+                document.getElementById('rep-top-table').querySelector('tbody').innerHTML = '<tr><td colspan="2">Error.</td></tr>';
+            } 
+        }
     </script>
     <script src="js/global-config.js"></script>
 </body>

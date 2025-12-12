@@ -412,7 +412,7 @@
 
     document.addEventListener('DOMContentLoaded', async () => {
         if (!studentId) {
-            document.querySelector('.container').innerHTML = "<h1 style='color:red; text-align:center;'>Error: Missing Student ID</h1>";
+            document.querySelector('.container').innerHTML = "<h1 style='color:var(--danger); text-align:center;'>Error: Missing Student ID. Access this page from the student list.</h1>";
             return;
         }
         
@@ -433,7 +433,7 @@
 
         } catch (error) {
             console.error(error);
-            document.querySelector('.container').innerHTML = `<h2 style='color:red; text-align:center;'>Error Loading Profile: ${error.message}</h2>`;
+            document.querySelector('.container').innerHTML = `<h2 style='color:var(--danger); text-align:center;'>Error Loading Profile: ${error.message}</h2>`;
         }
     });
 
@@ -463,8 +463,9 @@
             } else if (imagePath.startsWith('http')) {
                 photoEl.src = imagePath; // Full URL
             } else {
+                // Ensure correct relative path starting from the uploads folder.
                 const cleanPath = imagePath.replace(/^\//, ''); 
-                photoEl.src = `${API_BASE_URL}/${cleanPath}`; // Relative path
+                photoEl.src = `/uploads/${cleanPath}`; 
             }
         } else {
             photoEl.src = defaultAvatar;
@@ -474,9 +475,6 @@
 
         set('p-attendance-stat', data.attendance_percentage ? `${data.attendance_percentage}%` : 'N/A');
         
-        // Due stat will be updated by populateFinance later
-        // set('p-due-stat', data.total_fees_due ? `₹${data.total_fees_due}` : 'N/A');
-
         set('d-fullname', `${data.first_name} ${data.last_name}`);
         set('d-dob', data.dob ? new Date(data.dob).toLocaleDateString() : 'N/A');
         set('d-gender', data.gender);
@@ -514,7 +512,6 @@
             
             // Handle case where backend returns 404 or non-OK status due to deep internal error
             if (!feeRes.ok) {
-                 // Try to read error body if available, otherwise use status text
                  const errorBody = await feeRes.json().catch(() => ({ message: feeRes.statusText }));
                  throw new Error(errorBody.message || `HTTP Error ${feeRes.status}`);
             }
@@ -556,12 +553,15 @@
             tbody.innerHTML = '';
             if (feeData.payments && feeData.payments.length > 0) {
                 feeData.payments.forEach(pay => {
+                    const statusText = pay.status || (pay.amount_paid >= pay.amount_due ? 'Paid' : 'Due');
                     const row = `<tr>
-                        <td>${new Date(pay.payment_date).toLocaleDateString()}</td>
-                        <td>Fee Payment (${pay.payment_mode}) - Ref: ${pay.receipt_number || pay.paymentId.substring(0, 8).toUpperCase()}</td>
-                        <td style="text-align:right; color: var(--success);">+₹${parseFloat(pay.amount_paid).toFixed(2)}</td>
+                        <td>${new Date(pay.payment_date || pay.invoice_date).toLocaleDateString()}</td>
+                        <td>${pay.description || pay.fee_item_name || 'Fee Payment'} - Ref: ${pay.receipt_number || pay.payment_id || pay.invoice_id.substring(0, 8).toUpperCase()}</td>
+                        <td style="text-align:right; color: ${statusText === 'Paid' ? 'var(--success)' : 'var(--danger)'};">
+                            ₹${parseFloat(pay.amount_paid || pay.amount_due).toFixed(2)}
+                        </td>
                         <td style="text-align:center;">
-                            <span class="status-badge" style="background: var(--success); color:#000;">Paid</span>
+                            <span class="status-badge" style="background: ${statusText === 'Paid' ? 'var(--success)' : 'var(--danger)'}; color:var(--bg-dark); padding: 2px 8px; border-radius: 4px;">${statusText}</span>
                         </td>
                     </tr>`;
                     tbody.innerHTML += row;
@@ -583,7 +583,6 @@
 
     // 3. Academic
     function populateAcademic(data) {
-        // ... (Academic logic remains the same)
         const hasExamData = data.exam_results && Array.isArray(data.exam_results) && data.exam_results.length > 0;
         if (hasExamData) {
             const labels = data.exam_results.map(e => e.exam_name);
@@ -600,7 +599,7 @@
                         tension: 0.3
                     }]
                 },
-                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100 } } }
+                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100, ticks: { color: 'var(--text-main)' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: 'var(--text-main)' }, grid: { color: 'rgba(255,255,255,0.1)' } } }, plugins: { legend: { labels: { color: 'var(--text-main)' } } } }
             });
         } else {
             document.getElementById('charts-container').style.display = 'none';
@@ -610,9 +609,10 @@
         const attendanceGrid = document.getElementById('attendance-grid');
         attendanceGrid.innerHTML = '';
         if (data.attendance_logs && Array.isArray(data.attendance_logs) && data.attendance_logs.length > 0) {
+            document.getElementById('no-attendance-data').style.display = 'none';
             data.attendance_logs.forEach(log => {
                 const box = document.createElement('div');
-                box.className = `heat-box ${log.status === 'Present' ? 'heat-present' : 'heat-absent'}`;
+                box.className = `heat-box ${log.status === 'Present' ? 'heat-present' : log.status === 'Absent' ? 'heat-absent' : 'heat-leave'}`;
                 box.title = `${new Date(log.date).toDateString()}: ${log.status}`;
                 box.textContent = new Date(log.date).getDate();
                 attendanceGrid.appendChild(box);
@@ -624,10 +624,10 @@
 
     // 4. Timeline
     function populateTimeline(data) {
-        // ... (Timeline logic remains the same)
         const container = document.getElementById('timeline-container');
         container.innerHTML = '';
         if (data.activity_logs && Array.isArray(data.activity_logs) && data.activity_logs.length > 0) {
+            document.getElementById('no-timeline-data').style.display = 'none';
             data.activity_logs.forEach(log => {
                 const item = `<div class="timeline-item">
                     <div class="t-date">${new Date(log.timestamp).toLocaleString()}</div>
@@ -669,6 +669,10 @@
     };
 
     window.generateIdCard = () => {
+        if (!studentId) {
+             alert("Cannot generate ID card: Student ID is missing.");
+             return;
+        }
         window.open(`${API_BASE_URL}/reports/generate-id?studentId=${studentId}`, '_blank');
     };
 </script>

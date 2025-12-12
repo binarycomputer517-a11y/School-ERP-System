@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Mess Menu</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css"> 
+    <style>
+        /* Modernized Styles */
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
+        .container { max-width: 900px; margin-top: 50px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #008080; border-bottom: 2px solid #008080; padding-bottom: 10px; margin-bottom: 30px; }
+        
+        .menu-day-card {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .menu-day-header {
+            background-color: #008080;
+            color: white;
+            padding: 12px 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+        .menu-items {
+            padding: 15px;
+        }
+        .meal-time {
+            margin-bottom: 15px;
+            border-left: 4px solid #008080; /* Highlight color */
+            padding-left: 10px;
+        }
+        .meal-time strong {
+            color: #333;
+            display: block;
+            margin-bottom: 5px;
+        }
+        .meal-content {
+            font-size: 0.95em;
+            color: #555;
+            line-height: 1.5;
+        }
+        .nav-links a { color: #0056b3; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <script>
+        // ✅ 1. Token is declared only once globally for auth check and later use.
+        const token = localStorage.getItem('erp-token');
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+    </script>
+    
+    <div class="container">
+        <div class="nav-links">
+            <a href="/student-dashboard.html">← Back to Dashboard</a>
+        </div>
+        
+        <h1><i class="fas fa-utensils"></i> Today's Mess Menu</h1>
+        
+        <div id="menu-container">
+            <p class="text-center text-info">Loading today's menu...</p>
+        </div>
+        
+        <p id="status-message" class="text-center mt-4"></p>
+    </div>
+
+    <script>
+        // ❌ Removed redundant 'const token = localStorage.getItem('erp-token');'
+        //    'token' is now accessible from the global scope defined above.
+        
+        const menuContainer = document.getElementById('menu-container');
+        const statusMessage = document.getElementById('status-message');
+        
+        const API_BASE_URL = '/api/canteen'; 
+        
+        // Helper function to render the menu display
+        function renderMenu(menuData) {
+            menuContainer.innerHTML = '';
+            
+            if (menuData.length === 0 || !menuData[0].day) {
+                menuContainer.innerHTML = '<p class="text-center text-secondary">Menu not published for today.</p>';
+                return;
+            }
+
+            // Assuming menuData[0] contains all meal times for the day
+            const dayMenu = menuData[0];
+            const dayName = dayMenu.day.charAt(0).toUpperCase() + dayMenu.day.slice(1).toLowerCase();
+
+            const mealTimes = [
+                { time: 'breakfast', label: 'Breakfast' },
+                { time: 'lunch', label: 'Lunch' },
+                { time: 'snacks', label: 'Snacks' },
+                { time: 'dinner', label: 'Dinner' }
+            ];
+
+            let menuHtml = '';
+            mealTimes.forEach(meal => {
+                const content = dayMenu[meal.time];
+                if (content) {
+                    menuHtml += `
+                        <div class="meal-time">
+                            <strong>${meal.label}:</strong> 
+                            <span class="meal-content">${content}</span>
+                        </div>
+                    `;
+                }
+            });
+
+            if (!menuHtml) {
+                 menuContainer.innerHTML = '<p class="text-center text-secondary">No meal items published for today.</p>';
+                 return;
+            }
+            
+            const dayCard = document.createElement('div');
+            dayCard.className = 'menu-day-card';
+            dayCard.innerHTML = `
+                <div class="menu-day-header">${dayName}'s Menu</div>
+                <div class="menu-items">${menuHtml}</div>
+            `;
+            menuContainer.appendChild(dayCard);
+        }
+
+        async function fetchMenu() {
+            statusMessage.textContent = '';
+            menuContainer.innerHTML = '<p class="text-center text-info"><i class="fas fa-spinner fa-spin"></i> Loading today\'s menu...</p>';
+            
+            try {
+                // Uses the global 'token' variable
+                const response = await fetch(`${API_BASE_URL}/menu/current`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 404) {
+                    menuContainer.innerHTML = '<p class="text-center text-secondary">Menu not published for today.</p>';
+                    return;
+                }
+                
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({ message: 'Server error fetching menu data.' }));
+                    throw new Error(err.message || `Failed to load menu: ${response.statusText}`);
+                }
+
+                const menuData = await response.json();
+                renderMenu(menuData);
+
+            } catch (error) {
+                console.error("Menu Fetch Error:", error);
+                statusMessage.className = 'text-danger mt-4';
+                statusMessage.textContent = `Error fetching menu: ${error.message}`;
+                menuContainer.innerHTML = '';
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchMenu);
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>
