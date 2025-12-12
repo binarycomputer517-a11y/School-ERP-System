@@ -18,6 +18,7 @@
         .status-pending { background-color: #f8d7da; color: #721c24; font-weight: bold; }
         .status-waived { background-color: #fff3cd; color: #856404; font-weight: bold; }
         .status-paid { background-color: #d4edda; color: #155724; font-weight: bold; }
+        .status-overdue { background-color: #ffcdd2; color: #c62828; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -31,6 +32,8 @@
             <select id="statusFilter">
                 <option value="Pending">Pending Dues</option>
                 <option value="Overdue">Overdue Books</option>
+                <option value="Paid">Paid</option>
+                <option value="Waived">Waived</option>
                 <option value="All">All Records</option>
             </select>
             <button class="btn btn-primary" onclick="loadFines()">
@@ -80,18 +83,18 @@
             }
 
             try {
-                // Assuming a PUT route for fine management
                 const response = await fetch(`${API_BASE_URL}/fines/${circulationId}/waive`, {
                     method: 'PUT',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Failed to waive fine. Status: ${response.status}`);
+                    const error = await response.json().catch(() => ({ message: 'Server error during waive.' }));
+                    throw new Error(error.message || `Status: ${response.status}`);
                 }
 
                 alert('Fine successfully waived!');
-                loadFines(); // Refresh the list
+                loadFines(); 
 
             } catch (error) {
                 console.error("Waive Fine Error:", error);
@@ -112,14 +115,14 @@
             const endpoint = `${API_BASE_URL}/fines/all?${queryParams.toString()}`;
 
             try {
-                // Assuming a route exists to get all pending fines
                 const response = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
 
                 if (response.status === 403 || response.status === 401) {
                     throw new Error('Authorization failed. Please log in again.');
                 }
                 if (!response.ok) {
-                    throw new Error(`Failed to load fines: ${response.statusText}`);
+                    const error = await response.json().catch(() => ({ message: 'Internal Server Error' }));
+                    throw new Error(error.message || `Failed to load fines: ${response.statusText}`);
                 }
 
                 const records = await response.json();
@@ -135,11 +138,13 @@
                 records.forEach(record => {
                     totalFine += parseFloat(record.fine_amount || 0);
                     
-                    const statusClass = record.payment_status === 'Paid' ? 'status-paid' : 
-                                          record.fine_amount === 0 ? 'status-waived' : 'status-pending';
+                    const statusText = record.payment_status || (record.days_late > 0 && record.fine_amount > 0 ? 'Pending' : 'N/A');
+                    const statusClass = statusText === 'Paid' ? 'status-paid' : 
+                                        statusText === 'Waived' ? 'status-waived' : 
+                                        statusText === 'Pending' ? 'status-pending' : 'status-overdue';
                     
                     const actionButton = record.payment_status === 'Pending' ? 
-                        `<button class="btn btn-sm btn-danger" onclick="waiveFine('${record.circulation_id}', ${record.fine_amount})">Waive</button>` :
+                        `<button class="btn btn-sm btn-danger" onclick="waiveFine('${record.circulation_id}', ${record.fine_amount})">Waive Fine</button>` :
                         `-`;
 
                     const row = document.createElement('tr');
@@ -149,13 +154,13 @@
                         <td>${record.accession_number}</td>
                         <td>${record.days_late || 0}</td>
                         <td>${formatCurrency(record.fine_amount)}</td>
-                        <td><span class="badge ${statusClass}">${record.payment_status || 'Pending'}</span></td>
+                        <td><span class="badge ${statusClass}">${statusText}</span></td>
                         <td>${actionButton}</td>
                     `;
                     finesTbody.appendChild(row);
                 });
                 
-                summaryDiv.innerHTML = `Total Dues Shown: ${formatCurrency(totalFine)}`;
+                summaryDiv.innerHTML = `Total Pending/Due Fines: ${formatCurrency(totalFine)} (${records.length} records)`;
 
             } catch (error) {
                 console.error("Admin Fine Load Error:", error);

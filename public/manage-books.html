@@ -30,8 +30,10 @@
         }
         .tab-button.active { background-color: #005A9C; color: white; border-color: #005A9C; border-bottom: none; }
         .tab-content { padding: 15px 0; }
-        .grid-3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 25px; }
-        
+        /* Adjusted grid to accommodate the new card */
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; } 
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 25px; } 
+
         /* Forms & Inputs */
         .card { padding: 20px; border: 1px solid #333; border-radius: 0; margin-bottom: 20px; background-color: #f8f8f8; }
         label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; color: #333; }
@@ -60,12 +62,17 @@
 </head>
 <body>
     <div class="container">
+        <div style="margin-bottom: 15px;">
+            <a href="/admin-dashboard.html" style="text-decoration: none; font-weight: bold; color: #005A9C;">← Back to Admin Dashboard</a>
+        </div>
+
         <h1>Library Management System</h1>
 
         <div class="tabs">
             <button class="tab-button active" onclick="showTab('catalog')">Book Catalog</button>
             <button class="tab-button" onclick="showTab('issue-return')">Circulation</button>
             <button class="tab-button" onclick="showTab('history')">History</button>
+            <button class="tab-button" onclick="window.location.href='/library-fines.html'">Fines Management</button> 
             <button class="tab-button" onclick="showTab('config')">Configuration</button>
         </div>
 
@@ -90,6 +97,7 @@
                 </div>
                 <div class="card" style="grid-column: 2 / span 2;">
                     <h2>Master Catalog List</h2>
+                    <input type="text" id="catalog-search" placeholder="Search catalog by title, author or ISBN..." onkeyup="filterCatalog()" style="margin-bottom: 10px;">
                     <table id="catalog-table">
                         <thead>
                             <tr>
@@ -109,7 +117,7 @@
         </div>
 
         <div id="issue-return" class="tab-content" style="display: none;">
-            <div class="grid-3">
+            <div class="grid-4"> 
                 <div class="card">
                     <h3>Issue Book</h3>
                     <form id="issue-form">
@@ -130,6 +138,20 @@
                         <p id="return-error-message" class="error-message"></p>
                     </form>
                 </div>
+                
+                <div class="card">
+                    <h3>Quick Actions</h3>
+                    <p style="font-size: 0.9em; margin-top: 5px;">Use Accession Number to manage status.</p>
+                    <form id="renewal-form">
+                        <label for="accession_number_renew">Accession No. (Renewal)</label>
+                        <input type="text" id="accession_number_renew" name="accession_number" placeholder="Enter Copy ID">
+                        <button type="submit" style="background-color: #28a745;">Renew Book</button>
+                        <p id="renewal-error-message" class="error-message"></p>
+                    </form>
+                    <button onclick="handleReservationSearch()" style="background-color: #ffc107; color: #111;">View Reservations</button>
+                    <p id="reservation-message" class="error-message"></p>
+                </div>
+                
                 <div class="card">
                     <h3>Inventory Management</h3>
                     <form id="add-copy-form">
@@ -172,7 +194,7 @@
                     </tr>
                 </thead>
                 <tbody id="history-tbody">
-                    <tr><td colspan="6">Enter a Student ID or Accession Number above to search.</td></tr>
+                    <tr><td colspan="6">Enter criteria above or click Search History for recent records.</td></tr>
                 </tbody>
             </table>
             <p id="history-error-message" class="error-message"></p>
@@ -203,10 +225,9 @@
         const token = localStorage.getItem('erp-token');
         const userRole = localStorage.getItem('user-role');
         
-        // Client-Side Role Guard Check
-        if (!token || (userRole !== 'Super Admin' && userRole !== 'Admin' && userRole !== 'Teacher')) { 
-            // window.location.href = '/login'; 
-            console.error("Access Denied: Must be Super Admin, Admin, or Teacher.");
+        // Client-Side Role Guard Check (Manager Roles)
+        if (!token || !['Super Admin', 'Admin', 'Teacher', 'Librarian'].includes(userRole)) { 
+            window.location.href = '/login'; 
         }
 
         // --- Helper Functions ---
@@ -237,8 +258,15 @@
 
             if (tabId === 'catalog') fetchCatalog();
             if (tabId === 'config') fetchConfig();
-            // Automatically fetch history when switching to the history tab (can be adjusted for performance)
-            if (tabId === 'history') fetchCirculationHistory();
+            if (tabId === 'history') { 
+                document.getElementById('history-student-id').value = '';
+                document.getElementById('history-accession-no').value = '';
+                fetchCirculationHistory(null, null, true); // Load default recent history
+            }
+            if (tabId === 'issue-return') {
+                document.getElementById('issue-form').reset();
+                document.getElementById('return-form').reset();
+            }
         }
 
         function formatDate(dateString) {
@@ -248,7 +276,7 @@
 
 
         // ===================================
-        // 1. CATALOG & INVENTORY FUNCTIONS
+        // 1. CATALOG FUNCTIONS
         // ===================================
 
         async function fetchCatalog() {
@@ -256,133 +284,173 @@
             tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
             try {
                 const data = await handleApi(`${API_BASE}/catalog`);
-                tbody.innerHTML = data.map(book => `
-                    <tr>
-                        <td><strong>${book.title}</strong><br><small>by ${book.author}</small></td>
-                        <td>${book.isbn}</td>
-                        <td>${book.total_copies}</td>
-                        <td class="${book.available_copies > 0 ? 'status-available' : 'status-issued'}">
-                            ${book.available_copies}
-                        </td>
-                        <td>
-                            <button onclick="copyToClipboard('${book.id}')">Copy ID</button>
-                            <button onclick="manageInventory('${book.id}', '${book.title.replace(/'/g, "\\'")}')">Inventory</button>
-                        </td>
-                    </tr>
-                `).join('') || '<tr><td colspan="5">No books in catalog.</td></tr>';
+                window.masterCatalogData = data; // Store data globally for filtering
+                filterCatalog(data);
+
             } catch (error) {
-                alert(`Error loading catalog: ${error.message}`);
-                tbody.innerHTML = '<tr><td colspan="5" style="color:red;">Failed to load catalog.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load catalog.</td></tr>';
             }
         }
         
+        function filterCatalog(data = window.masterCatalogData) {
+            const tbody = document.getElementById('catalog-tbody');
+            const searchValue = document.getElementById('catalog-search').value.toLowerCase();
+            
+            if (!data) return;
+
+            const filtered = data.filter(book => 
+                (book.title && book.title.toLowerCase().includes(searchValue)) ||
+                (book.author && book.author.toLowerCase().includes(searchValue)) ||
+                (book.isbn && book.isbn.includes(searchValue))
+            );
+
+            tbody.innerHTML = filtered.map(book => `
+                <tr>
+                    <td><strong>${book.title}</strong><br><small>ISBN: ${book.isbn}</small></td>
+                    <td>${book.total_copies || 0} / <span class="${book.available_copies > 0 ? 'status-available' : 'status-issued'}">${book.available_copies || 0}</span></td>
+                    <td>
+                        <button class="btn btn-sm" style="background-color: #005A9C; color: white;" onclick="copyToClipboard('${book.id}')">Copy ID</button>
+                        <button class="btn btn-sm" style="background-color: #777; color: white;" onclick="manageInventory('${book.id}')">Add Copy</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" class="text-center">No books found matching criteria.</td></tr>';
+        }
+
         async function copyToClipboard(bookId) {
              await navigator.clipboard.writeText(bookId);
              alert(`Book ID copied to clipboard: ${bookId}`);
         }
 
-        function manageInventory(bookId, title) {
+        function manageInventory(bookId) {
             document.getElementById('book_id_copy').value = bookId;
-            showTab('issue-return'); 
+            showTab('issue-return'); // Switch to circulation tab (inventory management form)
         }
 
         // Catalog Form Submission
         document.getElementById('add-catalog-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
-            const bookId = document.getElementById('book-id').value;
-            
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
-
-            const method = bookId ? 'PUT' : 'POST';
-            const url = bookId ? `${API_BASE}/catalog/${bookId}` : `${API_BASE}/catalog`;
+            const msgDiv = document.getElementById('catalog-message');
+            msgDiv.textContent = '';
 
             try {
-                await handleApi(url, { method: method, body: JSON.stringify(data) });
-                alert(`Book ${bookId ? 'updated' : 'added'} successfully.`);
+                const result = await handleApi(`${API_BASE}/catalog`, { method: 'POST', body: JSON.stringify(data) });
+                msgDiv.className = 'mt-2 text-success';
+                msgDiv.textContent = `✅ Book added successfully. (ID: ${result.book_id.substring(0, 8)}...).`;
                 form.reset();
                 fetchCatalog();
             } catch (error) {
-                alert(`Failed to save book: ${error.message}`);
+                msgDiv.className = 'mt-2 text-danger';
+                msgDiv.textContent = `❌ Failed to save book: ${error.message}`;
             }
         });
 
 
-        // Inventory (Add Copy) Form Submission
+        // ===================================
+        // 2. INVENTORY FUNCTIONS
+        // ===================================
+
         document.getElementById('add-copy-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
-            const errorDiv = document.getElementById('copy-error-message');
-            errorDiv.textContent = '';
-
-
-            if (!data.book_id) {
-                errorDiv.textContent = 'Please paste a Book Catalog ID first.';
-                return;
-            }
+            const msgDiv = document.getElementById('copy-error-message');
+            msgDiv.textContent = '';
             
             try {
-                // Links to the POST /api/library/inventory route
-                await handleApi(`${API_BASE}/inventory`, { method: 'POST', body: JSON.stringify(data) });
-                alert(`Copy ${data.accession_number} added successfully.`);
+                const result = await handleApi(`${API_BASE}/inventory`, { method: 'POST', body: JSON.stringify(data) });
+                msgDiv.className = 'mt-2 text-success';
+                msgDiv.textContent = `✅ ${result.message}`;
                 form.reset();
-                fetchCatalog(); 
+                fetchCatalog(); // Refresh catalog counts
             } catch (error) {
-                errorDiv.textContent = `❌ Failed to add copy: ${error.message}`;
+                msgDiv.className = 'mt-2 text-danger';
+                msgDiv.textContent = `❌ Failed to add copy: ${error.message}`;
             }
         });
 
 
         // ===================================
-        // 2. CIRCULATION FUNCTIONS
+        // 3. CIRCULATION FUNCTIONS
         // ===================================
 
-        // Issue Book Form Submission
         document.getElementById('issue-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
-            const errorDiv = document.getElementById('issue-error-message');
-            errorDiv.textContent = '';
+            const msgDiv = document.getElementById('issue-error-message');
+            msgDiv.textContent = '';
 
 
             try {
                 const result = await handleApi(`${API_BASE}/issue`, { method: 'POST', body: JSON.stringify(data) });
-                alert(`✅ Issued to student ID ${data.student_id}. Due Date: ${new Date(result.due_date).toLocaleDateString()}.`);
+                msgDiv.className = 'mt-2 text-success';
+                msgDiv.textContent = `✅ Issued to ${data.student_id.substring(0, 8)}.... Due: ${new Date(result.due_date).toLocaleDateString()}.`;
                 form.reset();
                 fetchCatalog();
-                fetchCirculationHistory(); // Refresh history
             } catch (error) {
-                errorDiv.textContent = `❌ Issue Failed: ${error.message}`;
+                msgDiv.className = 'mt-2 text-danger';
+                msgDiv.textContent = `❌ Issue Failed: ${error.message}`;
             }
         });
 
-        // Return Book Form Submission
         document.getElementById('return-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
             const formData = new FormData(form);
             const data = Object.fromEntries(formData.entries());
-            const errorDiv = document.getElementById('return-error-message');
-            errorDiv.textContent = '';
+            const msgDiv = document.getElementById('return-error-message');
+            msgDiv.textContent = '';
 
             try {
                 const result = await handleApi(`${API_BASE}/return`, { method: 'POST', body: JSON.stringify(data) });
-                alert(`✅ Return Processed. Fine Calculated: ₹${parseFloat(result.fine_calculated).toFixed(2)}.`);
+                msgDiv.className = 'mt-2 text-success';
+                msgDiv.textContent = `✅ Return Processed. Fine: ₹${parseFloat(result.fine_calculated).toFixed(2)}. Status: ${result.status}`;
                 form.reset();
                 fetchCatalog();
-                fetchCirculationHistory(); // Refresh history
             } catch (error) {
-                errorDiv.textContent = `❌ Return Failed: ${error.message}`;
+                msgDiv.className = 'mt-2 text-danger';
+                msgDiv.textContent = `❌ Return Failed: ${error.message}`;
+            }
+        });
+        
+        // NEW: Renewal Submission
+        document.getElementById('renewal-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+            const msgDiv = document.getElementById('renewal-error-message');
+            msgDiv.textContent = '';
+
+            try {
+                // Assuming POST /api/library/renew route exists for renewal
+                const result = await handleApi(`${API_BASE}/renew`, { method: 'POST', body: JSON.stringify(data) });
+                msgDiv.className = 'mt-2 text-success';
+                msgDiv.textContent = `✅ Renewal Successful. New Due Date: ${new Date(result.new_due_date).toLocaleDateString()}.`;
+                form.reset();
+                fetchCatalog();
+            } catch (error) {
+                msgDiv.className = 'mt-2 text-danger';
+                msgDiv.textContent = `❌ Renewal Failed: ${error.message}`;
             }
         });
 
+        // NEW: Reservation Search Action
+        function handleReservationSearch() {
+            // Placeholder for viewing pending reservations (Requires GET /api/library/reservations route)
+            alert("Viewing Reservations: This requires fetching a list of pending reservation requests from the backend.");
+            // You would typically navigate to a dedicated page or load a modal here.
+            // window.location.href = '/reservation-queue.html';
+        }
+
+
         // ===================================
-        // 3. HISTORY FUNCTIONS
+        // 4. HISTORY FUNCTIONS
         // ===================================
         
         // History Search Submission
@@ -391,20 +459,21 @@
             const studentId = document.getElementById('history-student-id').value.trim();
             const accessionNo = document.getElementById('history-accession-no').value.trim();
             
-            // Only search if at least one field is filled
-            if (!studentId && !accessionNo) {
-                 document.getElementById('history-error-message').textContent = 'Please enter a Student ID or Accession Number to search.';
-                 return;
-            }
-
-            fetchCirculationHistory(studentId, accessionNo);
+            fetchCirculationHistory(studentId, accessionNo, false);
         });
 
 
-        async function fetchCirculationHistory(studentId = null, accessionNo = null) {
+        async function fetchCirculationHistory(studentId = null, accessionNo = null, isDefault = false) {
             const tbody = document.getElementById('history-tbody');
             const errorDiv = document.getElementById('history-error-message');
             errorDiv.textContent = '';
+            
+            if (!studentId && !accessionNo && !isDefault) {
+                 errorDiv.textContent = 'Please enter a Student ID or Accession Number to search.';
+                 tbody.innerHTML = '<tr><td colspan="6">Enter criteria above or click Search History for recent records.</td></tr>';
+                 return;
+            }
+
             tbody.innerHTML = '<tr><td colspan="6">Searching...</td></tr>';
             
             let url = `${API_BASE}/history`;
@@ -417,7 +486,6 @@
             }
 
             try {
-                // NOTE: This assumes a new route GET /api/library/history exists on the backend
                 const data = await handleApi(url); 
                 
                 if (data.length === 0) {
@@ -428,7 +496,7 @@
                 tbody.innerHTML = data.map(record => `
                     <tr>
                         <td><strong>${record.title}</strong> (${record.accession_number})</td>
-                        <td>${record.student_id}</td>
+                        <td>${record.student_id ? record.student_id.substring(0, 8) + '...' : 'N/A'}</td>
                         <td>${formatDate(record.issue_date)}</td>
                         <td>${formatDate(record.due_date)}</td>
                         <td>${record.return_date ? formatDate(record.return_date) : '— Active —'}</td>
@@ -446,7 +514,7 @@
 
 
         // ===================================
-        // 4. CONFIGURATION FUNCTIONS
+        // 5. CONFIGURATION FUNCTIONS
         // ===================================
 
         async function fetchConfig() {
@@ -469,10 +537,9 @@
             errorDiv.textContent = '';
             
             try {
-                // Links to the PUT /api/library/config route
                 await handleApi(`${API_BASE}/config`, { method: 'PUT', body: JSON.stringify(data) });
                 alert('Configuration saved successfully!');
-                fetchConfig(); // Reload to confirm state
+                fetchConfig(); 
             } catch (error) {
                 errorDiv.textContent = `❌ Failed to save config: ${error.message}`;
             }

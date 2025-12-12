@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Available E-books</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
+        .container { max-width: 1000px; margin-top: 50px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 30px; }
+        .ebook-card { border: 1px solid #ddd; border-radius: 8px; padding: 15px; margin-bottom: 15px; display: flex; align-items: center; background-color: #ffffff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .ebook-icon { font-size: 2em; color: #dc3545; margin-right: 15px; }
+        .ebook-details { flex-grow: 1; }
+        .ebook-title { font-weight: bold; font-size: 1.1em; color: #333; }
+        .ebook-meta { font-size: 0.9em; color: #6c757d; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        
+        <h1>Available E-books & Resources</h1>
+        
+        <div id="ebooks-list">
+            <p class="text-center text-info">Loading available e-books...</p>
+        </div>
+        
+        <p id="status-message" class="text-center mt-4"></p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const ebooksList = document.getElementById('ebooks-list');
+        const statusMessage = document.getElementById('status-message');
+        
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        const API_BASE_URL = '/api/media'; // Assuming media router handles general files/ebooks
+
+        async function fetchEbooks() {
+            ebooksList.innerHTML = '';
+            statusMessage.textContent = '';
+            
+            try {
+                // Assuming a route to fetch all viewable ebooks/resources
+                const response = await fetch(`${API_BASE_URL}/ebooks/public`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to load data: ${response.statusText}`);
+                }
+
+                const ebooks = await response.json();
+                
+                if (ebooks.length === 0) {
+                    ebooksList.innerHTML = '<p class="text-center text-secondary">No e-books are currently available in the public repository.</p>';
+                    return;
+                }
+
+                ebooks.forEach(book => {
+                    const card = document.createElement('div');
+                    card.className = 'ebook-card';
+                    card.innerHTML = `
+                        <div class="ebook-icon"><i class="fas fa-file-pdf"></i></div>
+                        <div class="ebook-details">
+                            <div class="ebook-title">${book.title || 'Untitled Resource'}</div>
+                            <div class="ebook-meta">Author: ${book.author || 'N/A'} | Subject: ${book.subject_area || 'General'} | File Type: ${book.file_type}</div>
+                        </div>
+                        <a href="/uploads/media/${book.file_path}" target="_blank" class="btn btn-sm btn-success">
+                            <i class="fas fa-download"></i> Download
+                        </a>
+                    `;
+                    ebooksList.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error("Ebook Fetch Error:", error);
+                statusMessage.className = 'text-danger mt-4';
+                statusMessage.textContent = `Error fetching e-books: ${error.message}`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchEbooks);
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

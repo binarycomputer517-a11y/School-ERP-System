@@ -6,13 +6,14 @@ const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 const moment = require('moment'); 
 const { v4: uuidv4 } = require('uuid');
+const fs = require('fs/promises'); // For file deletion logic (e.g., if needed in inventory/catalog)
 
 // --- Table Constants ---
 const CATALOG_TABLE = 'library_catalog';
 const INVENTORY_TABLE = 'book_inventory';
 const CIRCULATION_TABLE = 'book_circulation';
 const CONFIG_TABLE = 'library_config';
-const STUDENT_TABLE = 'students'; // To link circulation/fines to student profiles
+const STUDENT_TABLE = 'students'; 
 const USER_TABLE = 'users';
 
 // --- Role Definitions ---
@@ -401,6 +402,74 @@ router.post('/return', authenticateToken, authorize(MANAGER_ROLES), async (req, 
 });
 
 
+/**
+ * @route   POST /api/library/renew
+ * @desc    Renew a currently issued book. Extends due date.
+ * @access  Private (Admin, Teacher, Super Admin)
+ */
+router.post('/renew', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
+    const { accession_number } = req.body;
+    
+    if (!accession_number) {
+        return res.status(400).json({ message: 'Missing accession number.' });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // 1. Find the active circulation record
+        const circulationQuery = `
+            SELECT circ.id, circ.due_date, circ.inventory_id
+            FROM ${CIRCULATION_TABLE} circ
+            JOIN ${INVENTORY_TABLE} inv ON circ.inventory_id = inv.id
+            WHERE inv.accession_number = $1 AND circ.is_returned = FALSE;
+        `;
+        const circRes = await client.query(circulationQuery, [accession_number]);
+        const circRecord = circRes.rows[0];
+
+        if (!circRecord) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Book not actively issued or Accession No. is wrong.' });
+        }
+        
+        // 2. Check if overdue (renewal might be disallowed or incur fine if overdue)
+        const dueDate = moment(circRecord.due_date);
+        if (dueDate.isBefore(moment(), 'day')) {
+             await client.query('ROLLBACK');
+             return res.status(409).json({ message: 'Renewal failed: Book is currently overdue. Must be returned first.' });
+        }
+
+        // 3. Calculate New Due Date
+        const { maxDays } = await getFineConfig();
+        const newDueDate = moment().add(maxDays, 'days').format('YYYY-MM-DD');
+
+        // 4. Update Circulation Record
+        const renewalQuery = `
+            UPDATE ${CIRCULATION_TABLE} SET
+                due_date = $1,
+                renewal_count = COALESCE(renewal_count, 0) + 1
+            WHERE id = $2
+            RETURNING due_date;
+        `;
+        const renewalResult = await client.query(renewalQuery, [newDueDate, circRecord.id]);
+
+        await client.query('COMMIT');
+        res.status(200).json({ 
+            message: 'Book renewed successfully.', 
+            new_due_date: renewalResult.rows[0].due_date 
+        });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Book Renewal Error:', error);
+        res.status(500).json({ message: error.message || 'Failed to process book renewal.' });
+    } finally {
+        client.release();
+    }
+});
+
+
 // =========================================================
 // 4. STUDENT VIEW (Dashboard Integration) 
 // =========================================================
@@ -509,7 +578,7 @@ router.get('/history', authenticateToken, authorize(LIBRARY_ROLES), async (req, 
 
 
 // =========================================================
-// 5. FINE MANAGEMENT
+// 5. FINE MANAGEMENT (FIXED SQL CALCULATION)
 // =========================================================
 
 /**
@@ -533,19 +602,24 @@ router.get('/fines/my-fines', authenticateToken, authorize(['Student', 'Staff'])
             SELECT
                 circ.id AS circulation_id, circ.due_date, circ.return_date, 
                 circ.fine_amount, circ.payment_status,
-                (EXTRACT(DAY FROM (circ.return_date - circ.due_date))) AS days_late,
+                -- ✅ FIX: Calculate days late between return date and due date
+                CASE
+                    WHEN circ.return_date IS NOT NULL AND circ.return_date > circ.due_date
+                    THEN (circ.return_date - circ.due_date)
+                    ELSE 0
+                END AS days_late,
                 lc.title AS book_title
             FROM ${CIRCULATION_TABLE} circ
             JOIN ${INVENTORY_TABLE} bi ON circ.inventory_id = bi.id
             JOIN ${CATALOG_TABLE} lc ON bi.book_id = lc.id
-            WHERE circ.student_id = $1::uuid AND (circ.fine_amount > 0 OR circ.payment_status = 'Paid')
+            WHERE circ.student_id = $1::uuid AND (circ.fine_amount > 0 OR circ.payment_status = 'Paid' OR circ.payment_status = 'Waived')
             ORDER BY circ.issue_date DESC;
         `;
         const { rows } = await pool.query(query, [profileIdColumn]);
 
         res.status(200).json({ 
             records: rows,
-            total_due: rows.reduce((acc, r) => acc + (r.payment_status !== 'Paid' ? parseFloat(r.fine_amount || 0) : 0), 0)
+            total_due: rows.reduce((acc, r) => acc + (r.payment_status === 'Pending' ? parseFloat(r.fine_amount || 0) : 0), 0)
         });
 
     } catch (error) {
@@ -566,7 +640,14 @@ router.get('/fines/all', authenticateToken, authorize(MANAGER_ROLES), async (req
     let query = `
         SELECT
             circ.id AS circulation_id, circ.due_date, circ.fine_amount, circ.payment_status,
-            (EXTRACT(DAY FROM (CURRENT_DATE - circ.due_date))) AS days_late,
+            -- ✅ FIX: Calculate days late using date difference (CURRENT_DATE - circ.due_date)
+            CASE 
+                WHEN circ.is_returned = FALSE AND circ.due_date < CURRENT_DATE
+                THEN (CURRENT_DATE - circ.due_date) 
+                WHEN circ.return_date > circ.due_date AND circ.is_returned = TRUE
+                THEN (circ.return_date - circ.due_date)
+                ELSE 0 
+            END AS days_late,
             lc.title AS book_title, bi.accession_number,
             u.username AS student_name, s.student_id
         FROM ${CIRCULATION_TABLE} circ
@@ -574,7 +655,7 @@ router.get('/fines/all', authenticateToken, authorize(MANAGER_ROLES), async (req
         JOIN ${CATALOG_TABLE} lc ON bi.book_id = lc.id
         JOIN ${STUDENT_TABLE} s ON circ.student_id = s.student_id
         JOIN ${USER_TABLE} u ON s.user_id = u.id
-        WHERE circ.fine_amount > 0 
+        WHERE circ.fine_amount > 0 OR circ.is_returned = FALSE AND circ.due_date < CURRENT_DATE 
     `;
     
     const params = [];
@@ -638,10 +719,9 @@ router.put('/fines/:circulationId/waive', authenticateToken, authorize(MANAGER_R
 });
 
 // =========================================================
-// 6. RENEWAL/RESERVATION (Stubs for Future)
+// 6. RENEWAL/RESERVATION (Reservation Stubs)
 // =========================================================
 
-// Placeholder for POST /api/library/renew
 // Placeholder for POST /api/library/reserve
 
 module.exports = router;
