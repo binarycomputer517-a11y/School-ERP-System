@@ -5,6 +5,18 @@
     <title>Upload Media</title>
     <link rel="stylesheet" href="/css/style.css">
     <style>
+        /* Classic Styles */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #EFEFEF; color: #111; }
+        .container { 
+            max-width: 800px; margin: auto; padding: 40px; background-color: #FFFFFF; 
+            border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; border-radius: 0; 
+        }
+        h1 { 
+            color: #005A9C; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 3px solid #555; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.0em;
+        }
+
         .upload-form-group {
             margin-bottom: 15px;
         }
@@ -12,6 +24,35 @@
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
+            color: #333;
+        }
+        .upload-form-group input[type="text"], 
+        .upload-form-group textarea, 
+        .upload-form-group select {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            border: 1px solid #555;
+            border-radius: 0;
+            font-family: 'Times New Roman', serif;
+        }
+        .upload-form-group input[type="file"] {
+            border: 1px solid #555;
+            padding: 5px;
+        }
+        button {
+            background-color: #C0392B; color: white; padding: 10px 15px; border: 2px solid #000; border-radius: 0; 
+            cursor: pointer; margin-top: 15px; box-shadow: 2px 2px 0 #000; font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #96281B;
+        }
+        .nav-links a {
+            color: #005A9C;
+            text-decoration: none;
+            font-weight: bold;
+            margin-right: 15px;
         }
     </style>
 </head>
@@ -20,8 +61,8 @@
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
     
-    // Auth check: Only Admin or Teacher roles should access the upload page
-    if (!token || (userRole !== 'Admin' && userRole !== 'Teacher')) {
+    // Auth check: Only authorized roles should access the upload page (Admin, Teacher, Librarian, Super Admin)
+    if (!token || !['Admin', 'Teacher', 'Super Admin', 'Librarian'].includes(userRole)) {
         window.location.href = '/login';
     }
 </script>
@@ -29,7 +70,7 @@
 <div class="container">
     <h1>Upload New Media Item</h1>
     <div class="nav-links">
-        <a href="/media-gallery.html">Back to Gallery</a> |
+        <a href="/media-gallery.html">Back to Gallery</a> 
         <a href="/dashboard.html">Back to Dashboard</a>
     </div>
 
@@ -50,12 +91,13 @@
             <select id="media_type" name="media_type" required>
                 <option value="Image">Image</option>
                 <option value="Video">Video</option>
+                <option value="Ebook">E-book/PDF</option> 
             </select>
         </div>
         
         <div class="upload-form-group">
             <label for="file">Select File (Max size 50MB):</label>
-            <input type="file" id="file" name="file" accept="image/*,video/*" required>
+            <input type="file" id="file" name="file" accept="image/*,video/*,.pdf,.doc,.docx,.epub" required>
         </div>
 
         <div class="upload-form-group">
@@ -87,12 +129,10 @@
         submitButton.disabled = true;
 
         try {
-            // Note: The backend route '/api/media/upload' must be configured with Multer
+            // NOTE: Uses the generic /api/media/upload route
             const response = await fetch('/api/media/upload', {
                 method: 'POST',
                 headers: { 
-                    // DO NOT manually set Content-Type for FormData, 
-                    // the browser handles it automatically with the boundary parameter
                     'Authorization': authHeaders.Authorization 
                 },
                 body: formData

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Media Gallery</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"> 
     <style>
         /* Placeholder styling for the gallery view */
         .gallery-grid {
@@ -13,16 +14,41 @@
             margin-top: 20px;
         }
         .media-item {
-            border: 1px solid #ccc;
+            border: 1px solid #333; /* Darker border for classic design */
             padding: 10px;
-            border-radius: 8px;
+            border-radius: 0; /* Classic square corners */
             text-align: center;
+            box-shadow: 3px 3px 0 #ccc; /* Simple box shadow */
+            background-color: #fcfcfc;
         }
         .media-item img, .media-item video {
             width: 100%;
             height: 180px;
             object-fit: cover;
-            border-radius: 4px;
+            border-radius: 2px;
+            border: 1px solid #555;
+        }
+        /* Style for Ebook icon box */
+        .ebook-placeholder {
+            height: 180px; 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            background: #f0f0f0; 
+            border: 1px solid #ddd;
+        }
+        /* Filter Bar Styling */
+        .filter-bar {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            margin-bottom: 20px;
+            align-items: center;
+        }
+        .filter-bar input, .filter-bar select, .filter-bar button {
+            padding: 8px;
+            border: 1px solid #555;
+            border-radius: 0;
         }
     </style>
 </head>
@@ -40,14 +66,15 @@
         <a href="/upload-media.html" id="upload-link" style="display: none;">Upload Media</a>
     </div>
 
-    <div style="margin-top: 20px; margin-bottom: 20px;">
-        <input type="text" id="search-media" placeholder="Search by event or title...">
-        <select id="media-filter">
+    <div class="filter-bar">
+        <input type="text" id="search-media" placeholder="Search by event or title..." oninput="filterMedia()">
+        <select id="media-filter" onchange="filterMedia()">
             <option value="">All Media</option>
             <option value="Image">Images</option>
             <option value="Video">Videos</option>
+            <option value="Ebook">E-books/PDFs</option>
         </select>
-        <button onclick="filterMedia()">Search</button>
+        <button onclick="filterMedia()">Apply Filter</button>
     </div>
 
     <div id="gallery-container" class="gallery-grid">
@@ -61,54 +88,30 @@
 <script>
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     const userRole = localStorage.getItem('user-role');
+    let masterMediaData = []; // Global store for client-side filtering
     
-    // Show upload link only for admins/teachers
-    if (userRole === 'Admin' || userRole === 'Teacher') {
+    // Show upload link only for admins/teachers/super admins
+    if (userRole === 'Admin' || userRole === 'Teacher' || userRole === 'Super Admin' || userRole === 'Librarian') {
         document.getElementById('upload-link').style.display = 'inline';
     }
 
     async function fetchMedia() {
         const statusElement = document.getElementById('loading-status');
-        const galleryContainer = document.getElementById('gallery-container');
         statusElement.style.display = 'block';
-        galleryContainer.innerHTML = '';
-        document.getElementById('no-media-message').style.display = 'none';
         
         try {
-            // Fetch media from the backend endpoint
+            // NOTE: Using the generic /api/media route which fetches all public and user-specific media
             const response = await fetch('/api/media', { headers: authHeaders });
             
             if (!response.ok) {
                 let errorDetails = `Failed to fetch media: ${response.status} ${response.statusText}`;
-                try {
-                    const errorJson = await response.json();
-                    errorDetails = errorJson.error || errorJson.details || errorDetails;
-                } catch (e) {}
                 throw new Error(errorDetails);
             }
             
-            const mediaItems = await response.json();
+            masterMediaData = await response.json();
             
             statusElement.style.display = 'none';
-
-            if (mediaItems.length === 0) {
-                document.getElementById('no-media-message').style.display = 'block';
-                return;
-            }
-
-            mediaItems.forEach(item => {
-                galleryContainer.innerHTML += `
-                    <div class="media-item">
-                        ${item.media_type === 'Video' 
-                            // FIX: Use /uploads/${item.file_path} to prevent the double 'media/media' in the URL
-                            ? `<video controls src="/uploads/${item.file_path}"></video>`
-                            : `<img src="/uploads/${item.file_path}" alt="${item.title}">`
-                        }
-                        <h4>${item.title}</h4>
-                        <p><small>Type: ${item.media_type} | Date: ${new Date(item.upload_date).toLocaleDateString()}</small></p>
-                    </div>
-                `;
-            });
+            filterMedia(); // Display all on initial load
 
         } catch (err) {
             console.error("Error fetching media:", err);
@@ -117,9 +120,61 @@
         }
     }
 
-    // Placeholder function for filtering
+    // --- Client-Side Filtering ---
     function filterMedia() {
-        console.log("Filtering media...");
+        const galleryContainer = document.getElementById('gallery-container');
+        const searchInput = document.getElementById('search-media').value.toLowerCase();
+        const mediaType = document.getElementById('media-filter').value;
+        const noMediaMessage = document.getElementById('no-media-message');
+
+        const filteredItems = masterMediaData.filter(item => {
+            const matchesSearch = item.title.toLowerCase().includes(searchInput) ||
+                                  (item.description && item.description.toLowerCase().includes(searchInput));
+            
+            const matchesType = !mediaType || item.media_type === mediaType;
+            
+            return matchesSearch && matchesType;
+        });
+
+        galleryContainer.innerHTML = '';
+
+        if (filteredItems.length === 0) {
+            noMediaMessage.style.display = 'block';
+            return;
+        }
+
+        noMediaMessage.style.display = 'none';
+
+        filteredItems.forEach(item => {
+            let mediaHtml;
+
+            // Logic to handle Ebook type
+            if (item.media_type === 'Video') {
+                mediaHtml = `<video controls src="/uploads/${item.file_path}"></video>`;
+            } else if (item.media_type === 'Ebook') {
+                // Display PDF icon and direct download link
+                mediaHtml = `
+                    <div class="ebook-placeholder">
+                        <i class="fas fa-file-pdf" style="font-size: 4em; color: #dc3545;"></i>
+                    </div>
+                `;
+            } else { // Assume Image
+                mediaHtml = `<img src="/uploads/${item.file_path}" alt="${item.title}">`;
+            }
+            
+            // Generate the final HTML card
+            galleryContainer.innerHTML += `
+                <div class="media-item">
+                    ${mediaHtml}
+                    <h4>${item.title}</h4>
+                    <p><small>Type: ${item.media_type} | Date: ${new Date(item.upload_date).toLocaleDateString()}</small></p>
+                    <p><small class="text-muted">Access: ${item.access_level}</small></p>
+                    ${item.media_type === 'Ebook' ? 
+                        `<a href="/uploads/${item.file_path}" target="_blank" class="btn btn-sm" style="background-color: #005A9C; color: white; padding: 5px 10px; text-decoration: none;">Download Ebook</a>` : ''
+                    }
+                </div>
+            `;
+        });
     }
 
     window.onload = fetchMedia;
