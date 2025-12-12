@@ -3,17 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <title>Search Library Catalog</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="/css/style.css"> 
     <style>
+        /* Basic Styles */
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; }
+        .container { max-width: 900px; margin: auto; background-color: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
+        h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; }
+        .nav-links { margin-bottom: 20px; }
+
+        /* Search & Filter Styles */
         .search-filters { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
+        .search-filters input, .search-filters select, .search-filters button { padding: 8px; border: 1px solid #ccc; }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; }
+        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+        th { background-color: #003366; color: white; }
+
+        /* Status Badges */
         .status-available { color: green; font-weight: bold; }
         .status-issued { color: #d9534f; font-weight: bold; }
+        .status-none { color: orange; font-weight: bold; }
     </style>
 </head>
 <body>
     <script>
         const token = localStorage.getItem('erp-token');
-        if (!token) { // Accessible by Student, Teacher, Admin
+        if (!token) { 
+            // Accessible by Student, Teacher, Admin
             window.location.href = '/login';
         }
     </script>
@@ -35,13 +52,15 @@
                 <tr>
                     <th>Title</th>
                     <th>Author</th>
-                    <th>Categories</th>
+                    <th>Subject Area</th>
+                    <th>Available Copies</th>
                     <th>Status</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody id="results-body">
-                </tbody>
+                <tr><td colspan="6" style="text-align: center;">Loading categories and catalog...</td></tr>
+            </tbody>
         </table>
     </div>
 
@@ -50,79 +69,102 @@
 
     function loadCategories() {
         const catFilter = document.getElementById('category-filter');
+        
+        // Load categories using the new /api/library/categories route
         fetch('/api/library/categories', { headers: authHeaders })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to fetch categories.');
+                return res.json();
+            })
             .then(cats => {
-                cats.forEach(c => catFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                // Ensure cats is an array (prevents TypeError: forEach is not a function)
+                if (Array.isArray(cats)) {
+                    cats.forEach(c => {
+                        // Assuming c.id (subject_area) and c.name are passed from the backend
+                        catFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                    });
+                }
+            })
+            .catch(error => {
+                console.error("Category Load Error:", error);
+                // The frontend should continue even if categories fail to load
             });
     }
 
     function searchBooks() {
         const resultsBody = document.getElementById('results-body');
-        resultsBody.innerHTML = '<tr><td colspan="5">Searching...</td></tr>';
+        resultsBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Searching...</td></tr>';
 
         const search = document.getElementById('search-input').value;
         const category = document.getElementById('category-filter').value;
         
+        // Use backend's expected query parameters: search and category_name
         let url = `/api/library/books?`;
         if (search) url += `search=${encodeURIComponent(search)}&`;
-        if (category) url += `category=${category}&`;
+        if (category) url += `category_name=${encodeURIComponent(category)}&`; // Use category_name parameter
         
         fetch(url, { headers: authHeaders })
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Failed to fetch books.');
+                return res.json();
+            })
             .then(books => {
                 resultsBody.innerHTML = '';
-                if (books.length === 0) {
-                    resultsBody.innerHTML = '<tr><td colspan="5">No books found matching your criteria.</td></tr>';
+                // Ensure books is an array
+                if (!Array.isArray(books) || books.length === 0) {
+                    resultsBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No books found matching your criteria.</td></tr>';
                     return;
                 }
 
                 books.forEach(book => {
+                    const available = parseInt(book.available_copies || 0);
+                    const total = parseInt(book.total_copies || 0);
                     let statusHtml, actionHtml;
-                    if (book.available_quantity > 0) {
-                        statusHtml = `<span class="status-available">Available</span>`;
-                        actionHtml = `<span>-</span>`;
+
+                    if (available > 0) {
+                        statusHtml = `<span class="status-available">Available (${available})</span>`;
+                        actionHtml = `<button onclick="requestBook('${book.id}')">Issue/Request</button>`;
+                    } else if (total > 0) {
+                        statusHtml = `<span class="status-issued">Issued (0)</span>`;
+                        actionHtml = `<button onclick="reserveBook('${book.id}')">Reserve</button>`;
                     } else {
-                        statusHtml = `<span class="status-issued">Issued</span>`;
-                        actionHtml = `<button onclick="reserveBook(${book.id})">Reserve</button>`;
+                        statusHtml = `<span class="status-none">No Copies</span>`;
+                        actionHtml = `<span>-</span>`;
                     }
 
                     resultsBody.innerHTML += `
                         <tr>
                             <td>${book.title}</td>
                             <td>${book.author}</td>
-                            <td>${book.categories ? book.categories.join(', ') : 'N/A'}</td>
+                            <td>${book.subject_area || 'General'}</td>
+                            <td>${available} / ${total}</td>
                             <td>${statusHtml}</td>
                             <td>${actionHtml}</td>
                         </tr>
                     `;
                 });
+            })
+            .catch(error => {
+                console.error("Book Search Error:", error);
+                resultsBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error searching catalog.</td></tr>';
             });
     }
 
-    function reserveBook(bookId) {
-        if (!confirm('Are you sure you want to reserve this book? You will be notified when it becomes available.')) {
-            return;
-        }
+    function requestBook(bookId) {
+        // Book ID here is the Catalog ID (lc.id)
+        alert(`Requesting book ID: ${bookId}. (Implementation required: POST to /api/library/request)`);
+    }
 
-        fetch('/api/library/reserve', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...authHeaders },
-            body: JSON.stringify({ book_id: bookId })
-        }).then(res => {
-            if (res.ok) {
-                alert('Book reserved successfully! Check your dashboard for reservation status.');
-                searchBooks(); // Refresh the search results to potentially update the UI
-            } else {
-                res.text().then(text => alert('Error: ' + text));
-            }
-        });
+    function reserveBook(bookId) {
+        // Book ID here is the Catalog ID (lc.id)
+        alert(`Reserving book ID: ${bookId}. (Implementation required: POST to /api/library/reserve)`);
     }
 
     // Load categories and perform an initial search when the page loads
     window.onload = () => {
         loadCategories();
-        searchBooks();
+        // Initial search is usually run after categories load, but running here for quick startup
+        searchBooks(); 
     };
 </script>
 <script src="js/global-config.js"></script>

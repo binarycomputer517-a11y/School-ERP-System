@@ -4,17 +4,34 @@ const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
-const moment = require('moment'); // Required for date calculations
+const moment = require('moment'); 
+const { v4: uuidv4 } = require('uuid');
 
 // --- Table Constants ---
 const CATALOG_TABLE = 'library_catalog';
 const INVENTORY_TABLE = 'book_inventory';
 const CIRCULATION_TABLE = 'book_circulation';
 const CONFIG_TABLE = 'library_config';
+const STUDENT_TABLE = 'students'; // To link circulation/fines to student profiles
+const USER_TABLE = 'users';
 
 // --- Role Definitions ---
-const MANAGER_ROLES = ['Super Admin', 'Admin', 'Teacher'];
+const MANAGER_ROLES = ['Super Admin', 'Admin', 'Librarian', 'Teacher'];
 const ADMIN_ROLE = ['Super Admin', 'Admin'];
+const LIBRARY_ROLES = ['Super Admin', 'Admin', 'Librarian', 'Teacher', 'Student', 'Staff']; 
+
+// --- Helper: Get Fine Config ---
+async function getFineConfig() {
+    const configRes = await pool.query(`SELECT config_key, config_value FROM ${CONFIG_TABLE}`);
+    const config = configRes.rows.reduce((acc, row) => {
+        acc[row.config_key] = row.config_value;
+        return acc;
+    }, {});
+    const maxDays = parseInt(config.max_issue_days || '14', 10);
+    const dailyFine = parseFloat(config.daily_fine_rate || '5.00');
+    return { maxDays, dailyFine };
+}
+
 
 // =========================================================
 // 1. CONFIGURATION & CATALOG MANAGEMENT 
@@ -23,10 +40,9 @@ const ADMIN_ROLE = ['Super Admin', 'Admin'];
 /**
  * @route   GET /api/library/config
  * @desc    Get library configuration settings.
- * @access  Private (Admin, Teacher, Student, Super Admin)
+ * @access  Private (All authenticated users)
  */
 router.get('/config', authenticateToken, async (req, res) => {
-    // Allowing access to all authenticated users for simplicity
     try {
         const result = await pool.query(`SELECT config_key, config_value FROM ${CONFIG_TABLE}`);
         const config = result.rows.reduce((acc, row) => {
@@ -171,7 +187,81 @@ router.post('/inventory', authenticateToken, authorize(MANAGER_ROLES), async (re
 
 
 // =========================================================
-// 2. CIRCULATION (ISSUE & RETURN)
+// 2. SEARCH & BROWSING (OPAC Functionality)
+// =========================================================
+
+/**
+ * @route   GET /api/library/categories
+ * @desc    Fetch a list of all library categories (subject areas).
+ * @access  Private (All authenticated users)
+ */
+router.get('/categories', authenticateToken, authorize(LIBRARY_ROLES), async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT subject_area AS name, subject_area AS id 
+            FROM ${CATALOG_TABLE}
+            WHERE subject_area IS NOT NULL AND subject_area != ''
+            ORDER BY subject_area;
+        `;
+        const { rows } = await pool.query(query);
+        const categories = rows.map(row => ({ 
+            id: row.id, 
+            name: row.name 
+        }));
+        res.status(200).json(categories);
+    } catch (err) {
+        console.error('Error fetching library categories:', err);
+        res.status(500).json([]); 
+    }
+});
+
+
+/**
+ * @route   GET /api/library/books
+ * @desc    Search library books based on keywords or subject area.
+ * @access  Private (All authenticated users)
+ */
+router.get('/books', authenticateToken, authorize(LIBRARY_ROLES), async (req, res) => {
+    const { search, category_name } = req.query; 
+    
+    try {
+        let query = `
+            SELECT 
+                lc.id, lc.title, lc.author, lc.isbn, lc.subject_area,
+                (SELECT COUNT(id) FROM ${INVENTORY_TABLE} WHERE book_id = lc.id AND is_active = TRUE) AS total_copies,
+                (SELECT COUNT(id) FROM ${INVENTORY_TABLE} WHERE book_id = lc.id AND status = 'Available' AND is_active = TRUE) AS available_copies
+            FROM ${CATALOG_TABLE} lc
+            WHERE 1 = 1
+        `;
+        
+        const params = [];
+        let paramIndex = 1;
+
+        if (category_name) {
+            query += ` AND lc.subject_area = $${paramIndex++}`;
+            params.push(category_name);
+        }
+
+        if (search) {
+            query += ` AND (LOWER(lc.title) LIKE $${paramIndex} OR LOWER(lc.author) LIKE $${paramIndex} OR lc.isbn LIKE $${paramIndex})`;
+            params.push(`%${search.toLowerCase()}%`);
+        }
+        
+        query += ` ORDER BY lc.title ASC`;
+
+        const { rows } = await pool.query(query, params);
+        
+        res.status(200).json(rows); 
+
+    } catch (err) {
+        console.error('Error fetching library books:', err);
+        res.status(500).json([]); 
+    }
+});
+
+
+// =========================================================
+// 3. CIRCULATION (ISSUE & RETURN) 
 // =========================================================
 
 /**
@@ -204,8 +294,7 @@ router.post('/issue', authenticateToken, authorize(MANAGER_ROLES), async (req, r
         }
         
         // 2. Get Config (Max Days)
-        const configRes = await client.query(`SELECT config_value FROM ${CONFIG_TABLE} WHERE config_key = 'max_issue_days'`);
-        const maxDays = parseInt(configRes.rows[0]?.config_value || '14', 10);
+        const { maxDays } = await getFineConfig();
         const dueDate = moment().add(maxDays, 'days').format('YYYY-MM-DD');
 
         // 3. Create Circulation Record
@@ -255,11 +344,9 @@ router.post('/return', authenticateToken, authorize(MANAGER_ROLES), async (req, 
         // 1. Find the active circulation record
         const circulationQuery = `
             SELECT 
-                circ.id, circ.due_date, circ.inventory_id, 
-                config.config_value AS daily_fine_rate
+                circ.id, circ.due_date, circ.inventory_id
             FROM ${CIRCULATION_TABLE} circ
             JOIN ${INVENTORY_TABLE} inv ON circ.inventory_id = inv.id
-            LEFT JOIN ${CONFIG_TABLE} config ON config.config_key = 'daily_fine_rate'
             WHERE inv.accession_number = $1 AND circ.is_returned = FALSE;
         `;
         const circRes = await client.query(circulationQuery, [accession_number]);
@@ -271,14 +358,14 @@ router.post('/return', authenticateToken, authorize(MANAGER_ROLES), async (req, 
         }
         
         // 2. Calculate Fine
+        const { dailyFine } = await getFineConfig();
         const dueDate = moment(circRecord.due_date);
         const returnDate = moment();
         let fineAmount = 0.00;
+        let daysLate = 0;
         
         if (returnDate.isAfter(dueDate, 'day')) {
-            const daysLate = returnDate.diff(dueDate, 'days');
-            // Ensure dailyFine is treated as a number
-            const dailyFine = parseFloat(circRecord.daily_fine_rate || '5.00'); 
+            daysLate = returnDate.diff(dueDate, 'days');
             fineAmount = daysLate * dailyFine;
         }
 
@@ -287,9 +374,10 @@ router.post('/return', authenticateToken, authorize(MANAGER_ROLES), async (req, 
             UPDATE ${CIRCULATION_TABLE} SET
                 return_date = CURRENT_DATE,
                 fine_amount = $1,
-                is_returned = TRUE
+                is_returned = TRUE,
+                payment_status = CASE WHEN $1 > 0 THEN 'Pending' ELSE 'Paid' END
             WHERE id = $2
-            RETURNING fine_amount;
+            RETURNING fine_amount, payment_status;
         `;
         const returnResult = await client.query(returnQuery, [fineAmount, circRecord.id]);
 
@@ -297,7 +385,11 @@ router.post('/return', authenticateToken, authorize(MANAGER_ROLES), async (req, 
         await client.query(`UPDATE ${INVENTORY_TABLE} SET status = 'Available' WHERE id = $1`, [circRecord.inventory_id]);
 
         await client.query('COMMIT');
-        res.status(200).json({ message: 'Book returned successfully.', fine_calculated: returnResult.rows[0].fine_amount });
+        res.status(200).json({ 
+            message: 'Book returned successfully.', 
+            fine_calculated: returnResult.rows[0].fine_amount,
+            status: returnResult.rows[0].payment_status
+        });
 
     } catch (error) {
         await client.query('ROLLBACK');
@@ -310,7 +402,7 @@ router.post('/return', authenticateToken, authorize(MANAGER_ROLES), async (req, 
 
 
 // =========================================================
-// 3. STUDENT VIEW (Dashboard Integration)
+// 4. STUDENT VIEW (Dashboard Integration) 
 // =========================================================
 
 /**
@@ -319,10 +411,15 @@ router.post('/return', authenticateToken, authorize(MANAGER_ROLES), async (req, 
  * @access  Private (Student, Super Admin)
  */
 router.get('/student/issued', authenticateToken, authorize(['Student', 'Super Admin']), async (req, res) => {
-    const student_id = req.user.reference_id;
+    // FIX: Using req.user.id (UUID) to fetch the linked student_id
+    const userId = req.user.id; 
     
-    if (!student_id) {
-        return res.status(403).json({ message: 'Student ID not found.' });
+    // Get the linked student_id (Assuming students table links via user_id)
+    const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
+    const studentId = studentRes.rows[0]?.student_id;
+
+    if (!studentId) {
+        return res.status(404).json({ message: 'Student profile not found.' });
     }
 
     try {
@@ -330,7 +427,6 @@ router.get('/student/issued', authenticateToken, authorize(['Student', 'Super Ad
             SELECT
                 circ.id AS circulation_id, circ.issue_date, circ.due_date, 
                 lc.title, lc.author, bi.accession_number,
-                -- Calculate if overdue (for display)
                 (circ.due_date < CURRENT_DATE) AS is_overdue
             FROM ${CIRCULATION_TABLE} circ
             JOIN ${INVENTORY_TABLE} bi ON circ.inventory_id = bi.id
@@ -338,7 +434,7 @@ router.get('/student/issued', authenticateToken, authorize(['Student', 'Super Ad
             WHERE circ.student_id = $1 AND circ.is_returned = FALSE
             ORDER BY circ.due_date;
         `;
-        const result = await pool.query(query, [student_id]);
+        const result = await pool.query(query, [studentId]);
         
         res.status(200).json(result.rows);
 
@@ -348,17 +444,15 @@ router.get('/student/issued', authenticateToken, authorize(['Student', 'Super Ad
     }
 });
 
-
-
-// routes/library.js (add this block)
-
 /**
  * @route   GET /api/library/history
- * @desc    Search and retrieve circulation history.
- * @access  Private (Admin, Teacher, Super Admin)
+ * @desc    Search and retrieve circulation history. (Can be filtered by Student ID)
+ * @access  Private (Admin, Teacher, Student)
  */
-router.get('/history', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
+router.get('/history', authenticateToken, authorize(LIBRARY_ROLES), async (req, res) => {
     const { studentId, accessionNo } = req.query;
+    const userId = req.user.id;
+    const userRole = req.user.role;
 
     let query = `
         SELECT
@@ -372,17 +466,33 @@ router.get('/history', authenticateToken, authorize(MANAGER_ROLES), async (req, 
     const values = [];
     let paramIndex = 1;
 
-    if (studentId) {
+    // --- Student Self-View Restriction ---
+    if (userRole === 'Student' || userRole === 'student') {
+        const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
+        const studentProfileId = studentRes.rows[0]?.student_id;
+
+        if (!studentProfileId) {
+            return res.status(404).json({ message: "Student profile ID not found." });
+        }
+        // Force filter by the logged-in student's ID
         query += ` AND circ.student_id = $${paramIndex++}`;
-        values.push(studentId);
+        values.push(studentProfileId);
     }
+    // --- Admin/Teacher Filters ---
+    else {
+        if (studentId) {
+            query += ` AND circ.student_id = $${paramIndex++}`;
+            values.push(studentId);
+        }
+    }
+
     if (accessionNo) {
         query += ` AND bi.accession_number = $${paramIndex++}`;
         values.push(accessionNo);
     }
     
-    // Default: Show recent records if no search criteria are given
-    if (!studentId && !accessionNo) {
+    // Default: Show recent records if no search criteria are given by admin roles
+    if (!studentId && !accessionNo && userRole !== 'Student' && userRole !== 'student') {
         query += ` ORDER BY circ.issue_date DESC LIMIT 50`;
     } else {
         query += ` ORDER BY circ.issue_date DESC`;
@@ -397,5 +507,141 @@ router.get('/history', authenticateToken, authorize(MANAGER_ROLES), async (req, 
     }
 });
 
-// module.exports = router; // Ensure this is at the end of library.js
+
+// =========================================================
+// 5. FINE MANAGEMENT
+// =========================================================
+
+/**
+ * @route   GET /api/library/fines/my-fines
+ * @desc    Get all fine records (paid/unpaid) for the logged-in user.
+ * @access  Private (Student, Staff)
+ */
+router.get('/fines/my-fines', authenticateToken, authorize(['Student', 'Staff']), async (req, res) => {
+    const userId = req.user.id;
+    
+    // Get the linked student_id 
+    const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
+    const profileIdColumn = studentRes.rows[0]?.student_id;
+    
+    if (!profileIdColumn) {
+        return res.status(404).json({ message: "Profile ID not found for fine tracking." });
+    }
+
+    try {
+        const query = `
+            SELECT
+                circ.id AS circulation_id, circ.due_date, circ.return_date, 
+                circ.fine_amount, circ.payment_status,
+                (EXTRACT(DAY FROM (circ.return_date - circ.due_date))) AS days_late,
+                lc.title AS book_title
+            FROM ${CIRCULATION_TABLE} circ
+            JOIN ${INVENTORY_TABLE} bi ON circ.inventory_id = bi.id
+            JOIN ${CATALOG_TABLE} lc ON bi.book_id = lc.id
+            WHERE circ.student_id = $1::uuid AND (circ.fine_amount > 0 OR circ.payment_status = 'Paid')
+            ORDER BY circ.issue_date DESC;
+        `;
+        const { rows } = await pool.query(query, [profileIdColumn]);
+
+        res.status(200).json({ 
+            records: rows,
+            total_due: rows.reduce((acc, r) => acc + (r.payment_status !== 'Paid' ? parseFloat(r.fine_amount || 0) : 0), 0)
+        });
+
+    } catch (error) {
+        console.error('My Fines Fetch Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve fine records.' });
+    }
+});
+
+
+/**
+ * @route   GET /api/library/fines/all
+ * @desc    Get all pending fine records for Admin/Librarian view.
+ * @access  Private (Admin, Librarian)
+ */
+router.get('/fines/all', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
+    const { search, status } = req.query; 
+
+    let query = `
+        SELECT
+            circ.id AS circulation_id, circ.due_date, circ.fine_amount, circ.payment_status,
+            (EXTRACT(DAY FROM (CURRENT_DATE - circ.due_date))) AS days_late,
+            lc.title AS book_title, bi.accession_number,
+            u.username AS student_name, s.student_id
+        FROM ${CIRCULATION_TABLE} circ
+        JOIN ${INVENTORY_TABLE} bi ON circ.inventory_id = bi.id
+        JOIN ${CATALOG_TABLE} lc ON bi.book_id = lc.id
+        JOIN ${STUDENT_TABLE} s ON circ.student_id = s.student_id
+        JOIN ${USER_TABLE} u ON s.user_id = u.id
+        WHERE circ.fine_amount > 0 
+    `;
+    
+    const params = [];
+    let paramIndex = 1;
+    
+    // Filter by payment status
+    if (status && status !== 'All') {
+        if (status === 'Pending' || status === 'Waived' || status === 'Paid') {
+            query += ` AND circ.payment_status = $${paramIndex++}`;
+            params.push(status);
+        } else if (status === 'Overdue') {
+             // Overdue books that are not yet returned and past due date
+             query += ` AND circ.is_returned = FALSE AND circ.due_date < CURRENT_DATE`;
+        }
+    }
+    
+    // Search by student name or accession number
+    if (search) {
+        query += ` AND (LOWER(u.username) LIKE $${paramIndex} OR LOWER(bi.accession_number) LIKE $${paramIndex})`;
+        params.push(`%${search.toLowerCase()}%`);
+    }
+
+    query += ` ORDER BY circ.due_date ASC`;
+
+    try {
+        const { rows } = await pool.query(query, params);
+        res.status(200).json(rows);
+
+    } catch (error) {
+        console.error('All Fines Fetch Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve all fine records.' });
+    }
+});
+
+/**
+ * @route   PUT /api/library/fines/:circulationId/waive
+ * @desc    Waive a pending fine record.
+ * @access  Private (Admin, Librarian)
+ */
+router.put('/fines/:circulationId/waive', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
+    const { circulationId } = req.params;
+    
+    try {
+        const result = await pool.query(`
+            UPDATE ${CIRCULATION_TABLE} 
+            SET fine_amount = 0, payment_status = 'Waived', processed_by = $1::uuid
+            WHERE id = $2::uuid AND fine_amount > 0 AND payment_status != 'Paid'
+            RETURNING id, fine_amount, payment_status;
+        `, [req.user.id, circulationId]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Active fine record not found or already processed.' });
+        }
+        
+        res.status(200).json({ message: 'Fine successfully waived.', record: result.rows[0] });
+
+    } catch (error) {
+        console.error('Fine Waive Error:', error);
+        res.status(500).json({ message: 'Failed to waive fine.' });
+    }
+});
+
+// =========================================================
+// 6. RENEWAL/RESERVATION (Stubs for Future)
+// =========================================================
+
+// Placeholder for POST /api/library/renew
+// Placeholder for POST /api/library/reserve
+
 module.exports = router;

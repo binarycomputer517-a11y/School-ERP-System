@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Library History</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
+        .container { max-width: 1000px; margin-top: 50px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #003366; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-bottom: 30px; }
+        .table thead th { background-color: #003366; color: white; }
+        
+        /* Status Indicators */
+        .status-returned { color: #155724; background-color: #d4edda; font-weight: bold; }
+        .status-issued { color: #856404; background-color: #fff3cd; font-weight: bold; }
+        .status-overdue { color: white; background-color: #dc3545; font-weight: bold; }
+        .status-na { color: #6c757d; background-color: #e9ecef; font-weight: bold; }
+        
+        .action-cell button { font-size: 0.9em; padding: 5px 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        
+        <h1>My Library Transaction History</h1>
+        
+        <p id="loading-status" class="text-info text-center">Loading your transaction history...</p>
+        
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Book Title</th>
+                        <th>Accession No.</th>
+                        <th>Issued Date</th>
+                        <th>Due Date</th>
+                        <th>Return Date</th>
+                        <th>Fine Paid</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTbody">
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const userId = localStorage.getItem('user-id'); // Assuming user-id is stored upon login
+        const historyTbody = document.getElementById('historyTbody');
+        const loadingStatus = document.getElementById('loading-status');
+        const API_BASE_URL = '/api/library';
+
+        if (!token || !userId) {
+            window.location.href = '/login.html';
+        }
+
+        function formatCurrency(amount) {
+            return `₹${(parseFloat(amount) || 0.00).toFixed(2)}`;
+        }
+
+        function getStatus(dueDate, returnDate) {
+            if (returnDate) {
+                return 'status-returned';
+            }
+            
+            const today = new Date();
+            const due = new Date(dueDate);
+            
+            if (due < today) return 'status-overdue';
+            return 'status-issued';
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        async function fetchMyHistory() {
+            loadingStatus.textContent = 'Fetching transaction history...';
+            historyTbody.innerHTML = '';
+            
+            // Endpoint: GET /api/library/history?studentId=MY_ID
+            // We use the same /history route, filtered by the logged-in user's ID
+            const endpoint = `${API_BASE_URL}/history?studentId=${userId}`;
+
+            try {
+                const response = await fetch(endpoint, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 403 || response.status === 401) {
+                    throw new Error('Authorization failed. Please log in again.');
+                }
+                
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({ message: 'Server error fetching data.' }));
+                    throw new Error(err.message || `HTTP error! Status: ${response.status}`);
+                }
+
+                const records = await response.json();
+                loadingStatus.classList.add('d-none');
+                
+                if (records.length === 0) {
+                    historyTbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">No previous transactions found.</td></tr>';
+                    return;
+                }
+
+                records.forEach(record => {
+                    const statusClass = getStatus(record.due_date, record.return_date);
+                    const statusText = statusClass === 'status-returned' ? 'Returned' : 
+                                       statusClass === 'status-overdue' ? 'OVERDUE' : 
+                                       statusClass === 'status-issued' ? 'Issued' : 'N/A';
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td><strong>${record.title}</strong></td>
+                        <td>${record.accession_number || 'N/A'}</td>
+                        <td>${formatDate(record.issue_date)}</td>
+                        <td>${formatDate(record.due_date)}</td>
+                        <td>${formatDate(record.return_date)}</td>
+                        <td>${formatCurrency(record.fine_amount)}</td>
+                        <td><span class="badge ${statusClass}">${statusText}</span></td>
+                    `;
+                    historyTbody.appendChild(row);
+                });
+                
+            } catch (error) {
+                console.error("History Fetch Error:", error);
+                loadingStatus.classList.remove('d-none');
+                loadingStatus.className = 'text-danger text-center';
+                loadingStatus.textContent = `Error: ${error.message}. Please try logging in again.`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchMyHistory);
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

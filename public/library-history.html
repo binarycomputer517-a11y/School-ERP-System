@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Circulation History</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
+        .container { max-width: 1200px; margin-top: 50px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #003366; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-bottom: 30px; }
+        .filter-section { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); 
+            gap: 15px; 
+            margin-bottom: 25px;
+            padding: 20px;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            background-color: #f7f7f7;
+        }
+        .filter-section input, .filter-section button { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        .table thead th { background-color: #003366; color: white; }
+        
+        /* Status Indicators */
+        .status-returned { color: #155724; background-color: #d4edda; font-weight: bold; }
+        .status-issued { color: #856404; background-color: #fff3cd; font-weight: bold; }
+        .status-overdue { color: white; background-color: #dc3545; font-weight: bold; }
+        
+        .action-cell button { font-size: 0.9em; padding: 5px 10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/admin-dashboard.html" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        
+        <h1>Library Circulation History</h1>
+        
+        <div class="filter-section">
+            <input type="text" id="studentIdInput" placeholder="Search by Student ID (UUID)">
+            <input type="text" id="accessionNoInput" placeholder="Search by Accession No.">
+            <button class="btn btn-primary" onclick="searchHistory()">
+                <i class="fas fa-search"></i> Search History
+            </button>
+            <div id="statusMessage" class="align-self-center text-muted">Enter criteria above or search for recent records.</div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Transaction ID</th>
+                        <th>Book Title</th>
+                        <th>Accession No.</th>
+                        <th>Student ID</th>
+                        <th>Issued Date</th>
+                        <th>Due Date</th>
+                        <th>Return Date</th>
+                        <th>Fine (₹)</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTbody">
+                    <tr><td colspan="8" class="text-center text-secondary">No records found. Perform a search.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const historyTbody = document.getElementById('historyTbody');
+        const statusMessage = document.getElementById('statusMessage');
+        const API_BASE_URL = '/api/library';
+
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        function getStatusClass(issueDate, dueDate, returnDate) {
+            if (returnDate) return 'status-returned';
+            
+            const today = new Date();
+            const due = new Date(dueDate);
+            
+            if (due < today) return 'status-overdue';
+            return 'status-issued';
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '-';
+            return new Date(dateString).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+
+        async function searchHistory() {
+            const studentId = document.getElementById('studentIdInput').value.trim();
+            const accessionNo = document.getElementById('accessionNoInput').value.trim();
+            
+            // Basic validation
+            if (!studentId && !accessionNo) {
+                statusMessage.textContent = 'Showing recent records...';
+            } else {
+                statusMessage.textContent = 'Searching...';
+            }
+
+            historyTbody.innerHTML = '<tr><td colspan="8" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+
+            let queryParams = new URLSearchParams();
+            if (studentId) queryParams.append('studentId', studentId);
+            if (accessionNo) queryParams.append('accessionNo', accessionNo);
+            
+            const endpoint = `${API_BASE_URL}/history?${queryParams.toString()}`;
+
+            try {
+                const response = await fetch(endpoint, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.status === 403 || response.status === 401) {
+                    throw new Error('Authorization failed. Please log in again.');
+                }
+                if (!response.ok) {
+                    throw new Error(`Failed to load history: ${response.statusText}`);
+                }
+
+                const records = await response.json();
+                historyTbody.innerHTML = '';
+                
+                if (records.length === 0) {
+                    historyTbody.innerHTML = '<tr><td colspan="8" class="text-center text-secondary">No circulation records found matching the criteria.</td></tr>';
+                    statusMessage.textContent = 'Search complete. 0 records found.';
+                    return;
+                }
+                
+                records.forEach(record => {
+                    const row = document.createElement('tr');
+                    const statusClass = getStatusClass(record.issue_date, record.due_date, record.return_date);
+                    
+                    row.innerHTML = `
+                        <td>${record.id.substring(0, 8)}...</td>
+                        <td>${record.title || 'N/A'}</td>
+                        <td>${record.accession_number || 'N/A'}</td>
+                        <td>${record.student_id ? record.student_id.substring(0, 8) + '...' : 'N/A'}</td>
+                        <td>${formatDate(record.issue_date)}</td>
+                        <td><span class="${statusClass}">${formatDate(record.due_date)}</span></td>
+                        <td>${formatDate(record.return_date)}</td>
+                        <td>₹${(parseFloat(record.fine_amount) || 0.00).toFixed(2)}</td>
+                    `;
+                    historyTbody.appendChild(row);
+                });
+                
+                statusMessage.textContent = `Search complete. ${records.length} records displayed.`;
+
+            } catch (error) {
+                console.error("History Search Error:", error);
+                statusMessage.textContent = `Error searching history: ${error.message}`;
+                historyTbody.innerHTML = '<tr><td colspan="8" class="text-center text-danger">Failed to retrieve records.</td></tr>';
+                if (error.message.includes('Authorization failed')) {
+                    window.location.href = '/login.html';
+                }
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // Load the recent 50 records upon page load
+            searchHistory(); 
+        });
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

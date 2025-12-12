@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Library Fines</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
+        .container { max-width: 1200px; margin-top: 50px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { color: #0056b3; border-bottom: 2px solid #0056b3; padding-bottom: 10px; margin-bottom: 30px; }
+        .filter-section { display: flex; gap: 15px; margin-bottom: 25px; }
+        .filter-section input, .filter-section select { padding: 8px; border-radius: 4px; border: 1px solid #ccc; }
+        .table thead th { background-color: #003366; color: white; }
+        
+        /* Fine Status */
+        .status-pending { background-color: #f8d7da; color: #721c24; font-weight: bold; }
+        .status-waived { background-color: #fff3cd; color: #856404; font-weight: bold; }
+        .status-paid { background-color: #d4edda; color: #155724; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/admin-dashboard.html" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        
+        <h1>Manage Library Fines (Overdue & Pending)</h1>
+        
+        <div class="filter-section">
+            <input type="text" id="searchInput" placeholder="Search Student ID or Name">
+            <select id="statusFilter">
+                <option value="Pending">Pending Dues</option>
+                <option value="Overdue">Overdue Books</option>
+                <option value="All">All Records</option>
+            </select>
+            <button class="btn btn-primary" onclick="loadFines()">
+                <i class="fas fa-search"></i> Filter
+            </button>
+            <div id="summary" class="align-self-center"></div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered table-striped table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Book Title</th>
+                        <th>Accession No.</th>
+                        <th>Days Late</th>
+                        <th>Fine Amount (₹)</th>
+                        <th>Payment Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="finesTbody">
+                    <tr><td colspan="7" class="text-center text-info">Use the filter to view records.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const finesTbody = document.getElementById('finesTbody');
+        const summaryDiv = document.getElementById('summary');
+        const API_BASE_URL = '/api/library';
+        
+        if (!token) {
+            window.location.href = '/login.html';
+        }
+
+        function formatCurrency(amount) {
+            return `₹${(parseFloat(amount) || 0.00).toFixed(2)}`;
+        }
+
+        async function waiveFine(circulationId, fineAmount) {
+            if (!confirm(`Are you sure you want to WAIVE the fine of ${formatCurrency(fineAmount)} for this record? This action cannot be undone.`)) {
+                return;
+            }
+
+            try {
+                // Assuming a PUT route for fine management
+                const response = await fetch(`${API_BASE_URL}/fines/${circulationId}/waive`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to waive fine. Status: ${response.status}`);
+                }
+
+                alert('Fine successfully waived!');
+                loadFines(); // Refresh the list
+
+            } catch (error) {
+                console.error("Waive Fine Error:", error);
+                alert(`Error: ${error.message}`);
+            }
+        }
+        
+        async function loadFines() {
+            const search = document.getElementById('searchInput').value.trim();
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            finesTbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading...</td></tr>';
+            
+            let queryParams = new URLSearchParams();
+            if (search) queryParams.append('search', search);
+            if (statusFilter) queryParams.append('status', statusFilter);
+            
+            const endpoint = `${API_BASE_URL}/fines/all?${queryParams.toString()}`;
+
+            try {
+                // Assuming a route exists to get all pending fines
+                const response = await fetch(endpoint, { headers: { 'Authorization': `Bearer ${token}` } });
+
+                if (response.status === 403 || response.status === 401) {
+                    throw new Error('Authorization failed. Please log in again.');
+                }
+                if (!response.ok) {
+                    throw new Error(`Failed to load fines: ${response.statusText}`);
+                }
+
+                const records = await response.json();
+                finesTbody.innerHTML = '';
+                let totalFine = 0;
+
+                if (records.length === 0) {
+                    finesTbody.innerHTML = '<tr><td colspan="7" class="text-center text-secondary">No matching fine records found.</td></tr>';
+                    summaryDiv.innerHTML = '0 Records.';
+                    return;
+                }
+
+                records.forEach(record => {
+                    totalFine += parseFloat(record.fine_amount || 0);
+                    
+                    const statusClass = record.payment_status === 'Paid' ? 'status-paid' : 
+                                          record.fine_amount === 0 ? 'status-waived' : 'status-pending';
+                    
+                    const actionButton = record.payment_status === 'Pending' ? 
+                        `<button class="btn btn-sm btn-danger" onclick="waiveFine('${record.circulation_id}', ${record.fine_amount})">Waive</button>` :
+                        `-`;
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${record.student_name}</td>
+                        <td>${record.book_title}</td>
+                        <td>${record.accession_number}</td>
+                        <td>${record.days_late || 0}</td>
+                        <td>${formatCurrency(record.fine_amount)}</td>
+                        <td><span class="badge ${statusClass}">${record.payment_status || 'Pending'}</span></td>
+                        <td>${actionButton}</td>
+                    `;
+                    finesTbody.appendChild(row);
+                });
+                
+                summaryDiv.innerHTML = `Total Dues Shown: ${formatCurrency(totalFine)}`;
+
+            } catch (error) {
+                console.error("Admin Fine Load Error:", error);
+                finesTbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error fetching data: ${error.message}</td></tr>`;
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadFines);
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>
