@@ -118,6 +118,7 @@
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth(); 
     
+    // Determine the active fiscal year (e.g., if month is April (3) or later, it's the current year)
     const activeFiscalYear = currentMonth >= 3 ? currentYear : currentYear - 1; 
 
     for(let i = currentYear - 2; i <= currentYear + 2; i++) {
@@ -135,11 +136,16 @@
         tbody.innerHTML = '<tr><td colspan="6" class="loading-placeholder"><i class="fas fa-sync fa-spin"></i> Fetching budget data for FY ' + year + '...</td></tr>';
 
         try {
-            const res = await fetch(`/api/fees/reports/annual-budget?year=${year}`, {
+            // CRITICAL FIX: Ensure the call goes to /api/finance/reports/annual-budget
+            const res = await fetch(`/api/finance/reports/annual-budget?year=${year}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
-            if(!res.ok) throw new Error("Failed to load budget");
+            if(!res.ok) {
+                const error = await res.json().catch(() => ({message: "Server error loading budget."}));
+                throw new Error(error.message);
+            }
+            
             const data = await res.json();
             const report = data.report || [];
 
@@ -159,7 +165,9 @@
                     const variance = actual - budget;
                     
                     // Totals Calculation
-                    if(row.type === 'Expense') {
+                    const isExpense = row.type === 'Expense';
+                    
+                    if(isExpense) {
                         totalBudgetExp += budget;
                         totalActualExp += actual;
                     } else { // Type is Income
@@ -167,7 +175,6 @@
                     }
 
                     // UI Logic
-                    const isExpense = row.type === 'Expense';
                     const typeBadge = isExpense
                         ? `<span class="badge-expense"><i class="fas fa-arrow-up"></i> EXPENSE</span>` 
                         : `<span class="badge-income"><i class="fas fa-arrow-down"></i> INCOME</span>`;

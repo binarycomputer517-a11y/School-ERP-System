@@ -96,7 +96,7 @@
             border-bottom: 1px dashed #c0d8e8; 
         }
         .info-label { color: #555; font-size: 0.9rem; }
-        .info-value { font-weight: 700; color: var(--text-dark); }
+        .info-value { font-weight: 700; color: var(--dark-gray); }
         .balance-due { color: var(--danger-color); font-size: 1.3em; } 
         .balance-excess { color: var(--success-color); font-size: 1.3em; }
         .balance-zero { color: var(--primary-color); font-size: 1.3em; } 
@@ -298,25 +298,51 @@
 
         showLoader(true);
         try {
-            const response = await fetch(`/api/fees/student/${studentId}`, { headers: authHeaders });
-            if (!response.ok) throw new Error('Student financial data not found.');
+            // ⭐ CRITICAL FIX 1: Change API path from /api/fees to /api/finance
+            const financeRes = await fetch(`/api/finance/student/${studentId}`, { headers: authHeaders });
             
-            const data = await response.json();
+            // CRITICAL FIX: Ensure all nested properties exist even on 404/failure
+            const financeData = financeRes.status === 404 ? 
+                { 
+                    summary: { total_billed: 0, total_paid: 0, total_due: 0 }, 
+                    payments: [],
+                    student_name: 'N/A', 
+                    course_name: 'N/A',
+                    batch_name: 'N/A',
+                    total_fees: 0, // Ensure these are defined for rendering
+                    total_paid: 0,
+                    balance: 0
+                } 
+                : await financeRes.json();
+            
+            // ⭐ CRITICAL FIX 2: Fetch Library Fines (assuming /api/library/fines/student/:id is implemented)
+            // Use .catch to handle network/404 errors safely
+            const fineFetch = await fetch(`/api/library/fines/student/${studentId}`, { headers: authHeaders })
+                .catch(err => {
+                    console.warn("Library fine route error/404:", err.message);
+                    return { ok: false }; 
+                });
+            
+            const fineData = fineFetch.ok ? await fineFetch.json() : { total_pending_fine: 0 };
+            const totalPendingFine = parseFloat(fineData.total_pending_fine || 0);
 
-            const balance = parseFloat(data.balance);
+            // Calculate Total Balance Due
+            const feeBalance = parseFloat(financeData.balance || 0);
+            const totalDue = feeBalance + totalPendingFine;
+
             let balanceClass = '';
             let balanceText = '';
             let dueAmount = 0;
 
-            if (balance > 0) {
+            if (totalDue > 0) {
                 balanceClass = 'balance-due';
-                balanceText = `Due: ${formatCurrency(balance)}`;
-                dueAmount = balance;
+                balanceText = `Total Due: ${formatCurrency(totalDue)}`;
+                dueAmount = totalDue;
                 collectBtn.classList.add('collect-due');
                 btnText.innerText = `COLLECT FULL DUE`;
-            } else if (balance < 0) {
+            } else if (totalDue < 0) {
                 balanceClass = 'balance-excess';
-                balanceText = `Excess: ${formatCurrency(Math.abs(balance))}`;
+                balanceText = `Excess: ${formatCurrency(Math.abs(totalDue))}`;
                 dueAmount = 0; // Cannot auto-fill excess payment, suggest minimum payment
                 collectBtn.classList.remove('collect-due');
                 btnText.innerText = `COLLECT PAYMENT`;
@@ -330,21 +356,28 @@
             
             // Render Info Box
             infoBox.innerHTML = `
-                <div class="info-row"><span class="info-label"><i class="fas fa-user-graduate"></i> Name:</span> <span class="info-value">${data.student_name}</span></div>
-                <div class="info-row"><span class="info-label"><i class="fas fa-book"></i> Course:</span> <span class="info-value">${data.course_name || 'N/A'} (${data.batch_name || '-'})</span></div>
-                <div class="info-row"><span class="info-label"><i class="fas fa-calendar-alt"></i> Total Billed:</span> <span class="info-value">${formatCurrency(data.total_fees)}</span></div>
-                <div class="info-row"><span class="info-label"><i class="fas fa-check-circle"></i> Total Paid:</span> <span class="info-value text-success">${formatCurrency(data.total_paid)}</span></div>
+                <div class="info-row"><span class="info-label"><i class="fas fa-user-graduate"></i> Name:</span> <span class="info-value">${financeData.student_name || 'N/A'}</span></div>
+                <div class="info-row"><span class="info-label"><i class="fas fa-book"></i> Course:</span> <span class="info-value">${financeData.course_name || 'N/A'} (${financeData.batch_name || '-'})</span></div>
+                <div class="info-row"><span class="info-label"><i class="fas fa-calendar-alt"></i> Total Billed (Fees):</span> <span class="info-value">${formatCurrency(financeData.total_fees)}</span></div>
+                <div class="info-row"><span class="info-label"><i class="fas fa-check-circle"></i> Total Paid:</span> <span class="info-value text-success">${formatCurrency(financeData.total_paid)}</span></div>
+                ${totalPendingFine > 0 ? 
+                    `<div class="info-row" style="background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
+                        <span class="info-label"><i class="fas fa-book-open"></i> Pending Library Fines:</span> 
+                        <span class="info-value text-danger fw-bold">${formatCurrency(totalPendingFine)}</span>
+                    </div>` 
+                    : ''}
                 <div class="info-row" style="border:none; padding-top:15px; background: var(--info-bg); border-radius: 0 0 8px 8px;">
                     <span class="info-label fw-bold"><i class="fas fa-wallet"></i> CLOSING BALANCE:</span> 
                     <span class="info-value ${balanceClass}" style="font-size: 1.2em;">${balanceText}</span>
                 </div>
             `;
 
+
             // Render Payment History
             const tbody = document.getElementById('history-tbody');
             tbody.innerHTML = '';
             
-            const payments = data.payments || []; 
+            const payments = financeData.payments || []; 
 
             if (payments.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No previous payments found.</td></tr>';
@@ -357,7 +390,7 @@
                             <td>${p.payment_mode}</td>
                             <td class="fw-bold">${formatCurrency(p.amount_paid)}</td>
                             <td>
-                                <a href="#" class="receipt-link" onclick="event.preventDefault(); downloadReceipt('${p.transaction_id || p.receipt_number}')">
+                                <a href="#" class="receipt-link" onclick="event.preventDefault(); downloadReceipt('${p.transaction_id || p.paymentId}')">
                                     <i class="fas fa-file-pdf"></i> View
                                 </a>
                             </td>
@@ -377,8 +410,13 @@
 
         } catch (error) {
             console.error(error);
+            // Use the specific 404 message for the financial data not found case
+            const displayMessage = error.message.includes('404') || error.message.includes('financial data not found') 
+                ? 'Student financial data not found. Generate invoice or check ID.' 
+                : error.message;
+
             infoBox.innerHTML = `<p style="text-align: center; color: var(--danger-color); padding: 40px 20px;">
-                <i class="fas fa-exclamation-triangle"></i> Error loading details: ${error.message}
+                <i class="fas fa-exclamation-triangle"></i> Error loading details: ${displayMessage}
             </p>`;
         } finally {
             showLoader(false);
@@ -403,7 +441,8 @@
         btnSpinner.style.display = 'inline';
 
         try {
-            const response = await fetch('/api/fees/collect', {
+            // ⭐ CRITICAL FIX 3: Change API path from /api/fees to /api/finance
+            const response = await fetch('/api/finance/collect', {
                 method: 'POST',
                 headers: { ...authHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -443,7 +482,8 @@
 
     // 4. Download Receipt
     function downloadReceipt(refId) {
-        fetch(`/api/fees/receipt/${refId}`, { headers: authHeaders })
+        // ⭐ CRITICAL FIX 4: Change API path from /api/fees to /api/finance
+        fetch(`/api/finance/receipt/${refId}`, { headers: authHeaders })
         .then(res => {
             if(!res.ok) throw new Error('Receipt not found or failed to generate.');
             return res.blob();

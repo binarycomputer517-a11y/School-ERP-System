@@ -66,7 +66,7 @@
         
         <div class="d-flex justify-content-between align-items-center page-header">
             <div>
-                <h2 class="page-title"><i class="fas fa-history"></i> Transaction History</h2>
+                <h2 class="page-title"><i class="fas fa-history"></i> Global Transaction History</h2>
                 <p class="text-muted small mb-0 global-school-name">School ERP System</p>
             </div>
             <a href="/fee-collection.html" class="btn btn-outline-secondary">
@@ -116,7 +116,7 @@
 </div>
 
 <script>
-    const API_BASE = '/api/fees';
+    const API_BASE = '/api/finance'; // <-- CRITICAL FIX: Changed from /api/fees to /api/finance
     const token = localStorage.getItem('erp-token');
 
     // 1. Auth Check
@@ -141,7 +141,7 @@
         showLoader(true);
 
         try {
-            // Fetch from Backend
+            // Fetch from Backend - Path is now correct: /api/finance/history
             const response = await fetch(`${API_BASE}/history?startDate=${start}&endDate=${end}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -165,7 +165,7 @@
                 totalSum += amount;
 
                 // Backend returns 'payment_id' (UUID) and 'transaction_id' (Readable Ref)
-                const paymentId = row.payment_id; 
+                const receiptRef = row.transaction_id || row.payment_id; 
                 
                 tbody.innerHTML += `
                     <tr>
@@ -174,12 +174,12 @@
                             <div class="fw-bold text-dark">${row.student_name || 'Unknown'}</div>
                         </td>
                         <td>
-                            <small class="text-muted font-monospace">${row.transaction_id}</small>
+                            <small class="text-muted font-monospace">${receiptRef}</small>
                         </td>
                         <td><span class="badge-mode">${row.payment_mode}</span></td>
                         <td class="text-end text-amount">₹${amount.toFixed(2)}</td>
                         <td class="text-center">
-                            <button class="btn btn-sm btn-outline-primary" onclick="downloadReceipt('${paymentId}', this)">
+                            <button class="btn btn-sm btn-outline-primary" onclick="downloadReceipt('${receiptRef}', this)">
                                 <i class="fas fa-file-invoice"></i> Receipt
                             </button>
                         </td>
@@ -199,13 +199,14 @@
     }
 
     // 4. Secure Receipt Download (Blob Method)
-    async function downloadReceipt(paymentId, btnElement) {
+    async function downloadReceipt(receiptRef, btnElement) {
         const originalText = btnElement.innerHTML;
         btnElement.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
         btnElement.disabled = true;
 
         try {
-            const res = await fetch(`${API_BASE}/receipt/${paymentId}`, {
+            // Path is now correct: /api/finance/receipt/refId
+            const res = await fetch(`${API_BASE}/receipt/${receiptRef}`, { 
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 

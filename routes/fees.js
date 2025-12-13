@@ -43,44 +43,28 @@ const generateInvoiceNumber = () => {
     return `INV-${moment().format('YYYYMMDD')}-${uuidv4().split('-')[0].toUpperCase().substring(0, 6)}`;
 };
 
-/**
- * Helper to calculate Issue Date and Due Date based on course duration.
- * @param {string} admissionDate - The student's admission date string (s.admission_date).
- * @param {number} durationMonths - Course duration in months (fs.course_duration_months).
- * @returns {{issueDate: string, dueDate: string}}
- */
-const calculateDates = (admissionDate, durationMonths) => {
-    // 1. Issue Date is the Admission Date
-    const issueDate = moment(admissionDate).format('YYYY-MM-DD');
-    
-    // 2. Due Date calculation (7 days if short course, else 30 days)
-    const daysToAdd = durationMonths <= 6 ? 7 : 30; // 7 days if 6 months or less, otherwise 30 days
-    const dueDate = moment(issueDate).add(daysToAdd, 'days').format('YYYY-MM-DD');
-    
-    return { issueDate, dueDate };
-};
-
 // =========================================================
 // SECTION 2: CORE TRANSACTIONS (INVOICING, COLLECTION, REFUND)
 // =========================================================
 
 /**
  * 2.1 FULL COURSE INVOICE GENERATION (One-Time based on Structure - BULK ADMIN TOOL)
- * FIX: Uses student's admission_date as issue_date and dynamic due date calculation.
+ * FIX: Tuition Fee calculation removed.
  */
 router.post('/generate-structure-invoice', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
     const adminId = req.user.id;
+    const issueDate = moment().format('YYYY-MM-DD'); 
+    const dueDate = moment().add(30, 'days').format('YYYY-MM-DD'); 
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         
-        // 1. Fetch Students linked with Fee Structure (Now fetching s.admission_date)
+        // 1. Fetch Students linked with Fee Structure
         const studentsRes = await client.query(`
             SELECT 
                 s.student_id, 
                 u.username, 
-                s.admission_date, /* ✅ ADDED: Fetch Admission Date */
                 fs.id AS fee_structure_id,
                 fs.structure_name,
                 COALESCE(fs.tuition_fee, 0) AS tuition_monthly,
@@ -101,16 +85,6 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
 
         for (const student of studentsRes.rows) {
             
-            // Skip if admission date is missing
-            if (!student.admission_date) {
-                console.warn(`Skipping bulk invoice for ${student.username}: Admission date missing.`);
-                skippedCount++;
-                continue;
-            }
-
-            // Calculate dates dynamically
-            const { issueDate, dueDate } = calculateDates(student.admission_date, student.duration);
-
             // 2. DUPLICATE CHECK
             const checkDuplicate = await client.query(`
                 SELECT id FROM ${DB.INVOICES} 
@@ -140,6 +114,13 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
             addItem('Registration Fee', student.registration);
             addItem('Examination Fee', student.exam);
 
+            // ❌ Tuition Fee is REMOVED from calculation and item list
+            /*
+            if (student.tuition_monthly > 0) {
+                addItem(`Tuition Fee (${duration} Months)`, student.tuition_monthly * duration);
+            }
+            */
+            
             // Transport Fee is INCLUDED
             if (student.transport_struct_monthly > 0) {
                 addItem(`Transport Fee (${duration} Months)`, student.transport_struct_monthly * duration);
@@ -152,7 +133,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
 
             if (totalAmount === 0) continue; 
 
-            // 4. Insert Invoice Header (Uses dynamically calculated dates)
+            // 4. Insert Invoice Header
             const invRes = await client.query(`
                 INSERT INTO ${DB.INVOICES} 
                 (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
@@ -261,12 +242,10 @@ router.post('/refund', authenticateToken, authorize(['admin', 'finance']), async
     const { student_id, amount, reason } = req.body;
     try {
         const creditNote = `CN-${uuidv4().substring(0,6)}`;
-        // Refund is recorded as a negative invoice/credit note
         await pool.query(`INSERT INTO ${DB.INVOICES} (student_id, invoice_number, total_amount, paid_amount, status, created_by) VALUES ($1::uuid, $2, $3, $3, 'Refunded', $4::uuid)`, [student_id, creditNote, -amount, req.user.id]);
         res.status(200).json({ message: "Refund processed.", credit_note: creditNote });
     } catch (e) { res.status(500).json({ message: "Refund failed." }); }
 });
-
 
 /**
  * 2.4 LIST STUDENTS ELIGIBLE FOR REFUND (FINAL FIX - Schema Aligned)
@@ -294,7 +273,6 @@ router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']
         res.status(500).json({ message: 'Failed to fetch student list for refund.' });
     }
 });
-
 // =========================================================
 // SECTION 3: STUDENT DATA & RECEIPTS
 // =========================================================
@@ -317,23 +295,23 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
 /**
  * 3.2 SMART STUDENT DASHBOARD (Auto-Generate/Summary)
  * FIX: Tuition Fee calculation removed; Transport/Hostel mandatory fallback added.
- * FIX: Uses student's admission_date as issue_date and dynamic due date calculation.
  */
 router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     const client = await pool.connect();
     try {
         const { studentId } = req.params;
         const adminId = req.user.id; 
+        const issueDate = moment().format('YYYY-MM-DD');
+        const dueDate = moment().add(30, 'days').format('YYYY-MM-DD');
 
         await client.query('BEGIN');
 
-        // 1. Fetch Student, Structure, Duration AND Assignments (Added s.admission_date)
+        // 1. Fetch Student, Structure, Duration AND Assignments
         const sRes = await client.query(`
             SELECT 
                 s.student_id, 
                 u.username, 
                 s.roll_number,
-                s.admission_date, /* ✅ ADDED: Fetch Admission Date */
                 c.course_name, 
                 b.batch_name,
                 
@@ -348,7 +326,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                 COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
                 COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
 
-                -- Transport Info
+                -- Transport Info (Checking is_active and taking fee from assignment)
                 ta.monthly_fee AS transport_assigned_fee,
                 r.monthly_fee AS route_base_fee,
                 r.route_name,
@@ -383,19 +361,6 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
         }
         
         const student = sRes.rows[0];
-
-        // Ensure admission date exists before proceeding (Fixes initialization error if date is missing)
-        if (!student.admission_date) {
-            // Commit to avoid full rollback, but send back empty stats if core data is missing.
-            await client.query('COMMIT'); 
-            return res.json({ 
-                student_name: student.username, roll_number: student.roll_number,
-                total_fees: 0, total_paid: 0, balance: 0, payments: [] 
-            });
-        }
-        
-        // Calculate dates dynamically
-        const { issueDate, dueDate } = calculateDates(student.admission_date, student.duration);
 
         // 2. CHECK & AUTO-GENERATE INVOICE LOGIC
         if (student.fee_structure_id) {
@@ -455,11 +420,11 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
                     parseFloat(student.exam);
 
                 if (totalAmount > 0) {
-                    // Create Header (Uses dynamically calculated dates)
+                    // Create Header
                     const invRes = await client.query(`
                         INSERT INTO ${DB.INVOICES} 
                         (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
-                        VALUES ($1::uuid, $2, $3::date, $4::date, $5, 'Pending', $6::uuid, $7::uuid) 
+                        VALUES ($1::uuid, $2, $3, $4, $5, 'Pending', $6::uuid, $7::uuid) 
                         RETURNING id;
                     `, [student.student_id, generateInvoiceNumber(), issueDate, dueDate, totalAmount, adminId, student.fee_structure_id]);
                     
@@ -467,6 +432,7 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
                     // Create Items List
                     const items = [
+                        // { d: `Tuition Fee (${duration} Months)`, a: totalTuition }, <-- REMOVED TUITION
                         { d: 'Admission Fee', a: student.admission },
                         { d: 'Registration Fee', a: student.registration },
                         { d: 'Examination Fee', a: student.exam }
@@ -590,7 +556,7 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
 
         // Define safe reference for filenames and PDF body text
         const receiptRef = data.transaction_id || data.payment_id || 'UNKNOWN';
-        const currencySymbol = config.currency === 'INR' ? '₹' : (config.currency || 'Rs.');
+        const currencySymbol = config.currency === 'INR' ? 'Rs.' : (config.currency || 'Rs.');
 
         // --- PDF SETUP ---
         const doc = new PDFDocument({ size: 'A5', layout: 'landscape', margin: 30 });
@@ -690,20 +656,16 @@ router.get('/receipt/:idOrTxn', authenticateToken, async (req, res) => {
         doc.end();
 
     } catch (e) { 
-        await client.query('ROLLBACK');
         console.error("Receipt Error:", e);
         res.status(500).json({ message: 'PDF Gen Failed' }); 
-    } finally {
-        client.release();
     }
 });
-
 
 // =========================================================
 // SECTION 4: SETTINGS & CONFIGURATION (ADMIN CRUD)
 // =========================================================
 
-// 4.1 DISCOUNT MANAGEMENT (CRUD)
+// 4.1 DISCOUNT MANAGEMENT
 router.get('/discounts', authenticateToken, async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.DISCOUNTS} ORDER BY created_at DESC`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -714,7 +676,7 @@ router.delete('/discounts/:id', authenticateToken, authorize(['admin']), async (
     try { await pool.query(`DELETE FROM ${DB.DISCOUNTS} WHERE id=$1::uuid`, [req.params.id]); res.json({message:'Deleted'}); } catch (e) { res.status(500).json({message:'Error'}); }
 });
 
-// 4.2 HOSTEL RATES (CRUD)
+// 4.2 HOSTEL RATES
 router.get('/hostel/rates', authenticateToken, async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.HOSTEL}`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -732,7 +694,6 @@ router.get('/late-fee-config/current', authenticateToken, async (req, res) => {
 
 router.post('/late-fee-config', authenticateToken, authorize(['admin']), async (req, res) => {
     try { 
-        // Ensures only one configuration exists
         await pool.query(`DELETE FROM ${DB.LATE_FEE}`); 
         const r = await pool.query(`INSERT INTO ${DB.LATE_FEE} (grace_days, penalty_type, penalty_value, max_penalty_value, compounding_interval) VALUES ($1, $2, $3, $4, $5) RETURNING *`, [req.body.grace_days, req.body.penalty_type, req.body.penalty_value, req.body.max_penalty_value, req.body.compounding_interval]); 
         res.json(r.rows[0]); 
@@ -767,7 +728,7 @@ router.put('/late-fee-config/:id', authenticateToken, authorize(['admin', 'finan
     }
 });
 
-// 4.4 BUDGET TARGET CONFIG (Omitted for brevity)
+// 4.4 BUDGET TARGET CONFIG
 router.post('/budget-target', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { year, category_name, amount, type } = req.body;
     try {
@@ -786,7 +747,7 @@ router.post('/budget-target', authenticateToken, authorize(['admin', 'finance'])
 // SECTION 5: ANALYTICS & REPORTS
 // =========================================================
 
-// 5.1 GLOBAL TRANSACTION HISTORY (Omitted for brevity)
+// 5.1 GLOBAL TRANSACTION HISTORY
 router.get('/history', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('month').format('YYYY-MM-DD');
@@ -818,13 +779,12 @@ router.get('/history', authenticateToken, authorize(['admin', 'super admin', 'fi
     }
 });
 
-// 5.2 REVENUE STREAM (Omitted for brevity)
+// 5.2 REVENUE STREAM
 router.get('/reports/revenue-stream', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { start_date, end_date } = req.query;
     const s = start_date || moment().startOf('month').format('YYYY-MM-DD');
     const e = end_date || moment().endOf('month').format('YYYY-MM-DD');
     try {
-        // Groups income by invoice item description (e.g., 'Admission Fee', 'Transport Fee')
         const q = `SELECT SPLIT_PART(item.description, ' (', 1) AS category, SUM(item.amount) AS amount FROM ${DB.PAYMENTS} p JOIN ${DB.ITEMS} item ON p.invoice_id=item.invoice_id WHERE p.payment_date::date >= $1 AND p.payment_date::date <= $2 GROUP BY category`;
         const r = await pool.query(q, [s, e]);
         res.json({ breakdown: r.rows });
@@ -838,7 +798,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
     const end = `${year+1}-03-31`;
 
     try {
-        // 1. Fetch Configured Targets (omitted for brevity)
+        // 1. Fetch Configured Targets
         const targets = await pool.query(`
             SELECT c.name, b.budget_amount, c.type 
             FROM ${DB.BUDGETS} b 
@@ -853,7 +813,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
             actual: 0 
         }));
 
-        // 2. Calculate & Merge Actual Income (omitted for brevity)
+        // 2. Calculate & Merge Actual Income
         const incomeRes = await pool.query(`
             SELECT COALESCE(SUM(amount), 0) as val 
             FROM ${DB.PAYMENTS} 
@@ -870,7 +830,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
             reportData.push({ name: 'Tuition Fee Collection', budgeted: 0, type: 'Income', actual: totalIncome });
         }
 
-        // 3. Calculate & Merge Actual Expenses (omitted for brevity)
+        // 3. Calculate & Merge Actual Expenses
         const expenseRes = await pool.query(`
             SELECT c.name, SUM(e.amount) as val 
             FROM ${DB.EXPENSES} e 
@@ -898,7 +858,7 @@ router.get('/reports/annual-budget', authenticateToken, async (req, res) => {
     }
 });
 
-// 5.4 EXPENSE RECORDING (Omitted for brevity)
+// 5.4 EXPENSE RECORDING
 router.post('/expenses', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     const { category_name, amount, description, date } = req.body;
     try {
@@ -909,18 +869,16 @@ router.post('/expenses', authenticateToken, authorize(['admin', 'finance']), asy
     } catch (e) { res.status(500).json({ message: e.message }); }
 });
 
-// 5.5 REVENUE FORECAST (Omitted for brevity)
+// 5.5 REVENUE FORECAST
 router.get('/reports/revenue-forecast', authenticateToken, async (req, res) => {
     try {
-        // Forecasts revenue based on outstanding balances of invoices due in the next 6 months
         const q = `SELECT TO_CHAR(due_date, 'Mon YYYY') as month, SUM(total_amount - paid_amount) as projected FROM ${DB.INVOICES} WHERE status IN ('Pending', 'Partial') AND due_date BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '6 months') GROUP BY month ORDER BY month`;
         const r = await pool.query(q);
         res.json(r.rows);
     } catch (e) { res.status(500).json({message: 'Error'}); }
 });
 
-
-// 5.6 DASHBOARD QUICK STATS (Omitted for brevity)
+// 5.6 DASHBOARD QUICK STATS 
 router.get('/reports/dashboard-stats', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     try {
         const query = `
@@ -979,7 +937,7 @@ router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async 
 
         const result = await pool.query(query, [studentId]);
         
-        // Fetch Student Basic Info for Header (omitted for brevity)
+        // Fetch Student Basic Info for Header
         const studentInfo = await pool.query(`
             SELECT u.username, s.roll_number, c.course_name, b.batch_name 
             FROM ${DB.STUDENTS} s 
@@ -1011,7 +969,6 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
     try {
         let query = `
             SELECT 
-                s.student_id, /* ✅ FIX: Added student_id for frontend navigation */
                 s.roll_number, 
                 u.username AS student_name, 
                 c.course_name,
@@ -1055,8 +1012,7 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
     }
 });
 
-
-// 5.9 GENERAL LEDGER EXPORT (FIXED CAFETERIA COLUMNS BASED ON SCHEMA)
+// 5.9 GENERAL LEDGER EXPORT
 router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('year').format('YYYY-MM-DD');
@@ -1065,7 +1021,7 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
     try {
         const query = `
             SELECT * FROM (
-                -- 1. FEE INCOME (Credit)
+                -- 1. INCOME (Credit)
                 SELECT 
                     payment_date AS date,
                     'Income' AS type,
@@ -1077,8 +1033,8 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
                 WHERE payment_date::date >= $1 AND payment_date::date <= $2
 
                 UNION ALL
-                
-                -- 2. OPERATIONAL EXPENSES (Debit)
+
+                -- 2. EXPENSES (Debit)
                 SELECT 
                     e.expense_date AS date,
                     'Expense' AS type,
@@ -1089,37 +1045,6 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
                 FROM ${DB.EXPENSES} e
                 LEFT JOIN ${DB.BUDGET_CATS} c ON e.category_id = c.id
                 WHERE e.expense_date::date >= $1 AND e.expense_date::date <= $2
-                
-                UNION ALL
-                
-                -- 3. PAYROLL EXPENSE (Debit)
-                -- Uses confirmed payroll columns from schema analysis: ps.pay_date and ps.net_pay
-                SELECT
-                    ps.pay_date AS date,
-                    'Expense' AS type,
-                    'Payroll' AS category,
-                    (COALESCE(t.full_name, 'Staff') || ' Salary Payout, ID: ' || ps.employee_id) AS description,
-                    0.00 AS credit,
-                    ps.net_pay AS debit
-                FROM pay_slips ps
-                LEFT JOIN teachers t ON ps.teacher_id = t.id
-                WHERE ps.pay_date::date >= $1 AND ps.pay_date::date <= $2
-                
-                UNION ALL
-                
-                -- 4. CAFETERIA INCOME (Credit)
-                -- FIX: Using confirmed schema columns: ct.created_at and ct.amount
-                SELECT 
-                    ct.created_at::date AS date,
-                    'Income' AS type,
-                    'Cafeteria Sales' AS category,
-                    ('Cafeteria Sale Ref: ' || ct.id::text) AS description,
-                    ct.amount AS credit,
-                    0.00 AS debit
-                FROM cafeteria_transactions ct
-                WHERE ct.type = 'Sale' /* Use 'type' column for filtering */
-                  AND ct.created_at::date >= $1 AND ct.created_at::date <= $2
-
             ) ledger_data
             ORDER BY date DESC
         `;
@@ -1129,19 +1054,15 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
 
     } catch (error) {
         console.error('GL Export Error:', error);
-        res.status(500).json({ message: 'Failed to generate GL report. SQL Error likely.' });
+        res.status(500).json({ message: 'Failed to generate GL report.' });
     }
 });
-
-
-
-
 
 // =========================================================
 // SECTION 6: ADMIN UTILITIES (WAIVERS, DEFAULTERS)
 // =========================================================
 
-// 6.1 WAIVER REQUESTS (CRUD)
+// 6.1 WAIVER REQUESTS
 router.get('/waiver-requests', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     try { const r = await pool.query(`SELECT * FROM ${DB.WAIVERS} ORDER BY request_date DESC`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
 });
@@ -1153,7 +1074,6 @@ router.put('/waiver-requests/:requestId/status', authenticateToken, authorize(['
         const { requestId } = req.params; const { newStatus, amount } = req.body;
         await client.query(`UPDATE ${DB.WAIVERS} SET status=$1, processed_by=$2::uuid WHERE id=$3::uuid`, [newStatus, req.user.id, requestId]);
         
-        // If approved, update the invoice total amount to reflect the waiver/discount
         if (newStatus === 'Approved' && amount > 0) {
             const wRes = await client.query(`SELECT student_id FROM ${DB.WAIVERS} WHERE id=$1::uuid`, [requestId]);
             const inv = await client.query(`SELECT id FROM ${DB.INVOICES} WHERE student_id=$1::uuid AND status!='Paid' LIMIT 1`, [wRes.rows[0].student_id]);
@@ -1200,7 +1120,6 @@ router.post('/reminders/send', authenticateToken, async (req, res) => {
     const { students } = req.body;
     res.json({ message: `Simulated SMS sent to ${students?.length || 0} students.` });
 });
-
 
 // 6.3 FINANCE AUDIT LOGS
 router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
@@ -1259,14 +1178,6 @@ router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 
     }
 });
 
-function toUUID(value) {
-    if (!value || typeof value !== 'string' || value.trim() === '') return null;
-    return value.trim();
-}
-
-// routes/fees.js (Excerpt focusing on the fixed receipt route)
-
-// ... (Other imports and constants)
 
 // --- Helper: Safely Convert String to UUID or Null ---
 function toUUID(value) {
@@ -1274,22 +1185,13 @@ function toUUID(value) {
     return value.trim();
 }
 
-// ... (Other sections 1 and 2 remain the same) ...
-
-// =========================================================
-// SECTION 3: STUDENT DATA & RECEIPTS
-// =========================================================
-
-// ... (Routes 3.1 and 3.2 remain the same) ...
-
-
 /**
- * 3.3 GET STUDENT RECEIPTS LIST (Final Fix Applied)
- * @route   GET /api/fees/student/:studentId/receipts
+ * 3.4 GET STUDENT RECEIPTS LIST (Final Fix Applied)
+ * @route   GET /api/finance/student/:studentId/receipts
  * @desc    Get a list of successfully completed payments (receipts) for a student.
  * @access  Private (Student Self-View, Admin)
  */
-router.get('/student/:studentId/receipts', authenticateToken, authorize(['Student', 'Admin', 'Accountant']), async (req, res) => {
+router.get('/student/:studentId/receipts', authenticateToken, authorize(['Student', 'Admin', 'Finance', 'Super Admin']), async (req, res) => {
     const studentId = req.params.studentId;
     const safeStudentId = toUUID(studentId);
 
@@ -1306,16 +1208,12 @@ router.get('/student/:studentId/receipts', authenticateToken, authorize(['Studen
                 p.payment_mode,
                 p.transaction_id,
                 
-                -- ✅ FIX 1: COALESCE handles missing p.receipt_number
                 COALESCE(p.transaction_id, p.id::text) AS receipt_number, 
                 
                 i.invoice_number,
-                -- ✅ FIX 2: Replaced non-existent i.description with i.invoice_number
-                i.invoice_number AS description,
                 i.status 
             FROM ${DB.PAYMENTS} p
             JOIN ${DB.INVOICES} i ON p.invoice_id = i.id
-            -- Ensure i.student_id (UUID) is correctly compared with $1::uuid
             WHERE i.student_id = $1::uuid AND i.status != 'Waived'
             ORDER BY p.payment_date DESC;
         `;
@@ -1324,54 +1222,12 @@ router.get('/student/:studentId/receipts', authenticateToken, authorize(['Studen
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('Error fetching student receipts (Final Check):', error);
+        console.error('Error fetching student receipts:', error);
         res.status(500).json({ 
-            message: 'Failed to retrieve fee receipt history. Database integrity check required.', 
+            message: 'Failed to retrieve fee receipt history.', 
             error: error.message 
         });
     }
 });
-
-/**
- * 3.4 GET STUDENT SCHOLARSHIPS
- * @route   GET /api/fees/student/:studentId/scholarships
- * @desc    Fetches scholarship application/award details for a specific student.
- * @access  Private (Student, Admin, Finance)
- */
-router.get('/student/:studentId/scholarships', authenticateToken, authorize(['Student', 'Admin', 'Finance', 'student']), async (req, res) => {
-    const { studentId } = req.params;
-    
-    // Security Check (Self-view or authorized role)
-    const isSelf = String(req.user.id) === studentId;
-    const isAuthorized = req.user.role.includes('admin') || req.user.role.includes('finance');
-    
-    if (!isSelf && !isAuthorized) {
-        return res.status(403).json({ message: 'Forbidden: Access denied to other student records.' });
-    }
-
-    try {
-        const query = `
-            SELECT 
-                ss.scholarship_id,
-                sc.scholarship_name, 
-                ss.application_date,
-                ss.status,
-                ss.award_amount,
-                ss.next_disbursal_date
-            FROM student_scholarships ss
-            -- Assuming the student_scholarships table uses student_id for linking
-            JOIN scholarships sc ON ss.scholarship_id = sc.id 
-            WHERE ss.student_id = $1::uuid
-            ORDER BY ss.application_date DESC;
-        `;
-        
-        // Use studentId (which is the UUID) for the query
-        const { rows } = await pool.query(query, [studentId]); 
-
-        res.status(200).json(rows);
-    } catch (error) {
-        console.error('Error fetching student scholarship:', error);
-        res.status(500).json({ message: 'Failed to retrieve scholarship status due to internal server error.' });
-    }
-});
 module.exports = router;
+

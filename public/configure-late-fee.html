@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Configure Automatic Late Fee Calculation</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
         :root {
@@ -112,7 +113,7 @@
 <body>
 
 <div class="container">
-    <h1>Configure Automatic Late Fee</h1>
+    <h1><i class="fas fa-calendar-times"></i> Configure Automatic Late Fee</h1>
     <div class="nav-links">
         <a href="/admin-dashboard.html">← Back to Dashboard</a>
     </div>
@@ -181,7 +182,8 @@
 </div>
 
 <script>
-    const API_BASE_URL = '/api/fees/late-fee-config';
+    // CRITICAL FIX: The API path must use /api/finance since feesRouter is mapped there.
+    const API_BASE_URL = '/api/finance/late-fee-config'; 
     const token = localStorage.getItem('erp-token');
 
     // Auth Check
@@ -204,6 +206,7 @@
         const statusMsg = document.getElementById('status-message');
 
         try {
+            // Path: /api/finance/late-fee-config/current
             const response = await fetch(`${API_BASE_URL}/current`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -214,10 +217,10 @@
 
             // Populate Form with Real Data
             document.getElementById('config-id').value = config.id || '';
-            document.getElementById('grace-days').value = config.grace_days;
-            document.getElementById('penalty-type').value = config.penalty_type;
-            document.getElementById('penalty-value').value = config.penalty_value;
-            document.getElementById('compounding-interval').value = config.compounding_interval;
+            document.getElementById('grace-days').value = config.grace_days || 0;
+            document.getElementById('penalty-type').value = config.penalty_type || 'fixed';
+            document.getElementById('penalty-value').value = config.penalty_value || 0.00;
+            document.getElementById('compounding-interval').value = config.compounding_interval || 'once';
             document.getElementById('max-penalty-value').value = config.max_penalty_value || '';
 
             // Show Form
@@ -246,7 +249,7 @@
         document.getElementById('preview-grace-days').textContent = grace;
         
         let valText = '';
-        if(type === 'fixed') valText = `₹${val}`;
+        if(type === 'fixed') valText = `₹${parseFloat(val).toFixed(2)}`;
         else valText = `${val}% of due amount`;
         document.getElementById('preview-penalty-value').textContent = valText;
 
@@ -255,7 +258,7 @@
         const maxSection = document.getElementById('preview-max-section');
         if(max) {
             maxSection.style.display = 'inline';
-            document.getElementById('preview-max-penalty').textContent = max;
+            document.getElementById('preview-max-penalty').textContent = parseFloat(max).toFixed(2);
         } else {
             maxSection.style.display = 'none';
         }
@@ -281,6 +284,7 @@
         };
 
         const method = formData.id ? 'PUT' : 'POST';
+        // Path: /api/finance/late-fee-config or /api/finance/late-fee-config/ID
         const url = formData.id ? `${API_BASE_URL}/${formData.id}` : API_BASE_URL;
 
         try {
@@ -293,7 +297,10 @@
                 body: JSON.stringify(formData)
             });
 
-            if (!response.ok) throw new Error("Failed to save configuration");
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ message: 'Server error occurred.' }));
+                throw new Error(error.message || "Failed to save configuration");
+            }
 
             const result = await response.json();
             

@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Download Fee Receipts</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
         body { background-color: #f0f2f8; font-family: sans-serif; }
         .container { max-width: 1000px; }
@@ -22,13 +23,13 @@
 <body>
     <div class="container mt-5">
         <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1>Download Fee Receipts</h1>
+            <h1><i class="fas fa-file-invoice-dollar text-primary"></i> Fee Receipts</h1>
             <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
         </header>
 
         <div class="card shadow-sm">
             <div class="card-body">
-                <h4 class="text-secondary mb-3">Your Payment Receipts</h4>
+                <h4 class="text-secondary mb-3">Your Payment Receipts History</h4>
                 
                 <div class="table-responsive">
                     <table class="table table-striped table-hover align-middle">
@@ -36,7 +37,7 @@
                             <tr>
                                 <th scope="col">Payment Date</th>
                                 <th scope="col">Receipt No.</th>
-                                <th scope="col">Description</th>
+                                <th scope="col">Invoice Ref</th>
                                 <th scope="col" class="text-end">Amount Paid</th>
                                 <th scope="col">Status</th>
                                 <th scope="col">Action</th>
@@ -86,9 +87,9 @@
         }
 
         function getStatusClass(status) {
-            const s = status.toLowerCase();
+            const s = (status || '').toLowerCase();
             if (s.includes('paid') || s.includes('success')) return 'receipt-status-paid';
-            if (s.includes('pending') || s.includes('processing')) return 'receipt-status-pending';
+            if (s.includes('pending') || s.includes('partial')) return 'receipt-status-pending';
             return 'text-muted';
         }
 
@@ -101,9 +102,8 @@
             }
 
             try {
-                // ✅ CORRECT API ENDPOINT: Using the fees module to get student receipts
-                // NOTE: This assumes you will implement this route in routes/fees.js
-                const API_ENDPOINT = `/api/fees/student/${PROFILE_ID}/receipts`;
+                // ✅ Fetching receipts list from the correct path: /api/finance/student/:id/receipts
+                const API_ENDPOINT = `/api/finance/student/${PROFILE_ID}/receipts`;
                 const receipts = await handleApi(API_ENDPOINT);
                 
                 if (!receipts || receipts.length === 0) {
@@ -114,12 +114,12 @@
                 tableBody.innerHTML = receipts.map(r => `
                     <tr>
                         <td>${new Date(r.payment_date).toLocaleDateString()}</td>
-                        <td>${r.receipt_number || r.payment_id || 'N/A'}</td>
-                        <td>${r.description || 'Fee Payment'}</td>
+                        <td>${r.receipt_number || 'N/A'}</td>
+                        <td>${r.invoice_number || 'N/A'}</td>
                         <td class="text-end">${formatCurrency(r.amount)}</td>
                         <td><span class="${getStatusClass(r.status)}">${r.status || 'Paid'}</span></td>
                         <td>
-                            <a href="/api/finance/receipt/download/${r.receipt_id}" 
+                            <a href="/api/finance/receipt/${r.receipt_id || r.receipt_number}" 
                                class="btn btn-sm btn-outline-success" 
                                target="_blank">
                                 📥 Download

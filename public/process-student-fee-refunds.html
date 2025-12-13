@@ -114,7 +114,7 @@
 </div>
 
 <div class="container">
-    <h1>Process Student Fee Refunds</h1>
+    <h1><i class="fas fa-undo-alt"></i> Process Student Fee Refunds</h1>
     <div class="nav-links">
         <a href="/finance-dashboard.html"><i class="fas fa-arrow-left"></i> Back to Finance Dashboard</a>
     </div>
@@ -171,9 +171,19 @@
     const userRole = localStorage.getItem('user-role');
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     
-    if (!token || (userRole !== 'Admin' && userRole !== 'Finance')) { 
-        window.location.href = '/login'; 
+    // Safety check for role
+    if (!token || !['Admin', 'Super Admin', 'Finance'].includes(userRole)) { 
+        window.location.href = '/login.html'; 
     }
+
+    // Helper: Currency Formatter
+    const formatCurrency = (amount) => {
+        return new Intl.NumberFormat('en-IN', {
+            style: 'currency',
+            currency: 'INR',
+            minimumFractionDigits: 2
+        }).format(parseFloat(amount));
+    };
 
     function showLoader(show) {
         document.getElementById('loader').style.display = show ? 'flex' : 'none';
@@ -188,16 +198,16 @@
         studentSelect.innerHTML = '<option value="">Loading students...</option>';
 
         try {
-            // ✅ FIX 1: Changed URL to the correct fees route to resolve 500 error
-            const response = await fetch('/api/fees/list-for-refund', { headers: authHeaders });
+            // API call to the correct fees route
+            const response = await fetch('/api/finance/list-for-refund', { headers: authHeaders });
             
-            if (!response.ok) throw new Error('Failed to load students list.');
+            if (!response.ok) throw new Error('Failed to load students list for refund.');
             
             const students = await response.json();
             studentSelect.innerHTML = '<option value="">-- Select Student --</option>';
 
             if (students.length === 0) {
-                 studentSelect.innerHTML = '<option value="">No students found with payment history.</option>';
+                 studentSelect.innerHTML = '<option value="">No students found with payment history eligible for refund processing.</option>';
                  return;
             }
 
@@ -238,8 +248,8 @@
 
         try {
             showLoader(true);
-            // API call to check refundable balance
-            const response = await fetch(`/api/fees/student-refund-info/${studentId}`, { headers: authHeaders });
+            // API call to check refundable balance - Path: /api/finance/student-refund-info/:id
+            const response = await fetch(`/api/finance/student-refund-info/${studentId}`, { headers: authHeaders });
             
             if (!response.ok) {
                 const errorBody = await response.json().catch(() => ({ message: 'Server error fetching details.' }));
@@ -250,7 +260,7 @@
             const balance = parseFloat(data.refundable_balance) || 0;
             const canRefund = balance > 0;
 
-            refundableBalanceElement.textContent = `₹${balance.toFixed(2)}`;
+            refundableBalanceElement.textContent = formatCurrency(balance);
             refundAmountInput.max = balance;
             refundAmountInput.disabled = !canRefund;
             submitBtn.disabled = !canRefund;
@@ -259,13 +269,12 @@
             refundAmountInput.value = canRefund ? balance.toFixed(2) : '0.00';
             
             infoBox.innerHTML = `
-                <p><strong>Balance:</strong> ₹${(data.total_paid - data.total_invoiced).toFixed(2)}</p>
-                <p><strong>Note:</strong> Refund amount equals excess payment (Total Paid - Total Billed).</p>
+                <p><strong>Note:</strong> Refund amount equals **excess payment** (Total Paid - Total Billed, if positive).</p>
             `;
 
         } catch (error) {
             console.error('Error fetching refund details:', error);
-            infoBox.innerHTML = `<p style="color: var(--error-color);">Error loading data: ${error.message}. Check ledger.</p>`;
+            infoBox.innerHTML = `<p style="color: var(--error-color);">Error loading data: ${error.message}. Check ledger status.</p>`;
         } finally {
             showLoader(false);
         }
@@ -283,8 +292,8 @@
         try {
             document.getElementById('loader').style.display = 'flex';
             
-            // ✅ FIX 2: Using the correct, established backend route '/api/fees/refund'
-            const response = await fetch('/api/fees/refund', {
+            // Using the correct, established backend route '/api/finance/refund'
+            const response = await fetch('/api/finance/refund', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...authHeaders },
                 body: JSON.stringify(formData)
@@ -337,7 +346,7 @@
                  return;
             }
             if (submittedAmount > maxAmount) {
-                 alert(`Refund amount of ₹${submittedAmount.toFixed(2)} exceeds the refundable balance of ₹${maxAmount.toFixed(2)}.`);
+                 alert(`Refund amount of ${formatCurrency(submittedAmount)} exceeds the refundable balance of ${formatCurrency(maxAmount)}.`);
                  return;
             }
 
@@ -348,7 +357,7 @@
                 reason: document.getElementById('refund-reason').value
             };
             
-            if (confirm(`Confirm processing a refund of ₹${submittedAmount.toFixed(2)} to the selected student?`)) {
+            if (confirm(`Confirm processing a refund of ${formatCurrency(submittedAmount)} to the selected student?`)) {
                  submitRefund(formData);
             }
         });

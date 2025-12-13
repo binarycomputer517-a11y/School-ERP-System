@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Fee Dues Reminder | School ERP</title>
     <link rel="stylesheet" href="/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
         :root {
@@ -116,7 +117,7 @@
 <body>
 
 <div class="container">
-    <h1>Dues Reminder System</h1>
+    <h1><i class="fas fa-bullhorn"></i> Dues Reminder System</h1>
     <div class="nav-links">
         <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
     </div>
@@ -175,7 +176,7 @@
     const authHeaders = { 'Authorization': `Bearer ${token}` };
     
     // Check Auth
-    if (!token) window.location.href = '/login';
+    if (!token) window.location.href = '/login.html';
 
     let allDefaulters = [];
     let selectedStudents = new Set();
@@ -183,14 +184,15 @@
     // 1. Fetch Data
     async function fetchDefaulters() {
         try {
-            const response = await fetch('/api/fees/defaulters', { headers: authHeaders });
+            // CRITICAL FIX: Changed /api/fees to /api/finance
+            const response = await fetch('/api/finance/defaulters', { headers: authHeaders });
             if (!response.ok) throw new Error('Failed to fetch data');
             
             allDefaulters = await response.json();
             renderTable(allDefaulters);
         } catch (error) {
             console.error(error);
-            document.getElementById('table-body').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error loading data. Ensure backend route exists.</td></tr>`;
+            document.getElementById('table-body').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error loading data. Ensure backend route exists at /api/finance/defaulters.</td></tr>`;
         }
     }
 
@@ -222,7 +224,7 @@
                     <td>${student.course_name || '-'} / ${student.batch_name || '-'}</td>
                     <td>${student.parent_phone || '<span style="color:red">Missing</span>'}</td>
                     <td><span class="badge">${student.pending_invoices_count} Pending</span></td>
-                    <td class="amount-col">₹${parseFloat(student.total_due).toLocaleString('en-IN')}</td>
+                    <td class="amount-col">₹${parseFloat(student.total_due).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                 </tr>
             `;
             tbody.innerHTML += row;
@@ -298,7 +300,8 @@
         });
 
         try {
-            const response = await fetch('/api/fees/reminders/send', {
+            // CRITICAL FIX: Changed /api/fees to /api/finance
+            const response = await fetch('/api/finance/reminders/send', {
                 method: 'POST',
                 headers: { ...authHeaders, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ students: targets })

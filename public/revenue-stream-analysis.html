@@ -156,7 +156,7 @@
 <body>
 
 <div class="container">
-    <h1>Revenue Stream Analysis</h1>
+    <h1><i class="fas fa-chart-pie"></i> Revenue Stream Analysis</h1>
     <div class="nav-links">
         <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
     </div>
@@ -222,7 +222,7 @@
 </div>
 
 <script>
-    // --- 1. Authentication Check ---
+    // --- 1. Authentication Check & Global Setup ---
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
     const authHeaders = { 'Authorization': `Bearer ${token}` };
@@ -278,7 +278,9 @@
 
         try {
             const queryString = new URLSearchParams(filters).toString();
-            const apiUrl = `/api/fees/reports/revenue-stream?${queryString}`;
+            
+            // ⭐ CRITICAL FIX: Ensure the call goes to /api/finance/reports/revenue-stream
+            const apiUrl = `/api/finance/reports/revenue-stream?${queryString}`;
             
             const response = await handleApi(apiUrl); 
             const analysisData = response; 
@@ -361,6 +363,7 @@
         downloadLink.style.display = "none";
         document.body.appendChild(downloadLink);
         downloadLink.click();
+        window.URL.revokeObjectURL(csvFile); // Cleanup
     }
 
     // --- 6. Initialization ---
@@ -372,18 +375,14 @@
         // Format as YYYY-MM-DD for input fields
         const formatDate = (d) => d.toISOString().split('T')[0];
         
-        // FIX: Retrieve elements safely
+        // Retrieve elements safely
         const startDateEl = document.getElementById('start-date');
         const endDateEl = document.getElementById('end-date');
         const groupByEl = document.getElementById('group-by');
 
-        // Apply default dates only if elements exist
-        if (startDateEl) {
-            startDateEl.value = formatDate(firstDay);
-        }
-        if (endDateEl) {
-            endDateEl.value = formatDate(today);
-        }
+        // Apply default dates
+        if (startDateEl) startDateEl.value = formatDate(firstDay);
+        if (endDateEl) endDateEl.value = formatDate(today);
 
         // Initial Load
         const initialFilters = {

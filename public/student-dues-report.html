@@ -150,7 +150,7 @@
     // Global Config check (ensures token is loaded)
     const token = localStorage.getItem('erp-token');
     
-    // NOTE: API Base for fees module
+    // CRITICAL FIX: Defined API_BASE as /api, the root for all modules.
     const API_BASE = '/api'; 
     
     // Ensure token is available before setting auth headers
@@ -190,8 +190,8 @@
                 search: filters.q || '' 
             });
 
-            // Call the CORRECT backend endpoint
-            const dues = await handleApi(`${API_BASE}/fees/reports/student-dues?${params.toString()}`); 
+            // CRITICAL FIX: Call the correct backend endpoint: /api/finance/reports/student-dues
+            const dues = await handleApi(`${API_BASE}/finance/reports/student-dues?${params.toString()}`); 
             
             tbody.innerHTML = '';
             
@@ -220,7 +220,7 @@
 
                 const row = `<tr>
                     <td style="font-weight:500;">${d.roll_number || '-'}</td>
-                    <td>${d.student_name || 'Unknown'}</td>
+                    <td><a href="/student-wise-payments.html?studentId=${d.student_id}" class="text-primary" style="text-decoration:none;">${d.student_name || 'Unknown'}</a></td>
                     <td>${d.course_name || 'N/A'}</td>
                     <td>₹${totalBilled.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
                     <td style="color: var(--success-color);">₹${totalPaid.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
@@ -251,11 +251,16 @@
     async function loadCourses() {
         const courseFilter = document.getElementById('course-filter');
         try {
-            // Assuming endpoint for courses list exists
+            // Assuming endpoint for courses list exists at /api/courses
             const courses = await handleApi(`${API_BASE}/courses`); 
+            
+            // Add 'All Courses' option first
+            courseFilter.innerHTML = '<option value="">All Courses</option>';
+            
             courses.forEach(c => {
                 const option = document.createElement('option');
-                option.value = c.course_id || c.id; // Use course_id or id
+                // Backend returns student_id, but the filter should use course_id/id
+                option.value = c.course_id || c.id; 
                 option.innerText = c.course_name;
                 courseFilter.appendChild(option);
             });
@@ -282,14 +287,13 @@
         
         // Export Button Logic (Simple CSV Export)
         document.getElementById('export-btn').addEventListener('click', () => {
-            // NOTE: Full CSV/PDF export logic should be handled server-side for large data
             alert("Export functionality requires a server-side route to generate the file.");
         });
     });
 </script>
 
 <div class="container">
-    <h1>Detailed Student Dues Report</h1>
+    <h1><i class="fas fa-hand-holding-usd"></i> Detailed Student Dues Report</h1>
     <div class="nav-links">
         <a href="/finance-dashboard.html"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
     </div>

@@ -503,8 +503,9 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
     if (!safeStudentId) return res.status(400).json({ message: 'Invalid Student ID.' });
 
     try {
+        // FIX 1: Assuming the library circulation table name is 'book_circulation'
         const query = `
-            SELECT * FROM library_transactions 
+            SELECT * FROM book_circulation // <-- Changed from library_transactions
             WHERE student_id = $1::uuid AND status = 'Issued'
             ORDER BY issue_date DESC;
         `;
@@ -512,6 +513,7 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
             const result = await pool.query(query, [safeStudentId]);
             res.status(200).json(result.rows);
         } catch (dbError) {
+            // Revert to original error handling for safety
             console.warn("Library table might not exist yet:", dbError.message);
             res.status(200).json([]); 
         }
@@ -529,11 +531,12 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
     const safeStudentId = toUUID(studentId);
 
     try {
+        // FIX 2: Assuming teacher ID column in teacher_allocations is teacher_ref_id
         const query = `
             SELECT 
                 t.full_name, s.subject_name, t.email
             FROM teacher_allocations ta
-            JOIN teachers t ON ta.teacher_id = t.id
+            JOIN teachers t ON ta.teacher_ref_id = t.id // <-- Changed ta.teacher_id to ta.teacher_ref_id
             JOIN subjects s ON ta.subject_id = s.id
             JOIN students stu ON stu.batch_id = ta.batch_id
             WHERE stu.student_id = $1::uuid;

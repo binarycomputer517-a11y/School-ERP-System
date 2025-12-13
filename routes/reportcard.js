@@ -26,7 +26,6 @@ async function fetchReportDetails(studentId, examId) {
         LEFT JOIN courses c ON s.course_id = c.id
         LEFT JOIN batches b ON s.batch_id = b.id
         LEFT JOIN exams e ON e.id = $2::uuid
-        -- FIX: Use s.student_id (or the primary key used in the students table)
         WHERE s.student_id = $1::uuid; 
     `;
     const headerResult = await pool.query(headerQuery, [studentId, examId]);
@@ -79,7 +78,7 @@ async function fetchReportDetails(studentId, examId) {
 
 
 // =========================================================
-// 1. REPORT CARD AVAILABLE EXAMS (Dropdown Data) - FINAL FIX
+// 1. REPORT CARD AVAILABLE EXAMS (Dropdown Data)
 // =========================================================
 
 /**
@@ -100,7 +99,6 @@ router.get('/exams/student/:studentId', authenticateToken, authorize(['Admin', '
                 b.batch_name
             FROM marks m
             LEFT JOIN exams e ON m.exam_id = e.id
-            -- FIX: Changed s.id to s.student_id to resolve "column s.id does not exist" error (Line 112)
             LEFT JOIN students s ON m.student_id = s.student_id 
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
@@ -163,40 +161,46 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
          // In a real app, you would use a template engine (Handlebars, EJS) here.
          return `
              <html><head><style>
-                 body { font-family: Arial, sans-serif; margin: 0; padding: 20px; }
-                 .header { background-color: #f0f0f0; padding: 10px; text-align: center; }
-                 .details { margin-top: 20px; margin-bottom: 20px; }
-                 .marks-table { width: 100%; border-collapse: collapse; }
-                 .marks-table th, .marks-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+                 @page { size: A4; margin: 1cm; }
+                 body { font-family: Arial, sans-serif; margin: 0; padding: 0; font-size: 10pt; }
+                 .report-container { width: 100%; max-width: 700px; margin: auto; }
+                 .header { background-color: #005A9C; color: white; padding: 15px; text-align: center; border-bottom: 5px solid #C0392B; }
+                 .details { margin-top: 20px; margin-bottom: 20px; border: 1px solid #ccc; padding: 10px; }
+                 .marks-table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+                 .marks-table th { background-color: #f0f0f0; border: 1px solid #ccc; padding: 8px; text-align: left; }
+                 .marks-table td { border: 1px solid #ccc; padding: 8px; text-align: left; }
+                 .summary-box { margin-top: 20px; border-top: 2px solid #000; padding-top: 10px; font-weight: bold; }
              </style></head><body>
-                 <div class="header">
-                     <h2>Academic Report Card</h2>
-                     <p>${data.exam_name} - ${new Date(data.exam_date).toLocaleDateString()}</p>
+                 <div class="report-container">
+                     <div class="header">
+                         <h1>Academic Report Card</h1>
+                         <p>${data.exam_name} - Date: ${new Date(data.exam_date).toLocaleDateString()}</p>
+                     </div>
+                     <div class="details">
+                         <p><strong>Name:</strong> ${data.first_name} ${data.last_name}</p>
+                         <p><strong>Enrollment No:</strong> ${data.enrollment_no}</p>
+                         <p><strong>Course/Batch:</strong> ${data.course_name} (${data.batch_name})</p>
+                     </div>
+                     <table class="marks-table">
+                         <thead><tr><th>Subject</th><th>Theory</th><th>Practical</th><th>Obtained</th><th>Max Marks</th><th>Grade</th></tr></thead>
+                         <tbody>
+                             ${data.marks_details.map(m => `
+                                 <tr>
+                                     <td>${m.subject_name}</td>
+                                     <td>${m.marks_obtained_theory || 'N/A'}</td>
+                                     <td>${m.marks_obtained_practical || 'N/A'}</td>
+                                     <td>${m.total_marks_obtained}</td>
+                                     <td>${m.total_max_marks}</td>
+                                     <td>${m.grade || 'N/A'}</td>
+                                 </tr>
+                             `).join('')}
+                         </tbody>
+                     </table>
+                     <div class="summary-box">
+                         <p><strong>Grand Total Obtained:</strong> ${data.summary.grand_total_obtained} / ${data.summary.grand_total_max}</p>
+                         <p><strong>Overall Percentage:</strong> ${data.summary.overall_percentage}%</p>
+                     </div>
                  </div>
-                 <div class="details">
-                     <p><strong>Student:</strong> ${data.first_name} ${data.last_name}</p>
-                     <p><strong>Enrollment No:</strong> ${data.enrollment_no}</p>
-                     <p><strong>Course/Batch:</strong> ${data.course_name} (${data.batch_name})</p>
-                 </div>
-                 <table class="marks-table">
-                     <thead><tr><th>Subject</th><th>Obtained</th><th>Max</th><th>Grade</th></tr></thead>
-                     <tbody>
-                         ${data.marks_details.map(m => `
-                             <tr>
-                                 <td>${m.subject_name}</td>
-                                 <td>${m.total_marks_obtained}</td>
-                                 <td>${m.total_max_marks}</td>
-                                 <td>${m.grade || 'N/A'}</td>
-                             </tr>
-                         `).join('')}
-                         <tr style="font-weight: bold;">
-                             <td colspan="2">GRAND TOTAL</td>
-                             <td>${data.summary.grand_total_obtained}</td>
-                             <td>${data.summary.grand_total_max}</td>
-                         </tr>
-                     </tbody>
-                 </table>
-                 <p>Overall Percentage: ${data.summary.overall_percentage}%</p>
              </body></html>
          `;
     };
@@ -220,8 +224,14 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
         // CRITICAL FIX: Use try...finally to prevent the "Frame Detached" error and resource leaks.
         try {
             // Use 'headless: "new"' for stability and essential server arguments
+            // Fallback for local launch if it fails with default args
+            
+            // Check if running in a potentially restrictive environment (e.g., local Mac without full Chrome path or cloud)
+            const isLocalMac = process.platform === 'darwin' && !process.env.NODE_ENV;
+            
             browser = await puppeteer.launch({ 
                 headless: "new",
+                // Conditional args for cloud/non-local environments
                 args: [
                     '--no-sandbox', 
                     '--disable-setuid-sandbox', 
@@ -229,10 +239,14 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
                     '--single-process',
                     '--no-zygote'
                 ],
+                // On local, try to use system Chrome if standard Puppeteer fails
+                // You might need to uncomment and adjust the executablePath if local launch fails
+                // executablePath: isLocalMac ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : undefined,
                 timeout: 60000 
             }); 
             const page = await browser.newPage();
             
+            // Set longer timeout for page loading content
             await page.setContent(htmlContent, { 
                 waitUntil: ['domcontentloaded', 'load'], 
                 timeout: 60000 
@@ -244,6 +258,11 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
                 margin: { top: '1cm', right: '1cm', bottom: '1cm', left: '1cm' }
             });
 
+        } catch (launchError) {
+            console.error('Puppeteer Launch/PDF Error:', launchError);
+            // If Puppeteer fails entirely, send a fallback message instead of crashing the process
+            res.status(500).json({ message: 'PDF Generation failed. Check server logs for Puppeteer dependency issues.' });
+            return;
         } finally {
             // Ensure the browser instance is closed regardless of success/failure
             if (browser) {
@@ -258,9 +277,9 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
 
 
     } catch (error) {
-        // Log the Puppeteer error for server diagnosis
-        console.error('PDF Generation Error (Final Catch):', error); 
-        res.status(500).json({ message: 'Failed to generate PDF report due to internal server error.' });
+        // Log the external error for server diagnosis
+        console.error('Report Card Route Error:', error); 
+        res.status(500).json({ message: 'Failed to retrieve report data due to an internal server error.' });
     }
 });
 
