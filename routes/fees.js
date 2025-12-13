@@ -477,7 +477,12 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
         // 4. Fetch Payment History
         const history = await pool.query(`
-            SELECT p.transaction_id AS receipt_number, p.amount AS amount_paid, p.payment_mode, p.payment_date, p.id AS paymentId 
+            SELECT 
+                p.transaction_id AS receipt_number, 
+                p.amount AS amount_paid, 
+                p.payment_mode, 
+                p.payment_date, 
+                COALESCE(p.transaction_id, p.id::text) AS paymentId /* <--- FINAL FIX: Ensure one non-null text ID */
             FROM ${DB.PAYMENTS} p 
             JOIN ${DB.INVOICES} i ON p.invoice_id=i.id 
             WHERE i.student_id=$1::uuid 

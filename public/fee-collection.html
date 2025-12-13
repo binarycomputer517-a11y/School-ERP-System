@@ -124,6 +124,7 @@
         .history-table th, .history-table td { padding: 10px; font-size: 0.9rem; }
         .history-table th { background: #f0f0f0; font-weight: 600; color: #555; }
         .receipt-link { color: var(--primary-light); text-decoration: none; font-weight: 500; }
+        .missing-id { color: #888; font-style: italic; }
 
         /* Responsive */
         @media (max-width: 768px) { .grid-layout { grid-template-columns: 1fr; } }
@@ -266,6 +267,9 @@
                 return nameA.localeCompare(nameB);
             });
 
+            // Add initial option
+            select.innerHTML = '<option value="">-- Select Student --</option>';
+
             students.forEach(s => {
                 const opt = document.createElement('option');
                 opt.value = s.student_id; 
@@ -273,6 +277,17 @@
                 opt.text = `${displayName} (Roll: ${s.roll_number || 'N/A'})`;
                 select.appendChild(opt);
             });
+
+            // Check if studentId query param exists (e.g., from library-fines.html)
+            const urlParams = new URLSearchParams(window.location.search);
+            const initialStudentId = urlParams.get('studentId');
+            if (initialStudentId) {
+                // Select the student in the dropdown
+                select.value = initialStudentId;
+                // Load details immediately
+                loadStudentDetails(initialStudentId);
+            }
+
         } catch (error) {
             console.error('Error loading students:', error);
             alert('Failed to load student list.');
@@ -288,6 +303,9 @@
         const historySection = document.getElementById('history-section');
         const collectBtn = document.getElementById('collect-btn');
         const btnText = document.getElementById('btn-text');
+        
+        // Save current student ID for other functions
+        window.currentStudentId = studentId;
 
         infoBox.innerHTML = '<p style="text-align: center; color: #888; padding: 40px 20px;"><i class="fas fa-spinner fa-spin"></i> Loading...</p>';
         paymentForm.style.display = 'none';
@@ -298,25 +316,22 @@
 
         showLoader(true);
         try {
-            // ⭐ CRITICAL FIX 1: Change API path from /api/fees to /api/finance
+            // FIX: Change API path from /api/fees to /api/finance
             const financeRes = await fetch(`/api/finance/student/${studentId}`, { headers: authHeaders });
             
-            // CRITICAL FIX: Ensure all nested properties exist even on 404/failure
-            const financeData = financeRes.status === 404 ? 
+            const financeData = financeRes.ok ? await financeRes.json() : 
                 { 
                     summary: { total_billed: 0, total_paid: 0, total_due: 0 }, 
                     payments: [],
                     student_name: 'N/A', 
                     course_name: 'N/A',
                     batch_name: 'N/A',
-                    total_fees: 0, // Ensure these are defined for rendering
+                    total_fees: 0, 
                     total_paid: 0,
                     balance: 0
-                } 
-                : await financeRes.json();
+                };
             
-            // ⭐ CRITICAL FIX 2: Fetch Library Fines (assuming /api/library/fines/student/:id is implemented)
-            // Use .catch to handle network/404 errors safely
+            // Fetch Library Fines (assuming /api/library/fines/student/:id is implemented)
             const fineFetch = await fetch(`/api/library/fines/student/${studentId}`, { headers: authHeaders })
                 .catch(err => {
                     console.warn("Library fine route error/404:", err.message);
@@ -326,7 +341,7 @@
             const fineData = fineFetch.ok ? await fineFetch.json() : { total_pending_fine: 0 };
             const totalPendingFine = parseFloat(fineData.total_pending_fine || 0);
 
-            // Calculate Total Balance Due
+            // Calculate Total Balance Due (Fee Balance is negative if excess paid)
             const feeBalance = parseFloat(financeData.balance || 0);
             const totalDue = feeBalance + totalPendingFine;
 
@@ -343,7 +358,7 @@
             } else if (totalDue < 0) {
                 balanceClass = 'balance-excess';
                 balanceText = `Excess: ${formatCurrency(Math.abs(totalDue))}`;
-                dueAmount = 0; // Cannot auto-fill excess payment, suggest minimum payment
+                dueAmount = 0; // Suggest minimum payment 0, but allow user to enter more
                 collectBtn.classList.remove('collect-due');
                 btnText.innerText = `COLLECT PAYMENT`;
             } else {
@@ -359,7 +374,7 @@
                 <div class="info-row"><span class="info-label"><i class="fas fa-user-graduate"></i> Name:</span> <span class="info-value">${financeData.student_name || 'N/A'}</span></div>
                 <div class="info-row"><span class="info-label"><i class="fas fa-book"></i> Course:</span> <span class="info-value">${financeData.course_name || 'N/A'} (${financeData.batch_name || '-'})</span></div>
                 <div class="info-row"><span class="info-label"><i class="fas fa-calendar-alt"></i> Total Billed (Fees):</span> <span class="info-value">${formatCurrency(financeData.total_fees)}</span></div>
-                <div class="info-row"><span class="info-label"><i class="fas fa-check-circle"></i> Total Paid:</span> <span class="info-value text-success">${formatCurrency(financeData.total_paid)}</span></div>
+                <div class="info-row"><span class="info-label"><i class="fas fa-check-circle"></i> Total Paid (Fees):</span> <span class="info-value text-success">${formatCurrency(financeData.total_paid)}</span></div>
                 ${totalPendingFine > 0 ? 
                     `<div class="info-row" style="background: rgba(255, 193, 7, 0.1); border-color: #ffc107;">
                         <span class="info-label"><i class="fas fa-book-open"></i> Pending Library Fines:</span> 
@@ -384,16 +399,23 @@
             } else {
                 payments.forEach(p => {
                     const date = formatDate(p.payment_date);
+                    
+                    // ⭐ FINAL FIX: Prioritize paymentId (p.id) over transaction_id
+                    // p.paymentId comes from p.id::text in the backend (UUID cast to string)
+                    const paymentRefId = p.paymentId || p.transaction_id; 
+                    
+                    const receiptLink = paymentRefId ? 
+                        `<a href="#" class="receipt-link" onclick="event.preventDefault(); downloadReceipt('${paymentRefId}')">
+                            <i class="fas fa-file-pdf"></i> View
+                        </a>` 
+                        : '<span class="missing-id">No Ref ID</span>';
+
                     const row = `
                         <tr>
                             <td>${date}</td>
                             <td>${p.payment_mode}</td>
                             <td class="fw-bold">${formatCurrency(p.amount_paid)}</td>
-                            <td>
-                                <a href="#" class="receipt-link" onclick="event.preventDefault(); downloadReceipt('${p.transaction_id || p.paymentId}')">
-                                    <i class="fas fa-file-pdf"></i> View
-                                </a>
-                            </td>
+                            <td>${receiptLink}</td>
                         </tr>
                     `;
                     tbody.innerHTML += row;
@@ -406,11 +428,10 @@
             collectBtn.disabled = false;
             
             // Auto-fill amount due
-            document.getElementById('pay-amount').value = dueAmount.toFixed(2);
+            document.getElementById('pay-amount').value = Math.max(0, dueAmount).toFixed(2);
 
         } catch (error) {
             console.error(error);
-            // Use the specific 404 message for the financial data not found case
             const displayMessage = error.message.includes('404') || error.message.includes('financial data not found') 
                 ? 'Student financial data not found. Generate invoice or check ID.' 
                 : error.message;
@@ -441,7 +462,7 @@
         btnSpinner.style.display = 'inline';
 
         try {
-            // ⭐ CRITICAL FIX 3: Change API path from /api/fees to /api/finance
+            // FIX: Change API path from /api/fees to /api/finance
             const response = await fetch('/api/finance/collect', {
                 method: 'POST',
                 headers: { ...authHeaders, 'Content-Type': 'application/json' },
@@ -458,14 +479,20 @@
             if (response.ok) {
                 alert('Payment Successful! Receipt Ref: ' + result.receipt_number);
                 
+                // FIX A: Ensure a valid reference ID is available
+                // receipt_number holds the p.id from the backend, which is the primary key and should be non-null text.
+                const receiptRef = result.receipt_number || result.transaction_id; 
+
+                // Reload student details to refresh history/balance
                 await loadStudentDetails(studentId);
                 
                 // Clear inputs
                 document.getElementById('pay-amount').value = '0.00';
                 document.getElementById('pay-notes').value = '';
                 
-                if (result.receipt_number && confirm('Payment recorded. Would you like to download the receipt now?')) {
-                    downloadReceipt(result.receipt_number);
+                // Offer download using the received reference ID
+                if (receiptRef && confirm('Payment recorded. Would you like to download the receipt now?')) {
+                    downloadReceipt(receiptRef);
                 }
             } else {
                 alert('Error: ' + result.message);
@@ -482,13 +509,25 @@
 
     // 4. Download Receipt
     function downloadReceipt(refId) {
-        // ⭐ CRITICAL FIX 4: Change API path from /api/fees to /api/finance
-        fetch(`/api/finance/receipt/${refId}`, { headers: authHeaders })
+        // FIX C: Validate refId immediately to prevent 'undefined' in the URL
+        if (!refId || refId === 'undefined') {
+            alert("Error: Receipt reference ID is missing for this transaction.");
+            return;
+        }
+
+        // ⭐ FINAL FIX: Use Fetch API to send Authorization header
+        fetch(`/api/finance/receipt/${refId}`, { 
+            headers: authHeaders // <-- This ensures the JWT is sent, fixing "Unauthorized" error
+        })
         .then(res => {
-            if(!res.ok) throw new Error('Receipt not found or failed to generate.');
+            if (res.status === 401) { // Handle Unauthorized explicitly
+                throw new Error('Unauthorized access. Please log in again.');
+            }
+            if(!res.ok) throw new Error('Receipt not found or failed to generate (Status: ' + res.status + ').');
             return res.blob();
         })
         .then(blob => {
+            // Create a temporary link to trigger the download
             const url = window.URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;

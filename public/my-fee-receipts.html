@@ -18,6 +18,7 @@
         .text-end { text-align: right; }
         .receipt-status-paid { color: #198754; font-weight: bold; }
         .receipt-status-pending { color: #ffc107; font-weight: bold; }
+        .btn-outline-success { cursor: pointer; } /* Ensure button looks clickable */
     </style>
 </head>
 <body>
@@ -62,12 +63,15 @@
         const TOKEN = localStorage.getItem('erp-token');
         const tableBody = document.getElementById('receipt-table-body');
         const errorMessageDiv = document.getElementById('error-message');
+        
+        // Headers object used for fetching data and downloading receipts
+        const authHeaders = { 'Authorization': `Bearer ${TOKEN}` };
+
 
         // --- Helper function for API calls ---
         async function handleApi(url) {
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
-            });
+            const response = await fetch(url, { headers: authHeaders });
+            
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
                      // Unauthorized/Session Expired
@@ -83,7 +87,8 @@
 
         function formatCurrency(amount) {
             if (amount === undefined || amount === null) return 'N/A';
-            return `₹${Number(amount).toFixed(2).toLocaleString('en-IN')}`;
+            // Use IN-locale formatting for display
+            return `₹${Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
         }
 
         function getStatusClass(status) {
@@ -92,6 +97,39 @@
             if (s.includes('pending') || s.includes('partial')) return 'receipt-status-pending';
             return 'text-muted';
         }
+        
+        // ⭐ CRITICAL FIX: Download function using fetch and Auth header
+        function downloadReceipt(refId) {
+            if (!refId || refId === 'undefined') {
+                alert("Error: Receipt reference ID is missing for this transaction.");
+                return;
+            }
+
+            // Use Fetch API to send Authorization header
+            fetch(`/api/finance/receipt/${refId}`, { 
+                headers: authHeaders 
+            })
+            .then(res => {
+                if (res.status === 401) { 
+                    throw new Error('Unauthorized access. Please log in again.');
+                }
+                if(!res.ok) throw new Error('Receipt not found or failed to generate (Status: ' + res.status + ').');
+                return res.blob();
+            })
+            .then(blob => {
+                // Create a temporary link to trigger the download
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Receipt_${refId}.pdf`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url); // Clean up
+            })
+            .catch(err => alert(`Download Failed: ${err.message}`));
+        }
+
 
         async function loadReceiptHistory() {
             if (!PROFILE_ID || !TOKEN) {
@@ -102,7 +140,7 @@
             }
 
             try {
-                // ✅ Fetching receipts list from the correct path: /api/finance/student/:id/receipts
+                // Fetching receipts list
                 const API_ENDPOINT = `/api/finance/student/${PROFILE_ID}/receipts`;
                 const receipts = await handleApi(API_ENDPOINT);
                 
@@ -119,11 +157,10 @@
                         <td class="text-end">${formatCurrency(r.amount)}</td>
                         <td><span class="${getStatusClass(r.status)}">${r.status || 'Paid'}</span></td>
                         <td>
-                            <a href="/api/finance/receipt/${r.receipt_id || r.receipt_number}" 
-                               class="btn btn-sm btn-outline-success" 
-                               target="_blank">
+                            <button onclick="downloadReceipt('${r.receipt_id || r.receipt_number}')"
+                               class="btn btn-sm btn-outline-success">
                                 📥 Download
-                            </a>
+                            </button>
                         </td>
                     </tr>
                 `).join('');
@@ -135,6 +172,9 @@
                 tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to connect to the finance server.</td></tr>';
             }
         }
+
+        // Expose downloadReceipt globally for onclick to access it
+        window.downloadReceipt = downloadReceipt;
 
         document.addEventListener('DOMContentLoaded', loadReceiptHistory);
     </script>

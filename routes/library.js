@@ -790,4 +790,40 @@ router.post('/request', authenticateToken, authorize(LIBRARY_ROLES), async (req,
 
 // Placeholder for POST /api/library/reserve
 
+// =========================================================
+// 7. EXTERNAL INTEGRATION (Fee Collection Terminal) 
+// =========================================================
+
+/**
+ * @route   GET /api/library/fines/student/:studentId
+ * @desc    Get the total pending fine for a specific student ID (used by Finance Module).
+ * @access  Private (Admin, Finance, Librarian)
+ */
+router.get('/fines/student/:studentId', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
+    const { studentId } = req.params;
+    
+    // NOTE: This route should ONLY return PENDING fines (payment_status = 'Pending')
+    try {
+        const query = `
+            SELECT 
+                COALESCE(SUM(fine_amount), 0) AS total_pending_fine
+            FROM ${CIRCULATION_TABLE}
+            WHERE student_id = $1::uuid AND fine_amount > 0 AND payment_status = 'Pending';
+        `;
+        const result = await pool.query(query, [studentId]);
+        
+        // Should always return an object with a number, even if 0
+        const totalPendingFine = parseFloat(result.rows[0]?.total_pending_fine) || 0;
+
+        res.status(200).json({ 
+            total_pending_fine: totalPendingFine
+        });
+
+    } catch (error) {
+        console.error("Finance Integration Fine Fetch Error:", error);
+        // Return 404 here can confuse the fee-collection module, so return 500 or 200 with 0.
+        res.status(500).json({ message: 'Failed to retrieve pending fines for finance module.' });
+    }
+});
+
 module.exports = router;

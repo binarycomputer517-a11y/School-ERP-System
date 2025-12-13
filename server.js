@@ -75,8 +75,8 @@ const staffhrRouter = require('./routes/staffhr');
 const hrDepartmentsRouter = require('./routes/hr/departments');
 const transportRouter = require('./routes/transport');
 const hostelRouter = require('./routes/hostel');
-const cafeteriaRouter = require('./routes/cafeteria'); // Assuming filename is cafeteria.js
-const libraryRouter = require('./routes/library');
+const cafeteriaRouter = require('./routes/cafeteria'); 
+const libraryRouter = require('./routes/library'); // ✅ Library Router Imported
 const inventoryRouter = require('./routes/inventory'); 
 const assetRouter = require('./routes/asset');         
 const itHelpdeskRouter = require('./routes/it-helpdesk');
@@ -204,8 +204,8 @@ app.use('/api/staffhr', staffhrRouter);
 app.use('/api/hr/departments', hrDepartmentsRouter);
 app.use('/api/transport', transportRouter);
 app.use('/api/hostel', hostelRouter);
-app.use('/api/cafeteria', cafeteriaRouter); // ✅ Cafeteria Router Mapped
-app.use('/api/library', libraryRouter);
+app.use('/api/cafeteria', cafeteriaRouter); 
+app.use('/api/library', libraryRouter); // ✅ Library Router Mapped (Fixes 404 for fines)
 
 // Inventory & Asset
 app.use('/api/inventory', inventoryRouter); 
@@ -262,7 +262,6 @@ app.use((err, req, res, next) => {
     
     // Handle the 413 error specifically if it originates from body-parser limits
     if (err.type === 'entity.too.large') {
-        // NOTE: The request body limit is set to 10MB in section 2, so this should rarely hit unless a dependency overwrites it.
         return res.status(413).json({ success: false, message: 'Request Entity Too Large (Check server.js limits)' });
     }
 
