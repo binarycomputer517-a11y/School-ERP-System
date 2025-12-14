@@ -43,6 +43,14 @@
         .modal-content .form-input, .modal-content .form-select, .modal-content .form-textarea {
              margin-bottom: 15px;
         }
+
+        /* --- Custom Status Classes (for better visual management) --- */
+        .status-new { background-color: #ffe0b2; color: #ff6f00; font-weight: 500; } /* Light Orange/Amber */
+        .status-follow-up { background-color: #bbdefb; color: #1565c0; font-weight: 500; } /* Light Blue */
+        .status-admitted { background-color: #c8e6c9; color: #388e3c; font-weight: 500; } /* Light Green */
+        .status-closed { background-color: #fce4ec; color: #ad1457; font-weight: 500; } /* Light Pink/Red */
+        .status-default { background-color: #e0e0e0; color: #424242; font-weight: 500; } /* Gray */
+
     </style>
 </head>
 <body>
@@ -154,11 +162,14 @@
     const API_COURSES = '/api/academicswithfees/courses';
 
     const token = localStorage.getItem('erp-token');
-    if (!token || localStorage.getItem('user-role') !== 'Admin') {
-        window.location.href = '/login';
+    // MODIFIED: Only check if a token exists for authentication. Removed the strict 'Admin' role check 
+    // to allow all authenticated users (Teacher, Student, etc.) access, matching the backend update.
+    if (!token) {
+        window.location.href = '/login.html'; // Redirect to login page
     }
     
     const authHeaders = { 'Authorization': `Bearer ${token}` };
+    const userRole = localStorage.getItem('user-role'); // Get role for conditional UI access
 
     // Functions to control the modal's display property (CSS ensures flex centers it)
     function openModal(modalId) { document.getElementById(modalId).style.display = 'flex'; }
@@ -178,10 +189,19 @@
 
         fetch(API_COURSES, { headers: authHeaders })
             .then(response => {
-                if (!response.ok) throw new Error('Failed to fetch courses.');
+                // If fetching courses fails, it likely means the token is invalid or unauthorized
+                if (!response.ok) {
+                     // We don't throw an error here, but we should handle the failed state gracefully
+                     console.error('Failed to fetch courses, check token/auth.');
+                     return { ok: false, json: () => Promise.resolve([]) }; // Return a dummy failed object
+                }
                 return response.json();
             })
             .then(courses => {
+                 // Check if the response was successful
+                 if (!courses || courses.length === undefined) {
+                      throw new Error('No course data received.');
+                 }
                 allCourses = courses; // Store globally
                 selects.forEach(courseSelect => {
                     courseSelect.innerHTML = '<option value="">-- Select Course Applied For --</option>';
@@ -216,7 +236,7 @@
 
 
     // ===============================================
-    // ENQUIRIES LOADING
+    // ENQUIRIES LOADING & RENDERING
     // ===============================================
 
     function loadEnquiries() {
@@ -225,7 +245,14 @@
         fetch(API_ENQUIRIES, { headers: authHeaders })
             .then(res => {
                 if (!res.ok) {
-                    tableBody.innerHTML = `<tr><td colspan="6">Could not load enquiries. Ensure backend is running.</td></tr>`;
+                    // Based on backend, only authenticated users can GET. 
+                    // 401 (Unauthorized) will be caught by the general flow if we had a dedicated handleApi function.
+                    // For now, check if the response is explicitly 403 or 401
+                    if (res.status === 401 || res.status === 403) {
+                         tableBody.innerHTML = `<tr><td colspan="6" style="color:red;">Access Denied: You do not have permission to view enquiries.</td></tr>`;
+                    } else {
+                         tableBody.innerHTML = `<tr><td colspan="6">Could not load enquiries. Server error (Status: ${res.status}).</td></tr>`;
+                    }
                     throw new Error('Failed to fetch enquiries.');
                 }
                 return res.json();
@@ -238,6 +265,17 @@
                 }
                 enquiries.forEach(enq => {
                     const statusClass = enq.status ? `status-${enq.status.toLowerCase().replace(/\s/g, '-')}` : 'status-default';
+                    const safeName = enq.prospect_name.replace(/'/g, "\\'");
+                    
+                    // Conditionally render action buttons based on user role (Admin/Super Admin for PUT/DELETE)
+                    const actionsHtml = (userRole === 'Admin' || userRole === 'Super Admin') ? 
+                        `
+                            <button class="action-btn edit" onclick="openEditModal('${enq.id}')">Edit</button>
+                            <button class="action-btn view" onclick="setReminder('${enq.id}', '${safeName}')">Reminder</button>
+                            <button class="action-btn delete" onclick="deleteEnquiry('${enq.id}')">Delete</button>
+                        ` :
+                        `<span style="color: #666;">View Only</span>`;
+
 
                     tableBody.innerHTML += `
                         <tr data-id="${enq.id}">
@@ -247,9 +285,7 @@
                             <td class="${statusClass}">${enq.status}</td>
                             <td>${enq.notes || ''}</td>
                             <td class="actions">
-                                <button class="action-btn edit" onclick="openEditModal('${enq.id}')">Edit</button>
-                                <button class="action-btn view" onclick="setReminder('${enq.id}', '${enq.prospect_name.replace(/'/g, "\\'")}')">Reminder</button>
-                                <button class="action-btn delete" onclick="deleteEnquiry('${enq.id}')">Delete</button>
+                                ${actionsHtml}
                             </td>
                         </tr>
                     `;
@@ -257,15 +293,49 @@
             })
             .catch(error => {
                 console.error("Loading enquiries failed:", error);
-                tableBody.innerHTML = `<tr><td colspan="6" style="color:red;">Error fetching data.</td></tr>`;
+                // The specific error handling for 401/403 is done inside the first .then()
             });
     }
 
     // ===============================================
+    // NEW ENQUIRY SUBMISSION (Public or Authenticated)
+    // ===============================================
+    
+    document.getElementById('enquiry-form').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(this).entries());
+        
+        // POST route is public (no token needed on the server side)
+        try {
+            const response = await fetch(API_ENQUIRIES, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }, // NO auth headers needed for public POST
+                body: JSON.stringify(data)
+            });
+
+            if (response.ok) {
+                alert('Enquiry submitted successfully!');
+                this.reset();
+                loadEnquiries(); // Reload list to show the new enquiry
+            } else {
+                const text = await response.text();
+                alert('Failed to submit enquiry: ' + text);
+            }
+        } catch (err) {
+            alert('A network error occurred during submission.');
+            console.error('Submission error:', err);
+        }
+    });
+
+    // ===============================================
     // ENQUIRY ACTIONS (Edit, Reminder, Delete)
     // ===============================================
-
+    // NOTE: These functions MUST only be accessible to Admins/Super Admins as per backend rules.
+    // The UI limits button visibility, but the user could still call the functions if they bypass the UI.
+    
     async function openEditModal(id) {
+        if (userRole !== 'Admin' && userRole !== 'Super Admin') return alert('Permission denied.');
+        
         try {
             const response = await fetch(`${API_ENQUIRIES}/${id}`, { headers: authHeaders });
             if (!response.ok) {
@@ -296,6 +366,8 @@
 
     document.getElementById('edit-enquiry-form').addEventListener('submit', async function(e) {
         e.preventDefault();
+        if (userRole !== 'Admin' && userRole !== 'Super Admin') return alert('Permission denied.');
+
         const id = document.getElementById('edit-enquiry-id').value;
         const data = Object.fromEntries(new FormData(this).entries());
 
@@ -320,6 +392,7 @@
     });
 
     function setReminder(id, name) {
+        // Reminder function is passive on the frontend, doesn't require high privileges
         const date = prompt(`Set follow-up date for ${name} (Enquiry ID: ${id}) (YYYY-MM-DD):`);
         if (date) {
             alert(`Reminder set for ${date}. (Requires notification/scheduling backend implementation)`);
@@ -327,6 +400,8 @@
     }
 
     async function deleteEnquiry(id) {
+        if (userRole !== 'Admin' && userRole !== 'Super Admin') return alert('Permission denied.');
+
         if (!confirm('Are you sure you want to permanently delete this enquiry?')) return;
         
         try {

@@ -1,12 +1,31 @@
+/**
+ * @fileoverview Express router for handling enquiry-related API endpoints.
+ * @module routes/enquiries
+ */
+
+// =================================================================
+// --- IMPORTS AND ROUTER SETUP ---
+// =================================================================
+
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 
+// Define all recognized authenticated roles for read access.
+const ALL_AUTHENTICATED_ROLES = ['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student'];
+
+
 // ===============================================
 // 1. POST /api/enquiries - Add a new enquiry
 // ===============================================
-router.post('/', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   POST /api/enquiries
+ * @desc    Add a new enquiry (typically from a public form)
+ * @access  Public (No Authentication required)
+ */
+// FIX: Removed authenticateToken and authorize middleware to allow public access.
+router.post('/', async (req, res) => { 
     const {
         prospect_name,
         parent_name,
@@ -18,7 +37,6 @@ router.post('/', authenticateToken, authorize('Admin'), async (req, res) => {
     } = req.body;
 
     try {
-        // FIX: Explicitly set updated_at = NOW() upon creation, assuming created_at is defaulted by the DB.
         const newEnquiry = await pool.query(
             `INSERT INTO enquiries (prospect_name, parent_name, contact_number, email, class_applied_for, source, notes, status, updated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, 'New', NOW()) RETURNING *`,
@@ -34,7 +52,13 @@ router.post('/', authenticateToken, authorize('Admin'), async (req, res) => {
 // ===============================================
 // 2. GET /api/enquiries - Get all enquiries
 // ===============================================
-router.get('/', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   GET /api/enquiries
+ * @desc    Get all enquiries
+ * @access  Private (All Authenticated Roles)
+ */
+// FIX: Updated authorize middleware to allow access for all authenticated users.
+router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (req, res) => {
     try {
         const allEnquiries = await pool.query("SELECT * FROM enquiries ORDER BY created_at DESC");
         res.status(200).json(allEnquiries.rows);
@@ -47,7 +71,13 @@ router.get('/', authenticateToken, authorize('Admin'), async (req, res) => {
 // ===============================================
 // 3. GET /api/enquiries/:id - Get a single enquiry
 // ===============================================
-router.get('/:id', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   GET /api/enquiries/:id
+ * @desc    Get a single enquiry
+ * @access  Private (All Authenticated Roles)
+ */
+// FIX: Updated authorize middleware to allow access for all authenticated users.
+router.get('/:id', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query("SELECT * FROM enquiries WHERE id = $1", [id]);
@@ -65,7 +95,13 @@ router.get('/:id', authenticateToken, authorize('Admin'), async (req, res) => {
 // ===============================================
 // 4. PUT /api/enquiries/:id - Update an enquiry
 // ===============================================
-router.put('/:id', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   PUT /api/enquiries/:id
+ * @desc    Update an enquiry
+ * @access  Private (Only Admins/Super Admins, as this is a sensitive operation)
+ */
+// NOTE: PUT operation remains restricted to 'Admin' and 'Super Admin'.
+router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     const { id } = req.params;
     const {
         prospect_name,
@@ -75,12 +111,11 @@ router.put('/:id', authenticateToken, authorize('Admin'), async (req, res) => {
         class_applied_for,
         source,
         notes,
-        status // Include status for updates
+        status 
     } = req.body;
 
     try {
         const result = await pool.query(
-            // The updated_at column is now expected to exist in the database
             `UPDATE enquiries SET 
                 prospect_name = $1, 
                 parent_name = $2, 
@@ -108,7 +143,13 @@ router.put('/:id', authenticateToken, authorize('Admin'), async (req, res) => {
 // ===============================================
 // 5. DELETE /api/enquiries/:id - Delete an enquiry
 // ===============================================
-router.delete('/:id', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   DELETE /api/enquiries/:id
+ * @desc    Delete an enquiry
+ * @access  Private (Only Admins/Super Admins, as this is a sensitive operation)
+ */
+// NOTE: DELETE operation remains restricted to 'Admin' and 'Super Admin'.
+router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
         const { id } = req.params;
         const result = await pool.query("DELETE FROM enquiries WHERE id = $1 RETURNING id", [id]);

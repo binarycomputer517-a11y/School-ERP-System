@@ -1,14 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../database'); // Ensure path is correct
-const { authenticateToken, authorize } = require('../authMiddleware'); // Ensure path is correct
+const { pool } = require('../database');
+const { authenticateToken, authorize } = require('../authMiddleware'); 
+
+// Define common management roles for clarity
+const ALUMNI_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Coordinator'];
+const ALL_AUTHENTICATED_ROLES = ['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student'];
 
 // =========================================================================
-// 1. GET CANDIDATES
-// Fetch students who are NOT yet in the alumni table.
-// This populates the "Select Student" dropdown to prevent duplicates.
+// 1. GET CANDIDATES (Dropdown Data)
 // =========================================================================
-router.get('/candidates', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   GET /api/alumni/candidates
+ * @desc    Fetch students not yet added to alumni.
+ * @access  Private (Admin, Super Admin, Coordinator)
+ */
+// FIX: Broadened access for staff roles who manage alumni.
+router.get('/candidates', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT s.student_id, s.first_name, s.last_name, s.enrollment_no
@@ -26,10 +34,14 @@ router.get('/candidates', authenticateToken, authorize('Admin'), async (req, res
 
 // =========================================================================
 // 2. ADD ALUMNI
-// Move a student to the alumni network with extended details.
 // =========================================================================
-router.post('/', authenticateToken, authorize('Admin'), async (req, res) => {
-    // Destructure all potential fields from the frontend form
+/**
+ * @route   POST /api/alumni
+ * @desc    Add a student to the alumni network.
+ * @access  Private (Admin, Super Admin, Coordinator)
+ */
+// FIX: Broadened access for staff roles who manage alumni.
+router.post('/', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (req, res) => {
     const { 
         student_id, 
         passing_year, 
@@ -72,9 +84,14 @@ router.post('/', authenticateToken, authorize('Admin'), async (req, res) => {
 
 // =========================================================================
 // 3. GET ALL ALUMNI
-// List existing alumni with Student Name joined from students table.
 // =========================================================================
-router.get('/', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   GET /api/alumni
+ * @desc    List existing alumni with student details.
+ * @access  Private (All Authenticated Roles)
+ */
+// FIX: Broadened access to ALL authenticated roles for viewing the list.
+router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
@@ -104,9 +121,14 @@ router.get('/', authenticateToken, authorize('Admin'), async (req, res) => {
 
 // =========================================================================
 // 4. DELETE ALUMNI
-// Remove a student from the alumni list.
 // =========================================================================
-router.delete('/:id', authenticateToken, authorize('Admin'), async (req, res) => {
+/**
+ * @route   DELETE /api/alumni/:id
+ * @desc    Remove an alumni record.
+ * @access  Private (Admin, Super Admin)
+ */
+// FIX: Restricted to high-level admins for security.
+router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
         const result = await pool.query('DELETE FROM alumni WHERE id = $1', [req.params.id]);
         

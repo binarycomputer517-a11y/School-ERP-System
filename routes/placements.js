@@ -13,6 +13,10 @@ const STUDENTS_TABLE = 'students';
 // Roles for management actions (lowercase for compatibility)
 const MANAGEMENT_ROLES = ['super admin', 'admin', 'placement officer'];
 
+// Roles for viewing data (All relevant parties)
+const VIEWER_ROLES = [...MANAGEMENT_ROLES, 'student', 'teacher', 'coordinator'];
+
+
 // =========================================================
 // 1. COMPANY MANAGEMENT (CRUD)
 // =========================================================
@@ -21,6 +25,7 @@ const MANAGEMENT_ROLES = ['super admin', 'admin', 'placement officer'];
  * @route POST /api/placements/companies - Create
  */
 router.post('/companies', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// ... (No change - Restricted to Management)
     const { company_name, industry, website, contact_person, contact_email } = req.body;
     if (!company_name) return res.status(400).json({ message: 'Company name is required.' });
 
@@ -42,7 +47,8 @@ router.post('/companies', authenticateToken, authorize(MANAGEMENT_ROLES), async 
 /**
  * @route GET /api/placements/companies - Read All
  */
-router.get('/companies', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// FIX: Open to all viewer roles
+router.get('/companies', authenticateToken, authorize(VIEWER_ROLES), async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT id, company_name, industry, website, contact_person, contact_email, created_at
@@ -59,6 +65,7 @@ router.get('/companies', authenticateToken, authorize(MANAGEMENT_ROLES), async (
  * @route PUT /api/placements/companies/:id - Update 
  */
 router.put('/companies/:id', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// ... (No change - Restricted to Management)
     const companyId = toUUID(req.params.id);
     const { company_name, industry, website, contact_person, contact_email } = req.body;
     if (!companyId) return res.status(400).json({ message: 'Invalid Company ID.' });
@@ -97,6 +104,7 @@ router.put('/companies/:id', authenticateToken, authorize(MANAGEMENT_ROLES), asy
  * @route DELETE /api/placements/companies/:id - Delete (Cascade Delete Jobs)
  */
 router.delete('/companies/:id', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// ... (No change - Restricted to Management)
     const companyId = toUUID(req.params.id);
     if (!companyId) return res.status(400).json({ message: 'Invalid Company ID.' });
 
@@ -120,6 +128,7 @@ router.delete('/companies/:id', authenticateToken, authorize(MANAGEMENT_ROLES), 
  * @route POST /api/placements/jobs - Create
  */
 router.post('/jobs', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// ... (No change - Restricted to Management)
     const { company_id, job_title, description, salary_package, drive_date, status = 'Open' } = req.body;
 
     if (!company_id || !job_title || !drive_date) {
@@ -145,7 +154,8 @@ router.post('/jobs', authenticateToken, authorize(MANAGEMENT_ROLES), async (req,
 /**
  * @route GET /api/placements/jobs - Read All
  */
-router.get('/jobs', authenticateToken, authorize([...MANAGEMENT_ROLES, 'student']), async (req, res) => {
+// FIX: Open to all viewer roles
+router.get('/jobs', authenticateToken, authorize(VIEWER_ROLES), async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT 
@@ -166,6 +176,7 @@ router.get('/jobs', authenticateToken, authorize([...MANAGEMENT_ROLES, 'student'
  * @route PUT /api/placements/jobs/:id - Update
  */
 router.put('/jobs/:id', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// ... (No change - Restricted to Management)
     const jobId = toUUID(req.params.id);
     const { company_id, job_title, description, salary_package, drive_date, status } = req.body;
     if (!jobId) return res.status(400).json({ message: 'Invalid Job ID.' });
@@ -204,6 +215,7 @@ router.put('/jobs/:id', authenticateToken, authorize(MANAGEMENT_ROLES), async (r
  * @route DELETE /api/placements/jobs/:id - Delete
  */
 router.delete('/jobs/:id', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// ... (No change - Restricted to Management)
     const jobId = toUUID(req.params.id);
     if (!jobId) return res.status(400).json({ message: 'Invalid Job ID.' });
 
@@ -227,6 +239,7 @@ router.delete('/jobs/:id', authenticateToken, authorize(MANAGEMENT_ROLES), async
  * @route POST /api/placements/record - Create/Update Record
  */
 router.post('/record', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// ... (No change - Restricted to Management)
     const { student_id, job_id, offer_status } = req.body;
     
     if (!student_id || !job_id || !offer_status) {
@@ -259,7 +272,8 @@ router.post('/record', authenticateToken, authorize(MANAGEMENT_ROLES), async (re
 /**
  * @route GET /api/placements/records - Read All Records
  */
-router.get('/records', authenticateToken, authorize(MANAGEMENT_ROLES), async (req, res) => {
+// FIX: Open to all viewer roles
+router.get('/records', authenticateToken, authorize(VIEWER_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 

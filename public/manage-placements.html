@@ -8,8 +8,14 @@
 
 <script>
     const token = localStorage.getItem('erp-token');
-    if (!token || localStorage.getItem('user-role') !== 'Admin') {
-        window.location.href = '/login';
+    const userRole = localStorage.getItem('user-role') ? localStorage.getItem('user-role').toLowerCase() : '';
+
+    // Define roles allowed for management access (matching the server's MANAGEMENT_ROLES)
+    const MANAGEMENT_ROLES_CLIENT = ['admin', 'super admin', 'placement officer'];
+
+    // FIX: Check if the user is authenticated AND has a management role
+    if (!token || !MANAGEMENT_ROLES_CLIENT.includes(userRole)) {
+        window.location.href = '/login.html';
     }
 </script>
 
@@ -56,7 +62,10 @@
 
         function loadCompanies() {
             fetch('/api/placements/companies', { headers: authHeaders })
-                .then(res => res.json())
+                .then(res => {
+                     if (res.status === 403) throw new Error("Permission Denied.");
+                     return res.json();
+                })
                 .then(companies => {
                     const companyListBody = document.getElementById('company-list-body');
                     const companySelect = document.getElementById('company-select');
@@ -66,12 +75,15 @@
                         companyListBody.innerHTML += `<tr><td>${c.company_name}</td><td>${c.industry || ''}</td><td>${c.website || ''}</td></tr>`;
                         companySelect.innerHTML += `<option value="${c.id}">${c.company_name}</option>`;
                     });
+                })
+                .catch(e => {
+                     console.error("Error loading companies:", e);
+                     document.getElementById('company-list-body').innerHTML = `<tr><td colspan="3">Error loading data. Check console.</td></tr>`;
                 });
         }
         
         document.getElementById('company-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            // FIXED: Used 'this' instead of 'e'
             const data = Object.fromEntries(new FormData(this).entries());
             fetch('/api/placements/companies', {
                 method: 'POST',
@@ -79,13 +91,17 @@
                 body: JSON.stringify(data)
             }).then(res => {
                 if (res.ok) { alert('Company added!'); this.reset(); loadCompanies(); } 
+                else if (res.status === 403) { alert('Permission Denied to add company.'); }
                 else { alert('Error adding company.'); }
-            });
+            }).catch(e => console.error("Network error on POST company:", e));
         });
 
         function loadJobs() {
             fetch('/api/placements/jobs', { headers: authHeaders })
-                .then(res => res.json())
+                .then(res => {
+                     if (res.status === 403) throw new Error("Permission Denied.");
+                     return res.json();
+                })
                 .then(jobs => {
                     const jobListBody = document.getElementById('job-list-body');
                     jobListBody.innerHTML = '';
@@ -93,12 +109,15 @@
                         const driveDate = j.drive_date ? new Date(j.drive_date).toLocaleDateString() : 'N/A';
                         jobListBody.innerHTML += `<tr><td>${j.company_name}</td><td>${j.job_title}</td><td>${j.salary_package || ''}</td><td>${driveDate}</td></tr>`;
                     });
+                })
+                .catch(e => {
+                     console.error("Error loading jobs:", e);
+                     document.getElementById('job-list-body').innerHTML = `<tr><td colspan="4">Error loading data. Check console.</td></tr>`;
                 });
         }
 
         document.getElementById('job-form').addEventListener('submit', function(e) {
             e.preventDefault();
-            // FIXED: Used 'this' instead of 'e'
             const data = Object.fromEntries(new FormData(this).entries());
             fetch('/api/placements/jobs', {
                 method: 'POST',
@@ -106,8 +125,9 @@
                 body: JSON.stringify(data)
             }).then(res => {
                 if (res.ok) { alert('Job posting added!'); this.reset(); loadJobs(); } 
+                else if (res.status === 403) { alert('Permission Denied to add job posting.'); }
                 else { alert('Error adding job posting.'); }
-            });
+            }).catch(e => console.error("Network error on POST job:", e));
         });
 
         window.onload = () => {

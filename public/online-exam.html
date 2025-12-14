@@ -375,18 +375,21 @@
         const quizForm = document.getElementById('quiz-form');
         const assessmentList = document.getElementById('assessment-list');
         
-        // --- NEW: Modal DOM Elements ---
+        // --- Modal DOM Elements ---
         const formModal = document.getElementById('form-modal');
         const importModal = document.getElementById('import-modal');
 
-        // --- API Helper ---
+        // --- API Helper (MODIFIED for better error handling) ---
         async function handleApi(endpoint, method = 'GET', body = null) {
             const token = localStorage.getItem('erp-token');
+            
+            // Initial check for token
             if (!token) {
-                alert('Authentication error. Please log in.');
+                alert('Authentication required. Please log in.');
                 window.location.href = '/login.html';
-                throw new Error('No token');
+                throw new Error('No authentication token found.');
             }
+            
             const options = {
                 method,
                 headers: { 'Authorization': `Bearer ${token}` }
@@ -395,12 +398,29 @@
                 options.headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(body);
             }
+            
             try {
                 const response = await fetch(endpoint, options);
+                
                 if (!response.ok) {
-                    const errorData = await response.json().catch(() => ({ message: 'API Error' }));
+                    const errorData = await response.json().catch(() => ({ message: `HTTP status ${response.status}` }));
+
+                    // --- ENHANCED ERROR HANDLING ---
+                    if (response.status === 401) {
+                        alert('Session Expired or Unauthorized. Please log in again.');
+                        window.location.href = '/login.html';
+                        throw new Error('401 Unauthorized.');
+                    } else if (response.status === 403) {
+                        // This handles your specific error (Forbidden)
+                        alert('Access Denied: Your account lacks permission for this action.');
+                        // Do NOT redirect here, as the user is authenticated but unauthorized for THIS resource.
+                        throw new Error(`Forbidden: ${errorData.message}`);
+                    }
+                    // --- END ENHANCED ERROR HANDLING ---
+
                     throw new Error(errorData.message || `API call failed with status: ${response.status}`);
                 }
+                
                 if (response.status === 204) return null;
                 return response.json();
             } catch (error) {
@@ -417,20 +437,25 @@
 
         async function loadDropdowns() {
             try {
-                const courses = await handleApi('/api/courses');
+                // The calls that were previously failing with 403
+                const courses = await handleApi('/api/courses'); 
                 const subjects = await handleApi('/api/subjects');
 
                 const courseSelect = document.getElementById('course-select');
+                courseSelect.innerHTML = '<option value="">-- Select Course --</option>'; // Clear existing
                 courses.forEach(course => {
                     courseSelect.innerHTML += `<option value="${course.id}">${course.course_name}</option>`;
                 });
 
                 const subjectSelect = document.getElementById('subject-select');
+                subjectSelect.innerHTML = '<option value="">-- Select Subject --</option>'; // Clear existing
                 subjects.forEach(subject => {
                     subjectSelect.innerHTML += `<option value="${subject.id}">${subject.subject_name}</option>`;
                 });
             } catch (error) {
-                alert('Failed to load courses or subjects.');
+                // This catch now handles the specific errors thrown by handleApi (403 or 401)
+                const errorMessage = error.message.includes('403') ? 'Access Denied to load courses/subjects.' : 'Failed to load courses or subjects.';
+                alert(errorMessage);
             }
         }
 
@@ -552,7 +577,7 @@
             // window.location.href = `quiz-results.html?quizId=${quizId}`;
         }
         
-        // --- NEW: Form Modal Functions ---
+        // --- Form Modal Functions ---
         
         function openFormModal(quizId = null) {
             if (!quizId) {

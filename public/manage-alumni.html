@@ -67,13 +67,20 @@
         .close-modal { position: absolute; right: 15px; top: 10px; font-size: 20px; color: #fff; cursor: pointer; z-index: 10; }
         .print-btn { display: block; width: 100%; padding: 15px; background: #333; color: white; text-align: center; border: none; cursor: pointer; font-size: 16px; }
         .print-btn:hover { background: #555; }
+        
+        /* Class to hide the form for non-management roles */
+        .hidden-form { display: none; }
     </style>
 </head>
 <body>
 
 <script>
     const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role'); // Get role for UI restrictions
     if (!token) window.location.href = '/login.html';
+
+    // Define roles allowed to ADD/DELETE records (matching backend POST/DELETE auth)
+    const MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Coordinator'];
 </script>
 
 <div class="container">
@@ -98,7 +105,7 @@
         </div>
     </div>
 
-    <h2>Add New Alumni</h2>
+    <h2 id="add-alumni-header">Add New Alumni</h2>
     <form id="alumni-form">
         <div class="full-width">
             <label>Select Graduated Student</label>
@@ -178,29 +185,50 @@
     const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     let alumniData = []; 
 
+    // Helper function to check role permission (Matches backend POST/DELETE auth)
+    function hasManagementPermission() {
+        return MANAGEMENT_ROLES.includes(userRole);
+    }
+
+    // Initialization hook to hide form for non-management roles
+    document.addEventListener('DOMContentLoaded', () => {
+        if (!hasManagementPermission()) {
+            document.getElementById('alumni-form').classList.add('hidden-form');
+            document.getElementById('add-alumni-header').style.display = 'none';
+        }
+    });
+
     async function loadData() {
         try {
-            // Fetch Candidates
-            const candRes = await fetch('/api/alumni/candidates', { headers: { 'Authorization': `Bearer ${token}` } });
-            const candidates = await candRes.json();
-            const select = document.getElementById('student-select');
-            
-            if (candidates.length > 0) {
-                select.innerHTML = '<option value="">-- Select Student --</option>' + 
-                    candidates.map(s => `<option value="${s.student_id}">${s.first_name} ${s.last_name} (${s.enrollment_no || 'N/A'})</option>`).join('');
-            } else {
-                select.innerHTML = '<option value="">No eligible students found</option>';
+            // Fetch Candidates only if the user has permission to add alumni (or else this call might fail with 403)
+            if (hasManagementPermission()) {
+                const candRes = await fetch('/api/alumni/candidates', { headers: { 'Authorization': `Bearer ${token}` } });
+                if (!candRes.ok) throw new Error('Failed to load candidate students.');
+                
+                const candidates = await candRes.json();
+                const select = document.getElementById('student-select');
+                
+                if (candidates.length > 0) {
+                    select.innerHTML = '<option value="">-- Select Student --</option>' + 
+                        candidates.map(s => `<option value="${s.student_id}">${s.first_name} ${s.last_name} (${s.enrollment_no || 'N/A'})</option>`).join('');
+                } else {
+                    select.innerHTML = '<option value="">No eligible students found</option>';
+                }
             }
 
-            // Fetch Alumni List
+            // Fetch Alumni List (Accessible to ALL AUTHENTICATED ROLES)
             const alumRes = await fetch('/api/alumni', { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!alumRes.ok) throw new Error('Failed to load alumni list.');
+            
             alumniData = await alumRes.json();
             
             renderTable(alumniData);
             updateStats(alumniData);
 
         } catch (err) {
-            console.error("Error:", err);
+            console.error("Error loading data:", err);
+            // Handle error display if list load fails
+            document.getElementById('alumni-list-body').innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:red;">Failed to load data. Please check connection and permissions.</td></tr>';
         }
     }
 
@@ -213,12 +241,21 @@
             return;
         }
 
+        const canDelete = hasManagementPermission();
+
         data.forEach(item => {
             const company = item.current_company ? ` at <b>${item.current_company}</b>` : '';
             const profession = item.current_profession || 'Not Specified';
             const linkedin = item.linkedin_profile 
                 ? `<a href="${item.linkedin_profile}" target="_blank" class="linkedin-link"><i class="fab fa-linkedin"></i></a>` 
                 : '<span style="color:#ccc"><i class="fab fa-linkedin"></i></span>';
+            
+            const actionsHtml = `
+                <button class="action-btn id-card" onclick="openIDCard('${item.student_name}', '${item.passing_year}', '${item.current_profession || 'N/A'}', '${item.id}')" title="Generate ID Card">
+                    <i class="fas fa-id-card"></i>
+                </button>
+                ${canDelete ? `<button class="action-btn delete" onclick="deleteAlumni('${item.id}')" title="Delete"><i class="fas fa-trash-alt"></i></button>` : ''}
+            `;
 
             tbody.innerHTML += `
                 <tr>
@@ -226,14 +263,7 @@
                     <td>${item.passing_year}</td>
                     <td>${profession}${company}</td>
                     <td style="text-align:center;">${linkedin}</td>
-                    <td>
-                        <button class="action-btn id-card" onclick="openIDCard('${item.student_name}', '${item.passing_year}', '${item.current_profession || 'N/A'}', '${item.id}')" title="Generate ID Card">
-                            <i class="fas fa-id-card"></i>
-                        </button>
-                        <button class="action-btn delete" onclick="deleteAlumni(${item.id})" title="Delete">
-                            <i class="fas fa-trash-alt"></i>
-                        </button>
-                    </td>
+                    <td>${actionsHtml}</td>
                 </tr>`;
         });
     }
@@ -244,8 +274,6 @@
         document.getElementById('card-year').innerText = year;
         document.getElementById('card-prof').innerText = profession;
         document.getElementById('card-id').innerText = 'ALU-' + String(id).padStart(4, '0');
-        
-        // Show Modal
         document.getElementById('idCardModal').style.display = 'block';
     }
 
@@ -257,7 +285,6 @@
         const printContent = document.getElementById('card-to-print').outerHTML;
         const win = window.open('', '', 'width=500,height=400');
         win.document.write('<html><head><title>Print ID Card</title>');
-        // Re-inject simplistic styles for printing
         win.document.write('<style>body{margin:0; padding:20px; display:flex; justify-content:center;} .id-card-design { width: 400px; height: 250px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; font-family: sans-serif; border-radius:10px; -webkit-print-color-adjust: exact; } .id-header{border-bottom:1px solid #ccc; padding-bottom:10px; display:flex; justify-content:space-between;} .id-photo{width:80px; height:80px; background:#ddd; border-radius:50%; float:left; margin-right:20px;} .id-badge{background:gold; color:black; padding:2px 5px; border-radius:5px; font-size:10px; font-weight:bold;} </style>');
         win.document.write('</head><body>');
         win.document.write(printContent);
@@ -273,8 +300,11 @@
         document.getElementById('stat-year').innerText = data.filter(d => d.passing_year == currentYear).length;
         const professions = data.map(d => d.current_profession).filter(Boolean);
         if(professions.length > 0) {
+            // Simple mode calculation for top profession
             const mode = professions.sort((a,b) => professions.filter(v => v===a).length - professions.filter(v => v===b).length).pop();
             document.getElementById('stat-profession').innerText = mode;
+        } else {
+             document.getElementById('stat-profession').innerText = 'N/A';
         }
     }
 
@@ -288,17 +318,32 @@
     }
 
     async function deleteAlumni(id) {
+        if (!hasManagementPermission()) {
+            return alert('Permission denied: You must be an Admin, Super Admin, or Coordinator to delete records.');
+        }
+
         if(!confirm('Are you sure you want to remove this record?')) return;
         try {
             const res = await fetch(`/api/alumni/${id}`, { method: 'DELETE', headers: authHeaders });
-            if(res.ok) loadData();
-        } catch(e) { console.error(e); }
+            if(res.ok) {
+                alert('Alumni record deleted successfully!');
+                loadData();
+            } else {
+                const errorText = await res.text();
+                alert(`Deletion failed: ${errorText}`);
+            }
+        } catch(e) { 
+            console.error(e); 
+            alert('A network error occurred during deletion.');
+        }
     }
 
     function exportToCSV() {
         let csv = "data:text/csv;charset=utf-8,Name,Year,Profession,Company,LinkedIn\n";
         alumniData.forEach(row => {
-            csv += `${row.student_name},${row.passing_year},${row.current_profession},${row.current_company},${row.linkedin_profile}\n`;
+            // Simple sanitization to handle commas in fields
+            const sanitize = (val) => `"${(val || '').replace(/"/g, '""')}"`;
+            csv += `${sanitize(row.student_name)},${sanitize(row.passing_year)},${sanitize(row.current_profession)},${sanitize(row.current_company)},${sanitize(row.linkedin_profile)}\n`;
         });
         const link = document.createElement("a");
         link.setAttribute("href", encodeURI(csv));
@@ -309,18 +354,33 @@
 
     document.getElementById('alumni-form').addEventListener('submit', function(e) {
         e.preventDefault();
+        if (!hasManagementPermission()) {
+            return alert('Permission denied: You must be an Admin, Super Admin, or Coordinator to add new alumni.');
+        }
+
         const data = Object.fromEntries(new FormData(e.target).entries());
         fetch('/api/alumni', {
             method: 'POST',
             headers: authHeaders,
             body: JSON.stringify(data)
-        }).then(res => {
-            if (res.ok) { alert('Added!'); e.target.reset(); loadData(); }
-            else alert('Error!');
+        }).then(async res => {
+            if (res.ok) { 
+                alert('Alumni added successfully!'); 
+                e.target.reset(); 
+                loadData(); 
+            }
+            else {
+                const errorText = await res.text();
+                alert(`Error adding alumni: ${errorText}`);
+            }
+        }).catch(err => {
+             alert('A network error occurred during submission.');
+             console.error('Submission error:', err);
         });
     });
 
     window.onload = loadData;
 </script>
+<script src="js/global-config.js"></script>
 </body>
 </html>

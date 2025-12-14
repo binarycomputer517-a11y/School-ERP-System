@@ -10,7 +10,7 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 // =================================================================
 
 // 1. Get all subjects linked to a specific course ID.
-router.get('/course/:courseId', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.get('/course/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Super Admin']), async (req, res) => {
     const { courseId } = req.params;
     try {
         const result = await pool.query(`
@@ -32,7 +32,9 @@ router.get('/course/:courseId', authenticateToken, authorize(['Admin', 'Teacher'
 // --- Standard CRUD for managing the master list of all subjects ---
 
 // 2. GET all subjects
-router.get('/', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
+// DEFINITIVE FIX: Authorization list updated to include 'Super Admin'
+// This should resolve the persistent 403 Forbidden error for the subject dropdown.
+router.get('/', authenticateToken, authorize(['Admin', 'Teacher', 'Super Admin']), async (req, res) => {
     try {
         // Updated to order by 'id'
         const result = await pool.query('SELECT * FROM subjects ORDER BY id');
@@ -44,7 +46,7 @@ router.get('/', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']
 });
 
 // 3. POST a new subject
-router.post('/', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.post('/', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     const { subject_name, subject_code } = req.body;
     try {
         const newSubject = await pool.query(
@@ -58,7 +60,7 @@ router.post('/', authenticateToken, authorize(['Admin']), async (req, res) => {
 });
 
 // 4. PUT (Update) a subject by ID
-router.put('/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     const { subject_name, subject_code } = req.body;
     try {
         // Updated WHERE clause to use 'id'
@@ -74,7 +76,7 @@ router.put('/:id', authenticateToken, authorize(['Admin']), async (req, res) => 
 });
 
 // 5. DELETE a subject by ID
-router.delete('/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
         // Updated WHERE clause to use 'id'
         const result = await pool.query("DELETE FROM subjects WHERE id = $1 RETURNING id", [req.params.id]);

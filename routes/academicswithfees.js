@@ -44,7 +44,7 @@ const safeParseInt = (value, fallback = 1) => {
  * @desc    Create a new course
  * @access  Private (Admin)
  */
-router.post('/courses', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.post('/courses', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { course_name, course_code } = req.body;
     try {
         // --- FIXED ---: Return the 'id' column, aliased as 'course_id'
@@ -62,9 +62,9 @@ router.post('/courses', authenticateToken, authorize(['Admin']), async (req, res
 /**
  * @route   GET /api/academicswithfees/courses
  * @desc    Get all courses
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/courses', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
+router.get('/courses', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Select the 'id' (Primary Key) and alias it
         const result = await pool.query('SELECT id AS course_id, course_name, course_code FROM courses ORDER BY course_name'); 
@@ -80,7 +80,7 @@ router.get('/courses', authenticateToken, authorize(['Admin', 'Teacher', 'Coordi
  * @desc    Update an existing course (param :id is the UUID Primary Key)
  * @access  Private (Admin)
  */
-router.put('/courses/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.put('/courses/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { id } = req.params; // This 'id' is the Primary Key UUID
     const { course_name, course_code } = req.body;
     try {
@@ -104,7 +104,7 @@ router.put('/courses/:id', authenticateToken, authorize(['Admin']), async (req, 
  * @desc    Delete a course (param :id is the UUID Primary Key)
  * @access  Private (Admin)
  */
-router.delete('/courses/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.delete('/courses/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM courses WHERE id = $1 RETURNING id", [req.params.id]);
@@ -131,7 +131,7 @@ router.delete('/courses/:id', authenticateToken, authorize(['Admin']), async (re
  * @desc    Create a new batch for a course
  * @access  Private (Admin)
  */
-router.post('/batches', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.post('/batches', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { batch_name, batch_code, course_id } = req.body; // course_id is the UUID from courses.id
     if (!batch_name || !course_id) {
         return res.status(400).json({ message: 'Batch name and course ID are required.' });
@@ -156,9 +156,9 @@ router.post('/batches', authenticateToken, authorize(['Admin']), async (req, res
 /**
  * @route   GET /api/academicswithfees/batches
  * @desc    Get a list of all batches across all courses
- * @access  Private (Admin, Teacher, Coordinator)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
+router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Select 'id' aliased as 'batch_id'
         const result = await pool.query('SELECT id AS batch_id, batch_name, batch_code, course_id FROM batches ORDER BY batch_name');
@@ -176,9 +176,9 @@ router.get('/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordi
 /**
  * @route   GET /api/academicswithfees/batches/:courseId
  * @desc    Get all batches for a specific course ID. (Fixes the add-student.js 404)
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         // The :courseId param correctly references batches.course_id (which points to courses.id)
         const result = await pool.query(
@@ -196,9 +196,9 @@ router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher
 /**
  * @route   GET /api/academicswithfees/courses/:courseId/batches
  * @desc    (This route is redundant if the above /batches/:courseId is used, but kept for legacy)
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/courses/:courseId/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+router.get('/courses/:courseId/batches', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Select 'id' aliased as 'batch_id'.
         const result = await pool.query(
@@ -217,7 +217,7 @@ router.get('/courses/:courseId/batches', authenticateToken, authorize(['Admin', 
  * @desc    Update a batch
  * @access  Private (Admin)
  */
-router.put('/batches/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.put('/batches/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { id } = req.params; // This 'id' is the batch Primary Key UUID
     const { batch_name, batch_code } = req.body;
     try {
@@ -241,7 +241,7 @@ router.put('/batches/:id', authenticateToken, authorize(['Admin']), async (req, 
  * @desc    Delete a batch
  * @access  Private (Admin)
  */
-router.delete('/batches/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.delete('/batches/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM batches WHERE id = $1 RETURNING id", [req.params.id]);
@@ -267,7 +267,7 @@ router.delete('/batches/:id', authenticateToken, authorize(['Admin']), async (re
  * @desc    Create a new subject
  * @access  Private (Admin)
  */
-router.post('/subjects', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.post('/subjects', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { subject_name, subject_code } = req.body;
     try {
         // --- FIXED ---: Return 'id' aliased as 'subject_id'
@@ -285,9 +285,9 @@ router.post('/subjects', authenticateToken, authorize(['Admin']), async (req, re
 /**
  * @route   GET /api/academicswithfees/subjects
  * @desc    Get all subjects
- * @access  Private (Admin, Teacher, Coordinator)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/subjects', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator']), async (req, res) => {
+router.get('/subjects', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Select 'id' aliased as 'subject_id'
         const result = await pool.query('SELECT id AS subject_id, subject_name, subject_code FROM subjects ORDER BY subject_name');
@@ -303,7 +303,7 @@ router.get('/subjects', authenticateToken, authorize(['Admin', 'Teacher', 'Coord
  * @desc    Update a subject
  * @access  Private (Admin)
  */
-router.put('/subjects/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.put('/subjects/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { id } = req.params; // This 'id' is the subject Primary Key UUID
     const { subject_name, subject_code } = req.body;
     try {
@@ -327,7 +327,7 @@ router.put('/subjects/:id', authenticateToken, authorize(['Admin']), async (req,
  * @desc    Delete a subject
  * @access  Private (Admin)
  */
-router.delete('/subjects/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.delete('/subjects/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM subjects WHERE id = $1 RETURNING id", [req.params.id]);
@@ -351,9 +351,9 @@ router.delete('/subjects/:id', authenticateToken, authorize(['Admin']), async (r
 /**
  * @route   GET /api/academicswithfees/courses/:courseId/subjects
  * @desc    Get all subjects linked to a specific course
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Select 's.id' (subject PK) aliased as 'subject_id'
         const result = await pool.query(`
@@ -374,7 +374,7 @@ router.get('/courses/:courseId/subjects', authenticateToken, authorize(['Admin',
  * @desc    Update the list of subjects linked to a course (transactional)
  * @access  Private (Admin)
  */
-router.put('/courses/:courseId/subjects', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.put('/courses/:courseId/subjects', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { courseId } = req.params; // This is courses.id (PK)
     const { subjectIds } = req.body; // This is an array of subjects.id (PK)
 
@@ -417,9 +417,9 @@ router.put('/courses/:courseId/subjects', authenticateToken, authorize(['Admin']
 /**
  * @route   GET /api/academicswithfees/course-details/:courseId
  * @desc    Get comprehensive details for a course
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         const { courseId } = req.params; // This is courses.id
 
@@ -466,7 +466,7 @@ router.get('/course-details/:courseId', authenticateToken, authorize(['Admin', '
  * @desc    Create a new academic session
  * @access  Private (Admin)
  */
-router.post('/sessions', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.post('/sessions', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { session_name, start_date, end_date } = req.body;
     try {
         // --- FIXED ---: Return 'id' aliased as 'academic_session_id'
@@ -484,9 +484,9 @@ router.post('/sessions', authenticateToken, authorize(['Admin']), async (req, re
 /**
  * @route   GET /api/academicswithfees/sessions
  * @desc    Get all academic sessions
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
+router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Select 'id' aliased as 'academic_session_id'.
         // This fixes the 'column "academic_session_id" does not exist' error.
@@ -503,7 +503,7 @@ router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coord
  * @desc    Update an academic session
  * @access  Private (Admin)
  */
-router.put('/sessions/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.put('/sessions/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const { id } = req.params; // This 'id' is the session Primary Key
     const { session_name, start_date, end_date } = req.body;
     try {
@@ -527,7 +527,7 @@ router.put('/sessions/:id', authenticateToken, authorize(['Admin']), async (req,
  * @desc    Delete an academic session
  * @access  Private (Admin)
  */
-router.delete('/sessions/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.delete('/sessions/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Delete WHERE 'id'
         const result = await pool.query("DELETE FROM academic_sessions WHERE id = $1 RETURNING id", [req.params.id]);
@@ -554,7 +554,7 @@ router.delete('/sessions/:id', authenticateToken, authorize(['Admin']), async (r
  * @desc    Create a new fee structure for a specific course and batch
  * @access  Private (Admin)
  */
-router.post('/fees/structures', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.post('/fees/structures', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     const {
         course_id, batch_id, // These are now UUIDs from courses.id and batches.id
         course_duration_months, admission_fee,
@@ -603,9 +603,9 @@ router.post('/fees/structures', authenticateToken, authorize(['Admin']), async (
 /**
  * @route   GET /api/academicswithfees/fees/structures/find
  * @desc    Get a single fee structure by Course ID and Batch ID
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         const { course_id, batch_id } = req.query; // These are the UUIDs
 
@@ -651,7 +651,7 @@ router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teac
  * @desc    Get all fee structures with course and batch details
  * @access  Private (Admin)
  */
-router.get('/fees/structures', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.get('/fees/structures', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     try {
         // --- FIXED ---: Changed JOINs to use 'id' (Primary Key)
         const result = await pool.query(`
@@ -676,7 +676,7 @@ router.get('/fees/structures', authenticateToken, authorize(['Admin']), async (r
  * @desc    Get a single fee structure by its ID (Fee Structure's PK)
  * @access  Private (Admin)
  */
-router.get('/fees/structures/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.get('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     // This route is for the fee_structure's own 'id', which may or may not be UUID.
     // We assume it's the Primary Key.
     try {
@@ -701,7 +701,7 @@ router.get('/fees/structures/:id', authenticateToken, authorize(['Admin']), asyn
  * @desc    Update a fee structure by its ID
  * @access  Private (Admin)
  */
-router.put('/fees/structures/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.put('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     try {
         const { id } = req.params; // This is fee_structures.id
         const {
@@ -739,7 +739,7 @@ router.put('/fees/structures/:id', authenticateToken, authorize(['Admin']), asyn
  * @desc    Delete a fee structure by its ID
  * @access  Private (Admin)
  */
-router.delete('/fees/structures/:id', authenticateToken, authorize(['Admin']), async (req, res) => {
+router.delete('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
     try {
         const { id } = req.params; // This is fee_structures.id
         const result = await pool.query("DELETE FROM fee_structures WHERE id = $1 RETURNING id", [id]);
@@ -760,9 +760,9 @@ router.delete('/fees/structures/:id', authenticateToken, authorize(['Admin']), a
 /**
  * @route   GET /api/academicswithfees/batches/:courseId
  * @desc    Get all batches for a specific course ID. (Needed by add-student.js)
- * @access  Private (Admin, Teacher, Coordinator, Student)
+ * @access  Private (All Authenticated Roles)
  */
-router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Student']), async (req, res) => {
+router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
     try {
         // The :courseId param correctly references batches.course_id (which points to courses.id)
         const result = await pool.query(
