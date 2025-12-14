@@ -14,7 +14,7 @@
             border: 1px solid #ccc;
             border-radius: 4px;
             box-sizing: border-box;
-            display: block; /* Ensure inputs/selects take full width */
+            display: block; 
         }
         button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
         .btn-warning { background-color: #ffc107; color: #333; }
@@ -38,11 +38,136 @@
     const form = document.getElementById('edit-teacher-form');
     const teacherId = new URLSearchParams(window.location.search).get('id');
     const API_URL = `/api/teachers/${teacherId}`;
+    const API_DEPARTMENTS_URL = `/api/hr/departments`;
     const TOKEN = localStorage.getItem('erp-token');
+    
+    let allDepartments = []; // Store fetched departments globally
 
     function formatDate(dateString) {
         if (!dateString) return '';
         return dateString.split('T')[0];
+    }
+    
+    async function loadDepartments() {
+        try {
+            const response = await fetch(API_DEPARTMENTS_URL, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (!response.ok) throw new Error('Failed to load departments.');
+            allDepartments = await response.json();
+        } catch (error) {
+            console.error('Error loading departments:', error);
+            alert('Warning: Could not load departments list. Department ID must be entered manually.');
+        }
+    }
+
+    // Function to render the full form after data and departments are loaded
+    function renderForm(teacher, data) {
+        // Build Department Options
+        let deptOptions = `<option value="">-- Select Department --</option>`;
+        
+        // Find the current department name from the list or use the fetched name (for display)
+        const currentDeptName = teacher.department_name || '';
+        
+        allDepartments.sort((a, b) => a.name.localeCompare(b.name));
+        allDepartments.forEach(d => {
+            const isSelected = d.id === data.department_id;
+            deptOptions += `<option value="${d.id}" ${isSelected ? 'selected' : ''}>${d.name}</option>`;
+        });
+
+        // Build Role Options
+        const roles = ['Teacher', 'Employee', 'HR', 'Coordinator', 'Admin'];
+        let roleOptions = roles.map(role => `<option value="${role}" ${teacher.role === role ? 'selected' : ''}>${role}</option>`).join('');
+
+        form.innerHTML = `
+            <h3>Editing: ${data.full_name} (ID: ${data.employee_id})</h3>
+            <input type="hidden" name="id" value="${teacherId}">
+            
+            <h4 style="margin-top: 20px;">Personal & Employment</h4>
+            <div class="form-group-custom">
+                <label>Full Name:</label>
+                <input type="text" name="full_name" value="${data.full_name}" required>
+            </div>
+            <div class="form-group-custom">
+                <label>Employee ID:</label>
+                <input type="text" value="${data.employee_id}" readonly style="background-color: #eee;">
+            </div>
+            <div class="form-group-custom">
+                <label>Designation:</label>
+                <input type="text" name="designation" value="${data.designation}">
+            </div>
+            
+            <div class="form-group-custom">
+                <label>Department:</label>
+                <select id="department_select" name="department_id">
+                    ${deptOptions}
+                </select>
+                <small class="text-muted">Current: ${currentDeptName || 'N/A'}</small>
+            </div>
+            
+            <h4 style="margin-top: 20px;">Contact Details</h4>
+            <div class="form-group-custom">
+                <label>Email Address:</label>
+                <input type="email" name="email" value="${data.email}" required>
+            </div>
+            <div class="form-group-custom">
+                <label>Phone Number:</label>
+                <input type="tel" name="phone_number" value="${data.phone_number}">
+            </div>
+            <div class="form-group-custom">
+                <label>Address:</label>
+                <input type="text" name="address" value="${data.address}">
+            </div>
+            
+            <h4 style="margin-top: 20px;">Dates & Status</h4>
+            <div class="form-group-custom">
+                <label for="date_of_birth">Date of Birth:</label>
+                <input type="date" id="date_of_birth" name="date_of_birth" value="${data.date_of_birth}">
+            </div>
+            
+            <div class="form-group-custom">
+                <label for="hire_date">Hire Date:</label>
+                <input type="date" id="hire_date" name="hire_date" value="${data.hire_date}">
+            </div>
+
+            <div class="form-group-custom">
+                <label for="is_active">Account Status:</label>
+                <select name="is_active" id="is_active">
+                    <option value="true" ${data.is_active ? 'selected' : ''}>Active</option>
+                    <option value="false" ${!data.is_active ? 'selected' : ''}>Deactivated / On Leave</option>
+                </select>
+            </div>
+            
+            <div class="form-group-custom">
+                <label for="new_role">System Role:</label>
+                <select name="new_role" id="new_role">
+                    ${roleOptions}
+                </select>
+            </div>
+
+            <h4 style="margin-top: 30px;">Files & Password</h4>
+            
+            <div class="form-group-custom">
+                <label for="password">New Password (Leave blank to keep existing):</label>
+                <input type="password" id="password" name="password" placeholder="Enter new password">
+                <small class="text-muted">Password must be at least 6 characters long if changed.</small>
+            </div>
+
+            <div class="form-group-custom">
+                <label for="profile_photo">Profile Photo (.jpg/.png):</label>
+                <input type="file" id="profile_photo" name="profile_photo" accept="image/*">
+                ${data.profile_image_path ? `<p class="current-path">Current: <a href="/${data.profile_image_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
+            </div>
+
+            <div class="form-group-custom">
+                <label for="cv_file">CV / Resume (.pdf/.doc):</label>
+                <input type="file" id="cv_file" name="cv_file" accept=".pdf,.doc,.docx">
+                ${data.cv_resume_path ? `<p class="current-path">Current: <a href="/${data.cv_resume_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
+            </div>
+            
+            <button type="submit" class="btn-warning" style="margin-top: 30px;">Save Changes</button>
+            <input type="text" name="employee_id_display" value="Login Username: ${teacher.username || 'N/A'}" readonly style="background-color: #eee; margin-top: 10px;">
+        `;
     }
 
     async function loadTeacherData() {
@@ -51,6 +176,9 @@
             window.location.href = '/view-teachers.html';
             return;
         }
+        
+        // 1. Load Departments first
+        await loadDepartments();
 
         const loadingMessageEl = document.getElementById('loading-message'); 
 
@@ -81,90 +209,17 @@
                 hire_date: formatDate(teacher.hire_date),
                 address: teacher.address || '',
                 is_active: teacher.is_active || false,
-                // File Paths
-                profile_image_path: teacher.profile_image_path || '',
-                cv_resume_path: teacher.cv_resume_path || ''
+                // File Paths (paths are relative to server root, prepending '/' is safer for links)
+                profile_image_path: teacher.profile_image_path ? teacher.profile_image_path.replace(/^(uploads)/, '$1') : '',
+                cv_resume_path: teacher.cv_resume_path ? teacher.cv_resume_path.replace(/^(uploads)/, '$1') : ''
             };
 
             if (loadingMessageEl) {
                 loadingMessageEl.style.display = 'none'; 
             }
 
-            // --- DYNAMICALLY RENDER FULL FORM AND POPULATE FIELDS ---
-            form.innerHTML = `
-                <h3>Editing: ${data.full_name} (ID: ${data.employee_id})</h3>
-                <input type="hidden" name="id" value="${teacherId}">
-                <input type="hidden" name="user_id" value="${teacher.user_id}">
-                
-                <h4 style="margin-top: 20px;">Personal & Employment</h4>
-                <div class="form-group-custom">
-                    <label>Full Name:</label>
-                    <input type="text" name="full_name" value="${data.full_name}" required>
-                </div>
-                <div class="form-group-custom">
-                    <label>Designation:</label>
-                    <input type="text" name="designation" value="${data.designation}">
-                </div>
-                <div class="form-group-custom">
-                    <label>Department ID:</label>
-                    <input type="text" name="department_id" placeholder="UUID" value="${data.department_id}">
-                </div>
-                
-                <h4 style="margin-top: 20px;">Contact Details</h4>
-                <div class="form-group-custom">
-                    <label>Email Address:</label>
-                    <input type="email" name="email" value="${data.email}" required>
-                </div>
-                <div class="form-group-custom">
-                    <label>Phone Number:</label>
-                    <input type="tel" name="phone_number" value="${data.phone_number}">
-                </div>
-                <div class="form-group-custom">
-                    <label>Address:</label>
-                    <input type="text" name="address" value="${data.address}">
-                </div>
-                
-                <h4 style="margin-top: 20px;">Dates & Status</h4>
-                <div class="form-group-custom">
-                    <label for="date_of_birth">Date of Birth:</label>
-                    <input type="date" id="date_of_birth" name="date_of_birth" value="${data.date_of_birth}">
-                </div>
-                
-                <div class="form-group-custom">
-                    <label for="hire_date">Hire Date:</label>
-                    <input type="date" id="hire_date" name="hire_date" value="${data.hire_date}">
-                </div>
-
-                <div class="form-group-custom">
-                    <label for="is_active">Account Status:</label>
-                    <select name="is_active" id="is_active">
-                        <option value="true" ${data.is_active ? 'selected' : ''}>Active</option>
-                        <option value="false" ${!data.is_active ? 'selected' : ''}>Deactivated / On Leave</option>
-                    </select>
-                </div>
-                
-                <h4 style="margin-top: 30px;">Files & Password</h4>
-                
-                <div class="form-group-custom">
-                    <label for="password">New Password (Leave blank to keep existing):</label>
-                    <input type="password" id="password" name="password" placeholder="Enter new password">
-                </div>
-
-                <div class="form-group-custom">
-                    <label for="profile_photo">Profile Photo (.jpg/.png):</label>
-                    <input type="file" id="profile_photo" name="profile_photo" accept="image/*">
-                    ${data.profile_image_path ? `<p class="current-path">Current: <a href="${data.profile_image_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
-                </div>
-
-                <div class="form-group-custom">
-                    <label for="cv_file">CV / Resume (.pdf/.doc):</label>
-                    <input type="file" id="cv_file" name="cv_file" accept=".pdf,.doc,.docx">
-                    ${data.cv_resume_path ? `<p class="current-path">Current: <a href="${data.cv_resume_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
-                </div>
-                
-                <button type="submit" class="btn-warning" style="margin-top: 30px;">Save Changes</button>
-                <input type="text" name="employee_id_display" value="Employee ID: ${data.employee_id}" readonly style="background-color: #eee; margin-top: 10px;">
-            `;
+            // 2. Render the form with populated data
+            renderForm(teacher, data); 
 
         } catch (error) {
             alert('Error loading teacher data: ' + error.message);
@@ -184,23 +239,35 @@
         // 1. CRITICAL: Use FormData for submission as files are present
         const formData = new FormData(this); 
         
-        // 2. Client-side Validation Check (before submission)
+        // 2. Client-side Validation Check
         const fullName = formData.get('full_name');
         const emailAddress = formData.get('email');
+        const newPassword = formData.get('password');
+        
         if (!fullName || fullName.trim() === '' || !emailAddress || emailAddress.trim() === '') {
             alert('Full Name and Email are required fields.');
             return;
         }
 
-        // 3. Convert FormData to a URLSearchParams object for key checking (OPTIONAL)
-        // Note: For PUT with files, the body must remain FormData, but we check values.
+        // Validate new password if present
+        if (newPassword && newPassword.length < 6) {
+            alert('New password must be at least 6 characters long.');
+            return;
+        }
         
-        // 4. Update the is_active status to boolean string, which backend expects
+        // 3. Department ID Cleanup: If user selected '-- Select Department --' (value=""), remove it so backend defaults to NULL
+        if (formData.get('department_id') === "") {
+             formData.delete('department_id');
+        }
+
+        // 4. Update the is_active status to boolean string
         const isActiveValue = document.getElementById('is_active').value;
         formData.set('is_active', isActiveValue);
+        
+        // 5. If new_role select is present, its value will be in formData. No need for manual update unless validation is needed.
 
         try {
-            // NOTE: The backend (routes/teachers.js) must handle PUT requests with multipart/form-data
+            // NOTE: The backend (routes/teachers.js) handles PUT requests with multipart/form-data via Multer.
             const response = await fetch(API_URL, {
                 method: 'PUT',
                 headers: { 
@@ -215,7 +282,6 @@
                 window.location.href = '/view-teachers.html';
             } else {
                 const errorText = await response.text();
-                // Attempt to parse JSON error if available, fallback to raw text
                 try {
                      const errorJson = JSON.parse(errorText);
                      alert(errorJson.message || 'Update failed.');

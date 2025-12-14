@@ -153,7 +153,8 @@
         function getGlobalConfig() {
             try {
                 const settings = localStorage.getItem('erp_settings');
-                return settings ? JSON.parse(settings) : {};
+                // Note: Cached data includes { data: settings_object, timestamp: ... }
+                return settings ? JSON.parse(settings).data || {} : {};
             } catch (e) {
                 console.error("Error reading global settings from cache:", e);
                 return {};
@@ -191,21 +192,27 @@
          */
         function getTeacherPhotoUrl(teacher) {
             const photoPath = teacher.profile_image_path || teacher.photo_path; 
-            const API_BASE_URL = window.API_BASE_URL || '/api'; 
+            
+            // ** CRITICAL FIX: Use the global window variables for API Base URL **
+            // The API_BASE_URL is set in global-config.js (e.g., http://localhost:3005/api)
+            const globalBaseUrl = window.API_BASE_URL || (window.location.origin + '/api'); 
+            
+            // Strip the trailing '/api' if it exists to get the server root (e.g., http://localhost:3005)
+            const serverRoot = globalBaseUrl.replace(/\/api\/?$/, '');
 
             if (photoPath) {
-                // Return local/uploaded path
                 if (!photoPath.startsWith('http') && !photoPath.startsWith('data:image')) {
-                    return `${API_BASE_URL.replace(/\/api\/?$/, '')}${photoPath.startsWith('/') ? photoPath : '/' + photoPath}`;
+                    // Prepend server root for relative paths like 'uploads/teacher_photos/...'
+                    return `${serverRoot}${photoPath.startsWith('/') ? photoPath : '/' + photoPath}`;
                 }
                 return photoPath;
             }
             
-            // FALLBACK: Generate local canvas avatar to avoid CORS block by html2canvas
+            // FALLBACK: Generate local canvas avatar
             return createLocalAvatar(teacher.full_name || teacher.username || 'Staff');
         }
 
-        // --- Utility function for authenticated fetch (Omitted for brevity) ---
+        // --- Utility function for authenticated fetch ---
         async function authenticatedFetch(url, options = {}) {
             options.headers = { 
                 'Authorization': `Bearer ${TOKEN}`,
@@ -226,7 +233,7 @@
             return response;
         }
         
-        // --- 1. DATA FETCHING AND INITIAL RENDER (Omitted for brevity) ---
+        // --- 1. DATA FETCHING AND INITIAL RENDER ---
         async function fetchTeachers() {
             const tbody = document.getElementById('teachers-list');
             try {
@@ -284,7 +291,7 @@
             });
         }
 
-        // --- 2. SORTING LOGIC (Omitted for brevity) ---
+        // --- 2. SORTING LOGIC ---
         function getSortValue(teacher, key) {
             const value = teacher[key];
             if (key === 'hire_date' && value) return new Date(value).getTime();
@@ -328,7 +335,7 @@
             }
         });
 
-        // --- 3. FILTERING LOGIC (Omitted for brevity) ---
+        // --- 3. FILTERING LOGIC ---
         function applyFilters(teachers) {
             const searchInput = document.getElementById('search-input').value.toLowerCase();
             const departmentFilter = document.getElementById('department-filter').value;
@@ -359,7 +366,7 @@
             sortAndRender(allTeachers, currentSortKey, isAscending);
         });
 
-        // --- 4. DELETE ACTION (Omitted for brevity) ---
+        // --- 4. DELETE ACTION ---
         async function deleteTeacher(id, name) {
             if (!confirm(`Are you sure you want to delete staff member: ${name}? This action cannot be undone.`)) {
                 return;
@@ -384,13 +391,13 @@
         // --- 5. ID CARD PRINTING LOGIC (Using full dynamic config + Watermark + Photo) ---
         function createIdCardElement(teacher) {
             // Get configuration data using the helper
-            const config = getGlobalConfig();
+            const configData = getGlobalConfig();
             
-            const schoolName = config.school_name || 'SCHOOL ERP SYSTEM';
-            const address = config.school_address || '123 School Lane, City';
-            const phone = config.school_phone || 'N/A';
-            const email = config.school_email || 'contact@school.com';
-            const logoPath = config.school_logo_path || ''; 
+            const schoolName = configData.school_name || 'SCHOOL ERP SYSTEM';
+            const address = configData.school_address || '123 School Lane, City';
+            const phone = configData.school_phone || 'N/A';
+            const email = configData.school_email || 'contact@school.com';
+            const logoPath = configData.school_logo_path || ''; 
             
             // Get photo URL (uses local canvas fallback if path is empty)
             const photoUrl = getTeacherPhotoUrl(teacher);
@@ -399,6 +406,7 @@
             card.className = 'id-card-template';
             
             // Set the background watermark style dynamically
+            // NOTE: The server root is prepended in getTeacherPhotoUrl, use the raw logoPath here
             const watermarkStyle = logoPath ? `background-image: url('${logoPath}');` : '';
 
             card.innerHTML = `
@@ -450,7 +458,6 @@
                 return html2canvas(cardElement, { 
                     scale: 3, 
                     useCORS: true,
-                    // No need for allowTaint if we use the local canvas fallback
                 }).then(canvas => {
                     const img = document.createElement('img');
                     img.src = canvas.toDataURL('image/png');

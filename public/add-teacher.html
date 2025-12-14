@@ -222,20 +222,13 @@
             window.location.href = '/login';
         }
         
-        const headers = {
-            'Authorization': `Bearer ${token}`
-            // NOTE: Content-Type is NOT set here for POST, as the browser handles 'multipart/form-data'
-        };
-
+        // --- Helper function for fetching data with auth and error handling ---
         async function handleApi(url, options = {}) {
-            // Apply Authorization header, but prevent Content-Type for GET/DELETE
-            if (!options.method || options.method === 'GET' || options.method === 'DELETE') {
-                 options.headers = { 'Authorization': `Bearer ${token}` };
-            } else {
-                 // For POST/PUT with JSON, we must explicitly set Content-Type.
-                 // For file uploads (FormData), we rely on the browser's multipart setting.
-                 options.headers = { ...headers, ...options.headers };
-            }
+            // NOTE: For FormData (multipart), Content-Type must NOT be set explicitly.
+            options.headers = { 
+                'Authorization': `Bearer ${token}`,
+                // We intentionally skip 'Content-Type': 'application/json' here
+            };
             
             const response = await fetch(url, options);
             if (response.status === 401 || response.status === 403) {
@@ -246,15 +239,12 @@
             return response;
         }
         
-        // --- FEATURE: Fetch and Populate Departments (Adjusted handleApi call for GET) ---
+        // --- FEATURE: Fetch and Populate Departments ---
         async function fetchAndPopulateDepartments() {
             try {
                 const departmentSelect = document.getElementById(DEPT_SELECT_ID);
-                // Use fetch directly for GET to avoid incorrect header handling
-                const response = await fetch(API_DEPARTMENTS_URL, { 
-                    method: 'GET', 
-                    headers: {'Authorization': `Bearer ${token}`} 
-                }); 
+                // Use handleApi for GET requests
+                const response = await handleApi(API_DEPARTMENTS_URL, { method: 'GET' }); 
 
                 if (!response.ok) {
                     console.warn('Failed to fetch departments. Switching to text input mode.');
@@ -265,6 +255,7 @@
                 const departments = await response.json();
 
                 if (Array.isArray(departments)) {
+                    // Remove existing dynamic options
                     const optionsToRemove = departmentSelect.querySelectorAll('option:not([value=""]):not([value="new_department_prompt"])');
                     optionsToRemove.forEach(opt => opt.remove());
 
@@ -274,7 +265,11 @@
                         const option = document.createElement('option');
                         option.value = dept.name;
                         option.textContent = dept.name;
+                        
+                        // Store the UUID in data-id
                         option.setAttribute('data-id', dept.id); 
+                        
+                        // Insert before the 'ADD NEW' prompt
                         departmentSelect.insertBefore(option, departmentSelect.lastElementChild);
                     });
                 }
@@ -284,7 +279,7 @@
             }
         }
 
-        // --- FEATURE: Swap Dropdown to Text Input (Unchanged) ---
+        // --- FEATURE: Swap Dropdown to Text Input ---
         function switchToTextInput() {
             const container = document.getElementById(DEPT_CONTAINER_ID);
             
@@ -308,14 +303,14 @@
             container.appendChild(note);
         }
 
-        // --- Add listener for the "Add New" option (Unchanged) ---
+        // --- Add listener for the "Add New" option ---
         document.addEventListener('change', function(event) {
             if (event.target.id === DEPT_SELECT_ID && event.target.value === 'new_department_prompt') {
                 switchToTextInput();
             }
         });
 
-        // --- Form Submission Handler (CRITICAL UPDATE: Using FormData for file upload) ---
+        // --- Form Submission Handler (CRITICAL UPDATE: Department ID/Name extraction) ---
         document.getElementById('add-teacher-form').addEventListener('submit', async function(event) {
             event.preventDefault();
             const errorMsg = document.getElementById('error-msg');
@@ -327,31 +322,28 @@
 
             // --- Department Data Handling Logic ---
             const deptSelect = document.getElementById(DEPT_SELECT_ID);
-            const deptTextInput = document.getElementById('department_name_text');
             
-            let departmentNameValue = formData.get('department_name');
+            // Assume initial department_id is blank, and it will be populated if selected from the dropdown
+            let departmentIdValue = '';
             
-            // 1. Process Department Name/ID
-            if (deptSelect && deptSelect.parentNode.id === DEPT_CONTAINER_ID && departmentNameValue) {
-                if (departmentNameValue === 'new_department_prompt') {
-                    formData.set('department_name', ''); // Clear invalid prompt value
-                } else {
-                    const selectedOption = deptSelect.querySelector(`option[value="${departmentNameValue}"]`);
-                    const departmentIdValue = selectedOption ? selectedOption.dataset.id : '';
-                    formData.set('department_id', departmentIdValue);
-                }
-            } else if (deptTextInput && deptTextInput.parentNode.id === DEPT_CONTAINER_ID) {
-                // Text input is used, department_id remains empty
-                formData.set('department_id', '');
-            } else {
-                formData.set('department_name', '');
-                formData.set('department_id', '');
-            }
+            // Check if the dropdown is currently visible and a valid option is selected (not the placeholder or 'add new')
+            if (deptSelect && deptSelect.offsetParent !== null && formData.get('department_name') && formData.get('department_name') !== 'new_department_prompt') {
+                const selectedOption = deptSelect.options[deptSelect.selectedIndex];
+                // Extract the UUID from the data-id attribute
+                departmentIdValue = selectedOption ? selectedOption.dataset.id : '';
+            } 
+            // NOTE: If text input is active, formData.get('department_name') contains the new name, and departmentIdValue remains ''.
+
+            // 1. Overwrite the department_id field in FormData
+            // If an ID was found via dropdown selection, set it. Otherwise, it remains blank (for new departments or none selected).
+            formData.set('department_id', departmentIdValue);
             
             // 2. Add other defaults needed by the backend
             if (!formData.get('hire_date')) formData.set('hire_date', new Date().toISOString().substring(0, 10));
             if (!formData.get('designation')) formData.set('designation', 'Teacher');
-            formData.set('initial_role', 'Teacher');
+            
+            // This role is used to create the user record on the backend
+            formData.set('initial_role', 'Teacher'); 
             
             // 3. Final validation check for password
             if (formData.get('password').length < 6) {
@@ -364,7 +356,7 @@
                 // API route: POST /api/teachers - Submitting as multipart/form-data
                 const response = await handleApi(API_TEACHERS_URL, {
                     method: 'POST',
-                    body: formData // Send FormData directly
+                    body: formData // Send FormData directly (browser handles headers)
                 });
 
                 const result = await response.json();
@@ -372,9 +364,10 @@
                 if (response.ok) {
                     alert(`✅ Success! Staff ${result.teacher.full_name} (${result.teacher.employee_id}) created with login ${formData.get('username')}.`);
                     event.target.reset(); 
-                    fetchAndPopulateDepartments(); 
+                    fetchAndPopulateDepartments(); // Reload departments in case a new one was created
                 } else {
-                    errorMsg.textContent = result.message || 'Failed to add teacher.';
+                    errorMsg.textContent = result.message || 'Failed to add teacher. Check console for details.';
+                    console.error('API Error Response:', result);
                 }
 
             } catch (err) {

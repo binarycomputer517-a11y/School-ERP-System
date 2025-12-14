@@ -286,8 +286,10 @@
             if (subjects) subjects.forEach(s => select.innerHTML += `<option value="${s.id}">${s.subject_name} (${s.subject_code})</option>`);
         }
         
+        // ✅ FIX: Ensure the API path correctly includes ATTENDANCE_API_PATH
         async function loadDepartments(selectId) {
             const select = document.getElementById(selectId);
+            // Use the attendance route dedicated for filters, which was fixed in the backend
             const departments = await handleApi(`${ATTENDANCE_API_PATH}/departments`).catch(() => []); 
             select.innerHTML = '<option value="">Select Department</option>';
             if (departments) departments.forEach(d => select.innerHTML += `<option value="${d.id}">${d.name}</option>`);
@@ -321,12 +323,24 @@
             if (attendanceMonitorInterval) clearInterval(attendanceMonitorInterval);
             const role = document.getElementById('markingRoleSelect').value;
             const filterSelect = document.getElementById('markingDynamicFilter');
-            const filter_id = filterSelect ? filterSelect.value : ''; 
-            const subject_id = document.getElementById('subjectSelect').value;
             const date = document.getElementById('attendanceDate').value;
             
-            if (!role || !filter_id || !date) { alert('Please select a Role, Batch/Department, and Date.'); return; }
+            // --- UPDATED VALIDATION LOGIC ---
+            const filter_id = filterSelect ? filterSelect.value : ''; 
+            const filter_text = filterSelect && filterSelect.selectedIndex !== -1 ? filterSelect.options[filterSelect.selectedIndex].text : '';
 
+            // Check 1: Base fields
+            if (!role || !date) { alert('Please select a Role and Date.'); return; }
+            
+            // Check 2: Dynamic filter MUST be selected and not be the default placeholder/loading state
+            if (!filter_id || filter_text === 'Select Batch/Dept' || filter_text === 'Loading...' || filter_text === 'Select Department' || filter_text === 'Select Batch') {
+                alert(`Please select a valid Batch or Department for the role: ${role}.`); 
+                return; 
+            }
+            // --- END UPDATED VALIDATION ---
+            
+            const subject_id = document.getElementById('subjectSelect').value;
+            
             const endpoint = `${ATTENDANCE_API_PATH}/report/roster/universal?role=${role.toLowerCase()}&filter_id=${filter_id}&subject_id=${subject_id}&date=${date}`;
             
             const fetchAndRender = async () => {

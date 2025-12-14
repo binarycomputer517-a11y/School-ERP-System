@@ -98,15 +98,46 @@ function applySettingsToUI(config) {
         link.href = config.school_logo_path;
     }
 
-    // --- B. Currency Formatting ---
-    const symbol = config.currency === 'USD' ? '$' : (config.currency === 'EUR' ? '€' : (config.currency === 'INR' ? '₹' : config.currency || '₹'));
+    // --- B. Currency Formatting (FIXED) ---
+    // Determine the symbol and locale
+    let symbol = '₹';
+    let locale = 'en-IN'; // Defaulting to Indian locale for formatting
+
+    switch (config.currency) {
+        case 'USD':
+            symbol = '$';
+            locale = 'en-US';
+            break;
+        case 'EUR':
+            symbol = '€';
+            locale = 'de-DE'; // German locale often used for Euro formatting
+            break;
+        case 'INR':
+        default:
+            symbol = '₹';
+            locale = 'en-IN'; // Indian numeral system (lakhs, crores)
+            break;
+    }
     
     // Globally define a currency formatter function for other scripts
     window.formatCurrency = (amount) => {
-        if (amount === undefined || amount === null) return `${symbol} 0.00`;
-        return `${symbol}${Number(amount).toFixed(2).toLocaleString('en-IN')}`;
-    };
+        if (amount === undefined || amount === null || isNaN(amount)) return `${symbol} 0.00`;
+        
+        // Convert to Number, fix to 2 decimal places (returns string), then apply locale formatting
+        // ✅ FIX: Apply locale string formatting to the numerical value, using grouping and 2 decimal places.
+        // Using Number.toFixed(2) + toLocaleString() is complex, better to use Intl.NumberFormat for clean display:
+        
+        const formatter = new Intl.NumberFormat(locale, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+            useGrouping: true // Crucial for number grouping (like 1,00,000 for en-IN)
+        });
+        
+        const formattedAmount = formatter.format(Number(amount));
 
+        return `${symbol} ${formattedAmount}`;
+    };
+    
     // Apply currency symbol to static elements
     document.querySelectorAll('.currency-symbol').forEach(el => {
         el.innerText = symbol;

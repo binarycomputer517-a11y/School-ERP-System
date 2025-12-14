@@ -1,3 +1,5 @@
+// routes/attendance.js
+
 const express = require('express');
 const router = express.Router();
 
@@ -8,7 +10,8 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 // =================================================================
 // CONFIGURATION: ROLES (Case-Insensitive Support)
 // =================================================================
-// ✅ FIX: Added lowercase versions to ensure "teacher" works as well as "Teacher"
+// [Roles definitions unchanged]
+
 const MARKING_ROLES = [
     'Super Admin', 'Admin', 'Teacher', 'ApiUser',
     'super admin', 'admin', 'teacher', 'apiuser' 
@@ -31,6 +34,7 @@ const USER_REPORT_ROLES = [
 
 // =================================================================
 // 1. MARKING ATTENDANCE (POST /mark)
+// [Unchanged]
 // =================================================================
 router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, res) => {
     const { batch_id, subject_id, attendance_date, records, mark_method } = req.body;
@@ -102,6 +106,7 @@ router.post('/mark', authenticateToken, authorize(MARKING_ROLES), async (req, re
     }
 });
 
+
 // =================================================================
 // 2. ROSTER VIEW (GET /report/roster/universal)
 // =================================================================
@@ -143,6 +148,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
             }
 
         } else if (role === 'teacher') {
+            // ✅ FIX: Filter teachers by t.department_id, not u.branch_id
             userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -152,11 +158,29 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                     'staff_id' AS profile_pk_column
                 FROM teachers t
                 JOIN users u ON t.user_id = u.id 
-                WHERE u.branch_id = $1::uuid
+                -- CRITICAL JOIN: Filter by department_id which is sent as filter_id ($1)
+                WHERE t.department_id = $1::uuid
+            `;
+            attendancePkColumn = 'staff_id';
+            
+        } else if (role === 'employee') {
+            // ✅ FIX: Filter employees by t.department_id (assuming non-teacher staff exist in teachers table)
+            userSelectQuery = `
+                SELECT 
+                    u.id::text AS user_id, 
+                    t.full_name, 
+                    t.employee_id AS user_identifier, 
+                    t.id AS profile_pk_id, 
+                    'staff_id' AS profile_pk_column
+                FROM teachers t
+                JOIN users u ON t.user_id = u.id 
+                -- CRITICAL JOIN: Filter by department_id for employees
+                WHERE t.department_id = $1::uuid AND LOWER(t.designation) NOT LIKE '%teacher%'
             `;
             attendancePkColumn = 'staff_id';
             
         } else {
+             // Fallback for generic roles not linked to a specific profile table (if needed)
              userSelectQuery = `
                 SELECT 
                     u.id::text AS user_id, 
@@ -165,9 +189,11 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
                     u.id AS profile_pk_id, 
                     'user_id' AS profile_pk_column
                 FROM users u
-                WHERE LOWER(u.role::text) = 'employee' AND u.branch_id = $1::uuid
+                WHERE LOWER(u.role::text) = $1 AND u.branch_id = $2::uuid
             `;
-            attendancePkColumn = 'user_id';
+             // NOTE: This fallback needs an extra parameter for $2, which is complex here. 
+             // Since we only expect student/teacher/employee for universal attendance, simplifying the "else" block:
+             return res.status(400).json({ message: 'Invalid role for attendance roster.' });
         }
         
         paramCounter++;
@@ -202,6 +228,7 @@ router.get('/report/roster/universal', authenticateToken, authorize(ROSTER_VIEW_
 
 // =================================================================
 // 3. CONSOLIDATED REPORT
+// [Unchanged]
 // =================================================================
 router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLES), async (req, res) => {
     const { role, month, year, optional_filter_id } = req.query;
@@ -263,6 +290,7 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 
 // =================================================================
 // 4. INDIVIDUAL USER REPORT
+// [Unchanged]
 // =================================================================
 router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLES), async (req, res) => {
     const targetUserId = req.params.userId; 
@@ -302,6 +330,7 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
 
 // =================================================================
 // 5. UPDATE & DELETE
+// [Unchanged]
 // =================================================================
 router.put('/:attendanceId', authenticateToken, authorize(MARKING_ROLES), async (req, res) => {
     const { attendanceId } = req.params;
@@ -331,14 +360,23 @@ router.delete('/:attendanceId', authenticateToken, authorize(['Super Admin', 'Ad
 // =================================================================
 // 6. FILTER ENDPOINTS (Batches, Subjects, Departments)
 // =================================================================
-
+// ** FIX: Load data from hr_departments instead of branches **
 router.get('/departments', authenticateToken, async (req, res) => {
     try {
-        const query = `SELECT id, branch_name AS name FROM branches ORDER BY branch_name;`; 
+        // Query changed to select from the dedicated HR table for Departments
+        const query = `SELECT id, name FROM hr_departments ORDER BY name;`; 
         const { rows } = await pool.query(query);
         res.status(200).json(rows);
     } catch (err) {
-        res.status(500).json({ message: 'Failed to fetch departments.', error: err.message });
+        // Reverting to the previous query logic for robustness if hr_departments fails or the name is inconsistent.
+        console.error('Failed to fetch hr_departments. Falling back to branches:', err.message);
+        try {
+             const fallbackQuery = `SELECT id, branch_name AS name FROM branches ORDER BY branch_name;`;
+             const { rows } = await pool.query(fallbackQuery);
+             res.status(200).json(rows);
+        } catch (fallbackError) {
+             res.status(500).json({ message: 'Failed to fetch departments from both tables.', error: fallbackError.message });
+        }
     }
 });
 

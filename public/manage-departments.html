@@ -185,6 +185,9 @@
         .payroll-form label {
             text-decoration: none;
         }
+        .payroll-form .full-width { /* Added for full-width inputs in payroll form */
+            grid-column: 1 / -1;
+        }
         .payroll-view dl {
             grid-column: 1 / -1;
             display: grid;
@@ -368,6 +371,7 @@
         let currentSortKey = 'name';
         let isAscending = true;
         
+        // --- Helper function for fetching data with auth and error handling ---
         async function handleApi(url, options = {}) {
             options.headers = { 
                 'Content-Type': 'application/json',
@@ -393,6 +397,22 @@
             try {
                 const response = await handleApi(API_URL, { method: 'GET' });
                 allDepartments = await response.json();
+                
+                // New logic: Safely parse description JSON and store payroll data within the department object
+                allDepartments = allDepartments.map(d => {
+                    let payload = {};
+                    try {
+                        // Check if description is a JSON string containing the payroll structure
+                        payload = typeof d.description === 'string' && d.description ? JSON.parse(d.description) : (d.description || {});
+                    } catch (e) {
+                        console.warn("Error parsing description for department:", d.id, e);
+                    }
+                    // The backend should return data with these nested keys if it follows the standard
+                    d.payroll_template = payload.payroll_template || null;
+                    d.basic_description = payload.basic_description || '';
+                    return d;
+                });
+                
                 if (!Array.isArray(allDepartments)) allDepartments = []; 
                 sortAndRender(allDepartments, currentSortKey, isAscending);
             } catch(e) { 
@@ -410,16 +430,8 @@
             
             tbody.innerHTML = departments.map(d => {
                 const deptName = d.name.replace(/'/g, "\\'");
-                let isPayrollDefined = false;
-                try {
-                    const payload = typeof d.description === 'string' ? JSON.parse(d.description) : d.description;
-                    const payroll = payload && payload.payroll_template;
-                    if (payroll && parseFloat(payroll.base_salary) > 0) {
-                        isPayrollDefined = true;
-                    }
-                } catch(e) {
-                    console.warn("Could not parse description for department", d.id, e);
-                }
+                // Check if payroll structure is defined and base salary is set
+                const isPayrollDefined = d.payroll_template && parseFloat(d.payroll_template.base_salary) > 0;
                 
                 return `
                     <tr>
@@ -475,14 +487,20 @@
             const errorMsg = document.getElementById('create-error-msg');
             errorMsg.textContent = '';
             
-            const initialPayrollData = {
+            // Default Payroll Template Structure (for initial creation POST)
+            const payroll_template = {
                 base_salary: 0.00, pay_frequency: "Monthly", allowance_hra: 0.00,
                 allowance_da: 0.00, allowance_other: 0.00, bonus_target: 0.00,
                 fixed_deductions: 0.00, deduction_percentage: 0.00, tax_deduction_rate: 0.00,
                 bank_account_number: "", bank_ifsc_code: ""
             };
             
-            const data = { name, description, ...initialPayrollData };
+            // The backend is expected to receive basic description and payroll fields separately for creation.
+            const data = { 
+                name, 
+                description: description, // basic description text
+                ...payroll_template // initial payroll data
+            };
             
             try {
                 await handleApi(API_URL, { method: 'POST', body: JSON.stringify(data) });
@@ -524,11 +542,12 @@
             const dept = allDepartments.find(d => String(d.id) === String(id));
             if (!dept) return alert('Department not found.');
             
-            const payload = typeof dept.description === 'string' ? JSON.parse(dept.description) : dept.description;
+            // Basic description is now easily available from the mapped object
+            const basicDescription = dept.basic_description || '';
             
             document.getElementById('edit-id').value = dept.id;
             document.getElementById('edit-name').value = dept.name;
-            document.getElementById('edit-description').value = (payload && payload.basic_description) || ''; 
+            document.getElementById('edit-description').value = basicDescription; 
             
             editModal.style.display = 'block';
         }
@@ -543,12 +562,12 @@
             errorMsg.textContent = '';
             
             const originalDept = allDepartments.find(d => String(d.id) === String(id));
-            const originalPayload = typeof originalDept.description === 'string' ? JSON.parse(originalDept.description) : originalDept.description;
             
+            // To update basic info, send the new name/description along with the existing payroll template.
             const data = {
                 name,
-                description,
-                ...(originalPayload.payroll_template || {})
+                description, // Basic description text
+                ...(originalDept.payroll_template || {}) // Include existing payroll template fields
             };
 
             try {
@@ -565,8 +584,7 @@
             const dept = allDepartments.find(d => String(d.id) === String(id));
             if (!dept) return alert('Department not found.');
             
-            const payload = typeof dept.description === 'string' ? JSON.parse(dept.description) : dept.description;
-            const payrollData = (payload && payload.payroll_template) || {};
+            const payrollData = dept.payroll_template || {};
             
             document.getElementById('payroll-dept-name').textContent = dept.name;
             document.getElementById('edit-payroll-dept-id').value = dept.id;
@@ -576,7 +594,8 @@
                 if (el.name && el.name !== 'id') {
                     const value = payrollData[el.name];
                     if (el.type === 'number') {
-                        el.value = (value !== undefined && !isNaN(parseFloat(value))) ? parseFloat(value).toFixed(2) : '0.00';
+                        // Coerce null/undefined to 0.00 for display
+                        el.value = (value !== undefined && value !== null && !isNaN(parseFloat(value))) ? parseFloat(value).toFixed(2) : '0.00';
                     } else {
                         el.value = value || (el.tagName === 'SELECT' ? el.options[0].value : '');
                     }
@@ -593,19 +612,20 @@
             errorMsg.textContent = '';
             
             const originalDept = allDepartments.find(d => String(d.id) === String(id));
-            const originalPayload = typeof originalDept.description === 'string' ? JSON.parse(originalDept.description) : originalDept.description;
 
             const newPayrollData = {};
             Array.from(event.target.elements).forEach(input => {
                 if (input.name && input.name !== 'id') {
+                    // Collect all new payroll data, converting numbers
                     newPayrollData[input.name] = (input.type === 'number') ? (parseFloat(input.value) || 0.00) : input.value.trim();
                 }
             });
-
+            
+            // To update payroll, send new payroll data along with the original name and basic description.
             const data = {
                 name: originalDept.name,
-                description: (originalPayload && originalPayload.basic_description) || '',
-                ...newPayrollData
+                description: originalDept.basic_description || '', // Original basic description text
+                ...newPayrollData // All new payroll template fields
             };
             
             try {
@@ -622,12 +642,12 @@
             const dept = allDepartments.find(d => String(d.id) === String(id));
             if (!dept) return alert('Department not found.');
             
-            const payload = typeof dept.description === 'string' ? JSON.parse(dept.description) : dept.description;
-            const payrollData = (payload && payload.payroll_template) || {};
+            const payrollData = dept.payroll_template || {};
             
             document.getElementById('view-payroll-dept-name').textContent = dept.name;
 
-            const formatCurrency = val => (parseFloat(val) || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+            // Use the global formatCurrency function if available, otherwise use a local fallback.
+            const formatCurrency = window.formatCurrency || ((val) => `₹ ${Number(val).toFixed(2).toLocaleString()}`);
             const formatPercentage = val => `${parseFloat(val) || 0}%`;
             const safeData = (key, def = 'N/A') => payrollData[key] !== undefined ? payrollData[key] : def;
 
@@ -638,8 +658,11 @@
             document.getElementById('view_p_allowance_other').textContent = formatCurrency(safeData('allowance_other', 0));
             document.getElementById('view_p_bonus_target').textContent = formatCurrency(safeData('bonus_target', 0));
             document.getElementById('view_p_fixed_deductions').textContent = formatCurrency(safeData('fixed_deductions', 0));
+            
+            // Percentage fields remain local, using formatPercentage
             document.getElementById('view_p_deduction_percentage').textContent = formatPercentage(safeData('deduction_percentage', 0));
             document.getElementById('view_p_tax_deduction_rate').textContent = formatPercentage(safeData('tax_deduction_rate', 0));
+            
             document.getElementById('view_p_bank_account_number').textContent = safeData('bank_account_number');
             document.getElementById('view_p_bank_ifsc_code').textContent = safeData('bank_ifsc_code');
 
