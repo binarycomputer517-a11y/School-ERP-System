@@ -159,7 +159,7 @@
         <span class="close-modal" onclick="closeModal()">&times;</span>
         <div id="card-to-print" class="id-card-design">
             <div class="id-header">
-                <span class="school-name"><i class="fas fa-university"></i> SCHOOL ERP</span>
+                <span class="school-name global-school-name"><i class="fas fa-university"></i> SCHOOL ERP</span>
                 <span class="id-badge">ALUMNI</span>
             </div>
             <div class="id-body">
@@ -251,7 +251,7 @@
                 : '<span style="color:#ccc"><i class="fab fa-linkedin"></i></span>';
             
             const actionsHtml = `
-                <button class="action-btn id-card" onclick="openIDCard('${item.student_name}', '${item.passing_year}', '${item.current_profession || 'N/A'}', '${item.id}')" title="Generate ID Card">
+                <button class="action-btn id-card" onclick="openIDCard('${item.student_name}', '${item.passing_year}', '${item.current_profession || 'N/A'}', '${item.enrollment_no || 'N/A'}')" title="Generate ID Card">
                     <i class="fas fa-id-card"></i>
                 </button>
                 ${canDelete ? `<button class="action-btn delete" onclick="deleteAlumni('${item.id}')" title="Delete"><i class="fas fa-trash-alt"></i></button>` : ''}
@@ -269,11 +269,13 @@
     }
 
     // --- ID CARD FUNCTIONS ---
-    function openIDCard(name, year, profession, id) {
+    // Uses enrollment_no for the ID number field.
+    function openIDCard(name, year, profession, enrollment_no) {
         document.getElementById('card-name').innerText = name;
         document.getElementById('card-year').innerText = year;
         document.getElementById('card-prof').innerText = profession;
-        document.getElementById('card-id').innerText = 'ALU-' + String(id).padStart(4, '0');
+        // Display the actual enrollment number or 'N/A'
+        document.getElementById('card-id').innerText = enrollment_no || 'N/A'; 
         document.getElementById('idCardModal').style.display = 'block';
     }
 
@@ -288,7 +290,6 @@
         win.document.write('<style>body{margin:0; padding:20px; display:flex; justify-content:center;} .id-card-design { width: 400px; height: 250px; background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; padding: 20px; font-family: sans-serif; border-radius:10px; -webkit-print-color-adjust: exact; } .id-header{border-bottom:1px solid #ccc; padding-bottom:10px; display:flex; justify-content:space-between;} .id-photo{width:80px; height:80px; background:#ddd; border-radius:50%; float:left; margin-right:20px;} .id-badge{background:gold; color:black; padding:2px 5px; border-radius:5px; font-size:10px; font-weight:bold;} </style>');
         win.document.write('</head><body>');
         win.document.write(printContent);
-        win.document.write('</body></html>');
         win.document.close();
         win.print();
     }

@@ -1,21 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../database');
-const { authenticateToken, authorize } = require('../authMiddleware'); 
+const { pool } = require('../database'); // Ensure path is correct
+const { authenticateToken, authorize } = require('../authMiddleware'); // Ensure path is correct
+const { toUUID } = require('../utils/helpers'); // Assuming helper import is fixed
 
-// Define common management roles for clarity
-const ALUMNI_MANAGEMENT_ROLES = ['Admin', 'Super Admin', 'Coordinator'];
-const ALL_AUTHENTICATED_ROLES = ['Admin', 'Super Admin', 'Teacher', 'Coordinator', 'Student'];
+// --- Configuration ---
+const JOBS_TABLE = 'job_postings';
+const COMPANIES_TABLE = 'companies';
+const PLACEMENTS_TABLE = 'placements';
+const STUDENTS_TABLE = 'students'; 
+
+// Roles for management actions (lowercase for compatibility)
+const ALUMNI_MANAGEMENT_ROLES = ['admin', 'super admin', 'coordinator'];
+const ALL_AUTHENTICATED_ROLES = ['admin', 'super admin', 'teacher', 'coordinator', 'student'];
 
 // =========================================================================
-// 1. GET CANDIDATES (Dropdown Data)
+// 1. GET CANDIDATES
+// ... (No change)
 // =========================================================================
-/**
- * @route   GET /api/alumni/candidates
- * @desc    Fetch students not yet added to alumni.
- * @access  Private (Admin, Super Admin, Coordinator)
- */
-// FIX: Broadened access for staff roles who manage alumni.
 router.get('/candidates', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (req, res) => {
     try {
         const query = `
@@ -34,14 +36,10 @@ router.get('/candidates', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES),
 
 // =========================================================================
 // 2. ADD ALUMNI
+// ... (No change)
 // =========================================================================
-/**
- * @route   POST /api/alumni
- * @desc    Add a student to the alumni network.
- * @access  Private (Admin, Super Admin, Coordinator)
- */
-// FIX: Broadened access for staff roles who manage alumni.
 router.post('/', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (req, res) => {
+    // Destructure all potential fields from the frontend form
     const { 
         student_id, 
         passing_year, 
@@ -84,15 +82,11 @@ router.post('/', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (r
 
 // =========================================================================
 // 3. GET ALL ALUMNI
+// List existing alumni with Student Name joined from students table.
 // =========================================================================
-/**
- * @route   GET /api/alumni
- * @desc    List existing alumni with student details.
- * @access  Private (All Authenticated Roles)
- */
-// FIX: Broadened access to ALL authenticated roles for viewing the list.
 router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (req, res) => {
     try {
+        // --- FIXED QUERY ---: Replaced missing s.contact_number with s.phone_number
         const query = `
             SELECT 
                 a.id, 
@@ -101,14 +95,15 @@ router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (re
                 a.current_profession, 
                 a.current_company,
                 a.linkedin_profile,
-                a.contact_number, 
-                a.email,
-                -- Concatenate first and last name from the students table
+                a.contact_number AS alumni_contact, 
+                a.email AS alumni_email,
+                -- Student details from the joined table:
                 s.first_name || ' ' || s.last_name AS student_name,
-                s.enrollment_no
+                s.enrollment_no, -- Used for ID card fix
+                s.phone_number AS student_contact -- CORRECTED COLUMN NAME
             FROM alumni a
             JOIN students s ON a.student_id = s.student_id
-            ORDER BY a.passing_year DESC, s.first_name ASC
+            ORDER BY a.passing_year DESC, s.last_name ASC
         `;
         
         const result = await pool.query(query);
@@ -121,13 +116,8 @@ router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (re
 
 // =========================================================================
 // 4. DELETE ALUMNI
+// ... (No change)
 // =========================================================================
-/**
- * @route   DELETE /api/alumni/:id
- * @desc    Remove an alumni record.
- * @access  Private (Admin, Super Admin)
- */
-// FIX: Restricted to high-level admins for security.
 router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
         const result = await pool.query('DELETE FROM alumni WHERE id = $1', [req.params.id]);
