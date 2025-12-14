@@ -46,7 +46,7 @@
         
         .nav-links a { text-decoration: none; color: #666; font-size: 0.9em; display: inline-block; margin-bottom: 20px; }
 
-        /* --- NEW: ID CARD MODAL STYLES --- */
+        /* --- ID CARD MODAL STYLES --- */
         .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); }
         .modal-content { background-color: #fff; margin: 10% auto; padding: 0; width: 400px; border-radius: 15px; overflow: hidden; position: relative; box-shadow: 0 5px 25px rgba(0,0,0,0.2); animation: slideDown 0.3s ease; }
         @keyframes slideDown { from {top: -50px; opacity: 0;} to {top: 0; opacity: 1;} }
@@ -58,6 +58,7 @@
         
         .id-body { display: flex; margin-top: 15px; align-items: center; }
         .id-photo { width: 80px; height: 80px; background: #ddd; border-radius: 50%; border: 3px solid white; display: flex; align-items: center; justify-content: center; font-size: 30px; color: #888; margin-right: 20px; overflow: hidden;}
+        /* Ensure image fills the circle */
         .id-photo img { width: 100%; height: 100%; object-fit: cover; }
         
         .id-details h2 { margin: 0; font-size: 20px; }
@@ -250,8 +251,11 @@
                 ? `<a href="${item.linkedin_profile}" target="_blank" class="linkedin-link"><i class="fab fa-linkedin"></i></a>` 
                 : '<span style="color:#ccc"><i class="fab fa-linkedin"></i></span>';
             
+            // FIX 2 & 3: Passing enrollment_no and profile_image_path
+            const imagePath = item.profile_image_path || 'N/A';
+            
             const actionsHtml = `
-                <button class="action-btn id-card" onclick="openIDCard('${item.student_name}', '${item.passing_year}', '${item.current_profession || 'N/A'}', '${item.enrollment_no || 'N/A'}')" title="Generate ID Card">
+                <button class="action-btn id-card" onclick="openIDCard('${item.student_name}', '${item.passing_year}', '${item.current_profession || 'N/A'}', '${item.enrollment_no || 'N/A'}', '${imagePath}')" title="Generate ID Card">
                     <i class="fas fa-id-card"></i>
                 </button>
                 ${canDelete ? `<button class="action-btn delete" onclick="deleteAlumni('${item.id}')" title="Delete"><i class="fas fa-trash-alt"></i></button>` : ''}
@@ -269,13 +273,25 @@
     }
 
     // --- ID CARD FUNCTIONS ---
-    // Uses enrollment_no for the ID number field.
-    function openIDCard(name, year, profession, enrollment_no) {
+    // MODIFIED: Accepts enrollment_no and profile_image_path
+    function openIDCard(name, year, profession, enrollment_no, imagePath) {
         document.getElementById('card-name').innerText = name;
         document.getElementById('card-year').innerText = year;
         document.getElementById('card-prof').innerText = profession;
-        // Display the actual enrollment number or 'N/A'
+        // FIX 2: Display the actual enrollment number or 'N/A'
         document.getElementById('card-id').innerText = enrollment_no || 'N/A'; 
+        
+        const photoDiv = document.getElementById('card-photo');
+        
+        // FIX 3: Photo Loading Logic:
+        if (imagePath && imagePath !== 'N/A') {
+            // Use the image path to load the photo
+            photoDiv.innerHTML = `<img src="${imagePath}" alt="${name} Profile">`;
+        } else {
+            // Default icon if no path is available
+            photoDiv.innerHTML = '<i class="fas fa-user"></i>';
+        }
+
         document.getElementById('idCardModal').style.display = 'block';
     }
 

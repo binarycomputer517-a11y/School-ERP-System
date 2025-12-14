@@ -5,9 +5,6 @@ const { authenticateToken, authorize } = require('../authMiddleware'); // Ensure
 const { toUUID } = require('../utils/helpers'); // Assuming helper import is fixed
 
 // --- Configuration ---
-const JOBS_TABLE = 'job_postings';
-const COMPANIES_TABLE = 'companies';
-const PLACEMENTS_TABLE = 'placements';
 const STUDENTS_TABLE = 'students'; 
 
 // Roles for management actions (lowercase for compatibility)
@@ -15,8 +12,7 @@ const ALUMNI_MANAGEMENT_ROLES = ['admin', 'super admin', 'coordinator'];
 const ALL_AUTHENTICATED_ROLES = ['admin', 'super admin', 'teacher', 'coordinator', 'student'];
 
 // =========================================================================
-// 1. GET CANDIDATES
-// ... (No change)
+// 1. GET CANDIDATES (Students not yet added as Alumni)
 // =========================================================================
 router.get('/candidates', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (req, res) => {
     try {
@@ -36,7 +32,6 @@ router.get('/candidates', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES),
 
 // =========================================================================
 // 2. ADD ALUMNI
-// ... (No change)
 // =========================================================================
 router.post('/', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (req, res) => {
     // Destructure all potential fields from the frontend form
@@ -81,12 +76,11 @@ router.post('/', authenticateToken, authorize(ALUMNI_MANAGEMENT_ROLES), async (r
 });
 
 // =========================================================================
-// 3. GET ALL ALUMNI
-// List existing alumni with Student Name joined from students table.
+// 3. GET ALL ALUMNI (Including Photo Path and Enrollment No)
 // =========================================================================
 router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (req, res) => {
     try {
-        // --- FIXED QUERY ---: Replaced missing s.contact_number with s.phone_number
+        // --- FINALIZED QUERY ---: Includes profile_image_path and uses the correct s.phone_number column.
         const query = `
             SELECT 
                 a.id, 
@@ -97,10 +91,12 @@ router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (re
                 a.linkedin_profile,
                 a.contact_number AS alumni_contact, 
                 a.email AS alumni_email,
+                
                 -- Student details from the joined table:
                 s.first_name || ' ' || s.last_name AS student_name,
-                s.enrollment_no, -- Used for ID card fix
-                s.phone_number AS student_contact -- CORRECTED COLUMN NAME
+                s.enrollment_no, 
+                s.phone_number AS student_contact, -- Corrected column name confirmed from schema
+                s.profile_image_path -- NEW: Added for the ID Card feature
             FROM alumni a
             JOIN students s ON a.student_id = s.student_id
             ORDER BY a.passing_year DESC, s.last_name ASC
@@ -116,7 +112,6 @@ router.get('/', authenticateToken, authorize(ALL_AUTHENTICATED_ROLES), async (re
 
 // =========================================================================
 // 4. DELETE ALUMNI
-// ... (No change)
 // =========================================================================
 router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
