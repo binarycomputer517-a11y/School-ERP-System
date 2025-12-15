@@ -8,7 +8,7 @@ const bcrypt = require('bcryptjs');
 const saltRounds = 10;
 const { authenticateToken, authorize } = require('../authMiddleware');
 const moment = require('moment'); 
-const { getApp } = require('../utils/helpers'); // Assuming a helper to get app instance (or use req.app)
+const { getApp } = require('../utils/helpers'); 
 
 // --- Constants: Database Tables ---
 const STUDENTS_TABLE = 'students';
@@ -24,7 +24,7 @@ const PAYMENTS_TABLE = 'fee_payments';
 const CRUD_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar'];
 const VIEW_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar', 'Teacher', 'Coordinator', 'Student'];
 
-// --- Helper Functions (getConfigIds, toUUID, buildUpdateQuery remain the same) ---
+// --- Helper Functions ---
 function getConfigIds(req) {
     const branch_id = req.user.branch_id; 
     return { branch_id, created_by: req.user.id, updated_by: req.user.id };
@@ -121,17 +121,14 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
     }
     
     // 2. Use Multer middleware for a single file upload
-    // 'profile_image' is the expected field name from the frontend form (adjust if needed)
     upload.single('profile_image_path')(req, res, (err) => {
         if (err) {
             console.error('Multer Upload Error:', err);
-            // Handle Multer limits (e.g., specific file size limits set in multerConfig.js)
             if (err.code === 'LIMIT_FILE_SIZE') {
                 return res.status(400).json({ message: 'The uploaded file exceeds the file size limit.' });
             }
             return res.status(500).json({ message: 'File upload failed: ' + err.message });
         }
-        // Proceed to the next middleware (the asynchronous controller logic)
         next(); 
     });
 }, async (req, res) => { // Actual controller logic
@@ -141,13 +138,11 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
 
     // 🚨 Add uploaded file path to the body for database insertion
     if (req.file) {
-        // req.file.path contains the path where Multer saved the file (e.g., 'uploads/...')
         body.profile_image_path = req.file.path; 
     }
 
     // Validation
     if (!body.username || !body.password || !body.first_name || !body.last_name || !body.course_id || !body.batch_id) {
-        // NOTE: If file upload is successful, req.body contains text fields
         return res.status(400).json({ message: 'Missing required fields: Name, Login, Course, or Batch.' });
     }
 
@@ -240,11 +235,8 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
 });
 
 
-// ... (Routes 3, 4, 5, 6, 7, 8, 9 remain exactly the same as they do not require file uploads) ...
-
-
 // =========================================================
-// 3. GET: Single Student Details (Smart Lookup)
+// 3. GET: Single Student Details (Smart Lookup) - COURSE NAME FIX APPLIED
 // =========================================================
 router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const idParam = req.params.id;
@@ -254,9 +246,14 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
 
     try {
         const query = `
-            SELECT s.*, u.username, u.role
+            SELECT 
+                s.*, 
+                u.username, 
+                u.role,
+                c.course_name -- ✅ FIX: Include course_name
             FROM ${STUDENTS_TABLE} s
             LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
+            LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id -- ✅ FIX: Join COURSES table
             WHERE s.student_id = $1::uuid OR s.user_id = $1::uuid;
         `;
         const result = await pool.query(query, [safeId]);
@@ -275,8 +272,6 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
 // 4. PUT: Update Student (IMPROVED DYNAMIC UPDATE)
 // =========================================================
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    // NOTE: If PUT includes file updates, you would need Multer here too, 
-    // but the logic here assumes only standard form data update.
     const studentId = req.params.id;
     const body = req.body;
     const { updated_by } = getConfigIds(req);
@@ -503,9 +498,8 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
     if (!safeStudentId) return res.status(400).json({ message: 'Invalid Student ID.' });
 
     try {
-        // FIX 1: Assuming the library circulation table name is 'book_circulation'
         const query = `
-            SELECT * FROM book_circulation // <-- Changed from library_transactions
+            SELECT * FROM book_circulation 
             WHERE student_id = $1::uuid AND status = 'Issued'
             ORDER BY issue_date DESC;
         `;
@@ -513,7 +507,6 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
             const result = await pool.query(query, [safeStudentId]);
             res.status(200).json(result.rows);
         } catch (dbError) {
-            // Revert to original error handling for safety
             console.warn("Library table might not exist yet:", dbError.message);
             res.status(200).json([]); 
         }
@@ -531,12 +524,11 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
     const safeStudentId = toUUID(studentId);
 
     try {
-        // FIX 2: Assuming teacher ID column in teacher_allocations is teacher_ref_id
         const query = `
             SELECT 
                 t.full_name, s.subject_name, t.email
             FROM teacher_allocations ta
-            JOIN teachers t ON ta.teacher_ref_id = t.id // <-- Changed ta.teacher_id to ta.teacher_ref_id
+            JOIN teachers t ON ta.teacher_ref_id = t.id 
             JOIN subjects s ON ta.subject_id = s.id
             JOIN students stu ON stu.batch_id = ta.batch_id
             WHERE stu.student_id = $1::uuid;
@@ -555,13 +547,12 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
 });
 
 // =========================================================
-// 8.5. GET: Students by Course/Batch (For Marks Entry - FINAL FIX)
+// 8.5. GET: Students by Course/Batch (For Marks Entry)
 // =========================================================
 
 /**
  * @route   GET /api/students/course/:courseId/batch/:batchId
  * @desc    Get list of enrolled students for a specific course and batch (used by Marks Entry).
- * @access  Private (Admin, Teacher)
  */
 router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     const { courseId, batchId } = req.params;
@@ -587,11 +578,9 @@ router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(['Ad
               AND s.status = 'Enrolled'
             ORDER BY s.roll_number, s.first_name;
         `;
-        // NOTE: Assuming 'batch_id' in students table is used for batch/section linkage
         const result = await pool.query(query, [safeCourseId, safeBatchId]);
 
         if (result.rows.length === 0) {
-            // Important: Return 200 with empty array, or 404/400. We choose 404 as the endpoint implies expected results.
             return res.status(404).json({ message: 'No enrolled students found for this class and section.' });
         }
         
@@ -604,7 +593,7 @@ router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(['Ad
 });
 
 // =========================================================
-// 9. GET: Student Lookup (FIXED SYNTAX)
+// 9. GET: Student Lookup
 // =========================================================
 
 /**

@@ -13,7 +13,7 @@ const moment = require('moment');
 const JWT_SECRET = process.env.JWT_SECRET;
 const USERS_TABLE = 'users';
 
-// Helper: Finds user by username or email and verifies password
+// Helper: Finds user by username or email and verifies password (UNCHANGED)
 async function findUserAndVerifyPassword(loginInput, password) {
     const userResult = await pool.query(
         `SELECT id, username, password_hash, role, branch_id FROM ${USERS_TABLE} WHERE (username = $1 OR email = $1) AND is_active = TRUE`,
@@ -39,6 +39,23 @@ router.post('/login', async (req, res) => {
 
         if (!user) return res.status(401).json({ message: 'Invalid username or password.' });
         
+        let studentProfileId = null; // Variable to hold the actual student_id (UUID)
+        
+        // 🚀 CRITICAL FIX: Fetch Student's UUID from the students table
+        if (user.role === 'Student') {
+            const studentRes = await pool.query(
+                `SELECT student_id FROM students WHERE user_id = $1`, 
+                [user.id] // user.id is the UUID of the entry in the users table
+            );
+            // If found, use the student_id (which is the UUID of the student record)
+            studentProfileId = studentRes.rows[0]?.student_id || null;
+            
+            // NOTE: If studentProfileId is null here, the student profile is incomplete.
+            if (!studentProfileId) {
+                 console.warn(`Student login success but no student_id found for user ${user.id}`);
+            }
+        }
+        
         // --- Fetch Active Session ---
         let activeSessionId = null;
         try {
@@ -50,18 +67,17 @@ router.post('/login', async (req, res) => {
         
         // --- Generate Token ---
         const tokenPayload = { 
-            id: user.id,
+            id: user.id, // The user's UUID
             role: user.role, 
             branch_id: user.branch_id,
             
-            // ✅ CRITICAL FIX: Explicitly add student_id to the token payload
-            // This satisfies the authorization check in modules like online-exam.js
+            // ✅ FIX 1: Add the actual studentProfileId to the JWT payload
             ...(user.role === 'Student' && { 
-                student_id: user.id 
+                student_id: studentProfileId
             }),
         };
         
-        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' });
+        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' }); // 30 days is kept as is.
 
         // --- Send Response ---
         const responsePayload = {
@@ -70,7 +86,10 @@ router.post('/login', async (req, res) => {
             username: user.username,
             'user-id': user.id, 
             userBranchId: user.branch_id || '',
-            activeSessionId: activeSessionId || '',     
+            activeSessionId: activeSessionId || '',
+            
+            // ✅ FIX 2: Send the student_id in the response body for localStorage setting
+            student_id: studentProfileId // Will be null if role != Student or profile incomplete
         };
 
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
@@ -83,10 +102,11 @@ router.post('/login', async (req, res) => {
 });
 
 // =================================================================
-// 2. USER REGISTRATION ROUTE (Placeholder)
+// 2. USER REGISTRATION ROUTE (Placeholder - UNCHANGED)
 // =================================================================
 router.post('/register', async (req, res) => {
     const { username, password, role, email } = req.body;
+// ... (UNCHANGED) ...
     if (!username || !password || !role) return res.status(400).json({ message: 'Missing required fields.' });
 
     try {
@@ -111,11 +131,11 @@ router.post('/register', async (req, res) => {
 });
 
 // =================================================================
-// 3. FORGOT PASSWORD (POST /api/auth/forgot-password)
+// 3. FORGOT PASSWORD (POST /api/auth/forgot-password - UNCHANGED)
 // =================================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
-    
+// ... (UNCHANGED) ...
     const FRONTEND_URL = 'http://localhost:3005'; 
     const TOKEN_EXPIRY_MINUTES = 60; 
 
@@ -160,10 +180,11 @@ router.post('/forgot-password', async (req, res) => {
 });
 
 // =================================================================
-// 4. RESET PASSWORD (POST /api/auth/reset-password)
+// 4. RESET PASSWORD (POST /api/auth/reset-password - UNCHANGED)
 // =================================================================
 router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body; 
+// ... (UNCHANGED) ...
     const client = await pool.connect();
 
     if (!token || !password) {
@@ -227,7 +248,7 @@ router.post('/reset-password', async (req, res) => {
 
 
 // =================================================================
-// 5. VALIDATE TOKEN (PROFILE) (GET /api/auth/me)
+// 5. VALIDATE TOKEN (PROFILE) (GET /api/auth/me - UNCHANGED)
 // =================================================================
 router.get('/me', authenticateToken, async (req, res) => {
     try {

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>View My Academic Transcript</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f0f2f8; font-family: sans-serif; }
+        .container { max-width: 800px; margin-top: 50px; }
+        .card { border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+        h1 { color: #000080; font-weight: bold; }
+        .loader-container { 
+            text-align: center; 
+            padding: 50px; 
+            color: #5e35b1; 
+            font-size: 1.1em;
+        }
+        .text-primary-custom { color: #000080 !important; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card p-4">
+            <h1 class="mb-4 text-primary-custom">My Official Transcript</h1>
+            
+            <div id="loading-area" class="loader-container">
+                <div class="spinner-border text-primary-custom" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-3">Fetching your academic record...</p>
+                <p class="text-muted small">Your consolidated marksheet will open in a new window for viewing and printing.</p>
+                <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary mt-3">← Back to Dashboard</a>
+            </div>
+            
+            <div id="error-area" style="display: none;">
+                <p class="text-danger">Error: Could not retrieve your academic record.</p>
+                <p id="error-detail" class="text-muted small"></p>
+                <button onclick="window.location.reload()" class="btn btn-primary mt-3">Try Again</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="js/global-config.js"></script>
+    <script src="exam-manager-client.js"></script>
+
+    <script>
+        // Use 'profile-id' for consistency if 'student-id' is undefined
+        const STUDENT_ID_KEY = 'profile-id'; 
+        
+        /**
+         * Helper function to perform authenticated API call.
+         * NOTE: This handleApi function is redundant since exam-manager-client.js 
+         * exports fetchWithAuth. We will keep it but it's not strictly necessary.
+         */
+        async function handleApi(url, token) {
+            const response = await fetch(url, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            // 🚨 DEBUG FIX: The automatic logout is TEMPORARILY DISABLED here to diagnose
+            if (response.status === 401 || response.status === 403) {
+                 // localStorage.clear(); 
+                 // window.location.href = '/login.html'; 
+                 console.error('API Call Unauthorized (401/403). Token expired or invalid.');
+                 throw new Error('Unauthorized Access. Please log out and log in again.');
+            }
+            
+            if (!response.ok) {
+                 const errorBody = await response.json().catch(() => ({ message: 'Server error fetching data.' }));
+                 throw new Error(errorBody.message || `API Failed with status ${response.status}.`);
+            }
+            return response.json();
+        }
+
+        async function initViewTranscript() {
+            // 1. Get IDs
+            const studentId = localStorage.getItem(STUDENT_ID_KEY) || localStorage.getItem('student-id');
+            const token = localStorage.getItem('erp-token');
+            const loadingArea = document.getElementById('loading-area');
+            const errorArea = document.getElementById('error-area');
+            const errorDetail = document.getElementById('error-detail');
+            
+            loadingArea.classList.remove('d-none');
+            errorArea.style.display = 'none';
+
+            if (!studentId || !token) {
+                loadingArea.classList.add('d-none');
+                errorArea.style.display = 'block';
+                errorDetail.textContent = 'Authentication required. Please log in.';
+                return;
+            }
+            
+            // Wait for external script to ensure window.viewMarksheet is available
+            // This loop is crucial because exam-manager-client.js might load slightly later
+            if (typeof window.viewMarksheet !== 'function') {
+                setTimeout(initViewTranscript, 100); 
+                return;
+            }
+
+            try {
+                
+                // 2. Execute the marksheet generation function, passing studentId directly
+                const success = await window.viewMarksheet(studentId); // PASS STUDENT ID (UUID)
+                
+                // 3. Update the UI 
+                loadingArea.innerHTML = `
+                    <p class="text-success mt-3">✅ Your transcript generation initiated.</p>
+                    <p class="small">Please switch tabs to view the PDF/Print preview. (Using Student ID: ${studentId})</p>
+                    <a href="/student-dashboard.html" class="btn btn-outline-primary mt-3">Return to Dashboard</a>
+                `;
+                
+                if (success === false) {
+                     // This indicates that the API returned 200, but results were empty.
+                     throw new Error("Transcript generation failed on the client side.");
+                }
+
+
+            } catch (error) {
+                console.error('Transcript Initialization Error:', error);
+                loadingArea.classList.add('d-none');
+                errorArea.style.display = 'block';
+                errorDetail.textContent = `Details: ${error.message}`;
+            }
+        }
+        
+        // Use DOMContentLoaded to start the process
+        document.addEventListener('DOMContentLoaded', initViewTranscript);
+    </script>
+</body>
+</html>

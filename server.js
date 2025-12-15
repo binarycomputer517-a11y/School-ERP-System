@@ -60,9 +60,7 @@ const timetableRouter = require('./routes/timetable');
 const attendanceRouter = require('./routes/attendance');
 const leaveRouter = require('./routes/leave');
 const ptmRouter = require('./routes/ptm');
-const examsRouter = require('./routes/exams');
 const onlineExamRouter = require('./routes/onlineExam');
-const marksRouter = require('./routes/marks');
 const reportCardRouter = require('./routes/reportcard');
 const certificatesRouter = require('./routes/certificates');
 const assignmentsRouter = require('./routes/assignments');
@@ -76,7 +74,7 @@ const hrDepartmentsRouter = require('./routes/hr/departments');
 const transportRouter = require('./routes/transport');
 const hostelRouter = require('./routes/hostel');
 const cafeteriaRouter = require('./routes/cafeteria'); 
-const libraryRouter = require('./routes/library'); // ✅ Library Router Imported
+const libraryRouter = require('./routes/library'); 
 const inventoryRouter = require('./routes/inventory'); 
 const assetRouter = require('./routes/asset');         
 const itHelpdeskRouter = require('./routes/it-helpdesk');
@@ -89,6 +87,13 @@ const reportsRouter = require('./routes/reports');
 const feedbackRouter = require('./routes/feedback');
 const placementsRouter = require('./routes/placements');
 const healthRouter = require('./routes/health');
+
+// 🚀 MERGED ROUTER IMPORTS & FIXES
+const examMarksRouter = require('./routes/exam_marks'); 
+const quizzesRouter = require('./routes/quizzes'); 
+// 🚨 CRITICAL FIX: Import the new dedicated transcript router
+const transcriptRoutes = require('./routes/transcript'); 
+
 
 // --- App Initialization ---
 const app = express();
@@ -185,13 +190,17 @@ app.use('/api/ptm', ptmRouter);
 app.use('/api/placements', placementsRouter);
 
 // Exam Modules
-app.use('/api/exams', examsRouter);
+app.use('/api/exams', examMarksRouter);
 app.use('/api/online-exam', onlineExamRouter);
-app.use('/api/marks', marksRouter);
+app.use('/api/marks', examMarksRouter); 
+app.use('/api/quizzes', quizzesRouter); 
 app.use('/api/report-card', reportCardRouter);
 app.use('/api/certificates', certificatesRouter);
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api/online-learning', onlineLearningRouter);
+
+// 🚨 CRITICAL ROUTE FIX: Mount the dedicated transcript router under a unique path
+app.use('/api/transcript', transcriptRoutes); 
 
 // Finance Modules
 app.use('/api/finance', feesRouter);      
@@ -205,7 +214,7 @@ app.use('/api/hr/departments', hrDepartmentsRouter);
 app.use('/api/transport', transportRouter);
 app.use('/api/hostel', hostelRouter);
 app.use('/api/cafeteria', cafeteriaRouter); 
-app.use('/api/library', libraryRouter); // ✅ Library Router Mapped (Fixes 404 for fines)
+app.use('/api/library', libraryRouter); 
 
 // Inventory & Asset
 app.use('/api/inventory', inventoryRouter); 

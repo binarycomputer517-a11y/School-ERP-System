@@ -18,6 +18,9 @@ function getUrlParameter(name) {
     return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
 }
 
+/**
+ * Handles API calls with fetch, includes auth token and error handling.
+ */
 async function handleApi(url, method = 'GET', body = null) {
     const token = localStorage.getItem('erp-token');
     const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
@@ -103,12 +106,21 @@ async function blockExam(reason) {
             console.error("Failed to report block to server:", e);
         }
 
-        document.getElementById('quiz-content').innerHTML = `
-            <h2>Exam Blocked! ❌</h2>
-            <p style="color: red;">Reason: ${reason}</p>
-            <p>Your attempt has been recorded.</p>
-        `;
-        document.getElementById('verification-area').style.display = 'none';
+        // Display the block message (assuming an element with id 'quiz-content' exists)
+        const quizContentElement = document.getElementById('quiz-content');
+        if (quizContentElement) {
+            quizContentElement.innerHTML = `
+                <h2>Exam Blocked! ❌</h2>
+                <p style="color: red;">Reason: ${reason}</p>
+                <p>Your attempt has been recorded.</p>
+            `;
+        }
+        
+        // Hide verification area if it's visible
+        const verificationAreaElement = document.getElementById('verification-area');
+        if (verificationAreaElement) {
+            verificationAreaElement.style.display = 'none';
+        }
         attemptId = null; 
     }
 }
@@ -125,6 +137,7 @@ async function startVerification() {
     messageDiv.textContent = 'Verification in progress... (Checking credentials and live image)';
 
     // ✅ FIX: Get LIVE Data from URL and Local Storage
+    // NOTE: This assumes the URL parameter is named 'quiz' (as used in the my-quiz.html)
     const quizId = getUrlParameter('quiz'); 
     const userId = localStorage.getItem('user-id') || localStorage.getItem('profile-id'); 
     
@@ -138,7 +151,7 @@ async function startVerification() {
         // 1. Data Collection (FIXED)
         const studentData = {
             quiz_id: quizId,
-            student_id: userId, // The user UUID from localStorage, which matches the JWT 'student_id'
+            student_id: userId, // The user UUID from localStorage
             
             // Mock data for system identification
             room_number: 'R-A101', 
@@ -152,7 +165,11 @@ async function startVerification() {
         attemptId = verificationResult.attempt_id;
         
         // Display quiz details (e.g., title, time limit) on screen if needed
-        document.getElementById('quiz-title-display').textContent = verificationResult.quiz_details.title;
+        const quizTitleDisplay = document.getElementById('quiz-title-display');
+        if (quizTitleDisplay) {
+             quizTitleDisplay.textContent = verificationResult.quiz_details.title;
+        }
+
 
         // 3. Setup Proctored Monitoring (Motion/Sound/Focus)
         setupMonitoring(attemptId);
@@ -162,8 +179,12 @@ async function startVerification() {
         await loadQuizQuestions(attemptId);
 
         // 5. Success: Show Quiz Content
-        document.getElementById('verification-area').style.display = 'none';
-        document.getElementById('quiz-content').style.display = 'block';
+        const verificationArea = document.getElementById('verification-area');
+        if (verificationArea) verificationArea.style.display = 'none';
+        
+        const quizContent = document.getElementById('quiz-content'); // This ID is used in the HTML/CSS structure
+        if (quizContent) quizContent.style.display = 'block'; 
+
         messageDiv.textContent = '✅ Verification successful! Exam started.';
 
     } catch (error) {
@@ -182,6 +203,8 @@ async function loadQuizQuestions(currentAttemptId) {
         const questions = await handleApi(`${QUIZ_API}/attempts/${currentAttemptId}/questions`);
         
         const mcqArea = document.getElementById('mcq-area');
+        if (!mcqArea) return; 
+
         mcqArea.innerHTML = '';
         
         if (questions.length === 0) {
@@ -214,7 +237,7 @@ function setupMonitoring(attemptId) {
     const video = document.getElementById('live-camera');
     
     // Start camera stream (Camera is mandatory)
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false }) // Audio stream handled separately/conceptually
+    navigator.mediaDevices.getUserMedia({ video: true, audio: false }) 
         .then(stream => {
             video.srcObject = stream;
         })
@@ -224,7 +247,7 @@ function setupMonitoring(attemptId) {
             blockExam('Camera Access Denied'); // Block if camera is mandatory
         });
 
-    // Motion/Movement Monitoring (Conceptual - requires external ML/CV library)
+    // Motion/Movement Monitoring (Conceptual)
     monitoringInterval = setInterval(() => {
         // Conceptual: Check for excessive head/body motion or absence of face.
         // if (motionDetected) { blockExam('Excessive Movement Detected'); }
@@ -238,7 +261,7 @@ async function submitQuiz() {
     if (!confirm("Are you sure you want to submit the exam?")) return;
     
     clearInterval(monitoringInterval);
-    clearInterval(audioMonitor);
+    clearInterval(audioMonitor); // assuming audioMonitor is properly defined/handled globally
     
     // 1. Collect all answers from the form
     const formAnswers = [];
@@ -254,9 +277,9 @@ async function submitQuiz() {
         const submission = await handleApi(`${QUIZ_API}/submit-attempt/${attemptId}`, 'POST', { answers: formAnswers });
         
         // 3. Stop Media Streams
-        const stream = document.getElementById('live-camera').srcObject;
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+        const liveCameraElement = document.getElementById('live-camera');
+        if (liveCameraElement && liveCameraElement.srcObject) {
+            liveCameraElement.srcObject.getTracks().forEach(track => track.stop());
         }
 
         alert("Exam submitted successfully! Loading results...");
@@ -269,10 +292,5 @@ async function submitQuiz() {
     }
 }
 
-// --- Initial setup on load ---
-// NOTE: We don't call startVerification() automatically on DOMContentLoaded 
-// because we need the user to click the "Start Verification" button first.
-// The button in public/quiz.html should call startVerification().
-// document.addEventListener('DOMContentLoaded', async () => {
-//     // Initial display logic
-// });
+// NOTE: The main page logic (startVerification) is intended to be called by a button click in the HTML.
+// document.addEventListener('DOMContentLoaded', async () => { /* Initial display logic if any */ });

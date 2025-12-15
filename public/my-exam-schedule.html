@@ -6,6 +6,7 @@
     <title>My Exam Schedule</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
+        /* Custom Styles */
         body { background-color: #f0f2f8; font-family: sans-serif; }
         .container { max-width: 1000px; }
         h1 { color: #003366; font-weight: bold; }
@@ -14,6 +15,7 @@
         .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
         .table thead th { background-color: #003366; color: white; border-bottom: none; }
         .table tbody tr:hover { background-color: #f0f2f8; }
+        /* Initially hide the schedule card until an exam is selected */
         #exam-details-card { display: none; }
     </style>
 </head>
@@ -29,7 +31,7 @@
             <div class="row g-3 align-items-center">
                 <div class="col-md-8">
                     <select id="exam-select" class="form-select" onchange="loadSchedule()">
-                        <option value="">-- Select an Exam (e.g., Midterm, Final) --</option>
+                        <option value="">-- Select an Exam Series --</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -67,18 +69,29 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Retrieve token and student ID from local storage
         const token = localStorage.getItem('erp-token');
-        const studentId = localStorage.getItem('student-id'); 
         
-        // --- Helper function for API calls ---
+        // Handle potential naming inconsistency for student ID
+        const studentId = localStorage.getItem('student_id') || localStorage.getItem('student-id'); 
+        
+        // Global variables to store student's enrollment context
+        let studentCourseId = null;
+        let studentBatchId = null;
+
+        /**
+         * Helper function for making authenticated API calls.
+         * Handles token validation and error responses (e.g., 401 Unauthorized).
+         */
         async function handleApi(url) {
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) {
-                // Assuming session check as in other files
+                // If token is invalid or expired, force logout
                 if (response.status === 401 || response.status === 403) {
                      alert('Session expired or unauthorized. Please log in again.');
+                     localStorage.clear(); 
                      window.location.href = '/login.html';
                      throw new Error('Unauthorized');
                 }
@@ -87,13 +100,8 @@
             return response.json();
         }
 
-        let studentCourseId = null;
-        let studentBatchId = null;
-
         /**
-         * 1. Fetches student's profile to get course/batch.
-         * 2. Fetches all exams.
-         * 3. Filters exams to only show those relevant to the student.
+         * Loads the list of relevant exams for the logged-in student.
          */
         async function loadExams() {
             const examSelect = document.getElementById('exam-select');
@@ -102,11 +110,13 @@
 
             if (!studentId || !token) {
                 examSelect.innerHTML = '<option value="">Login error: ID/Token missing.</option>';
+                errorMessage.textContent = 'Authentication required. Please log in again.';
+                errorMessage.style.display = 'block';
                 return;
             }
 
             try {
-                // A. Get Student Course/Batch (Uses API from students.js)
+                // 1. Get Student Course/Batch ID
                 const studentData = await handleApi(`/api/students/${studentId}`);
                 studentCourseId = studentData.course_id;
                 studentBatchId = studentData.batch_id;
@@ -116,11 +126,10 @@
                     return;
                 }
 
-                // B. Get All Exams (Uses API from exams.js)
-                // NOTE: This endpoint MUST be authorized for the 'Student' role in exams.js
+                // 2. Get All Exams 
                 const exams = await handleApi('/api/exams/list');
 
-                // C. Filter exams relevant to the student's enrollment
+                // 3. Filter exams relevant to the student's enrollment
                 const relevantExams = exams.filter(exam => 
                     exam.course_id === studentCourseId && exam.batch_id === studentBatchId
                 );
@@ -132,14 +141,19 @@
 
                 examSelect.innerHTML = '<option value="">-- Select an Exam Series --</option>';
                 relevantExams.forEach(exam => {
-                    // Assuming max_theory_marks and max_practical_marks are numbers
-                    const examTotalMarks = (exam.max_theory_marks || 0) + (exam.max_practical_marks || 0); 
+                    
+                    // --- ✅ FIX APPLIED HERE: Ensure marks are parsed as numbers before addition ---
+                    const theoryMarks = parseFloat(exam.max_theory_marks) || 0;
+                    const practicalMarks = parseFloat(exam.max_practical_marks) || 0;
+                    const examTotalMarks = theoryMarks + practicalMarks; // Correct addition
+                    // ---------------------------------------------------------------------------------
+                    
+                    // Populate the dropdown with necessary data attributes
                     examSelect.innerHTML += `
                         <option value="${exam.exam_id}" 
                                 data-name="${exam.exam_name}"
                                 data-type="${exam.exam_type}"
-                                data-total-marks="${examTotalMarks}">
-                            ${exam.exam_name} (${exam.exam_type}) - ${exam.batch_code || 'N/A'}
+                                data-total-marks="${examTotalMarks.toFixed(2)}"> ${exam.exam_name} (${exam.exam_type}) - ${exam.batch_code || 'N/A'}
                         </option>
                     `;
                 });
@@ -152,7 +166,7 @@
         }
 
         /**
-         * Loads the schedule for the currently selected exam.
+         * Loads the schedule table for the currently selected exam.
          */
         async function loadSchedule() {
             const examSelect = document.getElementById('exam-select');
@@ -163,6 +177,7 @@
             const scheduleMessage = document.getElementById('schedule-message');
             const errorMessage = document.getElementById('error-message');
             
+            // Reset previous state
             scheduleBody.innerHTML = '';
             scheduleMessage.style.display = 'none';
             errorMessage.style.display = 'none';
@@ -178,13 +193,14 @@
             const examType = selectedOption.getAttribute('data-type');
             const examTotalMarks = selectedOption.getAttribute('data-total-marks');
 
+            // Update UI with selected exam details
             document.getElementById('schedule-exam-name').textContent = `${examName} (${examType})`;
             examInfo.textContent = `Total Marks: ${examTotalMarks}`;
             scheduleCard.style.display = 'block';
-            scheduleBody.innerHTML = '<tr><td colspan="5" class="text-center">Loading schedule...</td></tr>';
+            scheduleBody.innerHTML = '<tr><td colspan="5" class="text-center text-muted py-3">Loading schedule...</td></tr>';
 
             try {
-                // Uses API endpoint from exams.js: GET /api/exams/schedule/:exam_id
+                // Fetch schedule details for the selected exam
                 const schedules = await handleApi(`/api/exams/schedule/${examId}`);
                 
                 if (schedules.length === 0) {
@@ -194,32 +210,29 @@
                     return;
                 }
 
+                scheduleBody.innerHTML = ''; // Clear loading message
                 schedules.forEach(schedule => {
                     
-                    // --- 🐞 FIX: Duration Calculation ---
-                    // Create Date objects using the same base date, then compare times
+                    // --- Duration Calculation and Time Formatting ---
                     const [startHour, startMinute] = schedule.start_time.split(':').map(Number);
                     const [endHour, endMinute] = schedule.end_time.split(':').map(Number);
 
                     const startDate = new Date(2000, 0, 1, startHour, startMinute);
                     let endDate = new Date(2000, 0, 1, endHour, endMinute);
                     
-                    // Handle exam crossing midnight (optional, but safer)
+                    // Handle exam crossing midnight (if end time is earlier than start time)
                     if (endDate.getTime() < startDate.getTime()) {
                         endDate.setDate(endDate.getDate() + 1);
                     }
 
                     const durationMinutes = (endDate.getTime() - startDate.getTime()) / 60000; 
-                    const durationText = durationMinutes > 0 ? `${durationMinutes} minutes` : 'N/A';
-                    // --- End Fix ---
+                    const durationText = durationMinutes > 0 ? `${Math.round(durationMinutes)} minutes` : 'N/A';
                     
-                    // Format Date
+                    // Format Date (Example: 20 Dec 2025)
                     const examDate = new Date(schedule.exam_date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
                     
-                    // Format Time (e.g., 09:00 AM - 12:00 PM)
+                    // Format Time (Example: 09:00 AM - 12:00 PM)
                     const timeOptions = { hour: '2-digit', minute: '2-digit', hour12: true };
-                    
-                    // Use the parsed Date objects for locale time formatting
                     const startTimeFormatted = startDate.toLocaleTimeString('en-US', timeOptions);
                     const endTimeFormatted = endDate.toLocaleTimeString('en-US', timeOptions);
 
@@ -236,12 +249,13 @@
 
             } catch (error) {
                 console.error('Error loading schedule:', error);
-                scheduleBody.innerHTML = `<tr><td colspan="5" class="text-danger text-center">Failed to load schedule.</td></tr>`;
+                scheduleBody.innerHTML = `<tr><td colspan="5" class="text-danger text-center py-3">Failed to load schedule.</td></tr>`;
                 errorMessage.textContent = `Error: Failed to load schedule. (${error.message})`;
                 errorMessage.style.display = 'block';
             }
         }
 
+        // Initialize by loading the list of exams when the page is ready
         document.addEventListener('DOMContentLoaded', loadExams);
     </script>
     <script src="js/global-config.js"></script>

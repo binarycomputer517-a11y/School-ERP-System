@@ -14,9 +14,12 @@ const QUIZ_QUESTION_LINKS_TABLE = 'quiz_question_links';
 const RESULTS_TABLE = 'student_quiz_results'; 
 
 // --- UTILITY FUNCTIONS FOR SECURITY ---
+
+/**
+ * @desc Ensures the attempt being accessed belongs to the student making the request.
+ */
 async function checkAttemptOwnership(attemptId, studentId) {
     const result = await pool.query(
-        // Assuming student_id in ATTEMPT_TABLE stores the user's UUID
         `SELECT student_id, quiz_id FROM ${ATTEMPT_TABLE} WHERE attempt_id = $1;`,
         [attemptId]
     );
@@ -38,13 +41,11 @@ async function checkAttemptOwnership(attemptId, studentId) {
 
 
 // =================================================================
-// --- QUIZ MANAGER ROUTES (ADMIN VIEW) ---
+// --- QUIZ MANAGER ROUTES (ADMIN VIEW) (UNCHANGED) ---
 // =================================================================
 
 /**
  * @route   GET /api/online-exam/quizzes
- * @desc    Get all quizzes and exams for the manager overview.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.get('/quizzes', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     try {
@@ -70,8 +71,6 @@ router.get('/quizzes', authenticateToken, authorize(['Super Admin', 'Admin', 'Te
 
 /**
  * @route   POST /api/online-exam/quizzes
- * @desc    Create a new quiz or assessment.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.post('/quizzes', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { title, type, course_id, subject_id, time_limit, start_time, end_time, status } = req.body;
@@ -108,8 +107,6 @@ router.post('/quizzes', authenticateToken, authorize(['Super Admin', 'Admin', 'T
 
 /**
  * @route   PUT /api/online-exam/quizzes/:id
- * @desc    Update an existing quiz configuration.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.put('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { id } = req.params;
@@ -150,8 +147,6 @@ router.put('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admin',
 
 /**
  * @route   DELETE /api/online-exam/quizzes/:id
- * @desc    Delete a specific quiz.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.delete('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { id } = req.params;
@@ -169,13 +164,11 @@ router.delete('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admi
 
 
 // =================================================================
-// --- QUESTION BANK IMPORT ROUTE ---
+// --- QUESTION BANK IMPORT ROUTE (UNCHANGED) ---
 // =================================================================
 
 /**
  * @route   POST /api/online-exam/question-bank/import
- * @desc    Handles bulk import of MCQs from CSV/JSON.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.post('/question-bank/import', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { questions } = req.body;
@@ -243,13 +236,11 @@ router.post('/question-bank/import', authenticateToken, authorize(['Super Admin'
 
 
 // =================================================================
-// --- (NEW) QUESTION MANAGEMENT ROUTES (For question-management.html) ---
+// --- QUESTION MANAGEMENT ROUTES (UNCHANGED) ---
 // =================================================================
 
 /**
  * @route   GET /api/online-exam/question-bank
- * @desc    Get all questions from the central question bank.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.get('/question-bank', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     try {
@@ -263,8 +254,6 @@ router.get('/question-bank', authenticateToken, authorize(['Super Admin', 'Admin
 
 /**
  * @route   GET /api/online-exam/quizzes/:id/links
- * @desc    Get all questions *linked* to a specific quiz.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.get('/quizzes/:id/links', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { id } = req.params; // This is the quiz UUID
@@ -292,8 +281,6 @@ router.get('/quizzes/:id/links', authenticateToken, authorize(['Super Admin', 'A
 
 /**
  * @route   PUT /api/online-exam/quizzes/:id/link-questions
- * @desc    (Re)sets the full list of questions linked to a quiz.
- * @access  Private (Super Admin, Admin, Teacher)
  */
 router.put('/quizzes/:id/link-questions', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { id: quiz_id } = req.params; // The quiz UUID
@@ -338,16 +325,14 @@ router.put('/quizzes/:id/link-questions', authenticateToken, authorize(['Super A
 
 
 // =================================================================
-// --- (FIXED) SECURE EXAM FLOW ROUTES (STUDENT) ---
+// --- SECURE EXAM FLOW ROUTES (STUDENT) ---
 // =================================================================
 
 /**
  * @route   POST /api/online-exam/exam/start
- * @desc    VERIFIES student and INITIATES attempt. NOW RETURNS QUIZ DETAILS.
- * @access  Private (Student)
  */
 router.post('/exam/start', authenticateToken, authorize(['Student']), async (req, res) => {
-    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
+    const student_id = req.user.student_id || req.user.id; 
     const { quiz_id, live_image_data, room_number, system_id } = req.body;
 
     if (!student_id || !quiz_id) { 
@@ -357,7 +342,6 @@ router.post('/exam/start', authenticateToken, authorize(['Student']), async (req
     const studentIdStr = String(student_id); 
     const quizIdStr = String(quiz_id);
 
-    // Use a client for two queries
     const client = await pool.connect();
 
     try {
@@ -426,12 +410,10 @@ router.post('/exam/start', authenticateToken, authorize(['Student']), async (req
 
 /**
  * @route   GET /api/online-exam/attempts/:attemptId/questions
- * @desc    Retrieves the specific linked questions for the given attempt.
- * @access  Private (Student) - Requires attempt ownership check.
  */
 router.get('/attempts/:attemptId/questions', authenticateToken, authorize(['Student']), async (req, res) => {
     const { attemptId } = req.params;
-    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
+    const student_id = req.user.student_id || req.user.id; 
 
     try {
         // 1. SECURITY CHECK: Ensure the student owns the attempt and get quiz_id
@@ -468,12 +450,10 @@ router.get('/attempts/:attemptId/questions', authenticateToken, authorize(['Stud
 
 /**
  * @route   POST /api/online-exam/block-exam/:attemptId
- * @desc    Blocks the exam attempt due to a proctoring violation.
- * @access  Private (Student, Client-Side Logic) - Requires attempt ownership check.
  */
 router.post('/block-exam/:attemptId', authenticateToken, authorize(['Student']), async (req, res) => {
     const { attemptId } = req.params;
-    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
+    const student_id = req.user.student_id || req.user.id; 
     const { reason } = req.body;
 
     try {
@@ -500,12 +480,10 @@ router.post('/block-exam/:attemptId', authenticateToken, authorize(['Student']),
 
 /**
  * @route   POST /api/online-exam/submit-attempt/:attemptId
- * @desc    Submits student answers for final grading and ends the attempt.
- * @access  Private (Student) - Requires attempt ownership check.
  */
 router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student']), async (req, res) => {
     const { attemptId } = req.params;
-    const student_id = req.user.student_id || req.user.id; // ✅ FIX: Use student_id from JWT payload
+    const student_id = req.user.student_id || req.user.id; 
     const { answers } = req.body; 
 
     if (!Array.isArray(answers)) {
@@ -621,24 +599,28 @@ router.post('/submit-attempt/:attemptId', authenticateToken, authorize(['Student
 
 
 /**
- * @route   GET /api/online-exam/quizzes/student
+ * @route   GET /api/online-exam/student/:studentId/quizzes
  * @desc    Get available quizzes for the logged-in student based on their course.
  * @access  Private (Student)
  */
-router.get('/quizzes/student', authenticateToken, authorize(['Student']), async (req, res) => {
-    // This is the user UUID from the JWT payload
-    const studentId = req.user.student_id; 
+router.get('/student/:studentId/quizzes', authenticateToken, authorize(['Student']), async (req, res) => {
+    const studentIdFromUrl = req.params.studentId;
+    
+    // 🛑 CRITICAL FIX: Robust ID Extraction 🛑
+    // Prioritize req.user.student_id (the profile ID set in auth.js)
+    // Fallback to req.user.id (the user's UUID) if student_id is undefined in the JWT payload
+    const studentIdFromToken = req.user.student_id || req.user.id; 
 
-    if (!studentId) {
-        // This is a safety check; should not happen with the fixed Auth middleware
-        return res.status(403).json({ message: 'Forbidden: Student ID not found in token.' });
+    // CRITICAL SECURITY CHECK: 
+    if (!studentIdFromToken || String(studentIdFromUrl) !== String(studentIdFromToken)) {
+        console.warn(`SECURITY ALERT: Forbidden access attempt. Token ID: ${studentIdFromToken}, URL ID: ${studentIdFromUrl}.`);
+        return res.status(403).json({ message: 'Forbidden: Unauthorized access to quiz list.' });
     }
 
     try {
         // Step 1: Find the student's course ID
-        // FIX: The query now assumes students table links to users via user_id
         const studentInfoQuery = 'SELECT course_id FROM students WHERE user_id = $1'; 
-        const studentInfoResult = await pool.query(studentInfoQuery, [studentId]);
+        const studentInfoResult = await pool.query(studentInfoQuery, [studentIdFromToken]); // Use the secured token ID
 
         if (studentInfoResult.rows.length === 0) {
             return res.status(404).json({ message: 'Student profile not found.' });
@@ -652,7 +634,7 @@ router.get('/quizzes/student', authenticateToken, authorize(['Student']), async 
                 oq.title, 
                 s.subject_name,
                 oq.available_from,
-                oq.available_to,
+                oq.available_to AS end_date, /* Alias to match front-end display */
                 oq.time_limit_minutes
             FROM ${QUIZZES_TABLE} oq
             LEFT JOIN subjects s ON oq.subject_id = s.id 
@@ -668,7 +650,7 @@ router.get('/quizzes/student', authenticateToken, authorize(['Student']), async 
         res.status(200).json(quizResult.rows);
 
     } catch (error) {
-        console.error(`Error fetching quizzes for student ${studentId}:`, error);
+        console.error(`Error fetching quizzes for student ${studentIdFromToken}:`, error);
         res.status(500).json({ message: 'Failed to retrieve available quizzes.' });
     }
 });

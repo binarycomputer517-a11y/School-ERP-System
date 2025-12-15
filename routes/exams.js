@@ -6,35 +6,36 @@ const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Roles Configuration ---
+// These roles define who can manage (create/edit/delete) and who can only view exam data.
 const EXAM_MANAGER_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
 const EXAM_VIEWER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Teacher', 'Student'];
+
 // =======================================================================================
-// 1. EXAM CRUD ROUTES
+// 1. EXAM CRUD ROUTES (Core Exam Entry Management)
 // =======================================================================================
 
 /**
  * @route   GET /api/exams/list
  * @desc    Get a JOINED list of all exams linked to courses/batches.
  * @access  Private (EXAM_VIEWER_ROLES)
+ * * 🛑 CRITICAL FIX INCLUDED: This query ensures course_id and batch_id are returned,
+ * which is essential for the frontend to filter exams relevant to the logged-in student.
  */
-//
-// --- 🛑 THIS IS THE CRITICAL FIX 🛑 ---
-//
-// This route provides all the data (course_id, batch_id, total_marks)
-// that your frontend `examCache` needs to avoid the "Course ID is missing" error.
-// Your server.js routes `GET /api/exams/list` to this handler.
-//
 router.get('/list', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
                 e.id AS exam_id,
                 e.exam_name,
+                e.exam_type,
                 e.exam_date,
-                e.course_id,  -- This data is now included
-                e.batch_id,   -- This data is now included
+                e.course_id,  -- IMPORTANT: Included for frontend filtering
+                e.batch_id,   -- IMPORTANT: Included for frontend filtering
                 c.course_name,
                 b.batch_name,
+                b.batch_code, -- Added batch_code for clearer display
+                e.max_theory_marks,
+                e.max_practical_marks,
                 (e.max_theory_marks + e.max_practical_marks) AS total_marks
             FROM 
                 exams e
@@ -42,18 +43,11 @@ router.get('/list', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req,
                 courses c ON e.course_id = c.id
             LEFT JOIN 
                 batches b ON e.batch_id = b.id
-            /* -- Optional: Filter by academic session
-            WHERE
-                e.academic_session_id = $1 
-            */
             ORDER BY
                 e.exam_date DESC, c.course_name;
         `;
         
-        // If not filtering by session:
         const result = await pool.query(query);
-        
-        // This response will now have the course_id, batch_id, etc.
         res.status(200).json(result.rows);
 
     } catch (error) {
@@ -64,20 +58,13 @@ router.get('/list', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req,
 
 /**
  * @route   POST /api/exams
- * @desc    Create a new exam (Handles Section 1 Form)
+ * @desc    Create a new exam (Header for a series of subjects)
  * @access  Private (EXAM_MANAGER_ROLES)
  */
 router.post('/', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
     const {
-        exam_name,
-        exam_type,
-        exam_date,
-        is_midterm_assessment,
-        academic_session_id,
-        course_id,
-        batch_id,
-        max_theory_marks,
-        max_practical_marks
+        exam_name, exam_type, exam_date, is_midterm_assessment, academic_session_id,
+        course_id, batch_id, max_theory_marks, max_practical_marks
     } = req.body;
 
     // Validation
@@ -96,15 +83,8 @@ router.post('/', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, r
         `;
         
         const newExam = await pool.query(query, [
-            exam_name,
-            exam_type,
-            exam_date,
-            is_midterm_assessment || false,
-            academic_session_id,
-            course_id,
-            batch_id,
-            max_theory_marks || 100,
-            max_practical_marks || 0
+            exam_name, exam_type, exam_date, is_midterm_assessment || false, academic_session_id,
+            course_id, batch_id, max_theory_marks || 100, max_practical_marks || 0
         ]);
 
         res.status(201).json(newExam.rows[0]);
@@ -117,14 +97,14 @@ router.post('/', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, r
 
 /**
  * @route   DELETE /api/exams/:id
- * @desc    Delete an exam
+ * @desc    Delete an exam series.
  * @access  Private (EXAM_MANAGER_ROLES)
  */
 router.delete('/:id', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
     try {
         const { id } = req.params;
+        // Assumes ON DELETE CASCADE is set up in the database to delete related schedules and marks.
         await pool.query('DELETE FROM exams WHERE id = $1', [id]);
-        // ON DELETE CASCADE in your DB will handle deleting related schedules and marks.
         res.status(200).json({ message: 'Exam deleted successfully.' });
     } catch (error) {
         console.error('Error deleting exam:', error);
@@ -133,12 +113,12 @@ router.delete('/:id', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (r
 });
 
 // =======================================================================================
-// 2. EXAM SCHEDULE CRUD ROUTES
+// 2. EXAM SCHEDULE CRUD ROUTES (Subject-specific Scheduling)
 // =======================================================================================
 
 /**
  * @route   GET /api/exams/schedule/:examId
- * @desc    Get all schedule entries for a specific exam
+ * @desc    Get all schedule entries (subjects, dates, times) for a specific exam series.
  * @access  Private (EXAM_VIEWER_ROLES)
  */
 router.get('/schedule/:examId', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req, res) => {
@@ -171,20 +151,13 @@ router.get('/schedule/:examId', authenticateToken, authorize(EXAM_VIEWER_ROLES),
 
 /**
  * @route   POST /api/exams/schedule
- * @desc    Create a new schedule entry (Handles Section 2 Form)
+ * @desc    Create a new schedule entry (one subject for one exam)
  * @access  Private (EXAM_MANAGER_ROLES)
  */
 router.post('/schedule', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
     const {
-        exam_id,
-        course_id,
-        batch_id,
-        subject_id,
-        exam_date,
-        room_number,
-        start_time,
-        end_time,
-        max_marks
+        exam_id, course_id, batch_id, subject_id, exam_date,
+        room_number, start_time, end_time, max_marks // max_marks should ideally be derived from exam.js/exam_marks.js logic, but included here for direct entry capability
     } = req.body;
 
     if (!exam_id || !course_id || !batch_id || !subject_id || !exam_date || !start_time || !end_time) {
@@ -201,21 +174,14 @@ router.post('/schedule', authenticateToken, authorize(EXAM_MANAGER_ROLES), async
             RETURNING id AS schedule_id;
         `;
         const newSchedule = await pool.query(query, [
-            exam_id,
-            course_id,
-            batch_id,
-            subject_id,
-            exam_date,
-            room_number,
-            start_time,
-            end_time,
-            max_marks || 100 // Default to 100 if not provided
+            exam_id, course_id, batch_id, subject_id, exam_date,
+            room_number, start_time, end_time, max_marks || 100 // Default to 100 if not provided
         ]);
         
         res.status(201).json(newSchedule.rows[0]);
 
     } catch (error) {
-        if (error.code === '23505') { // unique_violation
+        if (error.code === '23505') { // unique_violation: ensures a subject is scheduled only once per exam/batch
             return res.status(409).json({ message: 'This subject is already scheduled for this exam and batch.' });
         }
         console.error('Error creating schedule entry:', error);
@@ -230,14 +196,7 @@ router.post('/schedule', authenticateToken, authorize(EXAM_MANAGER_ROLES), async
  */
 router.put('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
     const { scheduleId } = req.params;
-    const {
-        subject_id,
-        exam_date,
-        room_number,
-        start_time,
-        end_time,
-        max_marks
-    } = req.body;
+    const { subject_id, exam_date, room_number, start_time, end_time, max_marks } = req.body;
 
     try {
         const query = `
@@ -254,13 +213,7 @@ router.put('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER_RO
             RETURNING *;
         `;
         const updatedSchedule = await pool.query(query, [
-            subject_id,
-            exam_date,
-            room_number,
-            start_time,
-            end_time,
-            max_marks,
-            scheduleId
+            subject_id, exam_date, room_number, start_time, end_time, max_marks, scheduleId
         ]);
         
         if (updatedSchedule.rows.length === 0) {

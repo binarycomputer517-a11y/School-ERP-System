@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Online Exam</title>
     <style>
+        /* --- General Reset & Layout --- */
         body { font-family: 'Arial', sans-serif; background-color: #f4f4f9; margin: 0; padding: 0; }
         .hidden { display: none !important; }
 
@@ -16,7 +17,7 @@
             padding: 20px;
             background: white;
             box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            border: 3px solid #C0392B; /* Red border */
+            border: 3px solid #C0392B; /* Red border for security/warning */
         }
         #verification-left { flex: 1; padding: 10px; }
         #verification-right { flex: 1; padding: 10px; }
@@ -322,7 +323,7 @@
         let currentQuestionIndex = 0;
         let timerInterval = null;
         let warningCount = 0;
-        let quizDetails = {}; // Stores title and duration from server
+        let quizDetails = {}; 
 
         // --- DOM Elements ---
         const verificationArea = document.getElementById('verification-area');
@@ -342,15 +343,12 @@
         // --- Helper Functions ---
 
         /**
-         * === THIS FUNCTION IS NOW FIXED ===
-         * Gets the 'quizId' parameter from the URL. Returns null if invalid.
+         * Gets the 'quizId' parameter from the URL.
          */
         function getQuizIdFromUrl() {
             const params = new URLSearchParams(window.location.search);
-            // Check for 'quizId' (from online-exam.html) or fallback to 'quiz'
             const quizId = params.get('quizId') || params.get('quiz'); 
 
-            // Check if it's a valid string (not empty or too short), NOT a number
             if (!quizId || quizId.trim().length < 10) { 
                 console.error("Invalid or missing 'quizId' in URL.");
                 if (verificationMessage) {
@@ -358,7 +356,7 @@
                 }
                 return null;
             }
-            return quizId; // Return the UUID string
+            return quizId; 
         }
 
         /**
@@ -367,7 +365,7 @@
         async function handleApi(url, method = 'GET', body = null) {
             const token = localStorage.getItem('erp-token');
             if (!token) {
-                 window.location.href = '/login.html'; // Redirect if no token
+                 window.location.href = '/login.html';
                  throw new Error("Authentication token not found. Please log in.");
             }
             const options = {
@@ -389,7 +387,7 @@
                     } catch (e) { /* Ignore if response is not JSON */ }
                     throw new Error(errorMsg);
                 }
-                if (response.status === 204) return null; // Handle No Content
+                if (response.status === 204) return null;
                 return response.json();
             } catch (error) {
                  console.error(`API Error (${method} ${url}):`, error);
@@ -490,8 +488,8 @@
 
         function setupMonitoring(currentAttemptId) {
             monitoringInterval = setInterval(async () => {
-                // Placeholder
-            }, 30000);
+                // Conceptual Motion/Proctoring Check goes here (not implemented in JS)
+            }, 30000); // Check every 30 seconds (placeholder)
         }
 
         // --- Verification Flow ---
@@ -519,7 +517,7 @@
                 return;
             }
 
-            // 2. Get Quiz ID from URL (Using the FIXED function)
+            // 2. Get Quiz ID from URL
             const quizId = getQuizIdFromUrl();
             if (!quizId) {
                  startVerificationBtn.disabled = false;
@@ -544,18 +542,16 @@
                     live_image_data: verificationImageData
                 };
 
-                // === THIS PART IS NOW FIXED ===
-                // We expect 'attempt_id' AND 'quiz_details' from the server
+                // Server should return attempt_id and quiz_details (title, time_limit_minutes)
                 const verificationResult = await handleApi(`${QUIZ_API}/exam/start`, 'POST', studentData);
                 if (!verificationResult || !verificationResult.attempt_id || !verificationResult.quiz_details) {
                      throw new Error("Server did not return a valid attempt ID and quiz details.");
                 }
                 attemptId = verificationResult.attempt_id;
-                quizDetails = verificationResult.quiz_details; // Get details from server
+                quizDetails = verificationResult.quiz_details;
                 console.log("Exam attempt started successfully, ID:", attemptId);
-                // === END OF FIX ===
 
-                // 5. Set Quiz Details (Title, Duration) - From API
+                // 5. Set Quiz Details (Title, Duration)
                 examNameEl.textContent = quizDetails.title || `Exam ID: ${quizId}`;
 
                 // 6. Start Proctoring Services
@@ -567,7 +563,6 @@
                 await loadQuizQuestions(attemptId);
 
                 // 8. Start Exam Timer
-                // Use the time limit from the server
                 const duration = quizDetails.time_limit_minutes || 60; 
                 startExamTimer(duration);
 
@@ -601,6 +596,7 @@
                  let seconds = durationSeconds % 60;
                  timerEl.textContent = `Time: ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
                  
+                 // Color coding for time remaining
                  if (durationSeconds <= 300 && durationSeconds > 60) {
                      timerEl.style.color = 'orange'; timerEl.style.fontWeight = 'bold';
                  } else if (durationSeconds <= 60) {
@@ -619,7 +615,7 @@
                 if (durationSeconds < 0) {
                     clearInterval(timerInterval);
                     showAlert("Time is up! Your exam will be submitted automatically.");
-                    setTimeout(submitQuiz, 3000); 
+                    setTimeout(submitQuiz, 3000); // Auto-submit after 3 seconds
                 }
             }, 1000);
         }
@@ -627,7 +623,6 @@
         async function loadQuizQuestions(currentAttemptId) {
             mcqArea.innerHTML = '<p style="text-align: center; padding: 30px; color: #777;">⏳ Loading questions...</p>';
             try {
-                // This API endpoint is in your onlineExam.js
                 const questions = await handleApi(`${QUIZ_API}/attempts/${currentAttemptId}/questions`);
                 if (!Array.isArray(questions)) {
                      throw new Error("Invalid question data received.");
@@ -658,7 +653,7 @@
 
         function displayQuestion(index) {
             if (index < 0 || index >= allQuestions.length) return;
-             updatePaletteButton(currentQuestionIndex); // Update previous button state first
+             updatePaletteButton(currentQuestionIndex); 
             currentQuestionIndex = index;
             const q = allQuestions[index];
             const statusInfo = questionStatus[index];
@@ -744,16 +739,15 @@
 
         function updateStatusBar() {
             let attemptedCount = 0;
-            let notAttemptedCount = 0;
             let reviewedCount = 0;
 
             Object.values(questionStatus).forEach(item => {
                  if (item.answer) attemptedCount++;
                  if (item.status === 'reviewed') reviewedCount++;
             });
-             
-            notAttemptedCount = Math.max(0, allQuestions.length - attemptedCount - Object.values(questionStatus).filter(i => !i.answer && i.status === 'reviewed').length);
-            notAttemptedCount = Math.max(0, allQuestions.length - attemptedCount - reviewedCount + Object.values(questionStatus).filter(i => i.answer && i.status === 'reviewed').length);
+            
+            // Calculate not attempted = Total questions - attempted
+            let notAttemptedCount = allQuestions.length - attemptedCount;
 
             document.getElementById('total-attempted').textContent = attemptedCount;
             document.getElementById('total-not-attempted').textContent = notAttemptedCount;
@@ -800,13 +794,13 @@
             clearInterval(timerInterval);
             stopMediaStreams();
 
+            // Collect answers that have a value
             const formAnswers = Object.entries(questionStatus)
                 .filter(([_, item]) => item.answer)
                 .map(([_, item]) => ({ question_id: item.q_id, answer: item.answer }));
 
             try {
-                console.log(`Submitting ${formAnswers.length} answers for attempt ID: ${attemptId}`);
-                // This API endpoint is in your onlineExam.js
+                // Send answers to the submission API endpoint
                 await handleApi(`${QUIZ_API}/submit-attempt/${attemptId}`, 'POST', { answers: formAnswers });
 
                 alert("✅ Exam submitted successfully! Redirecting to results...");

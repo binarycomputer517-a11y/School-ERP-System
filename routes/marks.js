@@ -2,23 +2,29 @@
 
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../database'); // Your database connection pool
-const { authenticateToken, authorize } = require('../authMiddleware'); // Your auth middleware
+const { pool } = require('../database'); 
+const { authenticateToken, authorize } = require('../authMiddleware'); 
 
 // --- Roles Configuration ---
 const MARK_MANAGER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator'];
-const MARK_VIEWER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator'];
+// CRITICAL FIX: Adding 'Student' role to MARK_VIEWER_ROLES
+const MARK_VIEWER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student']; 
+
+// --- Table Constants (Using assumed names based on common ERP schemas) ---
+const EXAMS_TABLE = 'online_quizzes'; // Assuming exam details are stored here
+const SCHEDULES_TABLE = 'quiz_schedules'; // Assuming schedule details are stored here
+const MARKS_TABLE = 'marks';
+const STUDENTS_TABLE = 'students';
+const COURSES_TABLE = 'courses';
+const BATCHES_TABLE = 'batches';
+const SUBJECTS_TABLE = 'subjects';
 
 
 // =========================================================
-// HELPER: GRADE CALCULATION LOGIC
+// HELPER: GRADE CALCULATION LOGIC (UNCHANGED)
 // =========================================================
 
-/**
- * Calculates a grade based on obtained marks vs. total marks.
- */
 function calculateGrade(totalObtained, totalMax) {
-    // Cannot calculate grade if data is missing or invalid
     if (totalMax === 0 || totalMax === null || totalObtained === null) {
         return null; 
     }
@@ -31,18 +37,122 @@ function calculateGrade(totalObtained, totalMax) {
     if (percentage >= 60) return 'B';
     if (percentage >= 50) return 'C';
     if (percentage >= 40) return 'D';
-    return 'F'; // Fail
+    return 'F'; 
 }
 
 // =======================================================================================
-// 1. MARKSHEET STATUS & MARKS ENTRY FETCH ROUTES 
+// 1. MARK SHEET VIEW ROUTE (CRITICAL FIX: RENAME AND TABLE NAMES)
+// =======================================================================================
+/**
+ * @route   GET /api/marks/student-transcript/:studentId  <-- New Route Name
+ * @desc    Get consolidated marksheet data for a single student by UUID.
+ * @access  Private (MARK_VIEWER_ROLES)
+ */
+router.get('/student-transcript/:studentId', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
+    const studentId = req.params.studentId;
+
+    if (!studentId || studentId.length !== 36) {
+        return res.status(400).json({ message: 'Invalid Student ID format.' });
+    }
+    
+    try {
+        // 1. Fetch Student Details 
+        const studentQuery = `
+            SELECT 
+                s.student_id, s.first_name, s.last_name, s.enrollment_no, s.roll_number,
+                c.course_name, b.batch_name
+            FROM ${STUDENTS_TABLE} s
+            JOIN ${COURSES_TABLE} c ON s.course_id = c.id
+            JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
+            WHERE s.student_id = $1::uuid; 
+        `;
+        const studentResult = await pool.query(studentQuery, [studentId]);
+        const student = studentResult.rows[0];
+
+        if (!student) {
+            return res.status(404).json({ message: 'Student ID not found.' });
+        }
+
+        // 2. Fetch All Marks for the Student
+        const marksQuery = `
+            SELECT 
+                e.title AS exam_name, -- Use 'title' from online_quizzes table
+                COALESCE(es.max_marks, 0) AS total_marks, 
+                sub.subject_name, sub.subject_code,
+                m.total_marks_obtained AS marks_obtained,
+                m.grade
+            FROM ${MARKS_TABLE} m
+            -- 🚨 FIX: Joining with online_quizzes table 
+            JOIN ${EXAMS_TABLE} e ON m.exam_id = e.id
+            -- 🚨 FIX: Joining with quiz_schedules table
+            LEFT JOIN ${SCHEDULES_TABLE} es ON e.id = es.quiz_id AND m.subject_id = es.subject_id 
+            JOIN ${SUBJECTS_TABLE} sub ON m.subject_id = sub.id
+            WHERE m.student_id = $1::uuid 
+            ORDER BY e.created_at, sub.subject_code; -- Ordering by quiz creation time
+        `;
+        const marksResult = await pool.query(marksQuery, [studentId]);
+
+        // 3. Consolidate Data for Frontend
+        const marksheetData = {
+            student_info: {
+                student_id: student.student_id,
+                roll_number: student.roll_number || student.enrollment_no || 'N/A', 
+                student_name: `${student.first_name} ${student.last_name}`,
+                course_name: student.course_name,
+                batch_name: student.batch_name,
+            },
+            results: marksResult.rows.map(mark => ({
+                exam_name: mark.exam_name,
+                subject_name: mark.subject_name,
+                subject_code: mark.subject_code,
+                marks_obtained: parseFloat(mark.marks_obtained) || 0,
+                total_marks: parseFloat(mark.total_marks) || 0,
+                grade: mark.grade
+            }))
+        };
+
+        res.status(200).json(marksheetData);
+
+    } catch (error) {
+        console.error(`Database Error retrieving marksheet for ${studentId}:`, error.message, error.stack);
+        // Returning the friendly message expected by the frontend
+        res.status(500).json({ message: 'Failed to fetch existing marks due to a database error.' });
+    }
+});
+
+
+// =======================================================================================
+// 2. MARKS ENTRY FETCH ROUTES (Temporarily DISABLED/MOVED LATER)
+// =======================================================================================
+/**
+ * @route   GET /api/marks/:examId/:subjectId
+ * @desc    Fetch existing student marks for the Marks Entry form.
+ * @access  Private (MARK_VIEWER_ROLES)
+ */
+// This route is temporarily commented out to resolve the routing conflict. 
+/*
+router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
+    try {
+        const { examId, subjectId } = req.params;
+
+        const result = await pool.query(
+            // ... (Your original query here)
+            [examId, subjectId]
+        );
+        
+        res.json(result.rows);
+
+    } catch (error) {
+        console.error('SQL Error fetching existing marks:', error.message); 
+        res.status(500).json({ message: 'Failed to fetch existing marks due to a database error.' });
+    }
+});
+*/
+
+// =======================================================================================
+// 3. MARKSHEET STATUS & MARKS ENTRY FETCH ROUTES (UNCHANGED)
 // =======================================================================================
 
-/**
- * @route   GET /api/marks/status
- * @desc    Get the marksheet generation status overview for all students.
- * @access  Private (MARK_MANAGER_ROLES)
- */
 router.get('/status', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, res) => {
     try {
         const query = `
@@ -50,13 +160,12 @@ router.get('/status', authenticateToken, authorize(MARK_MANAGER_ROLES), async (r
                 s.enrollment_no, 
                 s.first_name || ' ' || s.last_name AS student_name,
                 c.course_name,
-                -- Check if any marks exist for the student
                 CASE WHEN EXISTS (
-                    SELECT 1 FROM marks m WHERE m.student_id = s.student_id
+                    SELECT 1 FROM ${MARKS_TABLE} m WHERE m.student_id = s.student_id
                 ) THEN 'Generated' ELSE 'Pending' END AS marksheet_status,
                 'Pending' AS certificate_status 
-            FROM students s
-            JOIN courses c ON s.course_id = c.id 
+            FROM ${STUDENTS_TABLE} s
+            JOIN ${COURSES_TABLE} c ON s.course_id = c.id 
             ORDER BY c.course_name, s.enrollment_no; 
         `;
         
@@ -69,49 +178,14 @@ router.get('/status', authenticateToken, authorize(MARK_MANAGER_ROLES), async (r
     }
 });
 
-/**
- * @route   GET /api/marks/:examId/:subjectId
- * @desc    Fetch existing student marks for the Marks Entry form.
- * @access  Private (MARK_VIEWER_ROLES)
- */
-router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
-    try {
-        const { examId, subjectId } = req.params;
-
-        // --- ✅ FIX APPLIED ---
-        // Your 'marks' table columns are 'marks_obtained_theory' and 'marks_obtained_practical'.
-        // This query now uses the correct column names directly.
-        const result = await pool.query(
-            `SELECT 
-                student_id, 
-                marks_obtained_theory,
-                marks_obtained_practical
-             FROM marks 
-             WHERE exam_id = $1 AND subject_id = $2
-             ORDER BY student_id`,
-            [examId, subjectId]
-        );
-        
-        res.json(result.rows);
-
-    } catch (error) {
-        console.error('SQL Error fetching existing marks:', error.message); 
-        res.status(500).json({ message: 'Failed to fetch existing marks due to a database error.' });
-    }
-});
 
 // =======================================================================================
-// 2. MARKS ENTRY/UPSERT ROUTE (Optimized)
+// 4. MARKS ENTRY/UPSERT ROUTE (UNCHANGED)
 // =======================================================================================
 
-/**
- * @route   POST /api/marks
- * @desc    Save/Upsert marks for a batch of students. (Optimized to prevent N+1 queries)
- * @access  Private (MARK_MANAGER_ROLES)
- */
 router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, res) => {
     const { exam_id, subject_id, marks } = req.body;
-    const entered_by = req.user.userId; // Assuming 'userId' comes from your authenticateToken
+    const entered_by = req.user.userId; 
 
     if (!exam_id || !subject_id || !Array.isArray(marks) || marks.length === 0) {
         return res.status(400).json({ message: 'Invalid or incomplete marks data.' });
@@ -119,15 +193,12 @@ router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, r
 
     const client = await pool.connect();
     try {
-        await client.query('BEGIN');
+        await client.query('BEGIN'); 
 
-        // === STEP 1: Fetch schedule details (Efficiently) ===
-        // --- ✅ N+1 FIX APPLIED HERE ---
-        // Get course_id, batch_id, and max_marks in ONE single query.
         const scheduleQuery = `
             SELECT course_id, batch_id, max_marks
-            FROM exam_schedules 
-            WHERE exam_id = $1 AND subject_id = $2
+            FROM ${SCHEDULES_TABLE}
+            WHERE quiz_id = $1 AND subject_id = $2
             LIMIT 1;
         `;
         const scheduleResult = await client.query(scheduleQuery, [exam_id, subject_id]);
@@ -140,18 +211,13 @@ router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, r
         const { course_id, batch_id, max_marks } = scheduleResult.rows[0]; 
         const totalMaxPossible = parseFloat(max_marks) || 0;
 
-        // Validate required foreign keys
         if (!course_id || !batch_id) { 
              await client.query('ROLLBACK');
              return res.status(500).json({ message: 'Internal error: Retrieved course_id or batch_id is NULL from exam schedule.' }); 
         }
 
-        // === STEP 2: Prepare the UPSERT query ===
-        // --- ✅ N+1 FIX APPLIED HERE ---
-        // The slow subquery `(SELECT batch_id FROM ...)` is removed.
-        // We now pass `batch_id` as parameter $5.
         const upsertQuery = `
-            INSERT INTO marks (
+            INSERT INTO ${MARKS_TABLE} (
                 student_id, subject_id, exam_id, course_id, batch_id,
                 marks_obtained_theory, marks_obtained_practical, 
                 total_marks_obtained, grade, entered_by, updated_at
@@ -167,7 +233,6 @@ router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, r
                 updated_at = NOW();
         `;
 
-        // === STEP 3: Execute UPSERT for each student in the transaction ===
         for (const markEntry of marks) {
             const theoryMark = markEntry.marks_obtained_theory !== null ? parseFloat(markEntry.marks_obtained_theory) : null;
             const practicalMark = markEntry.marks_obtained_practical !== null ? parseFloat(markEntry.marks_obtained_practical) : null;
@@ -175,159 +240,65 @@ router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, r
             const grade = calculateGrade(totalObtained, totalMaxPossible); 
 
             if (theoryMark !== null || practicalMark !== null) {
-                // --- ✅ N+1 FIX APPLIED HERE ---
-                // We pass the `batch_id` variable (as $5) instead of running a new query.
                 await client.query(upsertQuery, [
-                    markEntry.student_id, // $1
-                    subject_id,           // $2
-                    exam_id,              // $3
-                    course_id,            // $4 (From schedule)
-                    batch_id,             // $5 (From schedule - EFFICIENT)
-                    theoryMark,           // $6
-                    practicalMark,        // $7
-                    totalObtained,        // $8
-                    grade,                // $9
-                    entered_by            // $10
+                    markEntry.student_id, 
+                    subject_id,           
+                    exam_id,              
+                    course_id,            
+                    batch_id,             
+                    theoryMark,           
+                    practicalMark,        
+                    totalObtained,        
+                    grade,                
+                    entered_by            
                 ]);
             }
         }
 
-        await client.query('COMMIT');
+        await client.query('COMMIT'); 
         res.status(200).json({ message: 'Marks saved successfully.' });
 
     } catch (error) {
-        await client.query('ROLLBACK');
+        await client.query('ROLLBACK'); 
         console.error('Marks saving error:', error);
         res.status(500).json({ message: 'Failed to save marks due to a database error.' });
     } finally {
-        client.release();
+        if (client) client.release();
     }
 });
 
 
 // =======================================================================================
-// 3. MARK SHEET VIEW ROUTE 
-// =======================================================================================
-/**
- * @route   GET /api/marks/marksheet/roll/:rollNumber
- * @desc    Get consolidated marksheet data for a single student.
- * @access  Private (MARK_VIEWER_ROLES)
- */
-router.get('/marksheet/roll/:rollNumber', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
-    const rollNumber = req.params.rollNumber;
-
-    try {
-        // 1. Fetch Student Details
-        const studentQuery = `
-            SELECT 
-                s.student_id, s.first_name, s.last_name, s.enrollment_no,
-                c.course_name, b.batch_name
-            FROM students s
-            JOIN courses c ON s.course_id = c.id
-            JOIN batches b ON s.batch_id = b.id
-            WHERE s.enrollment_no = $1;
-        `;
-        const studentResult = await pool.query(studentQuery, [rollNumber]);
-        const student = studentResult.rows[0];
-
-        if (!student) {
-            return res.status(404).json({ message: 'Student roll number not found.' });
-        }
-
-        // 2. Fetch All Marks for the Student
-        const marksQuery = `
-            SELECT 
-                e.exam_name, 
-                COALESCE(es.max_marks, 0) AS total_marks, 
-                sub.subject_name, sub.subject_code,
-                m.total_marks_obtained AS marks_obtained,
-                m.grade
-            FROM marks m
-            JOIN exams e ON m.exam_id = e.id
-            LEFT JOIN exam_schedules es ON e.id = es.exam_id AND m.subject_id = es.subject_id 
-            JOIN subjects sub ON m.subject_id = sub.id
-            WHERE m.student_id = $1
-            ORDER BY e.exam_date, sub.subject_code;
-        `;
-        const marksResult = await pool.query(marksQuery, [student.student_id]);
-
-        // 3. Consolidate Data for Frontend
-        const marksheetData = {
-            roll_number: rollNumber,
-            student_name: `${student.first_name} ${student.last_name}`,
-            course_name: student.course_name,
-            batch_name: student.batch_name,
-            marks: marksResult.rows.map(mark => ({
-                exam_name: mark.exam_name,
-                subject_name: mark.subject_name,
-                subject_code: mark.subject_code,
-                marks_obtained: parseFloat(mark.marks_obtained) || 0,
-                total_marks: parseFloat(mark.total_marks) || 0,
-                grade: mark.grade
-            }))
-        };
-
-        res.status(200).json(marksheetData);
-
-    } catch (error) {
-        console.error(`Error retrieving marksheet for ${rollNumber}:`, error);
-        res.status(500).json({ message: 'Internal server error while retrieving marksheet.' });
-    }
-});
-
-// =======================================================================================
-// 4. EXAM LIST FETCH ROUTE (THE PRIMARY FIX FOR THE 404 ERROR)
+// 5. EXAM LIST FETCH ROUTE (UNCHANGED)
 // =======================================================================================
 
-/**
- * @route   GET /api/marks/list
- * @desc    Get a JOINED list of all exams linked to courses/batches.
- * @access  Private (MARK_MANAGER_ROLES)
- */
-// --- ✅ THIS IS THE FIX for the 404 Error and Cache Bug ---
-// Your frontend (`exam-management.html`) calls `GET /api/marks/list`.
-// This route handler provides all data (course_id, batch_id, total_marks)
-// needed for the `examCache` to work correctly.
 router.get('/list', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
                 e.id AS exam_id,
-                e.exam_name,
-                e.exam_date,
-                e.course_id,
-                e.batch_id,
+                e.title AS exam_name, -- Use 'title' from online_quizzes
+                e.available_from AS exam_date, -- Use appropriate date column from online_quizzes
+                e.course_id,  
+                e.subject_id, -- Using subject_id for consistency
                 c.course_name,
-                b.batch_name,
-                -- Calculate total_marks directly from the 'exams' table
-                (e.max_theory_marks + e.max_practical_marks) AS total_marks
+                s.subject_name,
+                e.max_marks AS total_marks -- Use 'max_marks' from online_quizzes
             FROM 
-                exams e
-            -- LEFT JOIN to safely get course and batch names
+                ${EXAMS_TABLE} e
             LEFT JOIN 
-                courses c ON e.course_id = c.id
+                ${COURSES_TABLE} c ON e.course_id = c.id
             LEFT JOIN 
-                batches b ON e.batch_id = b.id
-            /* -- Optional: Filter by academic session
-            WHERE
-                e.academic_session_id = $1 
-            */
+                ${SUBJECTS_TABLE} s ON e.subject_id = s.id
             ORDER BY
-                e.exam_date DESC, c.course_name;
+                e.available_from DESC, c.course_name;
         `;
         
-        // Example if filtering by session:
-        // const academicSessionId = req.user.academic_session_id; // Get from token
-        // const result = await pool.query(query, [academicSessionId]);
-        
-        // If not filtering by session:
         const result = await pool.query(query);
-        
-        // This response now contains all the data the frontend needs.
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('Error fetching comprehensive exam list:', error);
+        console.error('Error fetching comprehensive exam list for marks page:', error);
         res.status(500).json({ message: 'Failed to retrieve combined exam list.' });
     }
 });

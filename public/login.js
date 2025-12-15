@@ -38,23 +38,25 @@ document.getElementById('login-form').addEventListener('submit', async function(
             localStorage.setItem('user-role', data.role);
             localStorage.setItem('user-name', data.username);
             
-            // --- B. Save IDs (Handling the "user-id" format from server) ---
-            // The server sends 'user-id' (with a dash), so we use bracket notation
+            // --- B. Save IDs ---
             const userId = data['user-id'] || data.userId || data.reference_id;
             if (userId) {
                 localStorage.setItem('profile-id', userId); 
+            }
 
-                // ✅ CRITICAL FIX: Save Student ID if the user is a student
-                if (data.role === 'Student') {
-                    // This ensures other student-specific modules (like exam schedule) find the ID.
-                    localStorage.setItem('student-id', userId); 
-                }
+            // ✅ CRITICAL FIX: Save Student ID using the authoritative value from the server response
+            if (data.role === 'Student' && data.student_id) {
+                // Server (auth.js) sends the student's actual UUID in data.student_id
+                localStorage.setItem('student_id', data.student_id); 
+            } else {
+                // Ensure no stale student_id is left if the user is not a student
+                localStorage.removeItem('student_id');
             }
 
             // --- C. Save Configuration IDs ---
             localStorage.setItem('active_session_id', data.activeSessionId);
             
-            // Save Branch ID safely (if empty string, save empty string)
+            // Save Branch ID safely
             localStorage.setItem('active_branch_id', data.userBranchId || '');
 
             // --- D. Dynamic Redirection based on Role ---

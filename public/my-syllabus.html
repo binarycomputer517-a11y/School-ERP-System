@@ -33,7 +33,7 @@
 
     <script>
         const token = localStorage.getItem('erp-token');
-        // ⭐ UPDATED: Use 'profile-id' for consistency
+        // ⭐ UPDATED: Using 'profile-id' for student ID consistency across the application
         const studentId = localStorage.getItem('profile-id'); 
 
         // --- Helper function for authenticated API calls ---
@@ -42,8 +42,10 @@
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) {
-                // Check for Unauthorized status, consistent with other scripts
+                // Handle unauthorized/expired session
                 if (response.status === 401 || response.status === 403) {
+                     // Optionally redirect to login page here for a smoother UX
+                     // window.location.href = '/login.html';
                      throw new Error('Session expired or unauthorized. Please log in again.');
                 }
                 throw new Error(`API call failed with status: ${response.status}.`);
@@ -57,7 +59,6 @@
         async function loadSyllabus() {
             const syllabusList = document.getElementById('syllabus-list');
             
-            // Check based on the unified key
             if (!studentId || !token) {
                 syllabusList.innerHTML = '<p class="text-danger">Error: Not logged in or Profile ID missing.</p>';
                 return;
@@ -65,7 +66,7 @@
             
             try {
                 // 1. Fetch Student Profile to get course_id and course_name
-                // Uses your existing API: GET /api/students/:id
+                syllabusList.innerHTML = '<p class="text-info">Fetching profile...</p>';
                 const studentData = await handleApi(`/api/students/${studentId}`);
                 const courseId = studentData.course_id;
                 
@@ -75,7 +76,7 @@
                 }
 
                 // 2. Fetch Subjects linked to the Course ID
-                // Uses your existing API: GET /api/academicswithfees/courses/${courseId}/subjects
+                syllabusList.innerHTML = '<p class="text-info">Fetching subjects...</p>';
                 const subjects = await handleApi(`/api/academicswithfees/courses/${courseId}/subjects`);
                 
                 // 3. Render the list of subjects
@@ -88,7 +89,7 @@
                 courseHeader.className = 'mb-3 text-secondary';
                 courseHeader.innerHTML = `Subjects for Course: <strong>${studentData.course_name || 'N/A'}</strong>`;
                 
-                syllabusList.innerHTML = ''; // Clear the "Loading..." message
+                syllabusList.innerHTML = ''; // Clear the "Fetching..." message
                 syllabusList.appendChild(courseHeader);
                 
                 const ul = document.createElement('ul');
@@ -100,7 +101,7 @@
                             <strong class="text-primary">${subject.subject_name}</strong>
                             <span class="text-muted ms-2">(${subject.subject_code})</span>
                         </div>
-                        <a href="/download-syllabus/${subject.subject_id}" class="btn btn-sm btn-outline-primary">
+                        <a href="/download-syllabus/${subject.subject_id}" class="btn btn-sm btn-outline-primary" target="_blank">
                             Download Syllabus PDF
                         </a>
                     </li>
@@ -110,7 +111,7 @@
 
             } catch (error) {
                 console.error("Failed to load syllabus:", error);
-                syllabusList.innerHTML = `<p class="text-danger">Failed to load syllabus: ${error.message}. Please check your network or login status.</p>`;
+                syllabusList.innerHTML = `<p class="text-danger">Failed to load syllabus: ${error.message}.</p>`;
             }
         }
 
