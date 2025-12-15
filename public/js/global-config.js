@@ -96,6 +96,9 @@ function applySettingsToUI(config) {
             document.getElementsByTagName('head')[0].appendChild(link);
         }
         link.href = config.school_logo_path;
+        
+        // 🚨 FIX 1: Store Logo Path in localStorage for other scripts like view-transcript.html
+        localStorage.setItem('school-logo-path', config.school_logo_path); 
     }
 
     // --- B. Currency Formatting (FIXED) ---
@@ -122,10 +125,6 @@ function applySettingsToUI(config) {
     // Globally define a currency formatter function for other scripts
     window.formatCurrency = (amount) => {
         if (amount === undefined || amount === null || isNaN(amount)) return `${symbol} 0.00`;
-        
-        // Convert to Number, fix to 2 decimal places (returns string), then apply locale formatting
-        // ✅ FIX: Apply locale string formatting to the numerical value, using grouping and 2 decimal places.
-        // Using Number.toFixed(2) + toLocaleString() is complex, better to use Intl.NumberFormat for clean display:
         
         const formatter = new Intl.NumberFormat(locale, {
             minimumFractionDigits: 2,
@@ -154,6 +153,11 @@ function applySettingsToUI(config) {
     for (const key in identityMap) {
         if (config[key]) {
             document.querySelectorAll(identityMap[key]).forEach(el => el.innerText = config[key]);
+            
+            // 🚨 FIX 2: Store School Name in localStorage for view-transcript.html watermark/header
+            if (key === 'school_name') {
+                 localStorage.setItem('school-name', config[key]); 
+            }
         }
     }
     

@@ -89,9 +89,10 @@ const placementsRouter = require('./routes/placements');
 const healthRouter = require('./routes/health');
 
 // 🚀 MERGED ROUTER IMPORTS & FIXES
+// 🚨 FIX 1: Import the dedicated exams router
+const examsRouter = require('./routes/exams'); 
 const examMarksRouter = require('./routes/exam_marks'); 
 const quizzesRouter = require('./routes/quizzes'); 
-// 🚨 CRITICAL FIX: Import the new dedicated transcript router
 const transcriptRoutes = require('./routes/transcript'); 
 
 
@@ -190,7 +191,7 @@ app.use('/api/ptm', ptmRouter);
 app.use('/api/placements', placementsRouter);
 
 // Exam Modules
-app.use('/api/exams', examMarksRouter);
+app.use('/api/exams', examsRouter); // <-- ✅ FIX 2: Mount the correct examsRouter here
 app.use('/api/online-exam', onlineExamRouter);
 app.use('/api/marks', examMarksRouter); 
 app.use('/api/quizzes', quizzesRouter); 

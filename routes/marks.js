@@ -1,307 +1,231 @@
-// routes/marks.js
+// routes/exams.js - Handles Exam and Schedule CRUD (Mounted under /api/exams)
 
 const express = require('express');
 const router = express.Router();
-const { pool } = require('../database'); 
-const { authenticateToken, authorize } = require('../authMiddleware'); 
+const { pool } = require('../database');
+const { authenticateToken, authorize } = require('../authMiddleware');
 
-// --- Roles Configuration ---
-const MARK_MANAGER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator'];
-// CRITICAL FIX: Adding 'Student' role to MARK_VIEWER_ROLES
-const MARK_VIEWER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student']; 
-
-// --- Table Constants (Using assumed names based on common ERP schemas) ---
-const EXAMS_TABLE = 'online_quizzes'; // Assuming exam details are stored here
-const SCHEDULES_TABLE = 'quiz_schedules'; // Assuming schedule details are stored here
-const MARKS_TABLE = 'marks';
-const STUDENTS_TABLE = 'students';
-const COURSES_TABLE = 'courses';
-const BATCHES_TABLE = 'batches';
-const SUBJECTS_TABLE = 'subjects';
-
-
-// =========================================================
-// HELPER: GRADE CALCULATION LOGIC (UNCHANGED)
-// =========================================================
-
-function calculateGrade(totalObtained, totalMax) {
-    if (totalMax === 0 || totalMax === null || totalObtained === null) {
-        return null; 
-    }
-    
-    const percentage = (totalObtained / totalMax) * 100; 
-    
-    if (percentage >= 90) return 'A+';
-    if (percentage >= 80) return 'A';
-    if (percentage >= 70) return 'B+';
-    if (percentage >= 60) return 'B';
-    if (percentage >= 50) return 'C';
-    if (percentage >= 40) return 'D';
-    return 'F'; 
-}
+// --- Role Definitions ---
+const EXAM_MANAGER_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
+const EXAM_VIEWER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Teacher', 'Student'];
 
 // =======================================================================================
-// 1. MARK SHEET VIEW ROUTE (CRITICAL FIX: RENAME AND TABLE NAMES)
+// 1. EXAM CRUD ROUTES
 // =======================================================================================
+
 /**
- * @route   GET /api/marks/student-transcript/:studentId  <-- New Route Name
- * @desc    Get consolidated marksheet data for a single student by UUID.
- * @access  Private (MARK_VIEWER_ROLES)
+ * @route   GET /api/exams/list
+ * @desc    Fetches a comprehensive list of all exams.
  */
-router.get('/student-transcript/:studentId', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
-    const studentId = req.params.studentId;
-
-    if (!studentId || studentId.length !== 36) {
-        return res.status(400).json({ message: 'Invalid Student ID format.' });
-    }
-    
-    try {
-        // 1. Fetch Student Details 
-        const studentQuery = `
-            SELECT 
-                s.student_id, s.first_name, s.last_name, s.enrollment_no, s.roll_number,
-                c.course_name, b.batch_name
-            FROM ${STUDENTS_TABLE} s
-            JOIN ${COURSES_TABLE} c ON s.course_id = c.id
-            JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
-            WHERE s.student_id = $1::uuid; 
-        `;
-        const studentResult = await pool.query(studentQuery, [studentId]);
-        const student = studentResult.rows[0];
-
-        if (!student) {
-            return res.status(404).json({ message: 'Student ID not found.' });
-        }
-
-        // 2. Fetch All Marks for the Student
-        const marksQuery = `
-            SELECT 
-                e.title AS exam_name, -- Use 'title' from online_quizzes table
-                COALESCE(es.max_marks, 0) AS total_marks, 
-                sub.subject_name, sub.subject_code,
-                m.total_marks_obtained AS marks_obtained,
-                m.grade
-            FROM ${MARKS_TABLE} m
-            -- 🚨 FIX: Joining with online_quizzes table 
-            JOIN ${EXAMS_TABLE} e ON m.exam_id = e.id
-            -- 🚨 FIX: Joining with quiz_schedules table
-            LEFT JOIN ${SCHEDULES_TABLE} es ON e.id = es.quiz_id AND m.subject_id = es.subject_id 
-            JOIN ${SUBJECTS_TABLE} sub ON m.subject_id = sub.id
-            WHERE m.student_id = $1::uuid 
-            ORDER BY e.created_at, sub.subject_code; -- Ordering by quiz creation time
-        `;
-        const marksResult = await pool.query(marksQuery, [studentId]);
-
-        // 3. Consolidate Data for Frontend
-        const marksheetData = {
-            student_info: {
-                student_id: student.student_id,
-                roll_number: student.roll_number || student.enrollment_no || 'N/A', 
-                student_name: `${student.first_name} ${student.last_name}`,
-                course_name: student.course_name,
-                batch_name: student.batch_name,
-            },
-            results: marksResult.rows.map(mark => ({
-                exam_name: mark.exam_name,
-                subject_name: mark.subject_name,
-                subject_code: mark.subject_code,
-                marks_obtained: parseFloat(mark.marks_obtained) || 0,
-                total_marks: parseFloat(mark.total_marks) || 0,
-                grade: mark.grade
-            }))
-        };
-
-        res.status(200).json(marksheetData);
-
-    } catch (error) {
-        console.error(`Database Error retrieving marksheet for ${studentId}:`, error.message, error.stack);
-        // Returning the friendly message expected by the frontend
-        res.status(500).json({ message: 'Failed to fetch existing marks due to a database error.' });
-    }
-});
-
-
-// =======================================================================================
-// 2. MARKS ENTRY FETCH ROUTES (Temporarily DISABLED/MOVED LATER)
-// =======================================================================================
-/**
- * @route   GET /api/marks/:examId/:subjectId
- * @desc    Fetch existing student marks for the Marks Entry form.
- * @access  Private (MARK_VIEWER_ROLES)
- */
-// This route is temporarily commented out to resolve the routing conflict. 
-/*
-router.get('/:examId/:subjectId', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
-    try {
-        const { examId, subjectId } = req.params;
-
-        const result = await pool.query(
-            // ... (Your original query here)
-            [examId, subjectId]
-        );
-        
-        res.json(result.rows);
-
-    } catch (error) {
-        console.error('SQL Error fetching existing marks:', error.message); 
-        res.status(500).json({ message: 'Failed to fetch existing marks due to a database error.' });
-    }
-});
-*/
-
-// =======================================================================================
-// 3. MARKSHEET STATUS & MARKS ENTRY FETCH ROUTES (UNCHANGED)
-// =======================================================================================
-
-router.get('/status', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, res) => {
+router.get('/list', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req, res) => {
     try {
         const query = `
             SELECT 
-                s.enrollment_no, 
-                s.first_name || ' ' || s.last_name AS student_name,
-                c.course_name,
-                CASE WHEN EXISTS (
-                    SELECT 1 FROM ${MARKS_TABLE} m WHERE m.student_id = s.student_id
-                ) THEN 'Generated' ELSE 'Pending' END AS marksheet_status,
-                'Pending' AS certificate_status 
-            FROM ${STUDENTS_TABLE} s
-            JOIN ${COURSES_TABLE} c ON s.course_id = c.id 
-            ORDER BY c.course_name, s.enrollment_no; 
+                e.id AS exam_id, e.exam_name, e.exam_type, e.exam_date, e.course_id, e.batch_id,
+                c.course_name, b.batch_name, b.batch_code,
+                (e.max_theory_marks + e.max_practical_marks) AS total_marks,
+                e.max_theory_marks, e.max_practical_marks
+            FROM exams e
+            LEFT JOIN courses c ON e.course_id = c.id
+            LEFT JOIN batches b ON e.batch_id = b.id
+            ORDER BY e.exam_date DESC, c.course_name;
         `;
-        
         const result = await pool.query(query);
         res.status(200).json(result.rows);
-
     } catch (error) {
-        console.error('Error fetching marksheet status overview:', error);
-        res.status(500).json({ message: 'Server error fetching marksheet status.' });
+        console.error('Error fetching comprehensive exam list:', error);
+        res.status(500).json({ message: 'Failed to retrieve combined exam list.' });
     }
 });
 
+/**
+ * @route   POST /api/exams
+ * @desc    Creates a new exam entry.
+ * 🚨 This is the dedicated Exam Creation route.
+ */
+router.post('/', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
+    const {
+        exam_name, exam_type, exam_date, is_midterm_assessment, academic_session_id,
+        course_id, batch_id, max_theory_marks, max_practical_marks
+    } = req.body;
 
-// =======================================================================================
-// 4. MARKS ENTRY/UPSERT ROUTE (UNCHANGED)
-// =======================================================================================
-
-router.post('/', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, res) => {
-    const { exam_id, subject_id, marks } = req.body;
-    const entered_by = req.user.userId; 
-
-    if (!exam_id || !subject_id || !Array.isArray(marks) || marks.length === 0) {
-        return res.status(400).json({ message: 'Invalid or incomplete marks data.' });
+    // 🚨 This validation must ONLY run when creating an exam.
+    if (!exam_name || !exam_date || !course_id || !batch_id || !academic_session_id) {
+        return res.status(400).json({ message: 'Missing required fields for exam creation: name, date, course, batch, or session.' });
     }
 
-    const client = await pool.connect();
     try {
-        await client.query('BEGIN'); 
-
-        const scheduleQuery = `
-            SELECT course_id, batch_id, max_marks
-            FROM ${SCHEDULES_TABLE}
-            WHERE quiz_id = $1 AND subject_id = $2
-            LIMIT 1;
-        `;
-        const scheduleResult = await client.query(scheduleQuery, [exam_id, subject_id]);
-
-        if (scheduleResult.rows.length === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Error: Cannot find Max Marks. Exam schedule is missing for this subject.' });
-        }
-
-        const { course_id, batch_id, max_marks } = scheduleResult.rows[0]; 
-        const totalMaxPossible = parseFloat(max_marks) || 0;
-
-        if (!course_id || !batch_id) { 
-             await client.query('ROLLBACK');
-             return res.status(500).json({ message: 'Internal error: Retrieved course_id or batch_id is NULL from exam schedule.' }); 
-        }
-
-        const upsertQuery = `
-            INSERT INTO ${MARKS_TABLE} (
-                student_id, subject_id, exam_id, course_id, batch_id,
-                marks_obtained_theory, marks_obtained_practical, 
-                total_marks_obtained, grade, entered_by, updated_at
+        const query = `
+            INSERT INTO exams (
+                exam_name, exam_type, exam_date, is_midterm_assessment, academic_session_id,
+                course_id, batch_id, max_theory_marks, max_practical_marks
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-            ON CONFLICT (student_id, subject_id, exam_id) 
-            DO UPDATE SET 
-                marks_obtained_theory = EXCLUDED.marks_obtained_theory,
-                marks_obtained_practical = EXCLUDED.marks_obtained_practical,
-                total_marks_obtained = EXCLUDED.total_marks_obtained,
-                grade = EXCLUDED.grade, 
-                entered_by = EXCLUDED.entered_by,
-                updated_at = NOW();
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id AS exam_id, exam_name;
         `;
+        
+        const newExam = await pool.query(query, [
+            exam_name, exam_type, exam_date, is_midterm_assessment || false, academic_session_id,
+            course_id, batch_id, max_theory_marks || 100, max_practical_marks || 0
+        ]);
 
-        for (const markEntry of marks) {
-            const theoryMark = markEntry.marks_obtained_theory !== null ? parseFloat(markEntry.marks_obtained_theory) : null;
-            const practicalMark = markEntry.marks_obtained_practical !== null ? parseFloat(markEntry.marks_obtained_practical) : null;
-            const totalObtained = (theoryMark || 0) + (practicalMark || 0);
-            const grade = calculateGrade(totalObtained, totalMaxPossible); 
-
-            if (theoryMark !== null || practicalMark !== null) {
-                await client.query(upsertQuery, [
-                    markEntry.student_id, 
-                    subject_id,           
-                    exam_id,              
-                    course_id,            
-                    batch_id,             
-                    theoryMark,           
-                    practicalMark,        
-                    totalObtained,        
-                    grade,                
-                    entered_by            
-                ]);
-            }
-        }
-
-        await client.query('COMMIT'); 
-        res.status(200).json({ message: 'Marks saved successfully.' });
+        res.status(201).json(newExam.rows[0]);
 
     } catch (error) {
-        await client.query('ROLLBACK'); 
-        console.error('Marks saving error:', error);
-        res.status(500).json({ message: 'Failed to save marks due to a database error.' });
+        console.error('Error creating exam:', error);
+        res.status(500).json({ message: 'Failed to create exam.' });
+    }
+});
+
+/**
+ * @route   DELETE /api/exams/:id
+ * @desc    Deletes an exam by its ID.
+ */
+router.delete('/:id', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
+    try {
+        const { id } = req.params;
+        await pool.query('DELETE FROM exams WHERE id = $1', [id]); 
+        res.status(200).json({ message: 'Exam deleted successfully.' });
+    } catch (error) {
+        console.error('Error deleting exam:', error);
+        res.status(500).json({ message: 'Failed to delete exam.' });
+    }
+});
+
+// =======================================================================================
+// 2. EXAM SCHEDULE CRUD ROUTES
+// =======================================================================================
+
+/**
+ * @route   GET /api/exams/schedule/:examId
+ * @desc    Fetches the schedule for a specific exam.
+ */
+router.get('/schedule/:examId', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req, res) => {
+    try {
+        const { examId } = req.params;
+        const query = `
+            SELECT 
+                es.id AS schedule_id, es.subject_id, s.subject_name, s.subject_code,
+                es.exam_date, es.start_time, es.end_time, es.room_number, es.max_marks
+            FROM exam_schedules es
+            JOIN subjects s ON es.subject_id = s.id
+            WHERE es.exam_id = $1
+            ORDER BY es.exam_date, es.start_time;
+        `;
+        const result = await pool.query(query, [examId]);
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Error fetching exam schedule:', error);
+        res.status(500).json({ message: 'Failed to fetch exam schedule.' });
+    }
+});
+
+/**
+ * @route   POST /api/exams/schedule
+ * @desc    Creates a new schedule entry for an exam subject.
+ */
+router.post('/schedule', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
+    const {
+        exam_id, course_id, batch_id, subject_id, exam_date,
+        room_number, start_time, end_time
+    } = req.body;
+
+    if (!exam_id || !course_id || !batch_id || !subject_id || !exam_date || !start_time || !end_time) {
+        return res.status(400).json({ message: 'Missing required schedule fields.' });
+    }
+
+    let client;
+    try {
+        client = await pool.connect();
+        await client.query('BEGIN'); 
+
+        const marksQuery = `
+            SELECT (max_theory_marks + max_practical_marks) AS derived_max_marks
+            FROM exams
+            WHERE id = $1::uuid;
+        `;
+        const marksResult = await client.query(marksQuery, [exam_id]);
+
+        if (marksResult.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Associated Exam not found.' });
+        }
+        const derived_max_marks = marksResult.rows[0].derived_max_marks;
+        
+        const query = `
+            INSERT INTO exam_schedules (
+                exam_id, course_id, batch_id, subject_id, exam_date,
+                room_number, start_time, end_time, max_marks
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            RETURNING id AS schedule_id;
+        `;
+        const newSchedule = await client.query(query, [
+            exam_id, course_id, batch_id, subject_id, exam_date,
+            room_number, start_time, end_time, derived_max_marks 
+        ]);
+        
+        await client.query('COMMIT'); 
+        res.status(201).json(newSchedule.rows[0]);
+
+    } catch (error) {
+        if (client) await client.query('ROLLBACK'); 
+        if (error.code === '23505') {
+            return res.status(409).json({ message: 'This subject is already scheduled for this exam and batch.' });
+        }
+        console.error('Error creating schedule entry:', error);
+        res.status(500).json({ message: 'Failed to create schedule entry.', error: error.message });
     } finally {
         if (client) client.release();
     }
 });
 
+/**
+ * @route   PUT /api/exams/schedule/:scheduleId
+ * @desc    Updates an existing schedule entry.
+ */
+router.put('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
+    const { scheduleId } = req.params;
+    const { subject_id, exam_date, room_number, start_time, end_time } = req.body;
 
-// =======================================================================================
-// 5. EXAM LIST FETCH ROUTE (UNCHANGED)
-// =======================================================================================
-
-router.get('/list', authenticateToken, authorize(MARK_MANAGER_ROLES), async (req, res) => {
     try {
         const query = `
-            SELECT 
-                e.id AS exam_id,
-                e.title AS exam_name, -- Use 'title' from online_quizzes
-                e.available_from AS exam_date, -- Use appropriate date column from online_quizzes
-                e.course_id,  
-                e.subject_id, -- Using subject_id for consistency
-                c.course_name,
-                s.subject_name,
-                e.max_marks AS total_marks -- Use 'max_marks' from online_quizzes
-            FROM 
-                ${EXAMS_TABLE} e
-            LEFT JOIN 
-                ${COURSES_TABLE} c ON e.course_id = c.id
-            LEFT JOIN 
-                ${SUBJECTS_TABLE} s ON e.subject_id = s.id
-            ORDER BY
-                e.available_from DESC, c.course_name;
+            UPDATE exam_schedules
+            SET 
+                subject_id = $1, exam_date = $2, room_number = $3,
+                start_time = $4, end_time = $5, updated_at = NOW()
+            WHERE id = $6
+            RETURNING *;
         `;
+        const updatedSchedule = await pool.query(query, [
+            subject_id, exam_date, room_number, start_time, end_time, scheduleId
+        ]);
         
-        const result = await pool.query(query);
-        res.status(200).json(result.rows);
+        if (updatedSchedule.rows.length === 0) {
+            return res.status(404).json({ message: 'Schedule entry not found.' });
+        }
+        res.status(200).json(updatedSchedule.rows[0]);
 
     } catch (error) {
-        console.error('Error fetching comprehensive exam list for marks page:', error);
-        res.status(500).json({ message: 'Failed to retrieve combined exam list.' });
+        console.error('Error updating schedule entry:', error);
+        res.status(500).json({ message: 'Failed to update schedule entry.' });
     }
 });
 
+/**
+ * @route   DELETE /api/exams/schedule/:scheduleId
+ * @desc    Deletes an existing schedule entry.
+ */
+router.delete('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
+    try {
+        const { scheduleId } = req.params;
+        await pool.query('DELETE FROM exam_schedules WHERE id = $1', [scheduleId]);
+        res.status(200).json({ message: 'Schedule entry deleted successfully.' });
+    } catch (error) {
+        console.error('Error deleting schedule entry:', error);
+        res.status(500).json({ message: 'Failed to delete schedule entry.' });
+    }
+});
 
 module.exports = router;

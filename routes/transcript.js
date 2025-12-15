@@ -1,4 +1,4 @@
-// routes/transcript.js
+// routes/transcript.js (UPDATED FINAL VERSION)
 
 const express = require('express');
 const router = express.Router();
@@ -7,7 +7,8 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Constants (Ensure these names match your PostgreSQL schema) ---
 const MARK_VIEWER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student']; 
-const EXAMS_TABLE = 'online_quizzes'; 
+const EXAMS_TABLE = 'exams'; // 🚨 FIX 1: Use the correct table name 'exams'
+const SCHEDULES_TABLE = 'exam_schedules'; // 🚨 FIX 2: Need schedules table to get max_marks reliably
 const MARKS_TABLE = 'marks';
 const STUDENTS_TABLE = 'students';
 const COURSES_TABLE = 'courses';
@@ -16,7 +17,7 @@ const SUBJECTS_TABLE = 'subjects';
 
 
 // =========================================================
-// HELPER: GRADE CALCULATION LOGIC 
+// HELPER: GRADE CALCULATION LOGIC (UNCHANGED)
 // =========================================================
 function calculateGrade(totalObtained, totalMax) {
     if (totalMax === 0 || totalMax === null || totalObtained === null) {
@@ -37,11 +38,7 @@ function calculateGrade(totalObtained, totalMax) {
 // =========================================================
 // GET: Transcript/Marksheet by Student ID
 // =========================================================
-/**
- * @route   GET /api/transcript/:studentId  
- * @desc    Get consolidated marksheet data for a single student by UUID.
- * @access  Private (MARK_VIEWER_ROLES)
- */
+
 router.get('/:studentId', authenticateToken, authorize(MARK_VIEWER_ROLES), async (req, res) => {
     const studentId = req.params.studentId;
 
@@ -50,7 +47,7 @@ router.get('/:studentId', authenticateToken, authorize(MARK_VIEWER_ROLES), async
     }
     
     try {
-        // 1. Fetch Student Details 
+        // 1. Fetch Student Details (UNCHANGED)
         const studentQuery = `
             SELECT 
                 s.student_id, s.first_name, s.last_name, s.enrollment_no, s.roll_number,
@@ -70,23 +67,30 @@ router.get('/:studentId', authenticateToken, authorize(MARK_VIEWER_ROLES), async
         // 2. Fetch All Marks for the Student
         const marksQuery = `
             SELECT 
-                -- Use COALESCE to display a message if the linked entry is missing (due to LEFT JOIN)
-                COALESCE(e.title, 'Exam Missing') AS exam_name, 
-                COALESCE(e.max_marks, 0) AS total_marks, 
+                -- 🚨 FIX 3: Use e.exam_name from the 'exams' table
+                COALESCE(e.exam_name, 'Exam Missing') AS exam_name, 
+                
+                -- 🚨 FIX 4: Join schedules table to get the max marks recorded during scheduling
+                COALESCE(es.max_marks, 0) AS total_marks, 
+                
                 COALESCE(sub.subject_name, 'Subject Missing') AS subject_name, 
                 sub.subject_code,
                 m.total_marks_obtained AS marks_obtained,
                 m.grade
             FROM ${MARKS_TABLE} m
-            -- 🚨 CRITICAL FIX: Changed to LEFT JOIN to ensure marks are returned even if linked tables are empty/mismatched
-            LEFT JOIN ${EXAMS_TABLE} e ON m.exam_id = e.id
+            -- 🚨 FIX 5: Join with the correct EXAMS_TABLE ('exams') using INNER JOIN for reliable exam names
+            JOIN ${EXAMS_TABLE} e ON m.exam_id = e.id
+            
+            -- 🚨 FIX 6: LEFT JOIN with SCHEDULES_TABLE to get max_marks for the subject in that exam
+            LEFT JOIN ${SCHEDULES_TABLE} es ON e.id = es.exam_id AND m.subject_id = es.subject_id
+            
             LEFT JOIN ${SUBJECTS_TABLE} sub ON m.subject_id = sub.id
             WHERE m.student_id = $1::uuid 
-            ORDER BY e.created_at, sub.subject_code; 
+            ORDER BY e.exam_date, sub.subject_code; 
         `;
         const marksResult = await pool.query(marksQuery, [studentId]);
 
-        // 3. Consolidate Data for Frontend
+        // 3. Consolidate Data for Frontend (UNCHANGED)
         const marksheetData = {
             student_info: {
                 student_id: student.student_id,

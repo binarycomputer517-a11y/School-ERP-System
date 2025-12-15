@@ -8,7 +8,7 @@
     <style>
         body { background-color: #f0f2f8; font-family: sans-serif; }
         .container { max-width: 800px; margin-top: 50px; }
-        .card { border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); }
+        .card { border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); position: relative; } 
         h1 { color: #000080; font-weight: bold; }
         .loader-container { 
             text-align: center; 
@@ -17,11 +17,64 @@
             font-size: 1.1em;
         }
         .text-primary-custom { color: #000080 !important; }
+
+        /* --- New Styles for Header and Watermark --- */
+        .header-area {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #EEE;
+        }
+        .header-logo {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .header-logo img {
+            max-height: 80px;
+            margin-right: 15px;
+        }
+        .school-name {
+            font-size: 1.6em;
+            font-weight: 700;
+            color: #000080;
+            line-height: 1.2;
+            text-align: center;
+        }
+        
+        /* Watermark Style (Appears behind content) */
+        .watermark {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) rotate(-30deg);
+            color: rgba(0, 0, 0, 0.08); /* Very light grey */
+            font-size: 8em;
+            font-weight: 900;
+            z-index: 1; 
+            pointer-events: none; 
+            white-space: nowrap;
+        }
+        @media print {
+            .watermark {
+                color: rgba(0, 0, 0, 0.15); 
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card p-4">
+            
+            <div class="watermark" id="watermark-text">DRAFT</div>
+            <div class="header-area">
+                <div class="header-logo">
+                    <img id="school-logo" class="global-school-logo" src="" alt="School Logo" style="display:none;">
+                    <div class="school-name global-school-name" id="school-full-name">Academic Transcript</div>
+                </div>
+            </div>
             <h1 class="mb-4 text-primary-custom">My Official Transcript</h1>
             
             <div id="loading-area" class="loader-container">
@@ -49,19 +102,24 @@
         const STUDENT_ID_KEY = 'profile-id'; 
         
         /**
-         * Helper function to perform authenticated API call.
-         * NOTE: This handleApi function is redundant since exam-manager-client.js 
-         * exports fetchWithAuth. We will keep it but it's not strictly necessary.
+         * Function to load School Info from localStorage and apply it to the Watermark.
+         * The Header elements (.global-school-logo, .global-school-name) are handled 
+         * by global-config.js, this script only ensures the watermark is set quickly.
          */
+        function applyWatermarkInfo() {
+            const watermarkElement = document.getElementById('watermark-text');
+            const schoolName = localStorage.getItem('school-name') || 'DRAFT';
+            
+            // Set Watermark text
+            watermarkElement.textContent = schoolName.toUpperCase();
+        }
+
         async function handleApi(url, token) {
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             
-            // 🚨 DEBUG FIX: The automatic logout is TEMPORARILY DISABLED here to diagnose
             if (response.status === 401 || response.status === 403) {
-                 // localStorage.clear(); 
-                 // window.location.href = '/login.html'; 
                  console.error('API Call Unauthorized (401/403). Token expired or invalid.');
                  throw new Error('Unauthorized Access. Please log out and log in again.');
             }
@@ -74,6 +132,9 @@
         }
 
         async function initViewTranscript() {
+            // Apply watermark as soon as possible
+            applyWatermarkInfo(); 
+            
             // 1. Get IDs
             const studentId = localStorage.getItem(STUDENT_ID_KEY) || localStorage.getItem('student-id');
             const token = localStorage.getItem('erp-token');
@@ -92,7 +153,6 @@
             }
             
             // Wait for external script to ensure window.viewMarksheet is available
-            // This loop is crucial because exam-manager-client.js might load slightly later
             if (typeof window.viewMarksheet !== 'function') {
                 setTimeout(initViewTranscript, 100); 
                 return;
@@ -101,7 +161,7 @@
             try {
                 
                 // 2. Execute the marksheet generation function, passing studentId directly
-                const success = await window.viewMarksheet(studentId); // PASS STUDENT ID (UUID)
+                const success = await window.viewMarksheet(studentId); 
                 
                 // 3. Update the UI 
                 loadingArea.innerHTML = `
@@ -111,7 +171,6 @@
                 `;
                 
                 if (success === false) {
-                     // This indicates that the API returned 200, but results were empty.
                      throw new Error("Transcript generation failed on the client side.");
                 }
 
