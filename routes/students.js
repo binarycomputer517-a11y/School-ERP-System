@@ -1,5 +1,5 @@
 // routes/students.js
-// TRUE FULL & FINAL VERSION WITH MULTER INTEGRATION
+// TRUE FULL & FINAL VERSION WITH MULTER INTEGRATION AND QUERY FIXES
 
 const express = require('express');
 const router = express.Router();
@@ -250,10 +250,10 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
                 s.*, 
                 u.username, 
                 u.role,
-                c.course_name -- ✅ FIX: Include course_name
+                c.course_name
             FROM ${STUDENTS_TABLE} s
             LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
-            LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id -- ✅ FIX: Join COURSES table
+            LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id 
             WHERE s.student_id = $1::uuid OR s.user_id = $1::uuid;
         `;
         const result = await pool.query(query, [safeId]);
@@ -500,7 +500,8 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
     try {
         const query = `
             SELECT * FROM book_circulation 
-            WHERE student_id = $1::uuid AND status = 'Issued'
+            WHERE student_id = $1::uuid 
+              AND return_date IS NULL  -- ✅ FIX APPLIED: Check for NULL return_date instead of a missing 'status' column
             ORDER BY issue_date DESC;
         `;
         try {
@@ -528,7 +529,7 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
             SELECT 
                 t.full_name, s.subject_name, t.email
             FROM teacher_allocations ta
-            JOIN teachers t ON ta.teacher_ref_id = t.id 
+            JOIN teachers t ON ta.teacher_id = t.id  -- ✅ FIX APPLIED: Changed ta.teacher_ref_id to ta.teacher_id
             JOIN subjects s ON ta.subject_id = s.id
             JOIN students stu ON stu.batch_id = ta.batch_id
             WHERE stu.student_id = $1::uuid;

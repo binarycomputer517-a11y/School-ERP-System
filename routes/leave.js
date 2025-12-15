@@ -35,9 +35,21 @@ function calculateWorkingDays(startDate, endDate) {
     return workingDays;
 }
 
+// Helper: Safely convert string to UUID if possible, otherwise return null
+function toUUID(value) {
+    if (!value || typeof value !== 'string' || value.trim().length !== 36) {
+        return null;
+    }
+    // Simple regex for basic UUID format validation
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value)) {
+        return null;
+    }
+    return value.trim();
+}
+
 
 // =========================================================
-// 1. LEAVE APPLICATION (POST)
+// 1. LEAVE APPLICATION (POST) - UUID & Validation Fixes
 // =========================================================
 
 /**
@@ -49,10 +61,15 @@ router.post('/apply', authenticateToken, authorize(['Teacher', 'Student', 'Super
     const userId = req.user.userId;
     const userRole = req.user.role;
     
-    const { leave_type_id, start_date, end_date, reason } = req.body;
+    let { leave_type_id, start_date, end_date, reason } = req.body;
     
+    // CRITICAL FIX: Sanitize leave_type_id
+    if (leave_type_id === 'undefined' || leave_type_id === '') {
+        leave_type_id = null;
+    }
+
     if (!leave_type_id || !start_date || !end_date || !reason) {
-        return res.status(400).json({ message: 'Missing required fields (type, dates, reason).' });
+        return res.status(400).json({ message: 'Missing required fields (Leave Type, Dates, Reason).' });
     }
 
     const totalDays = calculateWorkingDays(start_date, end_date);
@@ -186,7 +203,7 @@ router.put('/approval/:applicationId', authenticateToken, authorize(APPROVER_ROL
 
 
 // =========================================================
-// 3. VIEWING ROUTES
+// 3. VIEWING ROUTES (User-Specific)
 // =========================================================
 
 /**
@@ -209,6 +226,37 @@ router.get('/types', authenticateToken, async (req, res) => {
 });
 
 /**
+ * @route   GET /api/leave/types/with-balance 
+ * @desc    Get all available leave types ALONGSIDE the logged-in user's current leave balances.
+ * @access  Private (Teacher, Student, Admin, Super Admin)
+ */
+router.get('/types/with-balance', authenticateToken, authorize(VIEWER_ROLES), async (req, res) => {
+    const userId = req.user.userId;
+
+    try {
+        const query = `
+            SELECT 
+                lt.id AS leave_type_id,
+                lt.name AS leave_type_name, 
+                lt.code AS type_code, 
+                lt.days_per_year AS allowance,
+                COALESCE(ulb.balance_days, lt.days_per_year) AS current_balance,
+                ulb.updated_at AS last_updated
+            FROM ${LEAVE_TYPES_TABLE} lt
+            LEFT JOIN ${LEAVE_BALANCE_TABLE} ulb ON ulb.leave_type_id = lt.id AND ulb.user_id = $1
+            WHERE lt.applicable_to = $2 OR lt.applicable_to = 'Both'
+            ORDER BY lt.name;
+        `;
+        const result = await pool.query(query, [userId, req.user.role]);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Types with Balance Fetch Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve leave types and balances.' });
+    }
+});
+
+
+/**
  * @route   GET /api/leave/balance
  * @desc    Get the logged-in user's current leave balances.
  * @access  Private (Teacher, Student, Admin, Super Admin)
@@ -219,6 +267,7 @@ router.get('/balance', authenticateToken, authorize(VIEWER_ROLES), async (req, r
     try {
         const query = `
             SELECT 
+                lt.id AS leave_type_id, -- Ensure ID is included for frontend dropdown value
                 lt.name AS leave_type, 
                 lt.code AS type_code, 
                 lt.days_per_year AS allowance,
@@ -275,10 +324,11 @@ router.get('/approvals/pending', authenticateToken, authorize(APPROVER_ROLES), a
     try {
         const query = `
             SELECT 
-                la.id, la.start_date, la.end_date, la.total_days, la.reason, la.status,
+                la.id, la.start_date, la.end_date, la.total_days, la.reason, la.status, la.created_at,
                 lt.name AS leave_type,
                 u.username AS applicant_name,
-                u.role AS applicant_role
+                u.role AS applicant_role,
+                u.id AS applicant_user_id
             FROM ${APPLICATIONS_TABLE} la
             JOIN ${LEAVE_TYPES_TABLE} lt ON la.leave_type_id = lt.id
             JOIN ${USERS_TABLE} u ON la.user_id = u.id
@@ -293,5 +343,103 @@ router.get('/approvals/pending', authenticateToken, authorize(APPROVER_ROLES), a
     }
 });
 
+
+// =========================================================
+// 4. ADMIN SEARCH ROUTES (For manage-leave.html) - NEW
+// =========================================================
+
+/**
+ * @route   GET /api/leave/admin/user-details/:userIdOrUsername
+ * @desc    Get leave balance and history for ANY user (Admin/Coordinator access).
+ * @access  Private (Admin, Coordinator, Super Admin)
+ */
+router.get('/admin/user-details/:userIdOrUsername', authenticateToken, authorize(APPROVER_ROLES), async (req, res) => {
+    const userIdOrUsername = req.params.userIdOrUsername;
+    
+    // Step 1: Find the actual user_id (UUID)
+    let targetUserId = toUUID(userIdOrUsername); 
+    let targetUserRole = req.user.role; // Default to the logged-in admin's role
+    let targetUsername = null;
+
+    if (!targetUserId) {
+        // If it's not a valid UUID, assume it's a username and look up the user.
+        try {
+            const userRes = await pool.query(`SELECT id, role, username FROM ${USERS_TABLE} WHERE username = $1 OR email = $1`, [userIdOrUsername]);
+            if (userRes.rowCount === 0) {
+                 return res.status(404).json({ message: 'Target user not found.' });
+            }
+            targetUserId = userRes.rows[0].id;
+            targetUserRole = userRes.rows[0].role;
+            targetUsername = userRes.rows[0].username;
+
+        } catch (error) {
+            console.error('Admin user lookup error:', error);
+            return res.status(500).json({ message: 'Failed to lookup target user.' });
+        }
+    } else {
+         // If it is a UUID, look up role and username for display
+         try {
+            const userRes = await pool.query(`SELECT role, username FROM ${USERS_TABLE} WHERE id = $1`, [targetUserId]);
+            if (userRes.rowCount > 0) {
+                targetUserRole = userRes.rows[0].role;
+                targetUsername = userRes.rows[0].username;
+            }
+        } catch (error) {
+            // Error is logged but we proceed with the balance/history lookup anyway.
+        }
+    }
+    
+    // Check if targetUserId is valid after lookup attempt
+    if (!targetUserId) {
+        return res.status(404).json({ message: 'Invalid User ID or Username format.' });
+    }
+
+
+    const client = await pool.connect();
+    try {
+        
+        // Step 2: Fetch Balances (using the target user's ID and role)
+        const balanceQuery = `
+            SELECT 
+                lt.name AS leave_type_name, 
+                lt.code AS type_code, 
+                lt.days_per_year AS allowance,
+                COALESCE(ulb.balance_days, lt.days_per_year) AS current_balance
+            FROM ${LEAVE_TYPES_TABLE} lt
+            LEFT JOIN ${LEAVE_BALANCE_TABLE} ulb ON ulb.leave_type_id = lt.id AND ulb.user_id = $1
+            WHERE lt.applicable_to = $2 OR lt.applicable_to = 'Both'
+            ORDER BY lt.name;
+        `;
+        const balanceResult = await client.query(balanceQuery, [targetUserId, targetUserRole]);
+
+        // Step 3: Fetch History (for the target user)
+        const historyQuery = `
+            SELECT 
+                la.start_date, la.end_date, la.total_days, la.status, la.reason, la.created_at,
+                lt.name AS leave_type,
+                u_approver.username AS approver
+            FROM ${APPLICATIONS_TABLE} la
+            JOIN ${LEAVE_TYPES_TABLE} lt ON la.leave_type_id = lt.id
+            LEFT JOIN users u_approver ON la.approver_id = u_approver.id
+            WHERE la.user_id = $1
+            ORDER BY la.created_at DESC;
+        `;
+        const historyResult = await client.query(historyQuery, [targetUserId]);
+
+        res.status(200).json({
+            user_id: targetUserId,
+            username: targetUsername,
+            role: targetUserRole,
+            balances: balanceResult.rows,
+            history: historyResult.rows
+        });
+
+    } catch (error) {
+        console.error('Admin Search Details Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve user leave details.' });
+    } finally {
+        client.release();
+    }
+});
 
 module.exports = router;

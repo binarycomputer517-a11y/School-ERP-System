@@ -13,13 +13,8 @@ const TEACHERS_TABLE = 'teachers';
 
 // ---------------------------------------------------------
 // 1. GET: Main List (Admin Only)
+// ... (Remains the same)
 // ---------------------------------------------------------
-
-/**
- * @route   GET /api/users
- * @desc    Get a list of all users (non-sensitive info)
- * @access  Private (Admin, Super Admin, HR)
- */
 router.get('/', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']), async (req, res) => {
     try {
         const query = `SELECT id, username, role, email, phone_number, is_active FROM ${USERS_TABLE} ORDER BY username`;
@@ -34,14 +29,9 @@ router.get('/', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']), as
 
 // ---------------------------------------------------------
 // 2. PUT: Change Own Password
+// ... (Remains the same)
 // ---------------------------------------------------------
-/**
- * @route   PUT /api/users/change-password
- * @desc    Allow a logged-in user to change their own password.
- * @access  Private (Self-service for any logged-in user)
- */
 router.put('/change-password', authenticateToken, async (req, res) => {
-    // NOTE: Assuming req.user.id is correctly set by the middleware
     const userId = req.user.id; 
     const { currentPassword, newPassword } = req.body;
 
@@ -76,12 +66,8 @@ router.put('/change-password', authenticateToken, async (req, res) => {
 
 // ---------------------------------------------------------
 // 3. POST: Admin/Teacher Reset Password
+// ... (Remains the same)
 // ---------------------------------------------------------
-/**
- * @route   POST /api/users/reset-password
- * @desc    Allow an Admin, HR, or Teacher to reset any user's password.
- * @access  Private (Admin, Super Admin, HR, Teacher)
- */
 router.post('/reset-password', authenticateToken, authorize(['Admin', 'Super Admin', 'HR', 'Teacher']), async (req, res) => {
     const { userId, newPassword } = req.body;
 
@@ -112,17 +98,13 @@ router.post('/reset-password', authenticateToken, authorize(['Admin', 'Super Adm
 
 // ---------------------------------------------------------
 // 4. DELETE: Delete User
+// ... (Remains the same)
 // ---------------------------------------------------------
-/**
- * @route   DELETE /api/users/:id
- * @desc    Delete a user by their ID
- * @access  Private (Admin, Super Admin)
- */
 router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
   const userIdToDelete = req.params.id;
 
   try {
-    if (req.user.id == userIdToDelete) { // Check against req.user.id
+    if (req.user.id == userIdToDelete) {
       return res.status(400).json({ error: "Action not allowed: You cannot delete your own account." });
     }
 
@@ -138,7 +120,6 @@ router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), as
   } catch (err) {
     console.error('Error deleting user:', err);
     if (err.code === '23503') {
-        // Foreign Key Violation
         return res.status(400).json({ error: 'Cannot delete user. They are still linked to student/teacher/staff records.' });
     }
     res.status(500).json({ error: 'Server error occurred while deleting the user.' });
@@ -147,12 +128,8 @@ router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), as
 
 // ---------------------------------------------------------
 // 5. GET: User Lookup (Staff/Student Directory)
+// ... (Remains the same)
 // ---------------------------------------------------------
-/**
- * @route   GET /api/users/all-staff-students
- * @desc    Get simplified list of all active Teachers and Students (for autofill/lookup in PTM).
- * @access  Private (Admin, Super Admin, HR, Teacher)
- */
 router.get('/all-staff-students', authenticateToken, authorize(['Admin', 'Super Admin', 'HR', 'Teacher']), async (req, res) => {
     try {
         const query = `
@@ -203,13 +180,9 @@ router.get('/all-staff-students', authenticateToken, authorize(['Admin', 'Super 
 
 // ---------------------------------------------------------
 // 6. GET: VMS Host Lookup (Public Access)
+// ... (Remains the same)
 // ---------------------------------------------------------
-/**
- * @route   GET /api/users/hosts
- * @desc    Get simplified list of active staff users for VMS host selection (Autofill API).
- * @access  Public (Mounted before authenticateToken in server.js)
- */
-router.get('/hosts', async (req, res) => { // <--- NO authenticateToken MIDDLEWARE
+router.get('/hosts', async (req, res) => {
     const query = req.query.query;
     if (!query || query.length < 3) {
         return res.status(200).json([]);
@@ -218,12 +191,10 @@ router.get('/hosts', async (req, res) => { // <--- NO authenticateToken MIDDLEWA
     try {
         const searchPattern = `%${query.toLowerCase()}%`;
         
-        // FIX: Reverting to search and select only the reliable USERS_TABLE fields 
-        // (username and email) to prevent crashes on missing columns/tables.
         const result = await pool.query(
             `SELECT 
                 id, 
-                username AS name, // Use username as the display name
+                username AS name, 
                 email
             FROM ${USERS_TABLE} 
             WHERE 
@@ -235,33 +206,23 @@ router.get('/hosts', async (req, res) => { // <--- NO authenticateToken MIDDLEWA
             [searchPattern]
         );
         
-        // VMS frontend expects objects with {id, name, email}
         res.status(200).json(result.rows);
         
     } catch (err) {
-        // This crash usually happens if the USERS_TABLE itself is missing, 
-        // or a referenced column is missing.
         console.error('Error fetching VMS host list (USERS_TABLE assumed):', err);
         res.status(500).json({ error: 'Server error fetching host list. Details: ' + err.message, details: err.message });
     }
 });
 
 
-// routes/users.js (SECTION 7: GET: Staff List for Assignment)
-
 // ---------------------------------------------------------
-// 7. GET: Staff List for Assignment (FIX for Helpdesk) 🎯
+// 7. GET: Staff List for Assignment (FIX for Helpdesk)
+// ... (Remains the same)
 // ---------------------------------------------------------
-/**
- * @route   GET /api/users/staff
- * @desc    Get a list of assignable staff (Admin, Super Admin, HR, Teacher, Staff roles).
- * @access  Private (Requires authentication, typically used by Admin/Staff)
- */
 router.get('/staff', authenticateToken, async (req, res) => {
     try {
         const STAFF_ROLES = ['Admin', 'Super Admin', 'HR', 'Teacher', 'Staff', 'Coordinator'];
         
-        // CRITICAL FIX: Explicitly cast u.role to TEXT using '::text' for comparison
         const query = `
             SELECT 
                 u.id, 
@@ -277,10 +238,8 @@ router.get('/staff', authenticateToken, async (req, res) => {
         
         const result = await pool.query(query, [STAFF_ROLES]);
         
-        // The front-end expects objects with {id, username/full_name, email}
         res.status(200).json(result.rows);
     } catch (error) {
-        // Log the detailed error from the database crash
         console.error('SQL Error fetching staff list for assignment (500):', error);
         res.status(500).json({ message: 'Failed to retrieve assignable staff list due to a server error.', details: error.message });
     }
@@ -288,12 +247,8 @@ router.get('/staff', authenticateToken, async (req, res) => {
 
 // ---------------------------------------------------------
 // 8. PUT: Update User Details (Admin Only)
+// ... (Remains the same)
 // ---------------------------------------------------------
-/**
- * @route   PUT /api/users/:id
- * @desc    Admin/HR update a user's role, phone, or active status.
- * @access  Private (Admin, Super Admin, HR)
- */
 router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']), async (req, res) => {
     const userIdToUpdate = req.params.id;
     const { role, phone_number, is_active } = req.body;
@@ -302,7 +257,6 @@ router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']),
     let values = [];
     let paramIndex = 1;
 
-    // Build dynamic query fields
     if (role !== undefined) {
         fields.push(`role = $${paramIndex++}`);
         values.push(role);
@@ -312,7 +266,6 @@ router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']),
         values.push(phone_number);
     }
     if (is_active !== undefined) {
-        // Ensure is_active is treated as a boolean if it comes in as a string
         const isActiveBool = (is_active === 'true' || is_active === true);
         fields.push(`is_active = $${paramIndex++}`);
         values.push(isActiveBool);
@@ -322,9 +275,8 @@ router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']),
         return res.status(400).json({ error: 'No update fields provided.' });
     }
     
-    // Add updated_at and user ID to the query
     fields.push(`updated_at = CURRENT_TIMESTAMP`);
-    values.push(userIdToUpdate); // User ID is the last parameter
+    values.push(userIdToUpdate);
 
     try {
         const query = `
@@ -345,6 +297,35 @@ router.put('/:id', authenticateToken, authorize(['Admin', 'Super Admin', 'HR']),
     } catch (err) {
         console.error('Error updating user details:', err);
         res.status(500).json({ error: 'Server error occurred while updating user details.' });
+    }
+});
+
+
+// ---------------------------------------------------------
+// 9. GET: User Lookup for Leave/Admin Search (NEW) 🎯
+// ---------------------------------------------------------
+/**
+ * @route   GET /api/users/lookup/all
+ * @desc    Get ID, Username, Role, and Email for all active users (for Autocomplete/Search).
+ * @access  Private (Admin, Super Admin, Coordinator)
+ */
+router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 'Coordinator']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                id, 
+                username, 
+                role,
+                email
+            FROM ${USERS_TABLE} 
+            WHERE is_active = TRUE AND deleted_at IS NULL
+            ORDER BY role, username;
+        `;
+        const result = await pool.query(query);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Error fetching user lookup data for Admin search:', error);
+        res.status(500).json({ message: 'Failed to retrieve user list for search.' });
     }
 });
 

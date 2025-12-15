@@ -3,44 +3,185 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Leave Status</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>My Leave Status & History</title>
+    <style>
+        /* --- GLOBAL STYLES (CLASSIC DESIGN) --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #EFEFEF; 
+            color: #111; 
+        }
+        .container { 
+            max-width: 1200px; margin: auto; padding: 40px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #000; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #555;
+            padding-bottom: 8px; margin-top: 30px; font-size: 1.5em;
+        }
+        
+        /* Balance Display */
+        #balance-display { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+        .balance-item { 
+            border: 1px solid #005A9C; padding: 15px; border-radius: 0; min-width: 150px; 
+            background-color: #e6f7ff; 
+        }
+        .balance-item strong { color: #003366; display: block; font-size: 1.2em; }
+        .balance-item span { font-size: 0.9em; color: #555; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; border: 1px solid #333; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; }
+        
+        /* Status Badges */
+        .status-badge { padding: 3px 8px; border-radius: 0; font-weight: bold; font-size: 0.8em; text-transform: uppercase; border: 1px solid #333;}
+        .status-badge.Pending { background-color: #ffc107; color: #333; }
+        .status-badge.Approved { background-color: #28a745; color: white; border-color: #28a745;}
+        .status-badge.Rejected { background-color: #dc3545; color: white; border-color: #dc3545;}
+        
+        .btn-back {
+            background-color: #555; border-color: #333; padding: 8px 12px; border: 2px solid #000; cursor: pointer;
+            margin-bottom: 20px; color: white; text-decoration: none; display: inline-block; font-weight: bold;
+        }
+        .btn-back:hover {
+            background-color: #333;
+        }
+    </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <h2>My Leave Status 📊</h2>
-        <table class="table table-striped table-hover mt-4">
-            <thead>
-                <tr>
-                    <th>Request ID</th>
-                    <th>Leave Type</th>
-                    <th>Start Date</th>
-                    <th>End Date</th>
-                    <th>Status</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="leaveStatusTable">
-                <tr>
-                    <td>LEV-001</td>
-                    <td>Sick Leave</td>
-                    <td>2025-10-10</td>
-                    <td>2025-10-11</td>
-                    <td><span class="badge bg-success">Approved</span></td>
-                    <td>-</td>
-                </tr>
-                <tr>
-                    <td>LEV-002</td>
-                    <td>Casual Leave</td>
-                    <td>2025-11-05</td>
-                    <td>2025-11-05</td>
-                    <td><span class="badge bg-warning text-dark">Pending</span></td>
-                    <td><button class="btn btn-danger btn-sm">Withdraw</button></td>
-                </tr>
-            </tbody>
-        </table>
+    <div class="container">
+        <a href="/student-dashboard.html" class="btn btn-back">← Back to Dashboard</a> 
+
+        <h1>My Leave Status & History</h1>
+        
+        <div class="card">
+            <h2>Current Leave Balances</h2>
+            <div id="balance-display">
+                <p>Loading balances...</p>
+            </div>
+            <a href="/apply-leave.html" class="btn-back" style="background-color: #005A9C; margin-top: 15px;">Apply for New Leave →</a>
+        </div>
+        
+        <hr>
+
+        <div class="card">
+            <h2>Application History</h2>
+            <table id="history-table">
+                <thead>
+                    <tr>
+                        <th>Type</th>
+                        <th>Dates</th>
+                        <th>Days</th>
+                        <th>Reason (Summary)</th>
+                        <th>Status</th>
+                        <th>Approver</th>
+                    </tr>
+                </thead>
+                <tbody id="history-tbody">
+                    <tr><td colspan="6">Loading application history...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
     </div>
-    <script src="/js/leave.js"></script>
-    <script src="js/global-config.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+    <script src="js/global-config.js"></script> 
+    
+    <script>
+        // --- Configuration & Initialization ---
+        const API_BASE = '/api/leave';
+        const token = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        
+        if (!token) { window.location.href = '/login.html'; } // Redirect if not authenticated
+
+        // --- Helper: API Fetcher with Auth and Error Handling ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                window.location.href = '/login.html';
+                throw new Error('Unauthorized or session expired.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                throw new Error(errorBody.message || 'API call failed.');
+            }
+            return response.json();
+        }
+        
+        // =========================================================
+        // Data Fetching Functions
+        // =========================================================
+
+        async function fetchLeaveBalances() {
+            const display = document.getElementById('balance-display');
+            display.innerHTML = '<p>Loading balances...</p>';
+
+            try {
+                // GET /api/leave/balance (requires userRole for filtering)
+                const balances = await handleApi(`${API_BASE}/balance`); 
+                
+                if (balances.length === 0) {
+                    display.innerHTML = '<p>No defined leave balances for your role.</p>';
+                    return;
+                }
+                
+                display.innerHTML = balances.map(b => `
+                    <div class="balance-item">
+                        <strong>${b.current_balance}</strong>
+                        <span>${b.leave_type} (${b.type_code})</span>
+                        <small style="color: #003366;">Allowance: ${b.allowance} days</small>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error fetching balances:', error);
+                display.innerHTML = '<p style="color: red;">Failed to load balances.</p>';
+            }
+        }
+        
+        async function fetchLeaveHistory() {
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '<tr><td colspan="6">Loading application history...</td></tr>';
+            try {
+                // GET /api/leave/history
+                const history = await handleApi(`${API_BASE}/history`);
+                
+                tbody.innerHTML = history.map(h => `
+                    <tr>
+                        <td>${h.leave_type}</td>
+                        <td>${moment(h.start_date).format('MMM D, YYYY')} to ${moment(h.end_date).format('MMM D, YYYY')}</td>
+                        <td>${h.total_days}</td>
+                        <td title="${h.reason}">${h.reason.substring(0, 50)}...</td>
+                        <td><span class="status-badge ${h.status}">${h.status}</span></td>
+                        <td>${h.approver || 'N/A'}</td>
+                    </tr>
+                `).join('') || '<tr><td colspan="6">No application history found.</td></tr>';
+
+            } catch (error) {
+                console.error('Error fetching history:', error);
+                tbody.innerHTML = '<tr><td colspan="6" style="color:red;">Failed to load history.</td></tr>';
+            }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchLeaveBalances();
+            fetchLeaveHistory();
+        });
+    </script>
 </body>
 </html>
