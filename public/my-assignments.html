@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Homework & Assignments</title>
+    <title>My Assignments & Modules</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f0f2f8; font-family: sans-serif; }
@@ -18,14 +18,17 @@
         /* Status colors */
         .status-Assigned { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .status-Completed { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status-Graded { background-color: #198754; color: #fff; border: 1px solid #155724; }
         .status-Overdue { background-color: #ffc107; color: #383d41; border: 1px solid #ffeeba; }
         .status-Draft { background-color: #f0f0f0; color: #6c757d; border: 1px solid #e9ecef; }
+        .status-Pending { background-color: #cff4fc; color: #055160; border: 1px solid #b6effb; }
+
     </style>
 </head>
 <body>
     <div class="container mt-5">
         <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1>My Homework & Assignments</h1>
+            <h1>My Assignments & Learning Modules</h1>
             <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
         </header>
 
@@ -46,7 +49,7 @@
     <script>
         const token = localStorage.getItem('erp-token');
         
-        // ⭐ CRITICAL FIX: Use the robust ID retrieval logic for consistency
+        // Use the robust ID retrieval logic for consistency
         const studentId = localStorage.getItem('student_id') || localStorage.getItem('profile-id') || localStorage.getItem('student-id'); 
         
         const ONLINE_LEARNING_API_BASE = '/api/online-learning'; // Define base URL
@@ -59,7 +62,6 @@
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
                      alert('Session expired or unauthorized. Please log in again.');
-                     // Force logout if authentication fails
                      localStorage.clear(); 
                      window.location.href = '/login.html';
                      throw new Error('Unauthorized');
@@ -71,28 +73,36 @@
         }
 
         /**
-         * Determines the assignment status based on due date and completion date.
+         * Determines the assignment status based on due date and completion date/status.
          * @param {string} dueDateStr - The assignment due date.
-         * @param {string} completionDateStr - The submission date (renamed from submission_date).
-         * @param {string} currentStatus - Status provided by the backend.
+         * @param {string} completionDateStr - The submission date (from sub.submitted_at).
+         * @param {string} submissionStatus - Status provided by the backend (from sub.submission_status).
          */
-        function getAssignmentStatus(dueDateStr, completionDateStr, currentStatus) {
-            // Priority 1: If completed/submitted, mark as Completed
-            if (completionDateStr || currentStatus === 'Completed') return 'Completed';
+        function getAssignmentStatus(dueDateStr, completionDateStr, submissionStatus) {
+            // Priority 1: Use direct status from backend if submitted
+            if (submissionStatus && submissionStatus !== 'Pending') {
+                return submissionStatus;
+            }
 
-            // Priority 2: Check for Overdue status
+            // Priority 2: Check for submission presence
+            if (completionDateStr) {
+                 // If there's a submission date but status is 'Pending', treat it as 'Pending'
+                 return 'Pending';
+            }
+
+            // Priority 3: Check for Overdue status
             if (dueDateStr) {
                 const now = new Date();
                 const dueDate = new Date(dueDateStr);
                 
-                // Ensure date parsing is successful and check if due date is in the past
+                // If due date is in the past, it's overdue
                 if (!isNaN(dueDate) && dueDate < now) {
                     return 'Overdue';
                 }
             }
             
-            // Priority 3: Default to Assigned or backend status
-            return currentStatus || 'Assigned';
+            // Priority 4: Default 
+            return 'Assigned'; // If no submission and not overdue
         }
 
         /**
@@ -112,7 +122,7 @@
             listElement.innerHTML = '<li class="list-group-item text-center text-muted">Loading your assignments...</li>';
 
             try {
-                // Fetch data from the live API endpoint
+                // Fetch data using the corrected API endpoint
                 const url = `${ONLINE_LEARNING_API_BASE}/assignments/student/${studentId}`;
                 const assignments = await handleApi(url);
 
@@ -124,15 +134,27 @@
                 listElement.innerHTML = ''; // Clear loading message
 
                 assignments.forEach(assignment => {
-                    // completion_date is the recommended column name for the submission timestamp
+                    // completion_date is aliased from sub.submitted_at
                     const completionDateStr = assignment.completion_date; 
+                    const submissionStatus = assignment.submission_status; // Aliased from sub.submission_status
                     
-                    const status = getAssignmentStatus(assignment.due_date, completionDateStr, assignment.submission_status);
+                    const status = getAssignmentStatus(assignment.due_date, completionDateStr, submissionStatus);
                     
                     const dueDate = assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'N/A';
-                    const completionDate = completionDateStr ? new Date(completionDateStr).toLocaleDateString() : 'N/A';
-
-                    const actionUrl = `/student/assignment-viewer.html?id=${assignment.assignment_id}`; // Assuming a dedicated viewer page
+                    
+                    const actionUrl = `/student/assignment-viewer.html?id=${assignment.assignment_id}`; 
+                    
+                    // Button text logic
+                    let buttonText;
+                    if (status === 'Pending') {
+                        buttonText = 'Submitted (Pending Review)';
+                    } else if (status === 'Graded') {
+                        buttonText = 'View Grade';
+                    } else if (status === 'Completed') {
+                        buttonText = 'View Submission';
+                    } else {
+                        buttonText = 'Start/Submit';
+                    }
                     
                     listElement.innerHTML += `
                         <li class="list-group-item d-flex justify-content-between align-items-center">
@@ -148,9 +170,9 @@
                             </div>
                             
                             <div class="d-flex flex-column align-items-end">
-                                <span class="status-badge status-${status} mb-2">${status.toUpperCase()}</span>
+                                <span class="status-badge status-${status.replace(/\s/g, '')} mb-2">${status.toUpperCase()}</span>
                                 <a href="${actionUrl}" class="btn btn-sm btn-outline-secondary">
-                                    ${status === 'Completed' ? 'View Grade/Content' : 'Start/Submit'}
+                                    ${buttonText}
                                 </a>
                             </div>
                         </li>

@@ -7,7 +7,8 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 
 // --- Configuration for Roles ---
 const MANAGER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator']; 
-const VIEW_ROLES = [...MANAGER_ROLES, 'Student']; 
+const VIEW_ROLES = [...MANAGER_ROLES, 'Student']; // Student needs view access to their assignments
+const TEACHER_ROLES = ['Teacher', 'Coordinator'];
 
 // ===================================
 // Helper: Error Handler
@@ -39,6 +40,7 @@ router.get('/manager', authenticateToken, authorize(MANAGER_ROLES), async (req, 
             SELECT 
                 ha.id, ha.title, ha.due_date, 
                 c.course_name, b.batch_name, s.subject_name,
+                -- Count total submissions for this assignment (ASUB is the alias for assignment_submissions)
                 (SELECT COUNT(*) FROM assignment_submissions AS ASUB WHERE ASUB.assignment_id = ha.id) AS total_submissions
             FROM homework_assignments ha
             JOIN courses c ON ha.course_id = c.id
@@ -68,6 +70,10 @@ router.post('/', authenticateToken, authorize(MANAGER_ROLES), async (req, res) =
     const created_by = req.user ? req.user.id : null; 
     const branch_id = req.user ? req.user.branch_id : null; 
 
+    if (!course_id || !batch_id || !subject_id || !title || !due_date) {
+        return res.status(400).json({ message: "Missing required fields for assignment." });
+    }
+
     try {
         const sessionRes = await pool.query("SELECT id FROM academic_sessions WHERE is_active = true LIMIT 1");
         if (sessionRes.rows.length === 0) {
@@ -86,7 +92,7 @@ router.post('/', authenticateToken, authorize(MANAGER_ROLES), async (req, res) =
 
         const { rows } = await pool.query(query, [
             branch_id, academic_session_id, course_id, batch_id, subject_id, 
-            title, instructions, due_date, max_marks, created_by
+            title, instructions, due_date, max_marks || 10, created_by
         ]);
         res.status(201).json(rows[0]);
     } catch (err) {
@@ -105,6 +111,10 @@ router.put('/:id', authenticateToken, authorize(MANAGER_ROLES), async (req, res)
         title, instructions, due_date, max_marks
     } = req.body;
 
+    if (!course_id || !batch_id || !subject_id || !title || !due_date) {
+        return res.status(400).json({ message: "Missing required fields for assignment update." });
+    }
+
     try {
         const query = `
             UPDATE homework_assignments SET 
@@ -115,7 +125,7 @@ router.put('/:id', authenticateToken, authorize(MANAGER_ROLES), async (req, res)
             RETURNING id, title, due_date;
         `;
         const { rows } = await pool.query(query, [
-            course_id, batch_id, subject_id, title, instructions, due_date, max_marks, id
+            course_id, batch_id, subject_id, title, instructions, due_date, max_marks || 10, id
         ]);
 
         if (rows.length === 0) return res.status(404).json({ message: 'Assignment not found' });
@@ -160,10 +170,12 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
             return res.status(404).json({ message: 'Assignment not found' });
         }
         
-        // Format due_date to fit the HTML datetime-local input type
+        // Format due_date to fit the HTML datetime-local input type (YYYY-MM-DDTHH:MM)
         const assignment = rows[0];
         if (assignment.due_date) {
-            assignment.due_date = new Date(assignment.due_date).toISOString().slice(0, 16);
+            // Converts the UTC timestamp to a local ISO format string, then trims to YYYY-MM-DDTHH:MM
+            const date = new Date(assignment.due_date);
+            assignment.due_date = date.toISOString().slice(0, 16);
         }
 
         res.status(200).json(assignment);

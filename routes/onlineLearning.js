@@ -84,33 +84,34 @@ router.get('/assignments/student/:studentId', authenticateToken, authorize(['Stu
                 s.subject_name,
                 s.subject_code,
                 ha.max_marks,
-                sub.submission_date, -- Assumed to be fixed/added in DB
-                sub.status AS submission_status, -- Assumed to be fixed/added in DB
+                -- ✅ FINAL FIX: Use the confirmed column names from the DB schema
+                sub.submission_status, 
+                sub.submitted_at AS completion_date, -- Use submitted_at for frontend consumption
                 sub.marks_obtained,
                 ha.created_at
             FROM ${ASSIGNMENTS_CORE_TABLE} ha
             
             -- 1. Get student's current enrollment details
-            JOIN students stud ON stud.user_id = $1  -- $1 parameter
+            JOIN students stud ON stud.user_id = $1 
             
             -- 2. Get subject name
             LEFT JOIN subjects s ON ha.subject_id = s.id
             
-            -- 3. Get submission status
+            -- 3. Get submission status and completion date
             LEFT JOIN ${SUBMISSIONS_TABLE} sub 
                 ON sub.assignment_id = ha.id 
-                AND sub.student_id = $2  -- ✅ FIX: Use $2 here
+                AND sub.student_id = $1 
             
             -- 4. Filter: Only show assignments published for the student's current course and batch
             WHERE ha.course_id = stud.course_id AND ha.batch_id = stud.batch_id
             
             ORDER BY ha.due_date DESC;
         `;
-        // ✅ CORRECT CALL: Supplying two parameters ($1 and $2)
-        const result = await pool.query(query, [studentId, studentId]); 
+        const result = await pool.query(query, [studentId]); 
         
         res.status(200).json(result.rows);
     } catch (error) {
+        // Log the actual error that caused the 500
         console.error(`Error fetching assignments for student ${studentId}:`, error);
         res.status(500).json({ message: 'Failed to retrieve student assignments.' });
     }
