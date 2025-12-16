@@ -175,14 +175,20 @@ async function fetchAndRenderConversations() {
  * Serves the POST request to the backend to create a new chat session.
  */
 async function startNewConversation(recipientIds, topic = null) {
-    const participants = [currentUserId, ...recipientIds];
+    
+    // 🔥 CRITICAL FIX 1: Ensure the current user ID is included and unique.
+    // The participants array MUST contain the creator's ID (currentUserId)
+    const participants = [currentUserId, ...recipientIds].filter((value, index, self) => 
+        self.indexOf(value) === index
+    );
+    
     const isGroup = recipientIds.length > 1;
 
     try {
         const newConversation = await fetchWithAuth(`${CONVERSATIONS_URL}/new`, {
             method: 'POST',
             body: JSON.stringify({
-                participants: participants,
+                participants: participants, // Send the fixed array
                 topic: isGroup ? topic || 'Group Chat' : null,
                 is_group: isGroup
             })
@@ -306,9 +312,12 @@ function initAdminControls() {
             selectedRecipientsList.innerHTML = '<li>No recipients selected.</li>';
         }
         selectedRecipients.forEach((user, id) => {
+            // FIX 2: Use username if full_name is not available (to avoid 'null')
+            const displayName = user.name || user.username || 'Unknown User'; 
+            
             const tag = document.createElement('li');
             tag.classList.add('selected-recipient-tag');
-            tag.textContent = `${user.name} (${user.role}) X`; // X is the remove button/icon
+            tag.textContent = `${displayName} (${user.role}) X`; // Display the fixed name/username
             
             tag.addEventListener('click', () => {
                 selectedRecipients.delete(id);
@@ -363,16 +372,20 @@ function initAdminControls() {
                 users.forEach(user => {
                     if (user.id === currentUserId) return; 
                     
+                    // FIX 2: Use full_name or username for display
+                    const displayName = user.full_name || user.username || 'Unknown User'; 
+
                     const item = document.createElement('div');
                     item.classList.add('user-search-item');
-                    item.textContent = `${user.full_name} (${user.role})`;
+                    item.textContent = `${displayName} (${user.role})`; // Display the fixed name/username
                     
                     const addButton = document.createElement('button');
                     addButton.textContent = selectedRecipients.has(user.id) ? 'Selected' : 'Add';
                     addButton.disabled = selectedRecipients.has(user.id);
                     
                     addButton.addEventListener('click', () => {
-                        selectedRecipients.set(user.id, { id: user.id, name: user.full_name, role: user.role });
+                        // FIX 2: Store the display name (full_name or username)
+                        selectedRecipients.set(user.id, { id: user.id, name: displayName, username: user.username, role: user.role });
                         addButton.textContent = 'Selected';
                         addButton.disabled = true;
                         renderSelectedRecipients();

@@ -1,4 +1,4 @@
-// routes/messaging.js (FINAL & COMPLETE VERSION)
+// routes/messaging.js (FINAL & COMPLETE VERSION with DEBUGGING)
 
 const express = require('express');
 const router = express.Router();
@@ -8,13 +8,8 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 const MESSAGING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Parent']; 
 
 // =========================================================
-// 1. GET Conversation List (Fixed for Many-to-Many Schema)
+// 1. GET Conversation List
 // =========================================================
-/**
- * @route   GET /api/messaging/conversations
- * @desc    Fetches all conversations for the currently logged-in user.
- * @access  Private
- */
 router.get('/conversations', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
     const userId = req.user.id; 
 
@@ -23,7 +18,6 @@ router.get('/conversations', authenticateToken, authorize(MESSAGING_ROLES), asyn
     }
 
     try {
-        // This query finds all conversations a user is part of and determines the display name
         const result = await pool.query(
             `
             SELECT 
@@ -59,16 +53,17 @@ router.get('/conversations', authenticateToken, authorize(MESSAGING_ROLES), asyn
 });
 
 // =========================================================
-// 2. POST New Conversation
+// 2. POST New Conversation (CRITICAL FIX APPLIED & DEBUGGING ENABLED)
 // =========================================================
-/**
- * @route   POST /api/messaging/conversations/new
- * @desc    Creates a new conversation session.
- * @access  Private (Usually initiated by Admin/Staff/Teacher)
- */
 router.post('/conversations/new', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
     const { participants, topic, is_group } = req.body;
     const createdById = req.user.id; 
+
+    // 🔥 CRITICAL DEBUG START: These logs will tell us exactly what data the server received
+    console.log(`DEBUG: Creator ID (req.user.id): ${createdById}`);
+    console.log(`DEBUG: Participants Array Received: ${participants}`);
+    console.log(`DEBUG: Array Length: ${participants.length}`);
+    // 🔥 CRITICAL DEBUG END
 
     if (!participants || !Array.isArray(participants) || participants.length < 2) {
         return res.status(400).json({ message: 'Participants list is required and must contain at least two users.' });
@@ -94,12 +89,10 @@ router.post('/conversations/new', authenticateToken, authorize(MESSAGING_ROLES),
             );
 
             if (existingConversation.rowCount > 0) {
-                // If chat exists, return existing details
                 return res.status(200).json(existingConversation.rows[0]);
             }
         } catch (e) {
             console.error('Error checking for existing conversation:', e);
-            // Continue if there's an error
         }
     }
 
@@ -118,14 +111,15 @@ router.post('/conversations/new', authenticateToken, authorize(MESSAGING_ROLES),
         const newConversationId = newConvResult.rows[0].id;
         const newConversationTopic = newConvResult.rows[0].topic;
 
-        // B. Insert all participants into conversation_participants table
-        // We use map and join to safely inject multiple rows of data
-        const participantValues = participants.map(id => `('${newConversationId}', '${id}', ${id === createdById ? 'TRUE' : 'FALSE'})`).join(', ');
-        
-        await client.query(
-            `INSERT INTO conversation_participants (conversation_id, user_id, is_admin) 
-             VALUES ${participantValues};`
-        );
+        // B. Insert all participants sequentially within the transaction for robustness
+        for (const userId of participants) {
+            const isAdmin = (userId === createdById);
+            await client.query(
+                `INSERT INTO conversation_participants (conversation_id, user_id, is_admin) 
+                 VALUES ($1, $2, $3);`,
+                [newConversationId, userId, isAdmin]
+            );
+        }
 
         await client.query('COMMIT');
 
@@ -145,8 +139,8 @@ router.post('/conversations/new', authenticateToken, authorize(MESSAGING_ROLES),
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Transaction Error creating conversation:', error);
-        res.status(500).json({ message: 'Failed to create new conversation.', error: error.message });
+        console.error('Transaction Error creating conversation (Participants missing):', error);
+        res.status(500).json({ message: 'Failed to create new conversation. Participant insertion failed.', error: error.message });
     } finally {
         client.release();
     }
@@ -156,11 +150,6 @@ router.post('/conversations/new', authenticateToken, authorize(MESSAGING_ROLES),
 // =========================================================
 // 3. GET Message History
 // =========================================================
-/**
- * @route   GET /api/messaging/messages/:conversationId
- * @desc    Fetches messages for a specific conversation.
- * @access  Private
- */
 router.get('/messages/:conversationId', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
     const { conversationId } = req.params;
     const userId = req.user.id; 
