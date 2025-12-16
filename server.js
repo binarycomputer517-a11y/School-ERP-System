@@ -1,7 +1,8 @@
 /**
  * SERVER.JS
  * Entry point for the School ERP System
- * Final Updated Version: Incorporating Size Limit (10MB) and all Feature Routers
+ * Final Updated Version: Incorporating Size Limit (10MB), all Feature Routers,
+ * and the CRITICAL Socket.io Logic for Messaging
  */
 
 // ===================================
@@ -89,11 +90,13 @@ const placementsRouter = require('./routes/placements');
 const healthRouter = require('./routes/health');
 
 // 🚀 MERGED ROUTER IMPORTS & FIXES
-// 🚨 FIX 1: Import the dedicated exams router
 const examsRouter = require('./routes/exams'); 
 const examMarksRouter = require('./routes/exam_marks'); 
 const quizzesRouter = require('./routes/quizzes'); 
 const transcriptRoutes = require('./routes/transcript'); 
+
+// 🔥 CRITICAL FIX: Import the new calendar router
+const calendarRoutes = require('./routes/calendar'); 
 
 
 // --- App Initialization ---
@@ -137,12 +140,69 @@ app.use('/backups', express.static(BACKUP_DIR));
 
 
 // ===================================
-// 3. REAL-TIME SOCKET LOGIC
+// 3. REAL-TIME SOCKET LOGIC (MESSAGING FIX)
 // ===================================
 io.on('connection', (socket) => {
     // console.log('Socket connected:', socket.id); // Uncomment for debug
+
+    // 1. Join a specific conversation "room" (Client sends 'join_conversation' event)
     socket.on('join_conversation', (conversationId) => {
         socket.join(conversationId);
+        // console.log(`User ${socket.id} joined room: ${conversationId}`); // Uncomment for debug
+    });
+
+    // 2. Leave a conversation "room"
+    socket.on('leave_conversation', (conversationId) => {
+        socket.leave(conversationId);
+        // console.log(`User ${socket.id} left room: ${conversationId}`); // Uncomment for debug
+    });
+
+    // 3. Handle new messages (CRITICAL MESSAGING LOGIC)
+    socket.on('new_message', async (message) => {
+        const { conversationId, senderId, content } = message;
+
+        if (!conversationId || !senderId || !content) {
+            return; 
+        }
+
+        let savedMessage;
+        try {
+            // A. Save the message to PostgreSQL 'messages' table
+            const saveResult = await pool.query(
+                `INSERT INTO messages (conversation_id, sender_id, content) 
+                 VALUES ($1, $2, $3) RETURNING conversation_id, sender_id, content, created_at, id;`,
+                [conversationId, senderId, content]
+            );
+            savedMessage = saveResult.rows[0];
+
+            // B. Update conversation's last message timestamp
+            await pool.query(
+                `UPDATE conversations SET last_message_at = NOW() WHERE id = $1`,
+                [conversationId]
+            );
+
+            // C. Get sender name for broadcast display
+            const userResult = await pool.query('SELECT full_name FROM users WHERE id = $1', [senderId]);
+            const senderName = userResult.rows[0]?.full_name || 'Unknown User';
+
+            const broadcastMessage = {
+                ...savedMessage,
+                conversation_id: savedMessage.conversation_id,
+                timestamp: savedMessage.created_at,
+                sender_name: senderName
+            };
+            
+            // D. Broadcast the message to all clients in the conversation room
+            io.to(conversationId).emit('message_received', broadcastMessage);
+            
+        } catch (error) {
+            console.error('Socket.io DB Error saving message:', error);
+            socket.emit('message_error', { conversationId, message: 'Failed to send message.' });
+        }
+    });
+
+    socket.on('disconnect', () => {
+        // console.log('A user disconnected:', socket.id); // Uncomment for debug
     });
 });
 
@@ -191,7 +251,7 @@ app.use('/api/ptm', ptmRouter);
 app.use('/api/placements', placementsRouter);
 
 // Exam Modules
-app.use('/api/exams', examsRouter); // <-- ✅ Mount the correct examsRouter here
+app.use('/api/exams', examsRouter); 
 app.use('/api/online-exam', onlineExamRouter);
 app.use('/api/marks', examMarksRouter); 
 app.use('/api/quizzes', quizzesRouter); 
@@ -200,7 +260,10 @@ app.use('/api/certificates', certificatesRouter);
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api/online-learning', onlineLearningRouter);
 
-// 🚨 CRITICAL ROUTE FIX: Mount the dedicated transcript router under a unique path
+// 🚨 CRITICAL FIX: Mount the new calendar router
+app.use('/api/calendar', calendarRoutes); 
+
+// Transcript Route (Already fixed)
 app.use('/api/transcript', transcriptRoutes); 
 
 // Finance Modules

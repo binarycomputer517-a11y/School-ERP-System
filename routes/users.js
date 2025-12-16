@@ -10,7 +10,7 @@ const USERS_TABLE = 'users';
 const STUDENTS_TABLE = 'students';
 const TEACHERS_TABLE = 'teachers';
 
-
+const MESSAGING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Parent', 'HR', 'Staff'];
 // ---------------------------------------------------------
 // 1. GET: Main List (Admin Only)
 // ... (Remains the same)
@@ -329,5 +329,55 @@ router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 
     }
 });
 
+// routes/users.js (Add this search route)
+
+/**
+ * @route   GET /api/users/search
+ * @desc    Searches users by full_name, username, or email.
+ * @access  Private (Requires authentication, usually Admin/Staff)
+ */
+router.get('/search', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
+    const searchQuery = req.query.q;
+
+    if (!searchQuery || searchQuery.length < 3) {
+        return res.status(200).json([]); // Return empty array for short queries
+    }
+
+    // Prepare search term for ILIKE (case-insensitive fuzzy search)
+    const searchPattern = `%${searchQuery.toLowerCase()}%`;
+
+    try {
+        const result = await pool.query(
+            `
+            SELECT 
+                id, 
+                full_name, 
+                username, 
+                email, 
+                role 
+            FROM users
+            WHERE 
+                is_active = TRUE AND deleted_at IS NULL AND
+                (
+                    LOWER(full_name) ILIKE $1 OR 
+                    LOWER(username) ILIKE $1 OR 
+                    LOWER(email) ILIKE $1
+                )
+            ORDER BY full_name ASC
+            LIMIT 20;
+            `,
+            [searchPattern]
+        );
+
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('DB Error searching users:', error);
+        res.status(500).json({ message: 'Failed to search users.' });
+    }
+});
+
+// Remember to ensure 'authenticateToken' and 'authorize' middleware are available
+// and 'MESSAGING_ROLES' is defined if you use it globally in users.js. 
+// If not defined, use specific roles like ['Super Admin', 'Admin', 'Teacher'].
 
 module.exports = router;
