@@ -2,156 +2,283 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Teacher Dashboard</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teacher Dashboard - School ERP</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
+        :root {
+            --primary-color: #005A9C; /* Deep Blue */
+            --secondary-color: #C0392B; /* Accent Red */
+            --bg-light: #f4f6f9;
+            --text-dark: #333;
+            --card-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
-        .dashboard-card {
-            background-color: #f9f9f9;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 20px;
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-light);
+            color: var(--text-dark);
+            padding: 0;
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        .dashboard-card h3 {
-            margin-top: 0;
-            border-bottom: 2px solid #eee;
-            padding-bottom: 10px;
+
+        .dashboard-container {
+            max-width: 1300px;
+            margin: 50px auto;
+            padding: 30px;
+            background-color: #ffffff;
+            border-radius: 12px;
+            box-shadow: var(--card-shadow);
+            flex-grow: 1;
         }
-        .dashboard-card ul {
-            padding-left: 20px;
-        }
-        .dashboard-card li {
-            margin-bottom: 8px;
-        }
-        #logout-btn {
-            background-color: #d9534f;
-            color: white;
-            padding: 8px 15px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            float: right;
-        }
-        .header-bar {
+
+        /* --- Header & Navigation --- */
+        .header-section {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 20px;
         }
+
+        h1 {
+            color: var(--primary-color);
+            font-weight: 700;
+            font-size: 2.2em;
+            margin: 0;
+        }
+
+        .top-right-nav {
+            display: flex;
+            gap: 15px;
+        }
+
+        .top-right-nav a, .top-right-nav button {
+            background-color: var(--primary-color);
+            color: #ffffff;
+            padding: 8px 18px;
+            border: none;
+            border-radius: 6px;
+            text-decoration: none;
+            font-weight: 500;
+            transition: background-color 0.3s ease;
+        }
+        
+        .top-right-nav button {
+            background-color: var(--secondary-color);
+        }
+
+        .top-right-nav a:hover { background-color: #00457A; }
+        .top-right-nav button:hover { background-color: #A93226; }
+
+        /* --- Category & Grid --- */
+        h2 {
+            color: var(--primary-color);
+            border-bottom: 3px solid #EAEAEA;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            margin-bottom: 25px;
+            font-size: 1.6em;
+            font-weight: 600;
+        }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 25px;
+        }
+        
+        /* --- Dashboard Cards --- */
+        .dashboard-card { 
+            background: #ffffff; 
+            border: 1px solid #ddd; 
+            border-top: 5px solid var(--primary-color); 
+            border-radius: 8px; 
+            padding: 25px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            text-align: center;
+            text-decoration: none; 
+            color: var(--text-dark); 
+            transition: all 0.3s ease; 
+            box-shadow: var(--card-shadow);
+        }
+        
+        .dashboard-card:hover { 
+            transform: translateY(-5px); 
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1); 
+            border-top-color: var(--secondary-color);
+        }
+        
+        .dashboard-card .icon { 
+            font-size: 3em; 
+            color: var(--primary-color); 
+            margin-bottom: 10px; 
+            transition: color 0.3s;
+        }
+
+        .dashboard-card:hover .icon {
+            color: var(--secondary-color);
+        }
+
+        .dashboard-card span:last-child {
+            font-weight: 600;
+            font-size: 1.1em;
+        }
+        
+        /* --- Welcome/Time Message Area --- */
+        #welcome-area {
+            text-align: right;
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
     </style>
 </head>
 <body>
 <script>
-    // Client-side check to ensure a teacher is logged in. The server will always re-validate.
+    // --- Authentication and Authorization Check ---
     const token = localStorage.getItem('erp-token');
-    if (!token || localStorage.getItem('user-role') !== 'Teacher') {
+    const userRole = localStorage.getItem('user-role');
+    const username = localStorage.getItem('username'); 
+    
+    // Redirect if token is missing or user is not a Teacher
+    if (!token || userRole !== 'Teacher') {
         window.location.href = '/login.html';
     }
-</script>
 
-<div class="container">
-    <div class="header-bar">
-        <h1>Welcome, <span id="teacher-name"></span>!</h1>
-        <button id="logout-btn" onclick="logout()">Logout</button>
-    </div>
-    
-    <div class="dashboard-grid">
-        <div class="dashboard-card" id="profile-card">
-            <h3>My Profile</h3>
-            <p><strong>Subject:</strong> <span id="teacher-subject"></span></p>
-            <p><strong>Qualifications:</strong> <span id="teacher-qualifications"></span></p>
-            <p><strong>Email:</strong> <span id="teacher-email"></span></p>
-        </div>
-
-        <div class="dashboard-card" id="schedule-card">
-            <h3>Today's Schedule</h3>
-            <table style="width:100%;">
-                <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Class</th>
-                        <th>Subject</th>
-                    </tr>
-                </thead>
-                <tbody id="today-schedule-body"></tbody>
-            </table>
-        </div>
-
-        <div class="dashboard-card" id="classes-card">
-            <h3>My Assigned Classes</h3>
-            <ul id="assigned-classes-list"></ul>
-        </div>
-    </div>
-</div>
-
-<script>
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
-
+    // --- Logout Function ---
     function logout() {
         localStorage.removeItem('erp-token');
         localStorage.removeItem('user-role');
+        localStorage.removeItem('username');
         window.location.href = '/login.html';
     }
-
-    // Fetches all necessary data from the API concurrently for a fast load time
-    async function loadDashboardData() {
-        try {
-            const [profile, schedule, assignedClasses] = await Promise.all([
-                fetch('/api/teachers/me', { headers: authHeaders }).then(res => res.json()),
-                fetch('/api/timetable/my-schedule', { headers: authHeaders }).then(res => res.json()),
-                fetch('/api/teachers/me/assigned-classes', { headers: authHeaders }).then(res => res.json())
-            ]);
-
-            renderProfile(profile);
-            renderTodaysSchedule(schedule);
-            renderAssignedClasses(assignedClasses);
-
-        } catch (error) {
-            console.error("Failed to load dashboard data:", error);
-            alert("Could not load dashboard data. You may be logged out.");
-            logout();
-        }
-    }
-
-    function renderProfile(profile) {
-        document.getElementById('teacher-name').textContent = profile.full_name;
-        document.getElementById('teacher-subject').textContent = profile.subject || 'N/A';
-        document.getElementById('teacher-qualifications').textContent = profile.qualifications || 'N/A';
-        document.getElementById('teacher-email').textContent = profile.email || 'N/A';
-    }
-
-    function renderTodaysSchedule(schedule) {
-        const scheduleBody = document.getElementById('today-schedule-body');
-        if (schedule.length === 0) {
-            scheduleBody.innerHTML = '<tr><td colspan="3" style="text-align:center;">No classes scheduled for today.</td></tr>';
-            return;
-        }
-        scheduleBody.innerHTML = schedule.map(slot => `
-            <tr>
-                <td>${slot.time}</td>
-                <td>${slot.class_name}</td>
-                <td>${slot.subject}</td>
-            </tr>
-        `).join('');
-    }
-
-    function renderAssignedClasses(classes) {
-        const classesList = document.getElementById('assigned-classes-list');
-        if (classes.length === 0) {
-            classesList.innerHTML = '<li>You are not assigned to any classes yet.</li>';
-            return;
-        }
-        classesList.innerHTML = classes.map(item => `
-            <li><strong>${item.class_name}</strong> - ${item.subject_name}</li>
-        `).join('');
-    }
-
-    window.onload = loadDashboardData;
 </script>
-<script src="js/global-config.js"></script>
+
+    <div class="dashboard-container">
+        <div class="header-section">
+            <div>
+                <h1 id="greeting-message">Teacher Dashboard</h1>
+                <div id="welcome-area">
+                    <p id="datetime"></p>
+                </div>
+            </div>
+            
+            <div class="top-right-nav">
+                <a href="/profile.html">👤 My Profile</a>
+                <a href="/messaging.html">✉️ Messages</a>
+                <button onclick="logout()">🚪 Logout</button> 
+            </div>
+        </div>
+
+        <h2>Academic & Class Management</h2>
+        <div class="card-grid">
+            <a href="/my-timetable.html" class="dashboard-card" title="View assigned classes and periods.">
+                <span class="icon">🕓</span><span>My Timetable</span>
+            </a>
+            <a href="/manage-attendance.html" class="dashboard-card" title="Mark daily attendance for assigned classes.">
+                <span class="icon">✅</span><span>Mark Attendance</span>
+            </a>
+            <a href="/view-students-class.html" class="dashboard-card" title="View class roster, student details, and contact info.">
+                <span class="icon">🧑‍🎓</span><span>My Students</span>
+            </a>
+            <a href="/homework-assignments.html" class="dashboard-card" title="Create, assign, and review homework/classwork.">
+                <span class="icon">✍️</span><span>Assignments</span>
+            </a>
+            <a href="/grade-submissions.html" class="dashboard-card" title="Enter marks and grades for exams and assignments.">
+                <span class="icon">💯</span><span>Gradebook Entry</span>
+            </a>
+            <a href="/study-material-upload.html" class="dashboard-card" title="Upload resources, documents, and videos for students.">
+                <span class="icon">📚</span><span>Study Materials</span>
+            </a>
+            <a href="/online-exam-creation.html" class="dashboard-card" title="Create and schedule online quizzes and tests.">
+                <span class="icon">📝</span><span>Online Quizzes</span>
+            </a>
+            <a href="/academic-calendar.html" class="dashboard-card" title="View important school dates and deadlines.">
+                <span class="icon">📅</span><span>Academic Calendar</span>
+            </a>
+        </div>
+
+        <h2>HR & School Operations</h2>
+        <div class="card-grid">
+            <a href="/my-attendance.html" class="dashboard-card" title="View personal attendance records and history.">
+                <span class="icon">📊</span><span>My Attendance</span>
+            </a>
+            <a href="/request-leave.html" class="dashboard-card" title="Apply for leave and view leave status.">
+                <span class="icon">✈️</span><span>Leave Request</span>
+            </a>
+            <a href="/view-payroll.html" class="dashboard-card" title="Check salary slips and payroll history.">
+                <span class="icon">💵</span><span>My Payroll</span>
+            </a>
+            <a href="/class-teacher-reports.html" class="dashboard-card" title="Generate comprehensive reports for assigned classes.">
+                <span class="icon">📈</span><span>Class Reports</span>
+            </a>
+            <a href="/student-discipline-log.html" class="dashboard-card" title="Log disciplinary incidents for students in assigned classes.">
+                <span class="icon">⚖️</span><span>Discipline Log</span>
+            </a>
+            <a href="/ptm-schedule.html" class="dashboard-card" title="View Parent-Teacher Meeting schedules.">
+                <span class="icon">🤝</span><span>PTM Schedule</span>
+            </a>
+            <a href="/internal-feedback.html" class="dashboard-card" title="Provide feedback to the administration or IT.">
+                <span class="icon">📢</span><span>Internal Feedback</span>
+            </a>
+            <a href="/settings.html" class="dashboard-card" title="Manage account and notification settings.">
+                <span class="icon">⚙️</span><span>Settings</span>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const greetingMessageEl = document.getElementById('greeting-message');
+            const datetimeEl = document.getElementById('datetime');
+            const greetingName = username || 'Teacher';
+
+            function updateHeader() {
+                const now = new Date();
+                const hour = now.getHours();
+                
+                let greeting = 'Welcome';
+                if (hour < 12) {
+                    greeting = 'Good Morning ☀️';
+                } else if (hour < 17) {
+                    greeting = 'Good Afternoon 🌤️';
+                } else {
+                    greeting = 'Good Evening 🌙';
+                }
+                
+                greetingMessageEl.textContent = `${greeting}, ${greetingName}`;
+
+                const options = { 
+                    weekday: 'long', 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric', 
+                    hour: '2-digit', 
+                    minute: '2-digit', 
+                    second: '2-digit', 
+                    timeZone: 'Asia/Kolkata' 
+                };
+                datetimeEl.textContent = now.toLocaleDateString('en-IN', options);
+            }
+            
+            updateHeader(); 
+            setInterval(updateHeader, 1000); 
+
+        });
+    </script>
+    <script src="js/global-config.js"></script>
 </body>
 </html>

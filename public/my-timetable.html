@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Timetable</title>
+    <title id="page-title">My Timetable</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
-            background-color: #f0f2f8; /* Light background */
-            font-family: var(--bs-body-font-family);
+            background-color: #f0f2f8; 
+            font-family: 'Poppins', sans-serif; 
             font-size: 14px;
         }
         .timetable-container {
@@ -24,7 +24,7 @@
             margin-bottom: 25px;
         }
         .table thead th {
-            background-color: #5e35b1; /* Purple header */
+            background-color: #5e35b1; 
             color: white;
             text-align: center;
             vertical-align: middle;
@@ -32,20 +32,19 @@
         .table tbody td {
             text-align: center;
             vertical-align: middle;
-            height: 60px; /* Consistent row height */
+            height: 60px; 
         }
         .time-slot {
             font-weight: bold;
-            background-color: #f8f9fa; /* Light grey for time */
+            background-color: #f8f9fa; 
         }
         .subject-cell {
             font-weight: 500;
         }
         .teacher-name {
             font-size: 0.85em;
-            color: #6c757d; /* Muted color */
+            color: #6c757d; 
         }
-         /* Simple loading indicator */
         #loading-indicator {
             text-align: center;
             padding: 20px;
@@ -57,8 +56,8 @@
 <body class="p-3">
     <div class="timetable-container">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>My Weekly Timetable</h1>
-            <a href="/student-dashboard.html" class="btn btn-outline-secondary">← Back to Dashboard</a>
+            <h1 id="timetable-header">My Weekly Timetable</h1>
+            <a id="back-to-dashboard" href="/dashboard.html" class="btn btn-outline-secondary">← Back to Dashboard</a>
         </div>
 
         <div id="timetable-display" class="table-responsive">
@@ -76,24 +75,56 @@
                     </tr>
                 </thead>
                 <tbody id="timetable-body">
-                    </tbody>
+                </tbody>
             </table>
             <p id="error-message" class="text-danger mt-3" style="display: none;"></p>
         </div>
     </div>
 
     <script>
-        const API_URL = '/api/timetable/student/me';
         const TOKEN = localStorage.getItem('erp-token');
-        const STUDENT_ID = localStorage.getItem('student-id'); 
+        const USER_ROLE = localStorage.getItem('user-role'); 
         const timetableBody = document.getElementById('timetable-body');
         const loadingIndicator = document.getElementById('loading-indicator');
         const errorMessage = document.getElementById('error-message');
         const timetableTable = document.querySelector('.table');
+        const backToDashboardLink = document.getElementById('back-to-dashboard');
 
         const daysOfWeek = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
         
-        // Helper function to format time (e.g., "14:30" to "2:30 PM")
+        // --- Role-based API Endpoint Configuration ---
+        let API_URL;
+        let mainDashboard = '/dashboard.html'; 
+        let isAuthorized = true; // Flag to control script execution
+
+        switch (USER_ROLE) {
+            case 'Student':
+                API_URL = '/api/timetable/student/me';
+                mainDashboard = '/student-dashboard.html';
+                break;
+            case 'Teacher':
+                API_URL = '/api/timetable/teacher/me';
+                mainDashboard = '/teacher-dashboard.html';
+                break;
+            case 'Admin':
+            case 'Super Admin':
+                API_URL = '/api/timetable/teacher/me'; 
+                mainDashboard = '/admin-dashboard.html';
+                break;
+            default:
+                showError("Role not recognized. Access Denied. Redirecting to login...");
+                isAuthorized = false; // Disable fetching
+                setTimeout(() => window.location.href = '/login.html', 1000);
+                break; 
+        }
+
+        // Update back button and title
+        backToDashboardLink.href = mainDashboard;
+        document.getElementById('page-title').textContent = `${USER_ROLE} Timetable`;
+        document.getElementById('timetable-header').textContent = `My Weekly Timetable (${USER_ROLE})`;
+
+        
+        // Helper function to format time
         function formatTime(timeString) {
             const [h, m] = timeString.split(':');
             let hour = parseInt(h);
@@ -118,16 +149,19 @@
                 });
 
                 if (!response.ok) {
-                    if (response.status === 401 || response.status === 403) {
-                        throw new Error('Unauthorized. Please log in again.');
+                    // 404 means the route exists, but the specific data/profile wasn't found (e.g., student not enrolled, teacher not assigned)
+                    if (response.status === 404 || response.status === 204) {
+                        showError(`Timetable not yet assigned or profile not fully setup.`);
+                        return;
                     }
                     throw new Error(`HTTP error! Status: ${response.status}`);
                 }
 
                 const timetableData = await response.json();
 
-                if (!Array.isArray(timetableData)) {
-                     throw new Error('Invalid data format received from server.');
+                if (!Array.isArray(timetableData) || timetableData.length === 0) {
+                     showError(`No timetable data available for the current schedule.`);
+                     return;
                 }
 
                 renderTimetable(timetableData);
@@ -141,7 +175,7 @@
         }
 
         function renderTimetable(data) {
-            timetableBody.innerHTML = ''; // Clear previous content
+            timetableBody.innerHTML = ''; 
             
             // 1. Collect all unique time slots (start_time - end_time)
             let uniqueTimeSlots = new Set();
@@ -149,11 +183,10 @@
                 uniqueTimeSlots.add(entry.start_time + "-" + entry.end_time);
             });
             
-            // Convert to array and sort (lexicographical sort on time strings works for HH:MM format)
             const sortedTimeSlots = Array.from(uniqueTimeSlots).sort();
 
-            // 2. Create a lookup map for easy access: Map<TimeSlot_Key, Map<Day, Entry>>
-            const schedule = new Map(); // Key: "HH:MM-HH:MM"
+            // 2. Create a lookup map
+            const schedule = new Map(); 
             data.forEach(entry => {
                 const timeKey = entry.start_time + "-" + entry.end_time;
                 const day = entry.day_of_week; 
@@ -164,7 +197,7 @@
                 schedule.get(timeKey).set(day, entry);
             });
 
-            // 3. Generate table rows based on determined and sorted time slots
+            // 3. Generate table rows
             sortedTimeSlots.forEach(timeKey => {
                 const [startTime, endTime] = timeKey.split('-');
                 const row = document.createElement('tr');
@@ -173,22 +206,30 @@
                 row.innerHTML += `<td class="time-slot">${formatTime(startTime)} - ${formatTime(endTime)}</td>`; 
 
                 daysOfWeek.forEach(day => {
-                    const entry = schedule.get(timeKey)?.get(day); // Safely get entry for this day/time
+                    const entry = schedule.get(timeKey)?.get(day); 
                     if (entry) {
-                         row.innerHTML += `
+                        // Dynamically determine the secondary info based on role
+                        let secondaryInfo = '';
+                        if (USER_ROLE === 'Student' || USER_ROLE === 'Admin') {
+                            // Students/Admins see Teacher Name
+                            secondaryInfo = `${entry.teacher_name || 'N/A'} (${entry.room_number || 'N/A'})`;
+                        } else if (USER_ROLE === 'Teacher') {
+                            // Teachers see Course & Batch
+                            secondaryInfo = `${entry.course_name || 'N/A'} - ${entry.batch_name || 'N/A'} (${entry.room_number || 'N/A'})`;
+                        }
+
+                        row.innerHTML += `
                             <td class="subject-cell">
                                 ${entry.subject_name || 'N/A'}<br>
-                                <span class="teacher-name">${entry.teacher_name || ''} (${entry.room_number || 'N/A'})</span>
+                                <span class="teacher-name">${secondaryInfo}</span>
                             </td>`;
                     } else {
-                        // Empty cell for no class
                         row.innerHTML += `<td>-</td>`;
                     }
                 });
                 timetableBody.appendChild(row);
             });
 
-             // Show the table only if data was rendered
             if (timetableBody.children.length > 0) {
                  timetableTable.style.display = 'table';
             } else {
@@ -202,11 +243,19 @@
             timetableTable.style.display = 'none';
             loadingIndicator.style.display = 'none';
         }
-
-        document.addEventListener('DOMContentLoaded', fetchTimetable);
+        
+        // --- Initial Load Check ---
+        if (isAuthorized && TOKEN) {
+            document.addEventListener('DOMContentLoaded', fetchTimetable);
+        } else if (!isAuthorized) {
+            // Redirect already handled in switch statement
+        } else {
+            showError("User session expired or invalid. Redirecting to login...");
+            setTimeout(() => window.location.href = '/login.html', 1000);
+        }
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/global-config.js"></script>
+    <script src="js/global-config.js"></script> 
 </body>
 </html>

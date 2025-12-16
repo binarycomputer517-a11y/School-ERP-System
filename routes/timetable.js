@@ -32,7 +32,8 @@ function getDayAsNumber(dayStringOrNumber) {
 // Basic UUID/ID Validation
 function isValidId(id) {
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    return uuidRegex.test(id) || (!isNaN(parseInt(id)) && isFinite(id));
+    // Allowing numeric IDs as well, as per previous assumption, though UUID is preferred
+    return uuidRegex.test(id) || (!isNaN(parseInt(id)) && isFinite(id)); 
 }
 
 
@@ -49,7 +50,6 @@ router.get('/student/me', authenticateToken, authorize(VIEW_ROLES), async (req, 
     const studentUserId = req.user.id; // User's UUID from the JWT
 
     try {
-        // SECURITY FIX: Only use user_id to find the associated student profile
         const studentInfoQuery = `
             SELECT course_id, batch_id 
             FROM students 
@@ -68,10 +68,10 @@ router.get('/student/me', authenticateToken, authorize(VIEW_ROLES), async (req, 
                 ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
                 s.subject_name, s.subject_code,
                 COALESCE(t.full_name, u.username) AS teacher_name,
-                t.id AS teacher_reference_id  -- FIXED: Changed t.teacher_id to t.id in SELECT
+                t.id AS teacher_reference_id
             FROM ${TIMETABLE_TABLE} ct
             JOIN subjects s ON ct.subject_id = s.id
-            LEFT JOIN teachers t ON ct.teacher_id = t.id  -- FIXED: t.teacher_id changed to t.id in JOIN
+            LEFT JOIN teachers t ON ct.teacher_id = t.id
             LEFT JOIN users u ON t.user_id = u.id
             WHERE ct.course_id = $1 AND ct.batch_id = $2 AND ct.is_active = TRUE
             ORDER BY ct.day_of_week, ct.start_time ASC;
@@ -86,8 +86,68 @@ router.get('/student/me', authenticateToken, authorize(VIEW_ROLES), async (req, 
     }
 });
 
+
 // =========================================================
-// 1. CRUD Routes (Admin/Teacher)
+// 3. Teacher View Endpoint (MOVED UP FOR SAFE ROUTING)
+// =========================================================
+
+/**
+ * @route   GET /api/timetable/teacher/me
+ * @desc    Get the assigned weekly timetable for the logged-in teacher.
+ * @access  Private (Teacher)
+ */
+router.get('/teacher/me', authenticateToken, authorize(['Teacher']), async (req, res) => {
+    const teacherUserId = req.user.id; // User's UUID from the JWT
+
+    try {
+        // Step 1: Find the teacher's internal ID (t.id) using the User ID (u.id)
+        const teacherIdQuery = `
+            SELECT t.id 
+            FROM teachers t
+            WHERE t.user_id = $1
+            LIMIT 1;
+        `;
+        const teacherIdResult = await pool.query(teacherIdQuery, [teacherUserId]);
+        
+        if (teacherIdResult.rowCount === 0) {
+            // Returning 404 here, which is expected if the teacher has no profile
+            return res.status(404).json({ message: 'Teacher profile not found or user association is missing.' });
+        }
+        
+        const teacherReferenceId = teacherIdResult.rows[0].id;
+        
+        // Step 2: Fetch timetable slots assigned to this teacher reference ID
+        const timetableQuery = `
+            SELECT 
+                ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
+                s.subject_name, s.subject_code,
+                c.course_name, b.batch_name
+            FROM ${TIMETABLE_TABLE} ct
+            JOIN subjects s ON ct.subject_id = s.id
+            LEFT JOIN courses c ON ct.course_id = c.id
+            LEFT JOIN batches b ON ct.batch_id = b.id
+            
+            WHERE ct.teacher_id = $1 AND ct.is_active = TRUE
+            ORDER BY 
+                ct.day_of_week, 
+                ct.start_time ASC;
+        `;
+        
+        const result = await pool.query(timetableQuery, [teacherReferenceId]);
+        
+        res.status(200).json(result.rows);
+
+    } catch (error) {
+        console.error('Teacher Timetable Fetch Error:', error);
+        // Logging database error detail (added in previous step)
+        console.error('Database Error Detail:', error.detail); 
+        res.status(500).json({ message: 'Internal Server Error: Failed to retrieve teacher timetable.' });
+    }
+});
+
+
+// =========================================================
+// 1. CRUD Routes (Admin/Teacher) - PARAMETER ROUTES LAST
 // =========================================================
 
 /**
@@ -152,6 +212,7 @@ router.get('/:courseId/:batchId', authenticateToken, authorize(VIEW_ROLES), asyn
     const { courseId, batchId } = req.params;
 
     // SECURITY FIX: Input validation for URL parameters
+    // This is the validation that was causing the error if the fixed route was hit instead
     if (!isValidId(courseId) || !isValidId(batchId)) {
         return res.status(400).json({ message: 'Invalid Course or Batch ID format.' });
     }
@@ -162,10 +223,10 @@ router.get('/:courseId/:batchId', authenticateToken, authorize(VIEW_ROLES), asyn
                 ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
                 s.subject_name, s.subject_code,
                 COALESCE(t.full_name, u.username) AS teacher_name,
-                t.id AS teacher_reference_id  -- FIXED: Changed t.teacher_id to t.id in SELECT
+                t.id AS teacher_reference_id
             FROM ${TIMETABLE_TABLE} ct
             JOIN subjects s ON ct.subject_id = s.id
-            LEFT JOIN teachers t ON ct.teacher_id = t.id  -- FIXED: t.teacher_id changed to t.id in JOIN
+            LEFT JOIN teachers t ON ct.teacher_id = t.id
             LEFT JOIN users u ON t.user_id = u.id
             WHERE ct.course_id = $1 AND ct.batch_id = $2 AND ct.is_active = TRUE
             ORDER BY ct.day_of_week, ct.start_time ASC;

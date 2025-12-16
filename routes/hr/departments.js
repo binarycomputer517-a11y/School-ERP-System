@@ -20,16 +20,16 @@ async function handleTransactionError(client, error, res, action = 'operation') 
         errorMessage = 'A department with this name already exists.';
         return res.status(409).json({ message: errorMessage });
     }
-    // Check for foreign key constraint (Prevents deleting a department referenced by an active job posting)
+    // Check for foreign key constraint (Prevents deleting a department referenced by an active record)
     if (error.code === '23503') { 
-        errorMessage = 'Cannot delete this department. It is currently referenced by other records (e.g., job postings).';
+        errorMessage = 'Cannot delete this department. It is currently referenced by other records (e.g., teachers, job postings).';
         return res.status(400).json({ message: errorMessage });
     }
     res.status(500).json({ message: errorMessage });
 }
 
 // =========================================================
-// 1. GET: List All Departments (Uses broader VIEW_ROLES)
+// 1. GET: List All Departments (Fixed COUNT SQL and Columns)
 // =========================================================
 router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => { 
     try {
@@ -40,8 +40,8 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
                 hd.description, 
                 hd.created_at, 
                 hd.updated_at,
-                -- FIX: Changed COUNT(t.id) to COUNT(t.*) to fix the "column t.id does not exist" error.
-                COALESCE(COUNT(t.*) FILTER (WHERE t.is_active = TRUE), 0) AS staff_count
+                -- Using COUNT(t.id) is cleaner for PK counts
+                COALESCE(COUNT(t.id) FILTER (WHERE t.is_active = TRUE), 0) AS staff_count
             FROM ${DEPARTMENTS_TABLE} hd
             LEFT JOIN ${TEACHERS_TABLE} t ON hd.id = t.department_id
             GROUP BY hd.id
@@ -57,10 +57,9 @@ router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
 
 
 // =========================================================
-// 2. POST: Create New Department (Uses stricter CRUD_ROLES)
+// 2. POST: Create New Department (Removed 'department_name')
 // =========================================================
 router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
-    // Collect 'name' and 'description'. All other fields are treated as payroll template data.
     const { name, description, ...payroll_template_data } = req.body;
     
     if (!name || name.trim() === '') {
@@ -71,21 +70,17 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // Combine the basic description with the Payroll Template into a single JSON object.
         const department_description_payload = {
             basic_description: description || null,
-            payroll_template: payroll_template_data // Stores all salary fields as a JSON object
+            payroll_template: payroll_template_data 
         };
-
         const department_description_json = JSON.stringify(department_description_payload);
         
         const query = `
-            -- FIX: Added department_name to satisfy NOT NULL constraint on the table.
-            INSERT INTO ${DEPARTMENTS_TABLE} (name, department_name, description)
-            VALUES ($1, $1, $2)
+            INSERT INTO ${DEPARTMENTS_TABLE} (name, description) /* FIX: Removed department_name */
+            VALUES ($1, $2)
             RETURNING id, name;
         `;
-        // Pass name twice for $1 and $2 for description payload
         const result = await client.query(query, [name.trim(), department_description_json]);
 
         await client.query('COMMIT');
@@ -103,11 +98,10 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
 
 
 // =========================================================
-// 3. PUT: Update Department Details (Uses stricter CRUD_ROLES)
+// 3. PUT: Update Department Details (Fixed JSON Merge and Columns)
 // =========================================================
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const deptId = req.params.id;
-    // Collect 'name' and 'description'. All other fields are treated as payroll template data.
     const { name, description, ...payroll_template_data } = req.body;
 
     if (!name || name.trim() === '') {
@@ -118,25 +112,52 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
     try {
         await client.query('BEGIN');
         
-        // Re-package the payload before update
+        // --- 0. FETCH EXISTING DESCRIPTION (CRITICAL FOR JSON MERGE) ---
+        const existingDeptResult = await client.query(
+            `SELECT description FROM ${DEPARTMENTS_TABLE} WHERE id = $1`, [deptId]
+        );
+
+        if (existingDeptResult.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Department not found.' });
+        }
+        
+        const existingDescriptionJson = existingDeptResult.rows[0].description;
+        let existingPayload = {};
+        try {
+            // Attempt to parse existing JSON description
+            existingPayload = existingDescriptionJson ? JSON.parse(existingDescriptionJson) : {};
+        } catch(e) {
+            console.warn('Existing department description is invalid JSON:', e);
+            // Initialize payload to safely merge new data
+            existingPayload = {}; 
+        }
+
+        // --- 1. RE-PACKAGE THE PAYLOAD WITH MERGED DATA ---
         const department_description_payload = {
-            basic_description: description || null,
-            payroll_template: payroll_template_data // Update/Preserve the template
+            // If description is provided in request, use it. Otherwise, retain existing basic_description.
+            basic_description: description !== undefined ? description : existingPayload.basic_description || null,
+            
+            // Merge new payroll template data with existing data to prevent loss of keys not sent by the client
+            payroll_template: {
+                ...(existingPayload.payroll_template || {}),
+                ...payroll_template_data
+            }
         };
         const department_description_json = JSON.stringify(department_description_payload);
 
         const query = `
             UPDATE ${DEPARTMENTS_TABLE} SET
                 name = $1, 
-                -- FIX: Added department_name update to maintain consistency with the table schema.
-                department_name = $1,
-                description = $2,
+                description = $2, /* FIX: Removed department_name from update list */
                 updated_at = CURRENT_TIMESTAMP
             WHERE id = $3
             RETURNING id, name;
         `;
         const result = await client.query(query, [name.trim(), department_description_json, deptId]);
 
+        // ... (rest of the code) ...
+        
         if (result.rowCount === 0) {
             await client.query('ROLLBACK');
             return res.status(404).json({ message: 'Department not found.' });
@@ -157,7 +178,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
 
 
 // =========================================================
-// 4. DELETE: Delete Department (Uses stricter CRUD_ROLES)
+// 4. DELETE: Delete Department
 // =========================================================
 router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const deptId = req.params.id;
