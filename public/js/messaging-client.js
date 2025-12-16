@@ -428,8 +428,9 @@ function initAdminControls() {
  */
 function initializeMessagingClient() {
     // 1. Set global state from localStorage
-    currentUserId = localStorage.getItem('erp-user-id'); 
-    currentUserRole = localStorage.getItem('erp-user-role');
+    // 🔥 CRITICAL FIX: Use the key names set by the current login.js
+    currentUserId = localStorage.getItem('profile-id'); 
+    currentUserRole = localStorage.getItem('user-role');
     
     if (!currentUserId || !currentUserRole) { 
         console.error("User context (ID or Role) missing. Please ensure you are logged in and localStorage is populated.");

@@ -9,6 +9,32 @@ const SETTINGS_CACHE_KEY = 'erp_settings';
 const GLOBAL_CONFIG_API = '/api/settings/config/current'; 
 const MAX_CACHE_AGE_MS = 3600000; // 1 hour (3600 seconds * 1000 ms)
 
+// --- STATIC CLIENT-SIDE CONFIGURATION ---
+// These values are merged with the API response (settings).
+const STATIC_CONFIG = {
+    // --- Feedback Module Configuration ---
+    FEEDBACK_STATUSES: ['New', 'In Progress', 'Resolved', 'Closed'],
+    FEEDBACK_PRIORITIES: ['Low', 'Medium', 'High', 'Urgent'],
+    
+    // --- API Endpoints (Used by client-side JS) ---
+    API_ENDPOINTS: {
+        SUBMIT_FEEDBACK: '/api/feedback/submit',
+        MY_SUBMISSIONS: '/api/feedback/my-submissions',
+        ALL_FEEDBACK: '/api/feedback/all',
+        // Example of a function endpoint
+        UPDATE_STATUS: (id) => `/api/feedback/${id}/status`
+    },
+    
+    // --- UI Styles for Feedback ---
+    FEEDBACK_STATUS_COLORS: {
+        'New': '#3498db',         // Blue
+        'In Progress': '#f39c12', // Orange
+        'Resolved': '#2ecc71',    // Green
+        'Closed': '#95a5a6'       // Grey
+    }
+};
+
+
 // Global exposure of settings and utilities
 window.erpSettings = null;
 
@@ -40,8 +66,6 @@ async function initGlobalSettings() {
 
     // 2. Fetch from API if settings are null (cache miss or expired)
     if (!settings) {
-        // Since /api/settings/config/current is now PUBLIC (403 fix)
-        // We fetch it without relying on the JWT token.
         const token = localStorage.getItem('erp-token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
         
@@ -49,7 +73,6 @@ async function initGlobalSettings() {
             const res = await fetch(GLOBAL_CONFIG_API, { headers });
 
             if (!res.ok) {
-                // ✅ FIX: Removed extra 'new' keyword to fix TypeError
                 throw new Error(`Failed to fetch settings. Status: ${res.status}`);
             }
 
@@ -64,18 +87,19 @@ async function initGlobalSettings() {
             
         } catch (e) { 
             console.error("Global Config: Failed to sync settings", e);
-            // Return null if fetch failed (use default UI state)
             return null; 
         }
     }
 
     // 3. Apply Settings to the UI and return the object
     if(settings) {
+        // 🔥 CRITICAL FIX: Merge API settings with static client-side configuration
+        Object.assign(settings, STATIC_CONFIG); 
+        
         applySettingsToUI(settings);
         return settings; // Expose settings globally via the return value
     }
     
-    // If no settings are found or fetched, return null
     return null;
 }
 
@@ -97,14 +121,12 @@ function applySettingsToUI(config) {
         }
         link.href = config.school_logo_path;
         
-        // 🚨 FIX 1: Store Logo Path in localStorage for other scripts like view-transcript.html
         localStorage.setItem('school-logo-path', config.school_logo_path); 
     }
 
     // --- B. Currency Formatting (FIXED) ---
-    // Determine the symbol and locale
     let symbol = '₹';
-    let locale = 'en-IN'; // Defaulting to Indian locale for formatting
+    let locale = 'en-IN'; 
 
     switch (config.currency) {
         case 'USD':
@@ -113,12 +135,12 @@ function applySettingsToUI(config) {
             break;
         case 'EUR':
             symbol = '€';
-            locale = 'de-DE'; // German locale often used for Euro formatting
+            locale = 'de-DE'; 
             break;
         case 'INR':
         default:
             symbol = '₹';
-            locale = 'en-IN'; // Indian numeral system (lakhs, crores)
+            locale = 'en-IN'; 
             break;
     }
     
@@ -129,7 +151,7 @@ function applySettingsToUI(config) {
         const formatter = new Intl.NumberFormat(locale, {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2,
-            useGrouping: true // Crucial for number grouping (like 1,00,000 for en-IN)
+            useGrouping: true 
         });
         
         const formattedAmount = formatter.format(Number(amount));
@@ -154,7 +176,6 @@ function applySettingsToUI(config) {
         if (config[key]) {
             document.querySelectorAll(identityMap[key]).forEach(el => el.innerText = config[key]);
             
-            // 🚨 FIX 2: Store School Name in localStorage for view-transcript.html watermark/header
             if (key === 'school_name') {
                  localStorage.setItem('school-name', config[key]); 
             }

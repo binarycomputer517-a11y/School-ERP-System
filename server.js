@@ -18,10 +18,11 @@ const fs = require('fs');
 const morgan = require('morgan'); 
 
 // --- Custom Modules ---
-const { initializeDatabase, pool } = require('./database');
+// Note: initializeDatabase and pool are expected to be exported from ./database
+const { initializeDatabase, pool } = require('./database'); 
 const { startNotificationService } = require('./notificationService');
 const { multerInstance } = require('./multerConfig');
-const { authenticateToken } = require('./authMiddleware');
+const { authenticateToken } = require('./authMiddleware'); // authMiddleware for JWT checking
 
 // --- Configuration Constants ---
 const PORT = process.env.PORT || 3005;
@@ -85,7 +86,7 @@ const alumniRouter = require('./routes/alumni');
 const disciplineRouter = require('./routes/discipline');
 const complianceRouter = require('./routes/compliance');
 const reportsRouter = require('./routes/reports');
-const feedbackRouter = require('./routes/feedback');
+const feedbackRouter = require('./routes/feedback'); // ⬅️ Feedback Router Included
 const placementsRouter = require('./routes/placements');
 const healthRouter = require('./routes/health');
 
@@ -94,8 +95,6 @@ const examsRouter = require('./routes/exams');
 const examMarksRouter = require('./routes/exam_marks'); 
 const quizzesRouter = require('./routes/quizzes'); 
 const transcriptRoutes = require('./routes/transcript'); 
-
-// 🔥 CRITICAL FIX: Import the new calendar router
 const calendarRoutes = require('./routes/calendar'); 
 
 
@@ -143,18 +142,14 @@ app.use('/backups', express.static(BACKUP_DIR));
 // 3. REAL-TIME SOCKET LOGIC (MESSAGING FIX)
 // ===================================
 io.on('connection', (socket) => {
-    // console.log('Socket connected:', socket.id); // Uncomment for debug
-
-    // 1. Join a specific conversation "room" (Client sends 'join_conversation' event)
+    // 1. Join a specific conversation "room" 
     socket.on('join_conversation', (conversationId) => {
         socket.join(conversationId);
-        // console.log(`User ${socket.id} joined room: ${conversationId}`); // Uncomment for debug
     });
 
     // 2. Leave a conversation "room"
     socket.on('leave_conversation', (conversationId) => {
         socket.leave(conversationId);
-        // console.log(`User ${socket.id} left room: ${conversationId}`); // Uncomment for debug
     });
 
     // 3. Handle new messages (CRITICAL MESSAGING LOGIC)
@@ -202,7 +197,7 @@ io.on('connection', (socket) => {
     });
 
     socket.on('disconnect', () => {
-        // console.log('A user disconnected:', socket.id); // Uncomment for debug
+        // Handle disconnection logic if needed
     });
 });
 
@@ -226,7 +221,7 @@ app.use('/api', authenticateToken);
 app.use('/api/branches', branchesRouter); 
 app.use('/api/system/logs', systemLogsRouter); 
 app.use('/api/system/backup', backupRestoreRouter); 
-app.use('/api/feedback', feedbackRouter);
+app.use('/api/feedback', feedbackRouter); // ⬅️ Protected Feedback Route
 app.use('/api/utils', utilsRouter);
 // Core Modules
 app.use('/api/settings', settingsRouter);
@@ -260,10 +255,10 @@ app.use('/api/certificates', certificatesRouter);
 app.use('/api/assignments', assignmentsRouter);
 app.use('/api/online-learning', onlineLearningRouter);
 
-// 🚨 CRITICAL FIX: Mount the new calendar router
+// Calendar Route
 app.use('/api/calendar', calendarRoutes); 
 
-// Transcript Route (Already fixed)
+// Transcript Route
 app.use('/api/transcript', transcriptRoutes); 
 
 // Finance Modules
