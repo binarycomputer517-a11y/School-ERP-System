@@ -47,9 +47,11 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const token = localStorage.getItem('erp-token');
-        // ⭐ CRITICAL FIX: Use the consistent 'profile-id' key
         const studentId = localStorage.getItem('profile-id'); 
         
+        // Base URL for the online learning API
+        const ONLINE_LEARNING_API_BASE = '/api/online-learning';
+
         // --- Helper function for API calls (using the standard structure) ---
         async function handleApi(url) {
             const response = await fetch(url, {
@@ -58,10 +60,12 @@
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
                      alert('Session expired or unauthorized. Please log in again.');
+                     localStorage.clear(); 
                      window.location.href = '/login.html';
                      throw new Error('Unauthorized');
                 }
-                throw new Error(`API call failed with status: ${response.status}`);
+                const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
+                throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message || response.statusText}`);
             }
             return response.json();
         }
@@ -70,11 +74,14 @@
          * Maps content type to a visual icon and action text.
          */
         function getContentDetails(contentType) {
-            switch (contentType) {
+            // Ensure contentType is defined before calling toUpperCase()
+            const type = (contentType || 'DEFAULT').toUpperCase();
+            switch (type) {
                 case 'PDF': return { icon: '📄', action: 'Download PDF', color: 'btn-outline-danger' };
                 case 'VIDEO': return { icon: '▶️', action: 'Watch Video', color: 'btn-outline-primary' };
                 case 'EXTERNAL': return { icon: '🔗', action: 'View Link', color: 'btn-outline-info' };
                 case 'QUIZ': return { icon: '📝', action: 'Start Quiz', color: 'btn-outline-warning' };
+                case 'DOCUMENT': return { icon: '📑', action: 'View Document', color: 'btn-outline-secondary' };
                 default: return { icon: '📚', action: 'Open Resource', color: 'btn-outline-secondary' };
             }
         }
@@ -87,7 +94,6 @@
             const errorMessage = document.getElementById('error-message');
             errorMessage.style.display = 'none';
 
-            // Check based on the unified key
             if (!studentId || !token) {
                 container.innerHTML = '<p class="text-danger text-center">Login error: ID/Token missing. Please log in again.</p>';
                 return;
@@ -96,20 +102,22 @@
             container.innerHTML = '<p class="text-center text-muted">Loading your assigned resources...</p>';
 
             try {
-                // IMPORTANT: Reuse the student assignments API for consistency.
-                // The URL below assumes the necessary route is added to onlineLearning.js:
-                const assignments = await handleApi(`/api/online-learning/assignments/student/${studentId}`);
+                // Fetch study modules specifically assigned to this student
+                // NOTE: This URL requires a new route in routes/onlineLearning.js
+                const url = `${ONLINE_LEARNING_API_BASE}/modules/student/${studentId}`;
+                const modules = await handleApi(url);
 
-                if (assignments.length === 0) {
+                if (modules.length === 0) {
                     container.innerHTML = '<p class="text-center text-info">No study material or modules are currently assigned to you.</p>';
                     return;
                 }
 
                 // Group materials by subject for cleaner display
-                const groupedMaterial = assignments.reduce((acc, assign) => {
-                    const subjectName = assign.subject_name || 'Uncategorized';
+                const groupedMaterial = modules.reduce((acc, module) => {
+                    // Assuming the backend returns 'subject_name'
+                    const subjectName = module.subject_name || 'Uncategorized';
                     if (!acc[subjectName]) acc[subjectName] = [];
-                    acc[subjectName].push(assign);
+                    acc[subjectName].push(module);
                     return acc;
                 }, {});
 
@@ -125,7 +133,7 @@
                     groupedMaterial[subject].forEach(material => {
                         const details = getContentDetails(material.content_type);
                         
-                        // Check if content_url is available to make it clickable
+                        // Use content_url for the link
                         const contentUrl = material.content_url || '#';
                         const isDisabled = contentUrl === '#';
                         
@@ -138,7 +146,7 @@
                                     ${material.title}
                                 </h5>
                                 <p class="mb-0 small text-muted">
-                                    Module ID: ${material.module_id}
+                                    Content Type: ${material.content_type || 'General'}
                                 </p>
                             </div>
                             
@@ -154,7 +162,7 @@
 
             } catch (error) {
                 console.error('Error loading study material:', error);
-                errorMessage.textContent = `Error: Failed to load study material. (${error.message})`;
+                errorMessage.textContent = `Error: Failed to load study material. Please try again. (${error.message})`;
                 errorMessage.style.display = 'block';
                 container.innerHTML = '<p class="text-center text-danger">Failed to connect to the resources server.</p>';
             }

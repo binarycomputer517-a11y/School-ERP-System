@@ -84,9 +84,9 @@ router.get('/assignments/student/:studentId', authenticateToken, authorize(['Stu
                 s.subject_name,
                 s.subject_code,
                 ha.max_marks,
-                -- ✅ FINAL FIX: Use the confirmed column names from the DB schema
+                -- Final confirmed submission columns
                 sub.submission_status, 
-                sub.submitted_at AS completion_date, -- Use submitted_at for frontend consumption
+                sub.submitted_at AS completion_date, 
                 sub.marks_obtained,
                 ha.created_at
             FROM ${ASSIGNMENTS_CORE_TABLE} ha
@@ -100,7 +100,8 @@ router.get('/assignments/student/:studentId', authenticateToken, authorize(['Stu
             -- 3. Get submission status and completion date
             LEFT JOIN ${SUBMISSIONS_TABLE} sub 
                 ON sub.assignment_id = ha.id 
-                AND sub.student_id = $1 
+                -- IMPORTANT: References the student's primary ID for the submission record
+                AND sub.student_id = stud.student_id 
             
             -- 4. Filter: Only show assignments published for the student's current course and batch
             WHERE ha.course_id = stud.course_id AND ha.batch_id = stud.batch_id
@@ -111,9 +112,52 @@ router.get('/assignments/student/:studentId', authenticateToken, authorize(['Stu
         
         res.status(200).json(result.rows);
     } catch (error) {
-        // Log the actual error that caused the 500
+        // This catch block handles SQL errors, preventing the 500 crash
         console.error(`Error fetching assignments for student ${studentId}:`, error);
         res.status(500).json({ message: 'Failed to retrieve student assignments.' });
+    }
+});
+
+
+/**
+ * @route   GET /api/online-learning/modules/student/:studentId
+ * @desc    Get published learning modules relevant to a specific student's course/batch.
+ * @access  Private (Student, Admin, Super Admin)
+ */
+router.get('/modules/student/:studentId', authenticateToken, authorize(['Student', 'Admin', 'Super Admin']), async (req, res) => {
+    const { studentId } = req.params; // studentId here is the user_id (UUID)
+
+    try {
+        const query = `
+            SELECT
+                olm.id AS module_id,
+                olm.title, 
+                olm.content_type, 
+                olm.content_url,
+                s.subject_name
+            FROM ${MODULES_TABLE} olm
+            
+            -- 1. Get student's current enrollment details (course_id, batch_id)
+            JOIN students stud ON stud.user_id = $1  
+            
+            -- 2. Get subject name
+            LEFT JOIN subjects s ON olm.subject_id = s.id
+            
+            -- 3. Filter: Only show modules matching the student's course, batch, and published status
+            WHERE 
+                olm.course_id = stud.course_id 
+                AND olm.batch_id = stud.batch_id -- CRITICAL: Correct batch filter (schema confirmed its existence)
+                AND olm.status = 'Published'
+            
+            ORDER BY s.subject_name, olm.title;
+        `;
+        
+        const result = await pool.query(query, [studentId]); 
+        
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error(`Error fetching study modules for student ${studentId}:`, error);
+        res.status(500).json({ message: 'Failed to retrieve study modules.' });
     }
 });
 
@@ -423,6 +467,7 @@ router.post('/unassign', authenticateToken, authorize(ADMIN_ONLY_ROLES), async (
                     SELECT id FROM ${ASSIGNMENTS_CORE_TABLE} WHERE batch_id = $2 AND module_id = $1
                 )
                 AND student_id IN (
+                    -- NOTE: Assuming students table uses user_id for submission tracking in this context
                     SELECT user_id FROM students WHERE batch_id = $2
                 )
                 RETURNING student_id;
