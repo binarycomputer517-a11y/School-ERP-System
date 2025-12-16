@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Assignments & Modules</title>
+    <title>My Homework & Assignments</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body { background-color: #f0f2f8; font-family: sans-serif; }
@@ -25,7 +25,7 @@
 <body>
     <div class="container mt-5">
         <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1>My Assignments & Learning Modules</h1>
+            <h1>My Homework & Assignments</h1>
             <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
         </header>
 
@@ -45,8 +45,10 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const token = localStorage.getItem('erp-token');
-        // ⭐ UPDATED: Use 'profile-id' for consistency
-        const studentId = localStorage.getItem('profile-id'); 
+        
+        // ⭐ CRITICAL FIX: Use the robust ID retrieval logic for consistency
+        const studentId = localStorage.getItem('student_id') || localStorage.getItem('profile-id') || localStorage.getItem('student-id'); 
+        
         const ONLINE_LEARNING_API_BASE = '/api/online-learning'; // Define base URL
 
         // --- Helper function for API calls ---
@@ -57,6 +59,8 @@
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
                      alert('Session expired or unauthorized. Please log in again.');
+                     // Force logout if authentication fails
+                     localStorage.clear(); 
                      window.location.href = '/login.html';
                      throw new Error('Unauthorized');
                 }
@@ -73,18 +77,21 @@
          * @param {string} currentStatus - Status provided by the backend.
          */
         function getAssignmentStatus(dueDateStr, completionDateStr, currentStatus) {
-            // ✅ FIX: Use completionDateStr (which is sub.created_at from backend)
-            if (completionDateStr) return 'Completed';
-            if (currentStatus === 'Completed') return 'Completed';
+            // Priority 1: If completed/submitted, mark as Completed
+            if (completionDateStr || currentStatus === 'Completed') return 'Completed';
 
-            const now = new Date();
+            // Priority 2: Check for Overdue status
             if (dueDateStr) {
+                const now = new Date();
                 const dueDate = new Date(dueDateStr);
-                // Check if the due date is in the past
-                if (dueDate < now) {
+                
+                // Ensure date parsing is successful and check if due date is in the past
+                if (!isNaN(dueDate) && dueDate < now) {
                     return 'Overdue';
                 }
             }
+            
+            // Priority 3: Default to Assigned or backend status
             return currentStatus || 'Assigned';
         }
 
@@ -96,7 +103,7 @@
             const errorMessage = document.getElementById('error-message');
             errorMessage.style.display = 'none';
 
-            // Check based on the unified key
+            // Initial check for critical data
             if (!studentId || !token) {
                 listElement.innerHTML = '<li class="list-group-item text-danger">Login error: ID/Token missing. Please log in again.</li>';
                 return;
@@ -117,7 +124,7 @@
                 listElement.innerHTML = ''; // Clear loading message
 
                 assignments.forEach(assignment => {
-                    // ✅ FIX: Read the completion date from the new column name (completion_date)
+                    // completion_date is the recommended column name for the submission timestamp
                     const completionDateStr = assignment.completion_date; 
                     
                     const status = getAssignmentStatus(assignment.due_date, completionDateStr, assignment.submission_status);
