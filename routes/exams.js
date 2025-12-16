@@ -243,4 +243,64 @@ router.delete('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER
     }
 });
 
+/**
+ * @route   GET /api/transcript/:studentId
+ * @desc    Generate a complete academic transcript/marksheet for a student.
+ * @access  Private (Student, Admin, Teacher)
+ */
+router.get('/transcript/:studentId', authenticateToken, authorize(['Student', 'Admin', 'Teacher']), async (req, res) => {
+    const { studentId } = req.params;
+
+    try {
+        const query = `
+            SELECT
+                m.exam_schedule_id,
+                es.exam_name,
+                s.subject_name,
+                m.marks_obtained,
+                m.max_marks,
+                m.pass_marks,
+                m.grade_achieved,
+                m.created_at AS result_date
+            FROM marks m
+            
+            -- 1. Get Exam Details
+            JOIN exam_schedule es ON m.exam_schedule_id = es.id
+            
+            -- 2. Get Subject Name
+            JOIN subjects s ON m.subject_id = s.id
+            
+            -- 3. Filter by Student (assuming 'marks' table uses student_id for the student's primary ID)
+            WHERE m.student_id = $1
+            
+            ORDER BY es.exam_name, s.subject_name;
+        `;
+        
+        const result = await pool.query(query, [studentId]);
+
+        if (result.rowCount === 0) {
+            return res.status(200).json({ message: 'No marksheet data found for this student.', transcript: [] });
+        }
+        
+        // Grouping the results by exam for easy client-side rendering
+        const transcript = result.rows.reduce((acc, row) => {
+            const examId = row.exam_schedule_id;
+            if (!acc[examId]) {
+                acc[examId] = {
+                    exam_name: row.exam_name,
+                    results: []
+                };
+            }
+            acc[examId].results.push(row);
+            return acc;
+        }, {});
+
+        res.status(200).json({ transcript: Object.values(transcript) });
+
+    } catch (error) {
+        console.error(`Error generating transcript for student ${studentId}:`, error);
+        res.status(500).json({ message: 'Failed to generate transcript due to a backend error.' });
+    }
+});
+
 module.exports = router;

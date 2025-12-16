@@ -191,7 +191,7 @@ app.use('/api/ptm', ptmRouter);
 app.use('/api/placements', placementsRouter);
 
 // Exam Modules
-app.use('/api/exams', examsRouter); // <-- ✅ FIX 2: Mount the correct examsRouter here
+app.use('/api/exams', examsRouter); // <-- ✅ Mount the correct examsRouter here
 app.use('/api/online-exam', onlineExamRouter);
 app.use('/api/marks', examMarksRouter); 
 app.use('/api/quizzes', quizzesRouter); 
