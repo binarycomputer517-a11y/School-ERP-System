@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Class Reports | Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        :root { --primary: #6366f1; --bg: #f8fafc; }
+        body { background: var(--bg); font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
+        .report-card { background: white; border-radius: 24px; border: none; box-shadow: 0 10px 40px rgba(0,0,0,0.03); }
+        .stat-box { background: #f1f5f9; border-radius: 16px; padding: 1.5rem; border: 1px solid #e2e8f0; }
+        .btn-generate { background: var(--primary); color: white; border-radius: 12px; font-weight: 700; border: none; padding: 12px 24px; transition: 0.3s; }
+        .btn-generate:hover { background: #4f46e5; transform: translateY(-2px); box-shadow: 0 8px 15px rgba(99, 102, 241, 0.2); }
+    </style>
+</head>
+<body>
+    <div class="container py-5">
+        <header class="mb-5 d-flex justify-content-between align-items-center">
+            <div>
+                <h2 class="fw-bold mb-0">Class Performance Reports</h2>
+                <p class="text-muted">Analyze batch results and generate academic transcripts.</p>
+            </div>
+            <a href="/teacher-dashboard.html" class="btn btn-outline-secondary rounded-pill px-4">Dashboard</a>
+        </header>
+
+        <div class="card report-card p-4 p-md-5 mb-4">
+            <form id="reportForm">
+                <div class="row g-4 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small text-uppercase text-muted">Select Batch</label>
+                        <select id="batch_id" name="batch_id" class="form-select rounded-3" required>
+                            <option value="">Loading Batches...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small text-uppercase text-muted">Academic Session</label>
+                        <select id="session_id" name="session_id" class="form-select rounded-3" required>
+                            <option value="">Loading Sessions...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <button type="submit" class="btn-generate w-100">
+                            <i class="fas fa-file-invoice me-2"></i> FETCH CLASS REPORT
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div id="reportResult" class="d-none">
+            <div class="row g-4 mb-4">
+                <div class="col-md-4">
+                    <div class="stat-box text-center">
+                        <small class="text-muted fw-bold uppercase">Class Average</small>
+                        <h2 class="fw-bold mb-0" id="avgMarks">0%</h2>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-box text-center border-success">
+                        <small class="text-muted fw-bold uppercase">Pass Percentage</small>
+                        <h2 class="fw-bold mb-0 text-success" id="passRate">0%</h2>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-box text-center">
+                        <small class="text-muted fw-bold uppercase">Total Students</small>
+                        <h2 class="fw-bold mb-0" id="totalStudents">0</h2>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card report-card p-4">
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead class="small text-muted text-uppercase">
+                            <tr>
+                                <th>Roll No</th>
+                                <th>Student Name</th>
+                                <th>Total Marks</th>
+                                <th>Percentage</th>
+                                <th class="text-end">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentReportBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const TOKEN = localStorage.getItem('erp-token');
+
+        // 1. Load Dropdowns on start
+        async function loadMeta() {
+            try {
+                const [batchRes, sessionRes] = await Promise.all([
+                    fetch('/api/teachers/me/batches', { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+                    fetch('/api/academic-sessions', { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+                ]);
+                
+                const batches = await batchRes.json();
+                const sessions = await sessionRes.json();
+
+                document.getElementById('batch_id').innerHTML = '<option value="">Select Batch</option>' + 
+                    batches.map(b => `<option value="${b.id}">${b.batch_name}</option>`).join('');
+                
+                document.getElementById('session_id').innerHTML = '<option value="">Select Session</option>' + 
+                    sessions.map(s => `<option value="${s.id}">${s.session_name}</option>`).join('');
+            } catch (err) { console.error("Metadata Load Failed", err); }
+        }
+
+        // 2. Fetch and Display Report
+        document.getElementById('reportForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const batchId = document.getElementById('batch_id').value;
+            const sessionId = document.getElementById('session_id').value;
+
+            try {
+                const res = await fetch(`/api/reports/batch/${batchId}?session_id=${sessionId}`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const data = await res.json();
+
+                document.getElementById('avgMarks').innerText = data.summary.avg_percentage + '%';
+                document.getElementById('passRate').innerText = data.summary.pass_rate + '%';
+                document.getElementById('totalStudents').innerText = data.students.length;
+
+                document.getElementById('studentReportBody').innerHTML = data.students.map(s => `
+                    <tr>
+                        <td>${s.roll_number}</td>
+                        <td class="fw-bold">${s.full_name}</td>
+                        <td>${s.total_marks}</td>
+                        <td>${s.percentage}%</td>
+                        <td class="text-end">
+                            <a href="/api/report-card/generate/${s.id}?session_id=${sessionId}" target="_blank" class="btn btn-sm btn-light border">
+                                <i class="fas fa-file-pdf me-1"></i> Print
+                            </a>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('reportResult').classList.remove('d-none');
+            } catch (err) { alert("Failed to fetch reports for this selection."); }
+        };
+
+        document.addEventListener('DOMContentLoaded', loadMeta);
+    </script>
+</body>
+</html>

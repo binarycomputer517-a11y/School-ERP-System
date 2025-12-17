@@ -35,7 +35,7 @@
 <body>
 
     <div class="container">
-        <a href="/student-dashboard.html" class="dashboard-link">← Back to Dashboard</a>
+        <a href="/" class="dashboard-link">← Back to Dashboard</a>
         <h1>My Detailed Attendance Record</h1>
 
         <div class="filter-section">
@@ -58,7 +58,7 @@
             </div>
         </div>
 
-        <h3 id="reportStatus">Initializing... Please log in.</h3>
+        <h3 id="reportStatus">Initializing... Please wait.</h3>
         
         <div class="table-wrapper">
             <table>
@@ -81,7 +81,8 @@
     </div>
 
     <script>
-        const API_BASE_URL = 'http://localhost:3005/api';
+        // NOTE: API_BASE_URL is loaded from global-config.js
+        const API_BASE_URL = window.GLOBAL_CONFIG ? window.GLOBAL_CONFIG.API_BASE_URL : 'http://localhost:3005/api';
         const token = localStorage.getItem('erp-token');
         let currentUserId = ''; 
 
@@ -93,7 +94,6 @@
                 if (parts.length !== 3) return null;
                 const base64Url = parts[1];
                 const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                // Use built-in atob and decodeURIComponent for payload
                 const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
                     return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
                 }).join(''));
@@ -111,18 +111,19 @@
         async function handleApi(endpoint) {
             showLoading();
             try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                // Ensure API_BASE_URL is used correctly
+                const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
+                
+                const response = await fetch(url, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
                 
                 if (response.status === 403 || response.status === 401) {
-                    // Specific error handling for Authentication/Authorization
                     const errorDetails = await response.json().catch(() => ({ message: 'No message provided' }));
-                    // Alert the user and redirect to login
                     alert(`Authentication/Authorization Failed. Status ${response.status}. Please log in again. ${errorDetails.message}`);
                     window.location.href = '/login.html';
-                    return null; // Return null to prevent further execution
+                    return null;
                 }
                 
                 if (!response.ok) {
@@ -142,7 +143,7 @@
         // --- Main Attendance Function ---
         async function loadUserAttendance() {
             if (!currentUserId) {
-                alert("Authentication required. User ID is missing. Please refresh the page or log in again.");
+                document.getElementById('reportStatus').textContent = "Error: User ID is missing. Please log in again.";
                 return;
             }
 
@@ -167,7 +168,7 @@
             tbody.innerHTML = ''; 
             
             if (!records || records.length === 0) {
-                statusH3.textContent = `No attendance records found for the selected criteria (User ID: ${currentUserId}).`;
+                statusH3.textContent = `No attendance records found for the selected criteria.`;
                 return;
             }
             
@@ -189,21 +190,31 @@
             });
         }
 
+        // Function to load subjects for the dropdown
+        async function loadSubjectsForDropdown() {
+            // ✅ FIX: Using the correct attendance/subjects endpoint
+            const subjects = await handleApi('/attendance/subjects'); 
+            if (subjects) {
+                const select = document.getElementById('subjectSelect');
+                subjects.forEach(sub => {
+                    const option = document.createElement('option');
+                    option.value = sub.id;
+                    // Assuming API returns subject_name
+                    option.textContent = sub.subject_name || sub.name || sub.subject_code; 
+                    select.appendChild(option);
+                });
+            }
+        }
+
+
         // --- Initial Load ---
         document.addEventListener('DOMContentLoaded', () => {
             
             const payload = decodeJwtPayload(token);
             let idToUse = null;
             
-            // ✅ FIX: Use payload.id (the core UUID) instead of the non-existent payload.userId
             if (payload) {
                 idToUse = payload.id; 
-                
-                // Optional: If you use student_id for student-specific routes, you might prioritize it.
-                // For a general 'user' report, 'id' is safer.
-                if (!idToUse && payload.student_id) {
-                    idToUse = payload.student_id;
-                }
             }
 
             // --- Apply the extracted ID ---
@@ -211,47 +222,32 @@
                 currentUserId = idToUse;
                 document.getElementById('reportStatus').textContent = `Ready to view records for User ID: ${currentUserId}`;
                 
-                // Optional: Automatically load attendance on page load for convenience
-                // loadUserAttendance(); 
-            } else {
-                 document.getElementById('reportStatus').textContent = "Error: Authentication token is missing or invalid. Please log in again.";
-                 // ❌ Triggers the alert for the missing ID, prompting the user to log in
-                 alert("Authentication required. User ID is missing. Please refresh the page or log in again.");
-                 window.location.href = '/login.html'; // Redirect to login if ID is missing
-            }
+                // Set default date range (last 30 days)
+                const today = new Date();
+                const lastMonth = new Date();
+                lastMonth.setDate(today.getDate() - 30);
+                
+                const formatDate = (date) => date.toISOString().split('T')[0];
+                
+                document.getElementById('endDate').value = formatDate(today);
+                document.getElementById('startDate').value = formatDate(lastMonth);
+                
+                // Now load subjects for the dropdown
+                loadSubjectsForDropdown(); 
 
-            // Set default date range (last 30 days)
-            const today = new Date();
-            const lastMonth = new Date();
-            lastMonth.setDate(today.getDate() - 30);
-            
-            const formatDate = (date) => date.toISOString().split('T')[0];
-            
-            document.getElementById('endDate').value = formatDate(today);
-            document.getElementById('startDate').value = formatDate(lastMonth);
+                // ✅ Auto-load attendance on page load for convenience
+                loadUserAttendance(); 
+
+            } else {
+                 document.getElementById('reportStatus').textContent = "Error: Authentication token is missing or invalid. Redirecting to login...";
+                 alert("Authentication required. Please log in again.");
+                 window.location.href = '/login.html'; 
+            }
             
             hideLoading();
-            
-            // Now load subjects for the dropdown (assuming API for subjects exists)
-            // loadSubjectsForDropdown(); 
         });
-
-        // Placeholder for loading subjects (requires a separate API route)
-        /*
-        async function loadSubjectsForDropdown() {
-            const subjects = await handleApi('/subjects/list'); // Assuming this route exists
-            if (subjects) {
-                const select = document.getElementById('subjectSelect');
-                subjects.forEach(sub => {
-                    const option = document.createElement('option');
-                    option.value = sub.id;
-                    option.textContent = sub.subject_name;
-                    select.appendChild(option);
-                });
-            }
-        }
-        */
+        
     </script>
-    <script src="js/global-config.js"></script>
+    <script src="js/global-config.js"></script> 
 </body>
 </html>

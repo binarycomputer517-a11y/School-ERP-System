@@ -1,5 +1,3 @@
-// routes/teachers.js
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -31,11 +29,15 @@ function getConfigIds(req) {
 
 const storage = multer.diskStorage({
     destination: (req, file, cb) => {
+        let dir = '';
         if (file.fieldname === 'profile_photo') {
-            cb(null, 'uploads/teacher_photos/'); 
+            dir = 'uploads/teacher_photos/'; 
         } else if (file.fieldname === 'cv_file') {
-            cb(null, 'uploads/teacher_cvs/');
+            dir = 'uploads/teacher_cvs/';
         }
+        // Synchronously ensure directory exists to prevent async module errors
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        cb(null, dir);
     },
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -68,7 +70,38 @@ const cleanupFiles = (profilePhotoPath, cvFilePath) => {
 };
 
 // =========================================================
-// 1. GET: Main List (Full Details for Table View) 
+// 1. GET: Logged-in Teacher's Profile Details
+// =========================================================
+router.get('/me/profile', authenticateToken, authorize(['Teacher']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                t.id AS teacher_id, t.full_name, t.employee_id, t.designation, t.email, 
+                t.phone_number, t.date_of_birth, t.hire_date, t.address,
+                t.profile_image_path, 
+                u.username, u.role, u.id AS user_id, u.created_at,
+                hd.name AS department_name,
+                b.branch_name
+            FROM ${TEACHERS_TABLE} t
+            JOIN ${USERS_TABLE} u ON t.user_id = u.id
+            LEFT JOIN ${DEPARTMENTS_TABLE} hd ON t.department_id = hd.id 
+            LEFT JOIN branches b ON u.branch_id = b.id 
+            WHERE u.id = $1 AND u.deleted_at IS NULL;
+        `;
+        const result = await pool.query(query, [req.user.id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Teacher profile not found.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error('Error fetching teacher profile:', error);
+        res.status(500).json({ message: 'Failed to retrieve profile details.' });
+    }
+});
+
+// =========================================================
+// 2. GET: Main List (Full Details for Table View - Admin only) 
 // =========================================================
 router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
@@ -97,7 +130,7 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
 });
 
 // =========================================================
-// 2. GET: Dropdown List
+// 3. GET: Dropdown List
 // =========================================================
 router.get('/list', authenticateToken, authorize(LIST_ROLES), async (req, res) => {
     try {
@@ -118,7 +151,56 @@ router.get('/list', authenticateToken, authorize(LIST_ROLES), async (req, res) =
     }
 });
 
-// --- GET: Single Teacher Details ---
+// =========================================================
+// 4. GET: Teacher's Assigned Students
+// =========================================================
+router.get('/me/students', authenticateToken, authorize(['Teacher']), async (req, res) => {
+    const teacherUserId = req.user.id; 
+
+    try {
+        const teacherIdResult = await pool.query('SELECT id FROM teachers WHERE user_id = $1', [teacherUserId]);
+        if (teacherIdResult.rowCount === 0) {
+            return res.status(404).json({ message: 'Teacher profile not found or is not linked.' });
+        }
+        const teacherId = teacherIdResult.rows[0].id; 
+
+        const query = `
+            SELECT DISTINCT
+                u.id AS student_user_id,          
+                u.full_name AS student_full_name, 
+                u.email,
+                stu.roll_number,                  
+                c.course_name,
+                c.id AS course_id,
+                b.batch_name,
+                b.id AS batch_id,
+                sub.subject_name,
+                sub.id AS subject_id
+            FROM students stu
+            JOIN users u ON stu.user_id = u.id
+            JOIN class_timetable ct 
+                ON ct.course_id = stu.course_id 
+                AND ct.batch_id = stu.batch_id
+                AND ct.teacher_id = $1 
+            LEFT JOIN courses c ON stu.course_id = c.id
+            LEFT JOIN batches b ON stu.batch_id = b.id
+            LEFT JOIN subjects sub ON ct.subject_id = sub.id
+            WHERE u.deleted_at IS NULL AND u.is_active = TRUE
+            ORDER BY u.full_name;
+        `;
+
+        const result = await pool.query(query, [teacherId]);
+        res.status(200).json(result.rows);
+        
+    } catch (error) {
+        console.error('Error fetching students for teacher:', error);
+        res.status(500).json({ message: 'Failed to retrieve student list.' });
+    }
+});
+
+// =========================================================
+// 5. GET: Single Teacher Details (By ID)
+// =========================================================
 router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const teacherId = req.params.id;
     try {
@@ -135,7 +217,7 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         const result = await pool.query(query, [teacherId]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Teacher not found in the database.' });
+            return res.status(404).json({ message: 'Teacher not found.' });
         }
 
         res.status(200).json(result.rows[0]);
@@ -145,68 +227,8 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
     }
 });
 
-
 // =========================================================
-// 3. GET: Teacher's Assigned Students (FIXED SQL ERROR)
-// =========================================================
-
-/**
- * @route   GET /api/teachers/me/students
- * @desc    Get all students assigned to the logged-in teacher's classes (across all courses/batches).
- * @access  Private (Teacher)
- */
-router.get('/me/students', authenticateToken, authorize(['Teacher']), async (req, res) => {
-    const teacherUserId = req.user.id; 
-
-    try {
-        // 1. Get the teacher's internal ID
-        const teacherIdResult = await pool.query('SELECT id FROM teachers WHERE user_id = $1', [teacherUserId]);
-        if (teacherIdResult.rowCount === 0) {
-            return res.status(404).json({ message: 'Teacher profile not found or is not linked.' });
-        }
-        const teacherId = teacherIdResult.rows[0].id; 
-
-        // 2. Query to find students enrolled in the courses/batches/subjects assigned to this teacher
-        const query = `
-            SELECT DISTINCT
-                u.id AS student_user_id,          
-                u.full_name AS student_full_name, 
-                u.email,
-                stu.roll_number,                  
-                c.course_name,
-                c.id AS course_id,
-                b.batch_name,
-                b.id AS batch_id,
-                sub.subject_name,
-                sub.id AS subject_id
-            FROM students stu
-            
-            JOIN users u ON stu.user_id = u.id
-            
-            JOIN class_timetable ct 
-                ON ct.course_id = stu.course_id 
-                AND ct.batch_id = stu.batch_id
-                AND ct.teacher_id = $1 
-            
-            LEFT JOIN courses c ON stu.course_id = c.id
-            LEFT JOIN batches b ON stu.batch_id = b.id
-            LEFT JOIN subjects sub ON ct.subject_id = sub.id
-            
-            WHERE u.deleted_at IS NULL AND u.is_active = TRUE /* FIX APPLIED HERE */
-            ORDER BY u.full_name;
-        `;
-
-        const result = await pool.query(query, [teacherId]);
-        res.status(200).json(result.rows);
-        
-    } catch (error) {
-        console.error('Error fetching students for teacher:', error);
-        res.status(500).json({ message: 'Failed to retrieve student list.' });
-    }
-});
-
-// =========================================================
-// 4. POST: Create New Teacher
+// 6. POST: Create New Teacher
 // =========================================================
 router.post('/', authenticateToken, authorize(CRUD_ROLES), teacherUploadFields, async (req, res) => {
     const {
@@ -216,18 +238,14 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), teacherUploadFields, 
         initial_role = 'Teacher'
     } = req.body;
     
-    const profilePhotoPath = req.files.profile_photo ? req.files.profile_photo[0].path : null;
-    const cvFilePath = req.files.cv_file ? req.files.cv_file[0].path : null;
+    const profilePhotoPath = req.files && req.files.profile_photo ? req.files.profile_photo[0].path : null;
+    const cvFilePath = req.files && req.files.cv_file ? req.files.cv_file[0].path : null;
     
     const { branch_id, created_by } = getConfigIds(req); 
 
     if (!username || !password || !full_name || !employee_id || !email) {
         cleanupFiles(profilePhotoPath, cvFilePath);
-        return res.status(400).json({ message: 'Missing required user/teacher fields.' });
-    }
-    if (password.length < 6) {
-        cleanupFiles(profilePhotoPath, cvFilePath);
-        return res.status(400).json({ message: 'Password must be at least 6 characters long.' });
+        return res.status(400).json({ message: 'Missing required fields.' });
     }
 
     const client = await pool.connect();
@@ -235,59 +253,37 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), teacherUploadFields, 
         await client.query('BEGIN'); 
         const password_hash = await bcrypt.hash(password, saltRounds);
 
-        const userQuery = `
-            INSERT INTO ${USERS_TABLE} (username, password_hash, role, email, phone_number, branch_id)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id;
-        `;
-        const userResult = await client.query(userQuery, [username, password_hash, initial_role, email, phone_number || null, branch_id]);
+        const userResult = await client.query(
+            `INSERT INTO ${USERS_TABLE} (username, password_hash, role, email, phone_number, branch_id)
+            VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+            [username, password_hash, initial_role, email, phone_number || null, branch_id]
+        );
         const newUserId = userResult.rows[0].id;
 
-        const teacherQuery = `
-            INSERT INTO ${TEACHERS_TABLE} (
+        await client.query(
+            `INSERT INTO ${TEACHERS_TABLE} (
                 user_id, full_name, employee_id, designation, 
                 email, phone_number, date_of_birth, address, hire_date, created_by,
                 department_id, profile_image_path, cv_resume_path      
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            RETURNING id AS teacher_id, full_name, employee_id; 
-        `;
-        const teacherResult = await client.query(teacherQuery, [
-            newUserId, full_name, employee_id, designation || null, 
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+            [newUserId, full_name, employee_id, designation || null, 
             email, phone_number || null, date_of_birth || null, address || null, hire_date || null, created_by,
-            department_id || null, 
-            profilePhotoPath, 
-            cvFilePath       
-        ]);
+            department_id || null, profilePhotoPath, cvFilePath]
+        );
 
         await client.query('COMMIT'); 
-
-        res.status(201).json({ 
-            message: 'Teacher created successfully', 
-            teacher: teacherResult.rows[0],
-            profile_image_path: profilePhotoPath,
-            cv_resume_path: cvFilePath
-        });
-
+        res.status(201).json({ message: 'Teacher created successfully' });
     } catch (error) {
         await client.query('ROLLBACK'); 
-        console.error('Teacher Creation Error:', error);
         cleanupFiles(profilePhotoPath, cvFilePath);
-        
-        let errorMessage = 'Failed to create teacher due to server error.';
-        if (error.code === '23505') {
-            errorMessage = 'Employee ID, Username, or Email already exists.';
-            return res.status(409).json({ message: errorMessage });
-        }
-        res.status(500).json({ message: errorMessage });
+        res.status(500).json({ message: error.code === '23505' ? 'Employee ID, Username, or Email already exists.' : 'Failed to create teacher.' });
     } finally {
         client.release();
     }
 });
 
-
 // =========================================================
-// 5. PUT: Update Existing Teacher Details
+// 7. PUT: Update Teacher Details
 // =========================================================
 router.put('/:id', authenticateToken, authorize(CRUD_ROLES), teacherUploadFields, async (req, res) => {
     const teacherId = req.params.id;
@@ -296,176 +292,115 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), teacherUploadFields
         department_id, new_role, password
     } = req.body;
     
-    const newProfilePhotoPath = req.files.profile_photo ? req.files.profile_photo[0].path : null;
-    const newCvFilePath = req.files.cv_file ? req.files.cv_file[0].path : null;
+    const newProfilePhotoPath = req.files && req.files.profile_photo ? req.files.profile_photo[0].path : null;
+    const newCvFilePath = req.files && req.files.cv_file ? req.files.cv_file[0].path : null;
 
     const { updated_by } = getConfigIds(req);
 
-    if (!full_name || !email) {
-        cleanupFiles(newProfilePhotoPath, newCvFilePath);
-        return res.status(400).json({ message: 'Missing required fields (Name, Email).' });
-    }
-
     const client = await pool.connect();
-    let oldProfilePath = null;
-    let oldCvPath = null;
-
     try {
         await client.query('BEGIN');
-
-        // 0. Fetch existing paths and user_id for updates/cleanup
         const fetchRes = await client.query(`SELECT user_id, profile_image_path, cv_resume_path FROM ${TEACHERS_TABLE} WHERE id = $1`, [teacherId]);
-        if (fetchRes.rowCount === 0) {
-            await client.query('ROLLBACK');
-            cleanupFiles(newProfilePhotoPath, newCvFilePath);
-            return res.status(404).json({ message: 'Teacher not found.' });
-        }
-        const { user_id } = fetchRes.rows[0];
-        oldProfilePath = fetchRes.rows[0].profile_image_path;
-        oldCvPath = fetchRes.rows[0].cv_resume_path;
+        if (fetchRes.rowCount === 0) throw new Error('Teacher not found.');
+        
+        const { user_id, profile_image_path: oldProfile, cv_resume_path: oldCv } = fetchRes.rows[0];
 
+        await client.query(
+            `UPDATE ${TEACHERS_TABLE} SET
+                full_name = $1, designation = $2, email = $3, phone_number = $4, 
+                date_of_birth = $5, address = $6, hire_date = $7, is_active = $8,
+                department_id = $9, profile_image_path = $10, cv_resume_path = $11, 
+                updated_at = CURRENT_TIMESTAMP, updated_by = $12
+            WHERE id = $13`,
+            [full_name, designation, email, phone_number, date_of_birth, address, hire_date, is_active, 
+            department_id, newProfilePhotoPath || oldProfile, newCvFilePath || oldCv, updated_by, teacherId]
+        );
 
-        // 1. Update Teacher Profile 
-        let teacherUpdateFields = [
-            'full_name = $1', 'designation = $2', 'email = $3', 'phone_number = $4', 
-            'date_of_birth = $5', 'address = $6', 'hire_date = $7', 'is_active = $8',
-            'department_id = $9', 'updated_at = CURRENT_TIMESTAMP', 'updated_by = $10'
-        ];
-        let teacherUpdateValues = [
-            full_name, designation || null, email, phone_number || null, date_of_birth || null, address || null, hire_date || null, is_active,
-            department_id || null, updated_by
-        ];
-        let placeholderIndex = 11;
-
-        if (newProfilePhotoPath) {
-            teacherUpdateFields.push(`profile_image_path = $${placeholderIndex++}`);
-            teacherUpdateValues.push(newProfilePhotoPath);
-        } else {
-            teacherUpdateFields.push(`profile_image_path = $${placeholderIndex++}`);
-            teacherUpdateValues.push(oldProfilePath);
-        }
-
-        if (newCvFilePath) {
-            teacherUpdateFields.push(`cv_resume_path = $${placeholderIndex++}`);
-            teacherUpdateValues.push(newCvFilePath);
-        } else {
-            teacherUpdateFields.push(`cv_resume_path = $${placeholderIndex++}`);
-            teacherUpdateValues.push(oldCvPath);
+        if (password) {
+            const hash = await bcrypt.hash(password, saltRounds);
+            await client.query(`UPDATE ${USERS_TABLE} SET password_hash = $1 WHERE id = $2`, [hash, user_id]);
         }
         
-        const teacherUpdateQuery = `
-            UPDATE ${TEACHERS_TABLE} SET
-                ${teacherUpdateFields.join(', ')}
-            WHERE id = $${placeholderIndex++}
-            RETURNING user_id, full_name, profile_image_path, cv_resume_path;
-        `;
-        teacherUpdateValues.push(teacherId); 
-
-        const teacherResult = await client.query(teacherUpdateQuery, teacherUpdateValues);
-        
-        // 2. Update Linked User Account
-        if (user_id) {
-            const userUpdateFields = ['email = $1', 'is_active = $2', 'phone_number = $3', 'updated_at = CURRENT_TIMESTAMP'];
-            const userUpdateValues = [email, is_active, phone_number || null];
-            let userPlaceholderIndex = 4;
-
-            if (new_role) {
-                userUpdateFields.push(`role = $${userPlaceholderIndex++}`);
-                userUpdateValues.push(new_role);
-            }
-            if (password) {
-                if (password.length < 6) throw new Error('New password must be at least 6 characters long.');
-                const password_hash = await bcrypt.hash(password, saltRounds);
-                userUpdateFields.push(`password_hash = $${userPlaceholderIndex++}`);
-                userUpdateValues.push(password_hash);
-            }
-            
-            userUpdateValues.push(user_id); 
-
-            const userUpdateQuery = `
-                UPDATE ${USERS_TABLE} SET 
-                    ${userUpdateFields.join(', ')}
-                 WHERE id = $${userPlaceholderIndex}
-            `;
-            
-            await client.query(userUpdateQuery, userUpdateValues);
-        }
+        await client.query(`UPDATE ${USERS_TABLE} SET email = $1, role = COALESCE($2, role), is_active = $3 WHERE id = $4`, 
+            [email, new_role, is_active, user_id]);
 
         await client.query('COMMIT');
-        
-        // 3. Cleanup OLD files after successful COMMIT
-        if (newProfilePhotoPath && oldProfilePath && fs.existsSync(oldProfilePath)) fs.unlinkSync(oldProfilePath);
-        if (newCvFilePath && oldCvPath && fs.existsSync(oldCvPath)) fs.unlinkSync(oldCvPath);
+        if (newProfilePhotoPath && oldProfile) cleanupFiles(oldProfile, null);
+        if (newCvFilePath && oldCv) cleanupFiles(null, oldCv);
 
-        res.status(200).json({ message: `Teacher ${teacherResult.rows[0].full_name} updated successfully.` });
-
+        res.status(200).json({ message: 'Teacher updated successfully.' });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Teacher Update Error:', error);
         cleanupFiles(newProfilePhotoPath, newCvFilePath);
-
-        let errorMessage = 'Failed to update teacher profile.';
-        if (error.code === '23505') {
-            errorMessage = 'Email, Employee ID, or Username already exists.';
-            return res.status(409).json({ message: errorMessage });
-        }
-        res.status(400).json({ message: error.message || 'Update failed due to a server error.' });
+        res.status(400).json({ message: error.message });
     } finally {
         client.release();
     }
 });
 
 // =========================================================
-// 6. DELETE: Soft Delete Teacher
+// 8. DELETE: Soft Delete Teacher
 // =========================================================
 router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const teacherId = req.params.id; 
-    
-    if (!teacherId || teacherId === 'undefined') {
-        return res.status(400).json({ message: 'Invalid Teacher ID provided for deletion.' });
-    }
-
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        // 1. Soft Delete Teacher (Set is_active=false)
-        const teacherUpdateQuery = `
-            UPDATE ${TEACHERS_TABLE} SET 
-                is_active = FALSE, updated_at = CURRENT_TIMESTAMP
-            WHERE id = $1 
-            RETURNING user_id;
-        `;
-        const teacherResult = await pool.query(teacherUpdateQuery, [teacherId]);
-
-        if (teacherResult.rowCount === 0) {
-            await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Teacher not found.' });
-        }
-
-        const { user_id } = teacherResult.rows[0];
-
-        // 2. Deactivate Linked User Account
-        if (user_id) {
-            await pool.query(
-                `UPDATE ${USERS_TABLE} SET 
-                    is_active = FALSE, deleted_at = CURRENT_TIMESTAMP
-                 WHERE id = $1`,
-                [user_id]
-            );
-        }
+        const result = await client.query(`UPDATE ${TEACHERS_TABLE} SET is_active = FALSE WHERE id = $1 RETURNING user_id`, [teacherId]);
+        if (result.rowCount === 0) throw new Error('Teacher not found.');
+        
+        await client.query(`UPDATE ${USERS_TABLE} SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP WHERE id = $1`, [result.rows[0].user_id]);
 
         await client.query('COMMIT');
-        res.status(200).json({ message: 'Teacher and linked user deactivated successfully.' });
-
+        res.status(200).json({ message: 'Teacher deactivated successfully.' });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Teacher Deletion Error:', error);
-        res.status(500).json({ message: 'Failed to deactivate teacher account.' });
+        res.status(500).json({ message: 'Failed to deactivate teacher.' });
     } finally {
         client.release();
     }
 });
 
+// =========================================================
+// GET: Subjects assigned to the logged-in teacher
+// =========================================================
+router.get('/me/subjects', authenticateToken, authorize(['Teacher']), async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT s.id, s.subject_name 
+            FROM subjects s
+            JOIN class_timetable ct ON s.id = ct.subject_id
+            JOIN teachers t ON t.id = ct.teacher_id
+            WHERE t.user_id = $1 AND ct.is_active = true
+            ORDER BY s.subject_name;
+        `;
+        const result = await pool.query(query, [req.user.id]);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Error fetching teacher subjects:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+// =========================================================
+// GET: Batches assigned to the logged-in teacher
+// =========================================================
+router.get('/me/batches', authenticateToken, authorize(['Teacher']), async (req, res) => {
+    try {
+        const query = `
+            SELECT DISTINCT b.id, b.batch_name 
+            FROM batches b
+            JOIN class_timetable ct ON b.id = ct.batch_id
+            JOIN teachers t ON t.id = ct.teacher_id
+            WHERE t.user_id = $1 AND ct.is_active = true
+            ORDER BY b.batch_name;
+        `;
+        const result = await pool.query(query, [req.user.id]);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Error fetching teacher batches:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
 
 module.exports = router;

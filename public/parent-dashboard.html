@@ -2,30 +2,272 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Parent Dashboard</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        body { font-family: 'Poppins', sans-serif; background-color: #f0f2f8; font-size: 14px; }
+        .container { max-width: 1200px; margin: 30px auto; padding: 30px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #8e24aa; margin-bottom: 25px; border-bottom: 2px solid #e0e0e0; padding-bottom: 10px; }
+        .dashboard-card { 
+            background-color: #f3e5f5; 
+            border-radius: 10px; 
+            padding: 20px; 
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .dashboard-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .card-icon { font-size: 2.5rem; color: #8e24aa; margin-bottom: 10px; }
+        .card-title { font-size: 1.1rem; font-weight: 600; color: #424242; }
+        .card-text { font-size: 0.9rem; color: #757575; }
+        .child-selector { margin-bottom: 30px; padding: 15px; background-color: #fff9c4; border: 1px solid #ffe082; border-radius: 8px; }
+        .child-selector label { font-weight: bold; color: #5d4037; }
+        #loading-indicator { text-align: center; padding: 20px; font-style: italic; color: #6c757d; }
+        .user-info { text-align: right; font-size: 0.9em; color: #757575; }
+        .logout-btn { margin-left: 15px; }
+    </style>
 </head>
 <body>
-    <script>
-        const token = localStorage.getItem('erp-token');
-        const userRole = localStorage.getItem('user-role');
-        // Only allow users with the 'Parent' role to access this page
-        if (!token || userRole !== 'Parent') {
-            window.location.href = '/login';
-        }
-    </script>
     <div class="container">
-        <h1>Welcome to the Parent Dashboard 👨‍👩‍👧‍👦</h1>
-        <p>Here you can monitor your child's academic progress, attendance, and pay fees online.</p>
-        <a href="#" onclick="logout()">Logout</a>
+        <div class="row align-items-center">
+            <div class="col-md-6">
+                <h1 id="dashboard-header">Parent Dashboard</h1>
+            </div>
+            <div class="col-md-6 user-info">
+                <span id="userName">Loading...</span> | Role: <span id="userRole">Parent</span>
+                <button id="logoutBtn" class="btn btn-sm btn-outline-danger logout-btn">Logout</button>
+            </div>
+        </div>
+
+        <div id="childSelectorSection" class="child-selector row">
+            <div class="col-md-4">
+                <label for="childSelect" class="form-label">Select Child:</label>
+                <select id="childSelect" class="form-select"></select>
+            </div>
+            <div class="col-md-8 d-flex align-items-end">
+                <span id="childDetails" class="ms-3 text-muted"></span>
+            </div>
+        </div>
+
+        <p id="loading-indicator">Loading your children's data...</p>
+        <p id="error-message" class="text-danger mt-3" style="display: none;"></p>
+
+        <div id="dashboardContent" class="row" style="display: none;">
+            
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/my-timetable.html')">
+                    <div class="card-icon"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="card-title">Class Timetable</div>
+                    <div class="card-text">View your child's weekly class schedule.</div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/my-attendance.html')">
+                    <div class="card-icon"><i class="fas fa-clipboard-check"></i></div>
+                    <div class="card-title">Attendance Record</div>
+                    <div class="card-text">Check daily attendance and status.</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/my-exam-schedule.html')">
+                    <div class="card-icon"><i class="fas fa-book-open"></i></div>
+                    <div class="card-title">Exam Schedule & Results</div>
+                    <div class="card-text">View upcoming exam dates and published results.</div>
+                </div>
+            </div>
+            
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/fees-status.html')">
+                    <div class="card-icon"><i class="fas fa-receipt"></i></div>
+                    <div class="card-title">Fee Status & Payment</div>
+                    <div class="card-text">Track due dates, outstanding balance, and payment history.</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/student-profile-view.html')">
+                    <div class="card-icon"><i class="fas fa-user-graduate"></i></div>
+                    <div class="card-title">Child Profile</div>
+                    <div class="card-text">View enrollment details, course, and contact info.</div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/announcements.html')">
+                    <div class="card-icon"><i class="fas fa-bullhorn"></i></div>
+                    <div class="card-title">Announcements</div>
+                    <div class="card-text">School notices, circulars, and events.</div>
+                </div>
+            </div>
+            
+        </div>
+        
     </div>
-    <script>
-        function logout() {
-            localStorage.removeItem('erp-token');
-            localStorage.removeItem('user-role');
-            window.location.href = '/login';
-        }
-    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/global-config.js"></script>
+    <script>
+        const API_BASE_URL = window.GLOBAL_CONFIG ? window.GLOBAL_CONFIG.API_BASE_URL : 'http://localhost:3005/api';
+        const TOKEN = localStorage.getItem('erp-token');
+        const userRole = localStorage.getItem('user-role');
+        const childSelect = document.getElementById('childSelect');
+        const childDetailsSpan = document.getElementById('childDetails');
+        const dashboardContent = document.getElementById('dashboardContent');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const errorMessage = document.getElementById('error-message');
+        const logoutBtn = document.getElementById('logoutBtn');
+
+        let parentUserId = null;
+        let childrenData = [];
+
+        // --- Utility Functions ---
+        function decodeJwtPayload(jwtToken) {
+            if (!jwtToken) return null;
+            try {
+                const parts = jwtToken.split('.');
+                const base64Url = parts[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                }).join(''));
+                return JSON.parse(jsonPayload);
+            } catch (e) {
+                return null;
+            }
+        }
+
+        async function fetchData(endpoint) {
+            errorMessage.style.display = 'none';
+            try {
+                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                if (response.status === 401 || response.status === 403) {
+                    window.location.href = '/login.html';
+                    return null;
+                }
+                if (!response.ok) {
+                    const errorDetails = await response.json().catch(() => ({ message: `HTTP Error ${response.status}` }));
+                    throw new Error(errorDetails.message);
+                }
+                return await response.json();
+            } catch (error) {
+                errorMessage.textContent = `Error: ${error.message}`;
+                errorMessage.style.display = 'block';
+                return null;
+            }
+        }
+
+        // --- Main Load Function ---
+        async function loadParentDashboard() {
+            const payload = decodeJwtPayload(TOKEN);
+            if (!payload || userRole !== 'Parent') {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            parentUserId = payload.id;
+            document.getElementById('userName').textContent = payload.username || payload.email;
+            
+            loadingIndicator.textContent = "Fetching children list...";
+            
+            // 1. Fetch children linked to this parent user ID
+            // NOTE: This API route must be implemented in your backend (e.g., /api/parents/me/children)
+            const childrenResult = await fetchData(`/parents/me/children`);
+            
+            loadingIndicator.style.display = 'none';
+
+            if (!childrenResult || childrenResult.length === 0) {
+                showError("No children profiles found linked to this parent account.");
+                return;
+            }
+
+            childrenData = childrenResult;
+            populateChildSelector(childrenData);
+            
+            // Load dashboard for the default selected child
+            childSelect.dispatchEvent(new Event('change'));
+
+            dashboardContent.style.display = 'flex';
+        }
+
+        // --- Child Selector Functions ---
+        
+        function populateChildSelector(children) {
+            childSelect.innerHTML = '';
+            children.forEach(child => {
+                const option = document.createElement('option');
+                option.value = child.student_user_id; // The unique ID used for API calls
+                option.textContent = `${child.student_name} (Class: ${child.course_name} - ${child.batch_name})`;
+                
+                // Store full data in the option dataset for easy retrieval
+                option.dataset.courseId = child.course_id;
+                option.dataset.batchId = child.batch_id;
+                option.dataset.rollNumber = child.roll_number;
+                
+                childSelect.appendChild(option);
+            });
+            childSelect.addEventListener('change', handleChildChange);
+        }
+
+        function handleChildChange() {
+            const selectedOption = childSelect.options[childSelect.selectedIndex];
+            if (!selectedOption) return;
+
+            const studentUserId = selectedOption.value;
+            const courseName = selectedOption.textContent.match(/\(Class: (.*?)\)/)[1];
+            const rollNumber = selectedOption.dataset.rollNumber;
+            const studentName = selectedOption.textContent.split('(')[0].trim();
+            
+            childDetailsSpan.innerHTML = `Viewing: <strong>${studentName}</strong> | Class/Batch: <strong>${courseName}</strong> | Roll: <strong>${rollNumber}</strong>`;
+            
+            // Save the selected child's details to localStorage for access by linked pages (e.g., my-timetable.html)
+            localStorage.setItem('selected-student-id', studentUserId);
+        }
+
+        // --- Navigation ---
+        function navigateTo(path) {
+            // Get the ID of the currently selected child from localStorage
+            const studentId = localStorage.getItem('selected-student-id');
+            if (!studentId) {
+                alert("Please select a child first.");
+                return;
+            }
+            
+            // Special case for profile view
+            if (path === '/student-profile-view.html') {
+                window.location.href = `${path}?id=${studentId}`;
+                return;
+            }
+            
+            // All other pages rely on the selected-student-id in localStorage
+            window.location.href = path;
+        }
+
+        function handleLogout() {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+
+        function showError(message) {
+            loadingIndicator.style.display = 'none';
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            loadParentDashboard();
+            logoutBtn.addEventListener('click', handleLogout);
+        });
+    </script>
 </body>
 </html>

@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Create Module | Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        :root { 
+            --primary: #6366f1; 
+            --primary-dark: #4f46e5;
+            --bg: #f8fafc; 
+            --card-shadow: 0 10px 30px rgba(0,0,0,0.05);
+        }
+        body { background: var(--bg); font-family: 'Inter', sans-serif; color: #1e293b; }
+        
+        .form-card { 
+            background: white; 
+            border-radius: 20px; 
+            box-shadow: var(--card-shadow); 
+            border: none; 
+            padding: 2.5rem;
+        }
+
+        .form-label { font-weight: 600; font-size: 0.85rem; color: #64748b; }
+
+        .btn-publish { 
+            background: var(--primary); 
+            color: white; 
+            border-radius: 12px; 
+            padding: 0.8rem; 
+            font-weight: 700; 
+            width: 100%; 
+            border: none; 
+            transition: all 0.3s ease;
+        }
+        .btn-publish:hover { background: var(--primary-dark); transform: translateY(-2px); box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3); }
+        .btn-publish:disabled { background: #cbd5e1; transform: none; }
+
+        /* Enhanced Upload Box */
+        .upload-box { 
+            border: 2px dashed #cbd5e1; 
+            border-radius: 15px; 
+            padding: 2.5rem; 
+            text-align: center; 
+            cursor: pointer; 
+            transition: all 0.2s ease-in-out;
+            background: #fff;
+        }
+        .upload-box.dragover { border-color: var(--primary); background: #f5f3ff; }
+        .upload-box:hover { border-color: var(--primary); }
+        
+        #file-info { font-size: 0.9rem; margin-top: 10px; color: var(--primary); }
+        
+        .back-link { color: #64748b; text-decoration: none; font-weight: 600; font-size: 0.9rem; transition: 0.2s; }
+        .back-link:hover { color: var(--primary); }
+    </style>
+</head>
+<body>
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <a href="/Teacher-Assignments.html" class="back-link mb-3 d-inline-block">
+                <i class="fas fa-chevron-left me-1"></i> Back to Assignments
+            </a>
+            <h2 class="fw-bold mb-4">Create New Learning Module</h2>
+
+            <div class="card form-card">
+                <form id="assignmentForm" novalidate>
+                    <div class="row g-4">
+                        <div class="col-12">
+                            <label class="form-label text-uppercase">Module / Assignment Title</label>
+                            <input type="text" name="title" class="form-control form-control-lg" required 
+                                   placeholder="e.g. Advanced Data Structures - Week 4">
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label text-uppercase">Instructions for Students</label>
+                            <textarea name="description" class="form-control" rows="4" 
+                                      placeholder="Provide detailed instructions, links, or objectives..."></textarea>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label text-uppercase">Subject</label>
+                            <select id="subject_id" name="subject_id" class="form-select" required>
+                                <option value="" selected disabled>Choose Subject...</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label text-uppercase">Target Batch</label>
+                            <select id="batch_id" name="batch_id" class="form-select" required>
+                                <option value="" selected disabled>Choose Batch...</option>
+                            </select>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label text-uppercase">Maximum Marks</label>
+                            <input type="number" name="max_marks" class="form-control" value="100" min="1">
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label text-uppercase">Submission Deadline</label>
+                            <input type="datetime-local" id="due_date" name="due_date" class="form-control" required>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="form-label text-uppercase">Attachments (Optional)</label>
+                            <div class="upload-box" id="dropzone">
+                                <i class="fas fa-cloud-upload-alt fa-3x mb-3 text-muted"></i>
+                                <p class="mb-1 fw-bold">Drag and drop files here</p>
+                                <p class="small text-muted">or click to browse (Max 10MB: PDF, DOCX, ZIP, Images)</p>
+                                <input type="file" id="file_upload" name="assignment_file" hidden>
+                                <div id="file-info" class="fw-bold"></div>
+                            </div>
+                        </div>
+
+                        <div class="col-12 pt-3">
+                            <button type="submit" class="btn-publish" id="submitBtn">
+                                <i class="fas fa-paper-plane me-2"></i> PUBLISH TO CLASSROOM
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const TOKEN = localStorage.getItem('erp-token');
+    const form = document.getElementById('assignmentForm');
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file_upload');
+    const fileInfo = document.getElementById('file-info');
+
+    // 1. Redirect if no token
+    if (!TOKEN) window.location.href = '/login.html';
+
+    // 2. Set min date for deadline to 'Now'
+    const now = new Date();
+    now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+    document.getElementById('due_date').min = now.toISOString().slice(0,16);
+
+    // 3. Handle File Selection & UI
+    dropzone.addEventListener('click', () => fileInput.click());
+    
+    fileInput.onchange = () => handleFiles(fileInput.files);
+
+    // Drag and Drop Logic
+    dropzone.addEventListener('dragover', (e) => { e.preventDefault(); dropzone.classList.add('dragover'); });
+    dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+    dropzone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        fileInput.files = e.dataTransfer.files;
+        handleFiles(e.dataTransfer.files);
+    });
+
+    function handleFiles(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.size > 10 * 1024 * 1024) {
+                alert("File is too large (Max 10MB)");
+                fileInput.value = "";
+                fileInfo.textContent = "";
+                return;
+            }
+            fileInfo.innerHTML = `<i class="fas fa-file-alt me-2"></i> Selected: ${file.name}`;
+        }
+    }
+
+    // 4. Load Resources (Subjects/Batches)
+    async function loadResources() {
+        try {
+            const [subRes, batchRes] = await Promise.all([
+                fetch('/api/teachers/me/subjects', { headers: { 'Authorization': `Bearer ${TOKEN}` } }),
+                fetch('/api/teachers/me/batches', { headers: { 'Authorization': `Bearer ${TOKEN}` } })
+            ]);
+
+            if (subRes.status === 401) throw new Error("Unauthorized");
+
+            const subjects = await subRes.json();
+            const batches = await batchRes.json();
+
+            const subSelect = document.getElementById('subject_id');
+            const batchSelect = document.getElementById('batch_id');
+
+            if(Array.isArray(subjects)) {
+                subjects.forEach(s => subSelect.innerHTML += `<option value="${s.id}">${s.subject_name}</option>`);
+            }
+            if(Array.isArray(batches)) {
+                batches.forEach(b => batchSelect.innerHTML += `<option value="${b.id}">${b.batch_name}</option>`);
+            }
+        } catch (err) { 
+            console.error("Resource Load Error", err);
+            if(err.message === "Unauthorized") window.location.href = '/login.html';
+        }
+    }
+
+    // 5. Submit Logic
+    form.onsubmit = async (e) => {
+        e.preventDefault();
+        
+        // Basic Validation
+        if (!form.checkValidity()) {
+            form.reportValidity();
+            return;
+        }
+
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Publishing Module...';
+
+        const formData = new FormData(form);
+        try {
+            const response = await fetch('/api/online-learning/assignments', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TOKEN}` },
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('🚀 Success! Assignment published to classroom.');
+                window.location.href = '/Teacher-Assignments.html';
+            } else {
+                alert('Submission Failed: ' + (result.message || 'Unknown error'));
+            }
+        } catch (err) { 
+            alert('Network Error: Please check your connection.'); 
+        } finally { 
+            btn.disabled = false; 
+            btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> PUBLISH TO CLASSROOM'; 
+        }
+    };
+
+    document.addEventListener('DOMContentLoaded', loadResources);
+</script>
+</body>
+</html>

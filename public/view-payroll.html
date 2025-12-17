@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Payroll | Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root { --primary: #6366f1; --bg: #f8fafc; }
+        body { background: var(--bg); font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
+        .hero-banner { background: #0f172a; color: white; padding: 3rem 0; border-radius: 0 0 40px 40px; }
+        .data-card { background: white; border-radius: 20px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.02); }
+        .status-badge { padding: 4px 12px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; }
+        .status-Generated { background: #e0f2fe; color: #0369a1; }
+        .status-Paid { background: #dcfce7; color: #166534; }
+    </style>
+</head>
+<body>
+
+<section class="hero-banner text-center">
+    <div class="container">
+        <h2 class="fw-bold">Payroll Analytics</h2>
+        <p class="opacity-75">Live Earnings & Compensation History</p>
+    </div>
+</section>
+
+<div class="container" style="margin-top: -40px;">
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="data-card mb-4">
+                <h6 class="fw-bold text-muted mb-4">NET SALARY TREND</h6>
+                <div style="height: 300px;"><canvas id="payrollChart"></canvas></div>
+            </div>
+
+            <div class="data-card">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="fw-bold mb-0">Payslip Archive</h5>
+                    <a href="/teacher-dashboard.html" class="btn btn-sm btn-outline-secondary">Dashboard</a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table align-middle">
+                        <thead class="small text-uppercase text-muted">
+                            <tr>
+                                <th>Period</th>
+                                <th>Gross</th>
+                                <th>Net Pay</th>
+                                <th>Status</th>
+                                <th class="text-end">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="livePayrollBody">
+                            <tr><td colspan="5" class="text-center py-5">Connecting to database...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="data-card mb-4">
+                <h6 class="fw-bold text-muted mb-3">LATEST BREAKDOWN</h6>
+                <div class="d-flex justify-content-between mb-2">
+                    <span>Base Gross</span>
+                    <span class="fw-bold" id="liveGross">$0.00</span>
+                </div>
+                <div class="d-flex justify-content-between mb-2 text-danger">
+                    <span>Tax Estimate (20%)</span>
+                    <span class="fw-bold" id="liveTax">-$0.00</span>
+                </div>
+                <div class="d-flex justify-content-between mb-3 text-danger border-bottom pb-3">
+                    <span>Deductions</span>
+                    <span class="fw-bold" id="liveDed">-$0.00</span>
+                </div>
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">Final Net</span>
+                    <span class="fs-4 fw-bold text-primary" id="liveNet">$0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const TOKEN = localStorage.getItem('erp-token');
+
+    async function loadLivePayroll() {
+        if (!TOKEN) return window.location.href = '/login.html';
+
+        try {
+            // Fetch live data from /api/payroll/my-history
+            const response = await fetch('/api/payroll/my-history', {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+
+            if (!response.ok) throw new Error("Database Fetch Failed");
+            const data = await response.json();
+
+            if (data.length === 0) {
+                document.getElementById('livePayrollBody').innerHTML = '<tr><td colspan="5" class="text-center py-5">No records found in database.</td></tr>';
+                return;
+            }
+
+            renderPayrollTable(data);
+            renderPayrollChart(data);
+            updateLiveSidebar(data[0]);
+
+        } catch (err) {
+            console.error(err);
+            document.getElementById('livePayrollBody').innerHTML = `<tr><td colspan="5" class="text-center text-danger">Connection Error: ${err.message}</td></tr>`;
+        }
+    }
+
+    function renderPayrollTable(data) {
+        const tbody = document.getElementById('livePayrollBody');
+        tbody.innerHTML = data.map(record => `
+            <tr>
+                <td>
+                    <div class="fw-bold">${new Date(record.end_date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</div>
+                    <small class="text-muted">${new Date(record.start_date).toLocaleDateString('en-GB')} - ${new Date(record.end_date).toLocaleDateString('en-GB')}</small>
+                </td>
+                <td class="text-muted">$${parseFloat(record.gross_pay).toLocaleString()}</td>
+                <td class="fw-bold text-primary">$${parseFloat(record.net_pay).toLocaleString()}</td>
+                <td><span class="status-badge status-${record.status}">${record.status.toUpperCase()}</span></td>
+                <td class="text-end">
+                    <a href="/api/payroll/payslip/${record.id}?token=${TOKEN}" target="_blank" class="btn btn-sm btn-light border"><i class="fas fa-file-pdf"></i></a>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    function renderPayrollChart(data) {
+        const ctx = document.getElementById('payrollChart').getContext('2d');
+        const sorted = [...data].reverse(); 
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: sorted.map(r => new Date(r.end_date).toLocaleDateString('en-GB', { month: 'short' })),
+                datasets: [{
+                    label: 'Net Earnings',
+                    data: sorted.map(r => r.net_pay),
+                    borderColor: '#6366f1',
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+        });
+    }
+
+    function updateLiveSidebar(latest) {
+        document.getElementById('liveGross').textContent = '$' + parseFloat(latest.gross_pay).toLocaleString();
+        document.getElementById('liveNet').textContent = '$' + parseFloat(latest.net_pay).toLocaleString();
+        // Calculation logic matches backend calculateNetPay function
+        const tax = latest.gross_pay * 0.20; 
+        const ded = latest.gross_pay - latest.net_pay - tax;
+        document.getElementById('liveTax').textContent = '-$' + tax.toLocaleString();
+        document.getElementById('liveDed').textContent = '-$' + (ded > 0 ? ded : 0).toLocaleString();
+    }
+
+    document.addEventListener('DOMContentLoaded', loadLivePayroll);
+</script>
+</body>
+</html>

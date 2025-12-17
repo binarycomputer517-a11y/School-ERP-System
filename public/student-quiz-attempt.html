@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secured Exam Portal | School ERP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+        body { background-color: #f1f5f9; font-family: 'Plus Jakarta Sans', sans-serif; user-select: none; overflow-x: hidden; }
+        
+        #startOverlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: #0f172a; color: white; z-index: 10000;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        .camera-container {
+            position: fixed; bottom: 20px; right: 20px; width: 220px; height: 160px;
+            background: #000; border: 4px solid #6366f1; border-radius: 15px;
+            overflow: hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.3); z-index: 1000;
+        }
+        #videoFeed { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #faceCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        #securityOverlay {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 23, 42, 0.99); z-index: 9999; color: white;
+            text-align: center; padding-top: 15%; backdrop-filter: blur(15px);
+        }
+
+        .question-card { background: white; border-radius: 20px; padding: 35px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); min-height: 400px; }
+        .option-btn { display: block; width: 100%; padding: 18px; margin-bottom: 12px; border: 2px solid #e2e8f0; border-radius: 15px; text-align: left; background: white; transition: 0.3s; }
+        .option-btn.active { background: #eef2ff; border-color: #6366f1; color: #4338ca; font-weight: 700; }
+        
+        .proctor-alert { position: absolute; top: 10px; right: 10px; font-size: 12px; color: #ff4757; font-weight: bold; text-shadow: 1px 1px 2px #000; }
+    </style>
+</head>
+<body oncontextmenu="return false;" ondragstart="return false;">
+
+<div id="startOverlay">
+    <div class="card bg-dark text-white border-primary" style="max-width: 600px;">
+        <div class="card-body p-5 text-center">
+            <i class="fas fa-microchip fa-4x text-primary mb-4"></i>
+            <h3 class="fw-bold">Ultra-Secure Proctoring System</h3>
+            <div class="alert alert-danger small text-start my-4">
+                <strong><i class="fas fa-biohazard"></i> SYSTEM CHECKS:</strong>
+                <ul class="mt-2 mb-0">
+                    <li><b>Voice Detection:</b> High noise or talking will be flagged.</li>
+                    <li><b>Face Tracking:</b> Stay centered. Avoid looking away.</li>
+                    <li><b>Double Face:</b> Only ONE person must be in the frame.</li>
+                    <li><b>App Block:</b> Any screen capture or app switching will terminate session.</li>
+                </ul>
+            </div>
+            <button class="btn btn-primary btn-lg rounded-pill w-100 py-3" onclick="beginExam()">I Consent to AI Monitoring & Start</button>
+        </div>
+    </div>
+</div>
+
+<div id="securityOverlay">
+    <i class="fas fa-skull-crossbones fa-5x text-danger mb-4"></i>
+    <h2 id="violationMsg" class="display-6 fw-bold">PROTOCOL BREACH!</h2>
+    <p id="violationDetail" class="lead text-warning">Unauthorized activity detected.</p>
+    <button class="btn btn-warning rounded-pill px-5 mt-4 fw-bold" onclick="resumeExam()">Resume Session</button>
+</div>
+
+<div class="camera-container">
+    <video id="videoFeed" autoplay playsinline muted></video>
+    <canvas id="faceCanvas"></canvas>
+    <div id="proctorAlert" class="proctor-alert"></div>
+</div>
+
+<div id="mainQuizContent" style="visibility: hidden;">
+    <div class="quiz-header bg-dark text-white py-3 border-bottom border-primary">
+        <div class="container d-flex justify-content-between align-items-center">
+            <span class="fw-bold"><i class="fas fa-circle text-danger me-2"></i>LIVE PROCTORING</span>
+            <div class="d-flex align-items-center gap-4">
+                <span id="violationCountBadge" class="badge bg-danger">Violations: 0/3</span>
+                <div class="h4 mb-0" id="timer">00:00</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-8">
+                <div id="questionContainer" class="question-card border-start border-primary border-5"></div>
+                <div class="d-flex justify-content-between mt-4">
+                    <button id="prevBtn" class="btn btn-outline-secondary px-4 rounded-pill" onclick="navigate(-1)" disabled>Prev</button>
+                    <button id="nextBtn" class="btn btn-primary px-5 rounded-pill shadow" onclick="navigate(1)">Next Question</button>
+                    <button id="submitBtn" class="btn btn-success px-5 rounded-pill d-none" onclick="finishQuiz()">Final Submission</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const QUIZ_ID = new URLSearchParams(window.location.search).get('quizId');
+    const TOKEN = localStorage.getItem('erp-token');
+    let questions = [], currentIndex = 0, studentAnswers = {}, violationCount = 0;
+    let model = null, audioContext = null, analyser = null;
+
+    // ১. সিকিউরিটি ইনিশিয়ালাইজেশন
+    async function beginExam() {
+        try {
+            // ১.১ ক্যামেরা ও মাইক্রোফোন পারমিশন
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            document.getElementById('videoFeed').srcObject = stream;
+            
+            // ১.২ ফেস ডিটেকশন মডেল লোড করা
+            model = await blazeface.load();
+            detectFace();
+            detectAudio(stream);
+
+            // ১.৩ ফুল-স্ক্রিন ও অ্যাপ ব্লকিং
+            if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+            
+            document.getElementById('startOverlay').style.display = 'none';
+            document.getElementById('mainQuizContent').style.visibility = 'visible';
+            
+            initData();
+            startSecurityWatch();
+        } catch (err) {
+            alert("Hardware access is mandatory for Ultra-Secure mode!");
+        }
+    }
+
+    // ২. অ্যাডভান্সড ভয়েস ডিটেকশন
+    function detectAudio(stream) {
+        audioContext = new AudioContext();
+        analyser = audioContext.createAnalyser();
+        const source = audioContext.createMediaStreamSource(stream);
+        source.connect(analyser);
+        const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+        function checkNoise() {
+            analyser.getByteFrequencyData(dataArray);
+            let avg = dataArray.reduce((a,b) => a+b) / dataArray.length;
+            if (avg > 40) handleViolation("Noise/Voice Detected"); // উচ্চ শব্দ হলে ডিটেক্ট হবে
+            requestAnimationFrame(checkNoise);
+        }
+        checkNoise();
+    }
+
+    // ৩. রিয়েল-টাইম ফেস মুভমেন্ট ও ডাবল ফেস ডিটেকশন
+    async function detectFace() {
+        const video = document.getElementById('videoFeed');
+        const alertBox = document.getElementById('proctorAlert');
+        
+        const predictions = await model.estimateFaces(video, false);
+        
+        if (predictions.length > 1) {
+            handleViolation("Multiple Faces Detected!");
+            alertBox.innerText = "MULTIPLE PERSONS";
+        } else if (predictions.length === 0) {
+            handleViolation("Face Not Visible!");
+            alertBox.innerText = "NO FACE DETECTED";
+        } else {
+            alertBox.innerText = "";
+            // মুখ ঘুরালে বা অন্যদিকে তাকালে (Movement detection)
+            const rightEye = predictions[0].landmarks[0];
+            const leftEye = predictions[0].landmarks[1];
+            if (Math.abs(rightEye[0] - leftEye[0]) < 20) handleViolation("Look at the screen!");
+        }
+        
+        setTimeout(detectFace, 1000); // প্রতি ১ সেকেন্ডে চেক হবে
+    }
+
+    function startSecurityWatch() {
+        // স্ক্রিন শেয়ারিং এবং ট্যাব ডিটেকশন
+        window.addEventListener('blur', () => handleViolation("Application Switching"));
+        document.addEventListener('visibilitychange', () => { if(document.hidden) handleViolation("Tab Switched"); });
+        
+        // কীবোর্ড লক (Alt+Tab, Windows Key, PrtSc)
+        document.addEventListener('keydown', (e) => {
+            if(e.altKey || e.metaKey || e.keyCode == 44) {
+                e.preventDefault();
+                handleViolation("Shortcut Keys Blocked");
+            }
+        });
+    }
+
+    function handleViolation(reason) {
+        violationCount++;
+        document.getElementById('violationCountBadge').innerText = `Violations: ${violationCount}/3`;
+        document.getElementById('violationDetail').innerText = `Reason: ${reason}`;
+        document.getElementById('securityOverlay').style.display = 'block';
+        
+        if (violationCount >= 3) {
+            alert("Security policy violated. Terminating exam.");
+            finishQuiz(true);
+        }
+    }
+
+    function resumeExam() {
+        document.getElementById('securityOverlay').style.display = 'none';
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    }
+
+    // ৪. ডেটা রেন্ডারিং লজিক (Same as stable versions)
+    async function initData() {
+        const res = await fetch(`/api/online-exam/attempt/${QUIZ_ID}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        questions = data.questions;
+        document.getElementById('quizTitle').innerText = data.title;
+        startTimer(data.timeLimit || 60);
+        renderQuestion();
+    }
+
+    function renderQuestion() {
+        const q = questions[currentIndex];
+        document.getElementById('questionContainer').innerHTML = `
+            <h5 class="text-primary mb-3"># ${currentIndex + 1} of ${questions.length}</h5>
+            <h4 class="fw-bold mb-4">${q.question_text}</h4>
+            <div class="options">
+                ${['a', 'b', 'c', 'd'].map(opt => q[`option_${opt}`] ? `
+                    <button class="option-btn ${studentAnswers[q.question_id] === opt ? 'active' : ''}" 
+                        onclick="selectOption(${q.question_id}, '${opt}')">
+                        <b>${opt.toUpperCase()}.</b> ${q[`option_${opt}`]}
+                    </button>
+                ` : '').join('')}
+            </div>
+        `;
+        document.getElementById('prevBtn').disabled = currentIndex === 0;
+        const isLast = currentIndex === questions.length - 1;
+        document.getElementById('nextBtn').classList.toggle('d-none', isLast);
+        document.getElementById('submitBtn').classList.toggle('d-none', !isLast);
+    }
+
+    function selectOption(qId, opt) { studentAnswers[qId] = opt; renderQuestion(); }
+    function navigate(dir) { currentIndex += dir; renderQuestion(); }
+    
+    function startTimer(m) {
+        let s = m * 60;
+        const t = setInterval(() => {
+            document.getElementById('timer').innerText = `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+            if (s-- <= 0) { clearInterval(t); finishQuiz(true); }
+        }, 1000);
+    }
+
+    async function finishQuiz(isAuto = false) {
+        await fetch(`/api/online-exam/submit/${QUIZ_ID}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify({ answers: studentAnswers, violations: violationCount })
+        });
+        window.location.href = `/quiz-results.html?quizId=${QUIZ_ID}`;
+    }
+</script>
+</body>
+</html>

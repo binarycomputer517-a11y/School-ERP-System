@@ -3,178 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Quizzes</title>
+    <title>My Quizzes | DCA Portal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <style>
-        body { background-color: #f0f2f8; font-family: sans-serif; }
-        .container { max-width: 1200px; }
-        h1 { color: #003366; font-weight: bold; }
-        .text-primary { color: #003366 !important; }
-        .text-secondary { color: #5e35b1 !important; }
-        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .quiz-item { border-left: 5px solid #003366; }
-        .badge-status { min-width: 80px; }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        body { background-color: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; }
+        .quiz-card { border-radius: 20px; border: none; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .btn-start { background: #6366f1; color: white; border-radius: 12px; font-weight: 700; transition: 0.3s; }
+        .btn-start:hover { background: #4f46e5; transform: translateY(-2px); }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1 class="text-primary">My Assigned Quizzes</h1>
-            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
+    <div class="container py-5">
+        <header class="d-flex justify-content-between align-items-center mb-5">
+            <div>
+                <h2 class="fw-bold mb-0">My Online Assessments</h2>
+                <p class="text-muted small">Course: DCA | Subject: Fundamentals of Computer</p>
+            </div>
+            <a href="/student-dashboard.html" class="btn btn-outline-dark rounded-pill px-4">Dashboard</a>
         </header>
 
-        <div class="card shadow-sm p-4">
-            <div id="quiz-list-container">
-                <h4 class="text-secondary mb-3">Available Quizzes</h4>
-                <div id="quiz-list" class="list-group">
-                    <p class="text-muted text-center py-5">Loading quizzes...</p>
-                </div>
+        <div id="quiz-list-container" class="row g-4">
+            <div class="col-12 text-center py-5">
+                <div class="spinner-border text-primary"></div>
+                <p class="mt-2 text-muted">Checking database for published quizzes...</p>
             </div>
-            <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
         </div>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
     <script>
-        const token = localStorage.getItem('erp-token');
-        // Using 'profile-id' for student ID consistency
-        const studentId = localStorage.getItem('profile-id'); 
+        const TOKEN = localStorage.getItem('erp-token');
+        const STUDENT_ID = localStorage.getItem('profile-id'); 
 
-        // --- Helper function for authenticated API calls ---
-        async function handleApi(url) {
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                     alert('Session expired or unauthorized. Please log in again.');
-                     localStorage.clear();
-                     window.location.href = '/login.html';
-                     throw new Error('Unauthorized');
-                }
-                throw new Error(`API call failed with status: ${response.status}`);
-            }
-            return response.json();
-        }
-
-        /**
-         * Determines the status and returns appropriate HTML for the badge.
-         * Note: The quiz object must contain start_time and end_time (in ISO format).
-         */
-        function getQuizStatus(quiz) {
-            const now = new Date();
-            // Ensure times are valid Date objects
-            const startTime = new Date(quiz.start_time);
-            const endTime = new Date(quiz.end_time);
-
-            if (isNaN(startTime) || isNaN(endTime)) {
-                return `<span class="badge bg-secondary badge-status">Time Error</span>`;
-            }
-
-            if (now < startTime) {
-                return `<span class="badge bg-warning badge-status">Upcoming</span>`;
-            } else if (now >= startTime && now <= endTime) {
-                return `<span class="badge bg-success badge-status">Active</span>`;
-            } else {
-                return `<span class="badge bg-danger badge-status">Ended</span>`;
-            }
-        }
-        
-        /**
-         * Generates the action button based on the quiz status.
-         */
-        function getActionButton(quiz) {
-            const now = new Date();
-            const startTime = new Date(quiz.start_time);
-            const endTime = new Date(quiz.end_time);
-            
-            if (isNaN(startTime) || isNaN(endTime)) {
-                return `<button class="btn btn-sm btn-secondary" disabled>Time N/A</button>`;
-            }
-
-            if (now < startTime) {
-                const startString = startTime.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
-                return `<button class="btn btn-sm btn-warning" disabled>Starts: ${startString}</button>`;
-            } else if (now >= startTime && now <= endTime) {
-                // IMPORTANT: Pass the quiz ID to the dedicated quiz taking page
-                // The quiz page logic (Quiz.js) expects a query parameter, typically 'quizId' or 'quiz'.
-                return `<a href="/quiz.html?quiz=${quiz.quiz_id}" class="btn btn-sm btn-success">Start Quiz</a>`;
-            } else {
-                // Assuming students can view results after the end time
-                return `<a href="/quiz-results.html?quizId=${quiz.quiz_id}" class="btn btn-sm btn-info">View Result</a>`;
-            }
-        }
-
-
-        /**
-         * Main function to fetch student's quizzes based on their course and batch.
-         */
-        async function loadQuizzes() {
-            const quizList = document.getElementById('quiz-list');
-            const errorMessage = document.getElementById('error-message');
-            errorMessage.style.display = 'none';
-            quizList.innerHTML = '<p class="text-muted text-center py-5">Loading quizzes...</p>';
-
-            if (!studentId || !token) {
-                errorMessage.textContent = 'Authentication error: Please log in again.';
-                errorMessage.style.display = 'block';
-                quizList.innerHTML = '';
+        async function fetchQuizzes() {
+            const container = document.getElementById('quiz-list-container');
+            if (!STUDENT_ID) {
+                container.innerHTML = '<div class="alert alert-danger">Error: Student profile ID missing in session.</div>';
                 return;
             }
 
             try {
-                // 1. Fetch Student Profile (to get course_id and batch_id)
-                const studentData = await handleApi(`/api/students/${studentId}`);
-                const { course_id, batch_id } = studentData;
-                
-                if (!course_id || !batch_id) {
-                    quizList.innerHTML = `<p class="text-warning text-center py-5">Enrollment Error: Course/Batch not assigned.</p>`;
+                // আপনার রাউটারে থাকা GET /student/:studentId/quizzes রুটটি কল করা হচ্ছে
+                const res = await fetch(`/api/online-exam/student/${STUDENT_ID}/quizzes`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+
+                const data = await res.json();
+                container.innerHTML = '';
+
+                if (!data || data.length === 0) {
+                    container.innerHTML = '<div class="col-12 text-center py-5"><h4 class="text-muted">No active quizzes found for your course.</h4></div>';
                     return;
                 }
 
-                // 2. Fetch Quizzes relevant to the student's enrollment
-                // NOTE: The backend must define this route to prevent 404 (as seen in the log)
-                const quizzes = await handleApi(`/api/quizzes/for-student/${course_id}/${batch_id}`);
-                
-                if (quizzes.length === 0) {
-                    quizList.innerHTML = `<p class="text-info text-center py-5">No quizzes found for your course/batch yet.</p>`;
-                    return;
-                }
-
-                // 3. Render the quiz list
-                quizList.innerHTML = quizzes.map(quiz => `
-                    <div class="list-group-item list-group-item-action quiz-item d-flex justify-content-between align-items-center mb-2">
-                        <div class="d-flex align-items-center">
-                            <h6 class="mb-0 text-primary me-3">${quiz.quiz_name}</h6>
-                            ${getQuizStatus(quiz)}
+                data.forEach(quiz => {
+                    container.innerHTML += `
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card quiz-card p-4 h-100">
+                                <span class="badge bg-success mb-3" style="width: fit-content;">PUBLISHED</span>
+                                <h4 class="fw-bold mb-1">${quiz.title}</h4>
+                                <p class="text-muted small mb-4">${quiz.subject_name}</p>
+                                
+                                <div class="d-flex justify-content-between mb-4 border-top pt-3">
+                                    <div class="text-center">
+                                        <small class="d-block text-muted">Time</small>
+                                        <span class="fw-bold">${quiz.time_limit_minutes} Min</span>
+                                    </div>
+                                    <div class="text-center">
+                                        <small class="d-block text-muted">Max Marks</small>
+                                        <span class="fw-bold">100</span>
+                                    </div>
+                                </div>
+                                
+                                <button onclick="startQuiz('${quiz.id}')" class="btn btn-start w-100 py-2">
+                                    ATTEMPT NOW <i class="fas fa-arrow-right ms-2"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="d-flex align-items-center">
-                            <span class="text-muted me-3 small">
-                                Subject: <strong>${quiz.subject_name || 'N/A'}</strong> 
-                                | Max Marks: <strong>${quiz.max_marks || 'N/A'}</strong> 
-                                | Duration: <strong>${quiz.duration_minutes || 'N/A'} min</strong>
-                            </span>
-                            ${getActionButton(quiz)}
-                        </div>
-                    </div>
-                `).join('');
-
-            } catch (error) {
-                console.error("Error loading quizzes:", error);
-                // Specifically handle the 404 case, assuming the API route is missing
-                const detailMessage = error.message.includes('404') 
-                    ? 'Backend API route for quizzes is missing or incorrect.'
-                    : error.message;
-
-                errorMessage.textContent = `Error loading quizzes: ${detailMessage}`;
-                errorMessage.style.display = 'block';
-                quizList.innerHTML = '';
+                    `;
+                });
+            } catch (err) {
+                container.innerHTML = `<div class="alert alert-danger">Sync Error: ${err.message}</div>`;
             }
         }
 
-        // Run the function when the page loads
-        document.addEventListener('DOMContentLoaded', loadQuizzes);
+        function startQuiz(quizId) {
+            // ছাত্রকে পরীক্ষার মূল পেজে রিডাইরেক্ট করা হচ্ছে
+            window.location.href = `/student-quiz-attempt.html?quizId=${quizId}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchQuizzes);
     </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>
