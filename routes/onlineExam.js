@@ -1,174 +1,515 @@
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
-const { authenticateToken, authorize } = require('../authMiddleware'); 
+const { authenticateToken, authorize } = require('../authMiddleware');
 
-// --- টেবিল কনস্ট্যান্টস ---
-const QUIZZES_TABLE = 'online_quizzes';
-const ATTEMPT_TABLE = 'student_exam_attempts'; 
-const QUESTIONS_TABLE = 'quiz_questions';
-const QUIZ_QUESTION_LINKS_TABLE = 'quiz_question_links';
-const RESULTS_TABLE = 'student_quiz_results'; 
-
-// =================================================================
-// --- ছাত্রের জন্য রুটসমূহ (STUDENT ROUTES) ---
-// =================================================================
-
-/**
- * @route   GET /api/online-exam/student/:studentId/quizzes
- * @desc    ছাত্রের কোর্স অনুযায়ী পাবলিশড কুইজ লিস্ট লোড করা
+/** * HELPER: Validate UUID Format
+ * This checks if an ID is a valid UUID (e.g., 550e8400-e29b...).
+ * If the ID is an integer (e.g., "77124") or empty, this returns false.
  */
-router.get('/student/:studentId/quizzes', authenticateToken, async (req, res) => {
-    const { studentId } = req.params; // এটি ইউজার আইডি হিসেবে আসে (যেমন: 6fd0e97a...)
+const isValidUUID = (id) => {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    return id && uuidRegex.test(id);
+};
+
+/** * =================================================================
+ * SECTION 1: QUIZ MANAGEMENT (Admin/Teacher Access)
+ * =================================================================
+ */
+
+// POST: Create New Quiz
+router.post('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { title, subject_id, course_id, time_limit, max_marks, assessment_type, status, start_time, end_time } = req.body;
+    
+    try {
+        // SANITIZATION:
+        // 1. UUID Checks: If invalid (e.g. "77124"), set to NULL.
+        const safeSubjectId = isValidUUID(subject_id) ? subject_id : null;
+        const safeCourseId = isValidUUID(course_id) ? course_id : null;
+        
+        // 2. Integer Checks (The Fix for "NaN" error)
+        // Parse the input first
+        let parsedTime = parseInt(time_limit);
+        let parsedMarks = parseInt(max_marks);
+
+        // If parsed value is NaN (Not a Number), use defaults
+        const safeTimeLimit = isNaN(parsedTime) ? 60 : parsedTime;
+        const safeMaxMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
+        
+        const result = await pool.query(
+            `INSERT INTO online_quizzes 
+            (title, subject_id, course_id, time_limit_minutes, max_marks, status, assessment_type, available_from, available_to) 
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
+             RETURNING *`,
+            [
+                title, 
+                safeSubjectId, 
+                safeCourseId, 
+                safeTimeLimit, 
+                safeMaxMarks, 
+                status || 'Draft', 
+                assessment_type || 'Quiz',
+                start_time || null,
+                end_time || null
+            ]
+        );
+        res.status(201).json({ success: true, data: result.rows[0] });
+    } catch (err) { 
+        console.error("Quiz Creation Error:", err);
+        res.status(500).json({ message: 'Error creating quiz: ' + err.message }); 
+    }
+});
+
+// GET: All Quizzes for Admin/Teacher Panel
+router.get('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    try {
+        // Use LEFT JOIN with ::text casting for safe joining
+        const query = `
+            SELECT oq.*, c.course_name, s.subject_name 
+            FROM online_quizzes oq
+            LEFT JOIN courses c ON oq.course_id::text = c.id::text
+            LEFT JOIN subjects s ON oq.subject_id::text = s.id::text
+            ORDER BY oq.created_at DESC`;
+        
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Admin Quiz Fetch Error:", err);
+        res.status(500).json({ message: 'Failed to load quiz list' });
+    }
+});
+
+/** * =================================================================
+ * SECTION 2: STUDENT PORTAL (Exam & Grading)
+ * =================================================================
+ */
+
+// GET: Available Quizzes Catalog for Student
+router.get('/student/:userId/quizzes', authenticateToken, async (req, res) => {
+    const { userId } = req.params;
     try {
         const studentRes = await pool.query(
-            'SELECT course_id FROM students WHERE user_id = $1', [studentId]
+            'SELECT student_id, course_id FROM students WHERE user_id::text = $1 OR student_id::text = $1', 
+            [userId]
         );
-        if (studentRes.rowCount === 0) return res.status(404).json({ message: 'Course not found' });
+        if (studentRes.rowCount === 0) return res.status(404).json({ message: 'Profile not found' });
+
+        const { student_id, course_id } = studentRes.rows[0];
         
-        const courseId = studentRes.rows[0].course_id;
-        const quizQuery = `
-            SELECT oq.id, oq.title, oq.time_limit_minutes, oq.max_marks, s.subject_name
-            FROM ${QUIZZES_TABLE} oq
-            JOIN subjects s ON oq.subject_id = s.id
-            WHERE oq.course_id = $1 AND oq.status = 'Published'
-            ORDER BY oq.created_at DESC;
-        `;
-        const result = await pool.query(quizQuery, [courseId]);
-        res.status(200).json(result.rows);
-    } catch (error) { res.status(500).json({ message: 'Error loading quizzes' }); }
+        const quizzesQuery = `
+            SELECT oq.id, oq.title, oq.time_limit_minutes, oq.max_marks, s.subject_name,
+                   (SELECT status FROM student_exam_attempts 
+                    WHERE quiz_id = oq.id AND student_id::text = $1 
+                    ORDER BY end_time DESC LIMIT 1) as attempt_status
+            FROM online_quizzes oq
+            LEFT JOIN subjects s ON oq.subject_id::text = s.id::text
+            WHERE (oq.course_id::text = $2 OR oq.course_id IS NULL) 
+              AND oq.status = 'Published'
+            ORDER BY oq.created_at DESC`;
+
+        const quizzes = await pool.query(quizzesQuery, [student_id.toString(), course_id.toString()]);
+        res.json(quizzes.rows);
+    } catch (err) {
+        console.error("Student Quiz Catalog Error:", err);
+        res.status(500).json({ message: 'Catalog Unavailable' });
+    }
 });
 
-/**
- * @route   GET /api/online-exam/attempt/:quizId
- * @desc    পরীক্ষার জন্য প্রশ্নপত্র লোড করা
- */
+// GET: Hydrate Exam Environment and Questions
 router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
     const { quizId } = req.params;
+    const userId = req.user.id;
     try {
-        const quiz = await pool.query('SELECT title, time_limit_minutes FROM online_quizzes WHERE id = $1', [quizId]);
-        const questions = await pool.query(`
-            SELECT q.* FROM ${QUESTIONS_TABLE} q
-            JOIN ${QUIZ_QUESTION_LINKS_TABLE} l ON q.question_id = l.question_id
-            WHERE l.quiz_id = $1 ORDER BY l.question_order ASC;
-        `, [quizId]);
-        res.json({ title: quiz.rows[0].title, timeLimit: quiz.rows[0].time_limit_minutes, questions: questions.rows });
-    } catch (err) { res.status(500).json({ message: 'Failed to load attempt' }); }
+        const studentQuery = `
+            SELECT s.student_id, s.first_name, s.last_name, s.roll_number, s.profile_image_path,
+                   c.course_name, b.batch_name, sub.subject_name, oq.title, oq.time_limit_minutes
+            FROM students s
+            LEFT JOIN courses c ON s.course_id = c.id
+            LEFT JOIN batches b ON s.batch_id = b.id
+            CROSS JOIN online_quizzes oq
+            LEFT JOIN subjects sub ON oq.subject_id::text = sub.id::text
+            WHERE s.user_id::text = $1 AND oq.id::text = $2`;
+        
+        const studentRes = await pool.query(studentQuery, [userId, quizId]);
+        if (studentRes.rowCount === 0) return res.status(404).json({ message: 'Profile mismatch' });
+
+        const sId = studentRes.rows[0].student_id;
+        const checkAttempt = await pool.query(
+            `SELECT attempt_id FROM student_exam_attempts WHERE student_id::text = $1 AND quiz_id::text = $2`,
+            [sId, quizId]
+        );
+        if (checkAttempt.rowCount > 0) return res.status(403).json({ message: 'You have already completed this exam' });
+
+        const questionsRes = await pool.query(
+            `SELECT q.question_id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.marks 
+             FROM quiz_questions q
+             JOIN quiz_question_links l ON q.question_id = l.question_id
+             WHERE l.quiz_id::text = $1 ORDER BY l.question_order ASC`, [quizId]
+        );
+
+        res.json({ 
+            student: {
+                name: `${studentRes.rows[0].first_name} ${studentRes.rows[0].last_name}`,
+                roll: studentRes.rows[0].roll_number,
+                photo: studentRes.rows[0].profile_image_path,
+                course: studentRes.rows[0].course_name,
+                batch: studentRes.rows[0].batch_name,
+                subject: studentRes.rows[0].subject_name,
+                timeLimit: studentRes.rows[0].time_limit_minutes
+            }, 
+            questions: questionsRes.rows 
+        });
+    } catch (err) { 
+        console.error("Exam Hydration Error:", err);
+        res.status(500).json({ message: 'Server error: ' + err.message }); 
+    }
 });
 
-/**
- * @route   POST /api/online-exam/submit/:quizId
- * @desc    সঠিক student_id ব্যবহার করে উত্তর জমা দেওয়া (Fixes Foreign Key Error)
- */
+// POST: Atomic Submission & Result Calculation
 router.post('/submit/:quizId', authenticateToken, async (req, res) => {
     const { quizId } = req.params;
-    const { answers } = req.body; 
-    const userId = req.user.id; 
+    const { answers, violations } = req.body;
+    const userId = req.user.id;
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+        const sRes = await client.query('SELECT student_id FROM students WHERE user_id::text = $1', [userId]);
+        const sId = sRes.rows[0].student_id;
+
+        const qRes = await client.query(
+            `SELECT q.question_id, q.correct_option, q.marks 
+             FROM quiz_questions q 
+             JOIN quiz_question_links l ON q.question_id = l.question_id 
+             WHERE l.quiz_id::text = $1`, [quizId]
+        );
+
+        let totalScore = 0, correctCount = 0, incorrectCount = 0, unansweredCount = 0;
+        const attemptRes = await client.query(
+            `INSERT INTO student_exam_attempts (student_id, quiz_id, status, start_time, violation_count) 
+             VALUES ($1, $2, 'Submitted', NOW(), $3) RETURNING attempt_id`, 
+            [sId, quizId, violations || 0]
+        );
+        const attemptId = attemptRes.rows[0].attempt_id;
+
+        for (const row of qRes.rows) {
+            const studentAnsRaw = answers[row.question_id];
+            const studentAns = studentAnsRaw ? studentAnsRaw.toString().toLowerCase().trim() : null;
+            const officialAns = row.correct_option ? row.correct_option.toString().toLowerCase().trim() : null;
+
+            let isCorrect = (studentAns !== null && studentAns === officialAns);
+            let marksObtained = isCorrect ? row.marks : 0;
+
+            if (!studentAns) unansweredCount++;
+            else if (isCorrect) { correctCount++; totalScore += marksObtained; }
+            else incorrectCount++;
+
+            await client.query(
+                `INSERT INTO student_quiz_results (attempt_id, question_id, student_answer, correct_answer, is_correct, marks_obtained) 
+                 VALUES ($1, $2, $3, $4, $5, $6)`, 
+                [attemptId, row.question_id, studentAns, officialAns, isCorrect, marksObtained]
+            );
+        }
+
+        await client.query(
+            `UPDATE student_exam_attempts 
+             SET total_score = $1, correct_count = $2, incorrect_count = $3, unanswered_count = $4, end_time = NOW() 
+             WHERE attempt_id = $5`, 
+            [totalScore, correctCount, incorrectCount, unansweredCount, attemptId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, score: totalScore, correct: correctCount });
+    } catch (e) { 
+        await client.query('ROLLBACK'); 
+        console.error("Submission Error:", e);
+        res.status(500).json({ message: 'Submission failed' }); 
+    } finally { client.release(); }
+});
+
+// GET: Individual Detailed Results
+router.get('/results/:quizId', authenticateToken, async (req, res) => {
+    const { quizId } = req.params;
+    const userId = req.user.id;
+    try {
+        const summaryQuery = `
+            SELECT sea.*, oq.title, oq.max_marks,
+                   s.first_name || ' ' || s.last_name AS student_name,
+                   s.roll_number, s.profile_image_path AS profile_pic,
+                   c.course_name, b.batch_name, sub.subject_name
+            FROM student_exam_attempts sea
+            JOIN online_quizzes oq ON sea.quiz_id = oq.id
+            JOIN students s ON sea.student_id = s.student_id
+            LEFT JOIN courses c ON s.course_id = c.id
+            LEFT JOIN batches b ON s.batch_id = b.id
+            LEFT JOIN subjects sub ON oq.subject_id::text = sub.id::text
+            WHERE s.user_id::text = $1 AND sea.quiz_id::text = $2 
+            ORDER BY sea.end_time DESC LIMIT 1`;
+        
+        const summary = await pool.query(summaryQuery, [userId, quizId]);
+        if (summary.rowCount === 0) return res.status(404).json({ message: 'Result not found' });
+        
+        const details = await pool.query(
+            `SELECT r.*, q.question_text FROM student_quiz_results r 
+             JOIN quiz_questions q ON r.question_id = q.question_id 
+             WHERE r.attempt_id = $1`, [summary.rows[0].attempt_id]
+        );
+        res.json({ summary: summary.rows[0], details: details.rows });
+    } catch (err) { 
+        console.error("Results Fetch Error:", err);
+        res.status(500).json({ message: 'Result not found' }); 
+    }
+});
+
+/** * =================================================================
+ * SECTION 3: QUESTION BANK & LINKING (Admin/Teacher Access)
+ * =================================================================
+ */
+
+// GET: All Available Questions in Bank
+router.get('/question-bank', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    try {
+        const query = `
+            SELECT question_id, question_text, marks, correct_option, 
+                   option_a, option_b, option_c, option_d 
+            FROM quiz_questions 
+            ORDER BY question_id DESC`;
+        
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Question Bank Error:", err);
+        res.status(500).json({ message: 'Failed to load question bank' });
+    }
+});
+
+// GET: Linked Questions for Specific Quiz
+router.get('/quizzes/:quizId/links', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { quizId } = req.params;
+    try {
+        const query = `
+            SELECT q.question_id, q.question_text, q.marks, l.question_order
+            FROM quiz_questions q
+            JOIN quiz_question_links l ON q.question_id = l.question_id
+            WHERE l.quiz_id::text = $1
+            ORDER BY l.question_order ASC`;
+        
+        const result = await pool.query(query, [quizId]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Link Fetch Error:", err);
+        res.status(500).json({ message: 'Failed to load linked questions' });
+    }
+});
+
+// PUT: Bulk Link Questions to a Quiz
+router.put('/quizzes/:quizId/link-questions', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { quizId } = req.params;
+    const { questionIds } = req.body; 
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        
+        // 1. Delete all old links for this quiz
+        await client.query('DELETE FROM quiz_question_links WHERE quiz_id::text = $1', [quizId]);
+
+        // 2. Link the new questions
+        if (Array.isArray(questionIds) && questionIds.length > 0) {
+            for (let i = 0; i < questionIds.length; i++) {
+                await client.query(
+                    `INSERT INTO quiz_question_links (quiz_id, question_id, question_order) 
+                     VALUES ($1, $2, $3)`,
+                    [quizId, questionIds[i], i + 1]
+                );
+            }
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Questions successfully linked to quiz' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Bulk Linking Error:", err);
+        res.status(500).json({ message: 'Server error linking questions' });
+    } finally {
+        client.release();
+    }
+});
+
+// POST: Add Single New Question to Bank
+router.post('/questions', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { question_text, subject_id, correct_option, marks, option_a, option_b, option_c, option_d } = req.body;
+    try {
+        const query = `
+            INSERT INTO quiz_questions 
+            (question_text, subject_id, correct_option, marks, option_a, option_b, option_c, option_d) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+            RETURNING *`;
+        
+        const result = await pool.query(query, [
+            question_text, subject_id, correct_option, marks || 1, option_a, option_b, option_c, option_d
+        ]);
+        res.status(201).json({ success: true, data: result.rows[0] });
+    } catch (err) {
+        console.error("Single Question Add Error:", err);
+        res.status(500).json({ message: 'Failed to create new question' });
+    }
+});
+
+// POST: Bulk Import Questions
+router.post('/question-bank/import', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { questions } = req.body;
+    
+    if (!questions || !Array.isArray(questions) || questions.length === 0) {
+        return res.status(400).json({ message: 'No questions provided' });
+    }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
+        
+        for (const q of questions) {
+            // Basic validation
+            if (!q.Question_Text || !q.Correct_Option) continue;
 
-        // ১. ছাত্রের মূল student_id খুঁজে বের করা
-        const studentInfo = await client.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
-        if (studentInfo.rowCount === 0) throw new Error('Student profile not found.');
-        const actualStudentId = studentInfo.rows[0].student_id; 
-
-        // ২. এটেম্পট তৈরি
-        const attemptRes = await client.query(
-            `INSERT INTO ${ATTEMPT_TABLE} (student_id, quiz_id, start_time, status) 
-             VALUES ($1, $2, NOW(), 'Submitted') RETURNING attempt_id`,
-            [actualStudentId, quizId]
-        );
-        const attemptId = attemptRes.rows[0].attempt_id;
-
-        // ৩. গ্রেডিং লজিক
-        const questions = await client.query(
-            `SELECT q.question_id, q.correct_option, q.marks FROM ${QUESTIONS_TABLE} q 
-             JOIN ${QUIZ_QUESTION_LINKS_TABLE} l ON q.question_id = l.question_id WHERE l.quiz_id = $1`, [quizId]
-        );
-
-        let totalScore = 0;
-        for (let q of questions.rows) {
-            const studentAns = answers[q.question_id] || null;
-            const isCorrect = (studentAns === q.correct_option);
-            const marks = isCorrect ? q.marks : 0;
-            if (isCorrect) totalScore += marks;
-
+            // SANITIZATION: Validate UUID for import as well
+            const safeSubjectId = isValidUUID(q.Subject_ID) ? q.Subject_ID : null;
+            
             await client.query(
-                `INSERT INTO ${RESULTS_TABLE} (attempt_id, question_id, student_answer, correct_answer, is_correct, marks_obtained) 
-                 VALUES ($1, $2, $3, $4, $5, $6)`, [attemptId, q.question_id, studentAns, q.correct_option, isCorrect, marks]
+                `INSERT INTO quiz_questions 
+                (question_text, subject_id, correct_option, marks, option_a, option_b, option_c, option_d) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                [
+                    q.Question_Text, 
+                    safeSubjectId, 
+                    q.Correct_Option, 
+                    q.Marks || 1, 
+                    q.Option_A, 
+                    q.Option_B, 
+                    q.Option_C || null, 
+                    q.Option_D || null
+                ]
             );
         }
-
-        await client.query(`UPDATE ${ATTEMPT_TABLE} SET total_score = $1, end_time = NOW() WHERE attempt_id = $2`, [totalScore, attemptId]);
+        
         await client.query('COMMIT');
-        res.status(200).json({ success: true, score: totalScore, attemptId: attemptId });
-    } catch (error) {
-        await client.query('ROLLBACK');
-        console.error('Submission Error:', error.message);
-        res.status(500).json({ message: 'Submission failed: ' + error.message });
-    } finally { client.release(); }
-});
-
-/**
- * @route   GET /api/online-exam/results/:quizId
- * @desc    ছাত্রের কুইজ রেজাল্ট ও বিশ্লেষণ ফেচ করা
- */
-router.get('/results/:quizId', authenticateToken, async (req, res) => {
-    const { quizId } = req.params;
-    const userId = req.user.id;
-    try {
-        const student = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
-        const attempt = await pool.query(
-            `SELECT attempt_id, total_score FROM ${ATTEMPT_TABLE} WHERE student_id = $1 AND quiz_id = $2 ORDER BY end_time DESC LIMIT 1`,
-            [student.rows[0].student_id, quizId]
-        );
-        const details = await pool.query(
-            `SELECT r.*, q.question_text FROM ${RESULTS_TABLE} r JOIN ${QUESTIONS_TABLE} q ON r.question_id = q.question_id WHERE r.attempt_id = $1`, 
-            [attempt.rows[0].attempt_id]
-        );
-        res.json({ score: attempt.rows[0].total_score, details: details.rows });
-    } catch (err) { res.status(500).json({ message: 'Error fetching result' }); }
-});
-
-/**
- * @route   GET /api/online-exam/results/:quizId
- * @desc    ছাত্রের সর্বশেষ পরীক্ষার বিস্তারিত ফলাফল ও বিশ্লেষণ প্রদান
- */
-router.get('/results/:quizId', authenticateToken, async (req, res) => {
-    const { quizId } = req.params;
-    const userId = req.user.id;
-
-    try {
-        // ১. ছাত্রের student_id খুঁজে বের করা
-        const student = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
-        if (student.rowCount === 0) return res.status(404).json({ message: 'Student not found.' });
-        const studentId = student.rows[0].student_id;
-
-        // ২. ওই কুইজের জন্য সর্বশেষ এটেম্পট আইডি এবং স্কোর খুঁজে বের করা
-        const attempt = await pool.query(
-            `SELECT attempt_id, total_score FROM student_exam_attempts 
-             WHERE student_id = $1 AND quiz_id = $2 
-             ORDER BY end_time DESC LIMIT 1`, [studentId, quizId]
-        );
-
-        if (attempt.rowCount === 0) return res.status(404).json({ message: 'No record found.' });
-
-        // ৩. বিস্তারিত প্রশ্ন-উত্তর বিশ্লেষণ নিয়ে আসা
-        const details = await pool.query(
-            `SELECT r.*, q.question_text 
-             FROM student_quiz_results r 
-             JOIN quiz_questions q ON r.question_id = q.question_id 
-             WHERE r.attempt_id = $1`, [attempt.rows[0].attempt_id]
-        );
-
-        res.json({
-            score: attempt.rows[0].total_score,
-            details: details.rows
-        });
+        res.json({ success: true, message: `${questions.length} questions imported successfully` });
     } catch (err) {
-        res.status(500).json({ message: 'Error fetching results' });
+        await client.query('ROLLBACK');
+        console.error("Import Error:", err);
+        res.status(500).json({ message: 'Import failed: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// DELETE: Remove a student's quiz attempt to allow re-take
+router.delete('/attempts/:attemptId', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { attemptId } = req.params;
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. First delete related result details
+        await client.query('DELETE FROM student_quiz_results WHERE attempt_id = $1', [attemptId]);
+
+        // 2. Delete the main attempt record
+        const result = await client.query('DELETE FROM student_exam_attempts WHERE attempt_id = $1', [attemptId]);
+
+        if (result.rowCount === 0) {
+            throw new Error('Attempt not found');
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Attempt deleted successfully. Student can now retake the exam.' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Delete Attempt Error:", err);
+        res.status(500).json({ message: 'Failed to delete: ' + err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// DELETE: Remove a quiz and its associations
+router.delete('/quizzes/:id', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { id } = req.params;
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+        
+        // Delete the quiz (Cascade logic will delete related data)
+        const result = await client.query('DELETE FROM online_quizzes WHERE id::text = $1', [id]);
+
+        if (result.rowCount === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Quiz not found' });
+        }
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: 'Quiz deleted successfully' });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("Quiz Delete Error:", err);
+        res.status(500).json({ message: 'Server error deleting quiz' });
+    } finally {
+        client.release();
+    }
+});
+
+// PUT: Update existing quiz details
+router.put('/quizzes/:id', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+    const { id } = req.params;
+    const { title, subject_id, course_id, time_limit, max_marks, status, assessment_type, start_time, end_time } = req.body;
+    
+    try {
+        // SANITIZATION: Strict UUID Check
+        const safeSubjectId = isValidUUID(subject_id) ? subject_id : null;
+        const safeCourseId = isValidUUID(course_id) ? course_id : null;
+        
+        // SANITIZATION: Fix "NaN" errors for Integers
+        let parsedTime = parseInt(time_limit);
+        let parsedMarks = parseInt(max_marks);
+        const safeTimeLimit = isNaN(parsedTime) ? 60 : parsedTime;
+        const safeMaxMarks = isNaN(parsedMarks) ? 0 : parsedMarks;
+        
+        const query = `
+            UPDATE online_quizzes 
+            SET title = $1, 
+                subject_id = $2, 
+                course_id = $3, 
+                time_limit_minutes = $4, 
+                max_marks = $5, 
+                status = $6,
+                assessment_type = $7,
+                available_from = $8,
+                available_to = $9,
+                updated_at = NOW()
+            WHERE id::text = $10 RETURNING *`;
+        
+        const result = await pool.query(query, [
+            title, 
+            safeSubjectId, 
+            safeCourseId, 
+            safeTimeLimit, 
+            safeMaxMarks, 
+            status,
+            assessment_type,
+            start_time || null,
+            end_time || null,
+            id
+        ]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'Quiz not found' });
+        }
+
+        res.json({ success: true, message: 'Quiz updated successfully', data: result.rows[0] });
+    } catch (err) {
+        console.error("Quiz Update Error:", err);
+        res.status(500).json({ message: 'Server error updating quiz: ' + err.message });
     }
 });
 

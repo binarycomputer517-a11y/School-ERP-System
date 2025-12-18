@@ -3,380 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exam Result - OMR Sheet Style</title>
+    <title>Official Exam Result | School ERP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
     <style>
-        body { 
-            font-family: 'Arial', sans-serif; 
-            background-color: #f4f4f9; 
-            padding: 20px; 
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            min-height: 100vh;
-        }
-        .container { 
-            max-width: 950px; /* Wider to accommodate OMR columns */
-            width: 100%;
-            margin: 20px auto; 
-            background: white; 
-            padding: 30px; 
-            box-shadow: 0 0 15px rgba(0,0,0,0.2); /* More prominent shadow */
-            border-radius: 10px; 
-            position: relative;
-            overflow: hidden; /* For border effect */
-            border: 5px solid #005A9C; /* Main border */
+        :root {
+            --primary-blue: #005A9C;
+            --success-green: #28a745;
+            --danger-red: #dc3545;
+            --neutral-grey: #6c757d;
         }
 
-        /* Top and bottom decorative borders (like attendance module) */
-        .container::before, .container::after {
-            content: '';
-            position: absolute;
-            left: 0;
-            right: 0;
-            height: 15px;
-            background: linear-gradient(to right, #C0392B, #E67E22, #F1C40F, #2ECC71, #3498DB); /* Gradient border */
-            z-index: 1;
-        }
-        .container::before { top: 0; }
-        .container::after { bottom: 0; }
-
-        h1 { 
-            color: #005A9C; 
-            text-align: center;
-            font-size: 2.5em;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 3px dashed #005A9C;
-        }
-        h2 { 
-            color: #C0392B; /* Changed heading color */
-            border-bottom: 2px solid #C0392B; 
-            padding-bottom: 8px; 
-            margin-top: 30px;
-            font-size: 1.8em;
-            text-align: center;
-        }
+        body { font-family: 'Arial', sans-serif; background-color: #f4f4f9; padding: 20px; margin: 0; }
         
-        .summary-grid { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); /* Flexible 3-column layout */
-            gap: 20px; 
-            margin-bottom: 30px; 
-            padding: 15px;
-            background-color: #eaf6ff; /* Light blue background for summary */
-            border-radius: 8px;
-            border: 1px solid #cceeff;
-        }
-        .summary-item { 
-            background: white; 
-            border: 1px solid #bbddee; /* Lighter border for items */
-            padding: 18px; 
-            border-radius: 5px; 
-            text-align: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-        }
-        .summary-item strong { 
-            display: block; 
-            color: #005A9C; 
-            margin-bottom: 8px; 
-            font-size: 1.1em;
-        }
-        .summary-item span {
-            font-size: 1.5em; /* Larger values */
-            font-weight: bold;
-            display: block;
-        }
-        #correct-count { color: #28a745; } /* Green */
-        #incorrect-count { color: #dc3545; } /* Red */
-        #unanswered-count { color: #6c757d; } /* Grey */
-
-
-        .score { 
-            text-align: center; 
-            font-size: 3em; /* Larger score */
-            font-weight: bold;
-            color: #28a745; /* Green for score */
-            margin: 30px 0; 
-            padding: 15px 0;
-            border-top: 1px dashed #ccc;
-            border-bottom: 1px dashed #ccc;
-        }
-        .error { 
-            color: red; 
-            font-weight: bold; 
-            padding: 10px; 
-            border: 1px solid red; 
-            background: #ffebeb; 
-            text-align: center;
-            margin-bottom: 20px;
-            border-radius: 5px;
+        .container { 
+            max-width: 1000px; width: 100%; margin: 20px auto; background: white; padding: 30px; 
+            box-shadow: 0 0 15px rgba(0,0,0,0.2); border-radius: 12px; position: relative; border: 5px solid var(--primary-blue); 
         }
 
-        /* --- OMR Sheet Specific Styling --- */
-        #omr-sheet-grid {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr); /* 4 columns like an OMR sheet */
-            gap: 15px; /* Spacing between question blocks */
-            margin-top: 30px;
-            padding: 10px;
-            border: 1px solid #eee; /* Light border around the whole grid */
-            border-radius: 8px;
-            background-color: #fcfcfc;
+        .container::before, .container::after {
+            content: ''; position: absolute; left: 0; right: 0; height: 10px;
+            background: linear-gradient(to right, #6366f1, #a855f7, #ec4899); z-index: 1;
+        }
+        .container::before { top: 0; } .container::after { bottom: 0; }
+
+        .student-profile-header {
+            display: flex; align-items: center; gap: 25px; padding: 20px;
+            background: #f8fafc; border-radius: 15px; border: 1px solid #e2e8f0; margin-bottom: 25px;
         }
 
-        .omr-question-block {
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 10px 5px; /* Adjust padding to make bubbles fit */
-            text-align: center;
-            background: white;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
+        .profile-pic-container {
+            width: 100px; height: 100px; border-radius: 12px; border: 3px solid var(--primary-blue);
+            overflow: hidden; background: #fff;
         }
+        .profile-pic-container img { width: 100%; height: 100%; object-fit: cover; }
 
-        .omr-question-block strong {
-            font-size: 1.1em;
-            margin-bottom: 8px;
-            color: #333;
-            width: 100%;
-            text-align: left;
-            padding-left: 5px;
-            box-sizing: border-box;
-        }
+        h1 { color: var(--primary-blue); text-align: center; font-size: 2.2em; margin-bottom: 20px; border-bottom: 3px dashed var(--primary-blue); padding-bottom: 10px; }
+        
+        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px; padding: 15px; background-color: #eaf6ff; border-radius: 8px; }
+        .summary-item { background: white; padding: 15px; border-radius: 5px; text-align: center; border: 1px solid #bbddee; }
+        .summary-item strong { display: block; color: var(--primary-blue); margin-bottom: 5px; font-size: 0.85em; text-transform: uppercase; }
+        .summary-item span { font-size: 1.3em; font-weight: bold; }
 
-        .omr-bubbles {
-            display: flex;
-            gap: 5px; /* Space between bubbles */
-            justify-content: center;
-            width: 100%;
-        }
+        .score-val { font-size: 3.5em; font-weight: 900; color: var(--success-green); text-align: center; }
 
+        #omr-sheet-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 10px; }
+        .omr-question-block { border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: white; display: flex; flex-direction: column; align-items: center; }
+        .omr-bubbles { display: flex; gap: 4px; margin-top: 8px; }
+        
         .omr-bubble {
-            width: 25px; /* Smaller bubble size */
-            height: 25px;
-            border-radius: 50%;
-            border: 1px solid #888;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.8em; /* Smaller font for options */
-            color: #555;
-            background-color: #fff;
-            cursor: default; /* No interaction */
-            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+            width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #888;
+            display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: bold; color: #555;
         }
 
-        /* --- OMR Bubble States --- */
+        /* OMR Logic Colors */
+        .omr-bubble.correct-option { border-color: var(--success-green); color: var(--success-green); background: #e8f5e9; border-width: 2px; }
+        .omr-bubble.student-selected { background-color: var(--neutral-grey); border-color: var(--neutral-grey); color: white; }
+        .omr-bubble.student-selected.correct-option { background-color: var(--success-green) !important; border-color: var(--success-green) !important; color: white !important; }
+        .omr-bubble.student-selected:not(.correct-option) { background-color: var(--danger-red) !important; border-color: var(--danger-red) !important; color: white !important; }
 
-        /* Correct Answer (always highlighted with a green border if it's the right one) */
-        .omr-bubble.correct-option {
-            border-color: #28a745; /* Green border for correct option */
-            color: #28a745;
-        }
+        .btn-home { display: block; width: 220px; margin: 30px auto; padding: 12px; background: var(--primary-blue); color: white; text-align: center; text-decoration: none; border-radius: 50px; font-weight: bold; }
 
-        /* Student's Selected Answer (filled circle) */
-        .omr-bubble.student-selected {
-            background-color: #6c757d; /* Default selected grey */
-            border-color: #6c757d;
-            color: white;
-        }
-
-        /* Student's SELECTED & CORRECT Answer */
-        .omr-bubble.student-selected.correct-option {
-            background-color: #28a745; /* Green fill if student selected correctly */
-            border-color: #28a745;
-            color: white;
-        }
-
-        /* Student's SELECTED & INCORRECT Answer */
-        .omr-bubble.student-selected:not(.correct-option) {
-            background-color: #dc3545; /* Red fill if student selected incorrectly */
-            border-color: #dc3545;
-            color: white;
-        }
-
-        /* Unanswered Question Style */
-        .omr-question-block.unanswered .omr-bubbles .omr-bubble {
-            border-color: #ccc;
-            color: #aaa;
-            background-color: #f0f0f0;
-        }
-        .omr-question-block.unanswered .omr-bubbles .omr-bubble.correct-option {
-             border-color: #90ee90; /* Light green border for unanswered correct option */
+        @media print {
+            .btn-home, button, .fas { display: none !important; }
+            .container { box-shadow: none; border: 2px solid var(--primary-blue); margin: 0; width: 100%; }
         }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1>Exam Result Sheet</h1>
-        <div id="error-message"></div>
+    <div class="container animate__animated animate__fadeIn">
+        <h1>OFFICIAL RESULT SHEET</h1>
         
-        <div id="result-summary">
-            <h2 id="exam-title">Loading...</h2>
-            <div class="score">Total Score: <span id="total-score">...</span></div>
-            <div class="summary-grid">
-                <div class="summary-item">
-                    <strong>Correct</strong>
-                    <span id="correct-count">...</span>
-                </div>
-                <div class="summary-item">
-                    <strong>Incorrect</strong>
-                    <span id="incorrect-count">...</span>
-                </div>
-                <div class="summary-item">
-                    <strong>Unanswered</strong>
-                    <span id="unanswered-count">...</span>
-                </div>
-                <div class="summary-item">
-                    <strong>Student ID</strong>
-                    <span id="student-id">...</span>
-                </div>
-                <div class="summary-item">
-                    <strong>Course</strong>
-                    <span id="course-name">...</span>
-                </div>
-                <div class="summary-item">
-                    <strong>System / Room</strong>
-                    <span id="system-room">...</span>
+        <div class="student-profile-header">
+            <div class="profile-pic-container">
+                <img id="student-pic" src="" alt="Student">
+            </div>
+            <div class="student-info">
+                <h4 id="student-name">Loading Profile...</h4>
+                <div class="row g-2">
+                    <div class="col-md-6"><p>ROLL: <span id="student-roll">-</span></p></div>
+                    <div class="col-md-6"><p>COURSE: <span id="student-course">-</span></p></div>
+                    <div class="col-md-6"><p>BATCH: <span id="student-batch">-</span></p></div>
+                    <div class="col-md-6"><p>SUBJECT: <span id="student-subject">-</span></p></div>
                 </div>
             </div>
         </div>
 
-        <h2>Detailed Answer OMR</h2>
-        <div id="omr-sheet-grid">
-            <p style="grid-column: 1 / -1; text-align: center;">Loading details...</p>
+        <div id="result-summary">
+            <h3 id="exam-title" style="text-align: center; color: #333;">Exam Title</h3>
+            <div class="score-val" id="total-score">0</div>
+            <p class="text-center fw-bold text-muted">TOTAL MARKS OBTAINED</p>
+
+            <div class="summary-grid">
+                <div class="summary-item"><strong>Correct</strong><span id="correct-count" style="color: var(--success-green);">0</span></div>
+                <div class="summary-item"><strong>Incorrect</strong><span id="incorrect-count" style="color: var(--danger-red);">0</span></div>
+                <div class="summary-item"><strong>Unanswered</strong><span id="unanswered-count" style="color: var(--neutral-grey);">0</span></div>
+                <div class="summary-item"><strong>Violations</strong><span id="violation-count" style="color: #c0392b;">0</span></div>
+                <div class="summary-item"><strong>Max Marks</strong><span id="max-marks">0</span></div>
+                <div class="summary-item"><strong>Status</strong><span id="status" style="color: var(--primary-blue);">-</span></div>
+            </div>
+        </div>
+
+        <h4 class="text-center mt-4" style="color: var(--primary-blue);">Detailed OMR Analysis</h4>
+        <div id="omr-sheet-grid"></div>
+
+        <div class="mt-5">
+            <h4 class="text-center" style="color: var(--primary-blue); margin-bottom: 20px;">
+                <i class="fas fa-list-check me-2"></i> ANSWER KEY DETAILS
+            </h4>
+            <div class="table-responsive shadow-sm" style="border-radius: 12px; overflow: hidden;">
+                <table class="table table-hover align-middle mb-0" style="background: white;">
+                    <thead style="background-color: var(--primary-blue); color: white;">
+                        <tr>
+                            <th class="text-center">Q.No</th>
+                            <th>Question</th>
+                            <th class="text-center">Your Ans</th>
+                            <th class="text-center">Correct Ans</th>
+                            <th class="text-center">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="answer-key-body"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="text-center mt-4">
+            <button onclick="window.print()" class="btn btn-outline-secondary rounded-pill px-4 me-2">
+                <i class="fas fa-print me-2"></i> PRINT PDF
+            </button>
+            <a href="/my-quiz.html" class="btn-home d-inline-block">BACK TO DASHBOARD</a>
         </div>
     </div>
 
+    
+
     <script>
-        /**
-         * Helper function to handle authenticated API calls.
-         */
-        async function handleApi(url, method = 'GET', body = null) {
-            const token = localStorage.getItem('erp-token');
-            const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+        const QUIZ_ID = new URLSearchParams(window.location.search).get('quizId');
+        const TOKEN = localStorage.getItem('erp-token');
 
-            const options = {
-                method,
-                headers: authHeaders,
-                body: body ? JSON.stringify(body) : null
-            };
+        if (!TOKEN) window.location.href = '/login.html';
 
-            const response = await fetch(url, options);
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: 'Server Error' }));
-                throw new Error(`API call failed: ${errorBody.message}`);
-            }
-            return response.json();
-        }
-
-        /**
-         * Fetches both summary and detailed results from the server.
-         */
-        async function fetchResults(attemptId) {
-            const errorDiv = document.getElementById('error-message');
+        async function fetchResults() {
             try {
-                // 1. Fetch Summary Data
-                const summary = await handleApi(`/api/online-exam/results/summary/${attemptId}`);
-                populateSummary(summary);
-
-                // 2. Fetch Detailed Question Data
-                const details = await handleApi(`/api/online-exam/results/details/${attemptId}`);
-                populateOmrSheet(details);
-
-            } catch (error) {
-                console.error("Error fetching results:", error);
-                errorDiv.innerHTML = `<p class="error">❌ Failed to load results: ${error.message}</p>`;
-            }
-        }
-
-        /**
-         * Populates the summary dashboard with results.
-         */
-        function populateSummary(data) {
-            document.getElementById('exam-title').textContent = data.exam_title || 'Exam Result';
-            document.getElementById('total-score').textContent = data.total_score ?? 'N/A';
-            document.getElementById('student-id').textContent = data.student_id || '...';
-            document.getElementById('course-name').textContent = data.course_name || '...';
-            document.getElementById('correct-count').textContent = data.correct_count ?? '0';
-            document.getElementById('incorrect-count').textContent = data.incorrect_count ?? '0';
-            document.getElementById('unanswered-count').textContent = data.unanswered_count ?? '0';
-            document.getElementById('system-room').textContent = `${data.system_id || 'N/A'} / ${data.room_number || 'N/A'}`;
-        }
-
-        /**
-         * Populates the OMR-style grid with question-by-question details.
-         * --- UPDATED FOR OMR SHEET DESIGN ---
-         */
-        function populateOmrSheet(details) {
-            const grid = document.getElementById('omr-sheet-grid');
-            grid.innerHTML = ''; // Clear 'loading' message
-
-            if (!details || details.length === 0) {
-                grid.innerHTML = '<p style="grid-column: 1 / -1; text-align: center;">No detailed question results available.</p>';
-                return;
-            }
-
-            const options = ['A', 'B', 'C', 'D'];
-
-            details.forEach((item, index) => {
-                const questionBlock = document.createElement('div');
-                questionBlock.classList.add('omr-question-block');
-
-                // Check if the question was unanswered
-                if (!item.student_answer) {
-                    questionBlock.classList.add('unanswered');
-                }
-
-                const questionNum = document.createElement('strong');
-                questionNum.textContent = `${index + 1}.`; // Question number
-                questionBlock.appendChild(questionNum);
-
-                const bubblesContainer = document.createElement('div');
-                bubblesContainer.classList.add('omr-bubbles');
-
-                options.forEach(option => {
-                    const bubble = document.createElement('span');
-                    bubble.classList.add('omr-bubble');
-                    bubble.textContent = option;
-
-                    // Add class if this bubble is the correct answer
-                    if (item.correct_answer === option) {
-                        bubble.classList.add('correct-option');
-                    }
-
-                    // Add class if this bubble was the student's selected answer
-                    if (item.student_answer === option) {
-                        bubble.classList.add('student-selected');
-                    }
-                    
-                    bubblesContainer.appendChild(bubble);
+                const response = await fetch(`/api/online-exam/results/${QUIZ_ID}`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
                 });
-                
-                questionBlock.appendChild(bubblesContainer);
-                grid.appendChild(questionBlock);
-            });
-        }
+                const data = await response.json();
 
-        /**
-		 * Main entry point on page load.
-		 */
-        document.addEventListener('DOMContentLoaded', () => {
-            // Get the attempt ID from the URL (e.g., ?attempt=28)
-            const params = new URLSearchParams(window.location.search);
-            const attemptId = params.get('attempt');
+                // Profile & Summary Populate
+                document.getElementById('student-name').innerText = data.summary.student_name || 'N/A';
+                document.getElementById('student-roll').innerText = data.summary.roll_number || 'N/A';
+                document.getElementById('student-course').innerText = data.summary.course_name || 'N/A';
+                document.getElementById('student-batch').innerText = data.summary.batch_name || 'N/A';
+                document.getElementById('student-subject').innerText = data.summary.subject_name || 'N/A';
+                document.getElementById('student-pic').src = data.summary.profile_pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.summary.student_name)}&background=005A9C&color=fff`;
 
-            if (attemptId) {
-                fetchResults(attemptId);
-            } else {
-                document.getElementById('error-message').innerHTML = '<p class="error">No attempt ID found in URL.</p>';
+                document.getElementById('exam-title').innerText = data.summary.title || 'Exam Result';
+                document.getElementById('total-score').innerText = data.summary.total_score ?? 0;
+                document.getElementById('correct-count').innerText = data.summary.correct_count ?? 0;
+                document.getElementById('incorrect-count').innerText = data.summary.incorrect_count ?? 0;
+                document.getElementById('unanswered-count').innerText = data.summary.unanswered_count ?? 0;
+                document.getElementById('violation-count').innerText = data.summary.violation_count ?? 0;
+                document.getElementById('max-marks').innerText = data.summary.max_marks ?? 0;
+                document.getElementById('status').innerText = (data.summary.status || 'Submitted').toUpperCase();
+
+                // OMR & Table Rendering
+                const grid = document.getElementById('omr-sheet-grid');
+                const tableBody = document.getElementById('answer-key-body');
+                const options = ['a', 'b', 'c', 'd'];
+
+                data.details.forEach((item, index) => {
+                    // Case-insensitive normalization
+                    const sAns = (item.student_answer || "").toString().toLowerCase().trim();
+                    const cAns = (item.correct_answer || "").toString().toLowerCase().trim();
+                    const isCorrect = (sAns === cAns);
+
+                    // OMR Block
+                    const block = document.createElement('div');
+                    block.className = 'omr-question-block';
+                    block.innerHTML = `<strong>Q.${index + 1}</strong>`;
+                    const bubbles = document.createElement('div');
+                    bubbles.className = 'omr-bubbles';
+
+                    options.forEach(opt => {
+                        const bubble = document.createElement('div');
+                        bubble.className = 'omr-bubble';
+                        bubble.innerText = opt.toUpperCase();
+                        
+                        const currentOpt = opt.toLowerCase();
+                        // Logic to highlight correct and selected bubbles
+                        if (cAns === currentOpt) bubble.classList.add('correct-option');
+                        if (sAns === currentOpt) bubble.classList.add('student-selected');
+                        
+                        bubbles.appendChild(bubble);
+                    });
+                    block.appendChild(bubbles);
+                    grid.appendChild(block);
+
+                    // Table Row logic
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="text-center fw-bold">${index + 1}</td>
+                        <td class="small text-muted">${item.question_text || '---'}</td>
+                        <td class="text-center"><span class="badge ${sAns === "" ? 'bg-secondary' : (isCorrect ? 'bg-success' : 'bg-danger')}">${sAns.toUpperCase() || 'N/A'}</span></td>
+                        <td class="text-center fw-bold text-success">${cAns.toUpperCase()}</td>
+                        <td class="text-center">${isCorrect ? '<i class="fas fa-check-circle text-success"></i>' : (sAns === "" ? '<i class="fas fa-minus text-muted"></i>' : '<i class="fas fa-times-circle text-danger"></i>')}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+
+            } catch (err) {
+                console.error(err);
+                alert("Error loading results.");
             }
-        });
+        }
+        document.addEventListener('DOMContentLoaded', fetchResults);
     </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>
