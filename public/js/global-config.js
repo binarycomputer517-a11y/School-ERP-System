@@ -1,7 +1,8 @@
 /**
  * Global Configuration Loader (Enterprise ERP)
  * ---------------------------------------------
- * Final Version: Fixed Token, Cache, and Recursion Errors.
+ * File: public/js/global-config.js
+ * Features: API-Driven, No Mock Data, 360x Watermark Generation.
  * This script runs on EVERY page load to apply settings globally.
  */
 
@@ -34,7 +35,6 @@ const STATIC_CONFIG = {
     }
 };
 
-
 // Global exposure of settings and utilities
 window.erpSettings = null;
 
@@ -65,6 +65,7 @@ async function initGlobalSettings() {
     }
 
     // 2. Fetch from API if settings are null (cache miss or expired)
+    // NO MOCK DATA FALLBACK
     if (!settings) {
         const token = localStorage.getItem('erp-token');
         const headers = token ? { 'Authorization': `Bearer ${token}` } : {};
@@ -93,7 +94,7 @@ async function initGlobalSettings() {
 
     // 3. Apply Settings to the UI and return the object
     if(settings) {
-        // 🔥 CRITICAL FIX: Merge API settings with static client-side configuration
+        // Merge API settings with static client-side configuration
         Object.assign(settings, STATIC_CONFIG); 
         
         applySettingsToUI(settings);
@@ -105,9 +106,21 @@ async function initGlobalSettings() {
 
 function applySettingsToUI(config) {
     
-    // --- A. Branding (Logo & Favicon) ---
+    // --- A. School Identity (Name, Watermark) ---
+    if (config.school_name) {
+        // Update text elements
+        document.querySelectorAll('.global-school-name').forEach(el => el.innerText = config.school_name);
+        document.querySelectorAll('.school-name').forEach(el => el.innerText = config.school_name);
+        
+        localStorage.setItem('school-name', config.school_name);
+        
+        // Generate 360x Watermark (If container exists)
+        generateWatermark(config.school_name);
+    }
+
+    // --- B. Branding (Logo & Favicon) ---
     if (config.school_logo_path) {
-        document.querySelectorAll('.global-school-logo').forEach(img => {
+        document.querySelectorAll('.global-school-logo, .school-logo, .watermark-logo').forEach(img => {
             img.src = config.school_logo_path;
             img.alt = config.school_name || "School Logo";
         });
@@ -124,7 +137,7 @@ function applySettingsToUI(config) {
         localStorage.setItem('school-logo-path', config.school_logo_path); 
     }
 
-    // --- B. Currency Formatting (FIXED) ---
+    // --- C. Currency Formatting ---
     let symbol = '₹';
     let locale = 'en-IN'; 
 
@@ -164,9 +177,8 @@ function applySettingsToUI(config) {
         el.innerText = symbol;
     });
 
-    // --- C. School Identity (Name, Address, Contact) ---
+    // --- D. School Address & Contact ---
     const identityMap = {
-        school_name: '.global-school-name',
         school_address: '.global-school-address',
         school_email: '.global-school-email',
         school_phone: '.global-school-phone'
@@ -175,20 +187,21 @@ function applySettingsToUI(config) {
     for (const key in identityMap) {
         if (config[key]) {
             document.querySelectorAll(identityMap[key]).forEach(el => el.innerText = config[key]);
-            
-            if (key === 'school_name') {
-                 localStorage.setItem('school-name', config[key]); 
-            }
         }
     }
     
-    // --- D. Global Footer Text ---
+    // Update specific classes used in marksheet/admin pages if they differ
+    if (config.school_address) {
+        document.querySelectorAll('.school-address').forEach(el => el.innerText = config.school_address);
+    }
+    
+    // --- E. Global Footer Text ---
     if (config.email_global_footer) {
         const footerEl = document.getElementById('global-footer-text');
         if(footerEl) footerEl.textContent = config.email_global_footer; 
     }
 
-    // --- E. Feature Toggles (Hide/Show Modules) ---
+    // --- F. Feature Toggles (Hide/Show Modules) ---
     if (config.multi_tenant_mode === false) {
         document.querySelectorAll('.module-tenant-switch').forEach(el => el.style.display = 'none');
     }
@@ -196,13 +209,29 @@ function applySettingsToUI(config) {
         document.querySelectorAll('.module-sms-panel').forEach(el => el.style.display = 'none');
     }
 
-    // --- F. Theme Colors (Advanced CSS Variables) ---
+    // --- G. Theme Colors (Advanced CSS Variables) ---
     if (config.theme_primary_color) {
         document.documentElement.style.setProperty('--primary-color', config.theme_primary_color);
     }
     if (config.theme_secondary_color) {
         document.documentElement.style.setProperty('--classic-gold', config.theme_secondary_color);
     }
+}
+
+/**
+ * Generates the School Name 360 times for background patterns.
+ * Looks for #bg-text-pattern container.
+ */
+function generateWatermark(text) {
+    const container = document.getElementById('bg-text-pattern');
+    if (!container) return; // Exit if page doesn't have watermark container
+
+    let html = '';
+    // Loop exactly 360 times
+    for (let i = 0; i < 360; i++) {
+        html += `<div class="watermark-text">${text}</div>`;
+    }
+    container.innerHTML = html;
 }
 
 /**

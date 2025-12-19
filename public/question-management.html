@@ -4,39 +4,105 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Question Management</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    
     <style>
         body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f0f2f5; margin: 20px; }
-        .container { max-width: 1400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        h1, h2 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+        .container-custom { max-width: 1400px; margin: auto; background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; border-bottom: 2px solid #007bff; padding-bottom: 10px; margin-bottom: 20px; }
+        
         .grid-container { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; margin-top: 20px; }
-        .panel { border: 1px solid #ddd; border-radius: 5px; background: #fdfdfd; display: flex; flex-direction: column; }
-        .panel h2 { padding: 10px 15px; margin: 0; background: #f9f9f9; border-bottom: 1px solid #ddd; font-size: 1.2em; }
-        #central-bank-list, #linked-questions-list { padding: 10px 15px; max-height: 600px; overflow-y: auto; flex-grow: 1; }
+        .panel { border: 1px solid #ddd; border-radius: 5px; background: #fdfdfd; display: flex; flex-direction: column; height: 75vh; }
+        
+        .panel-header { 
+            padding: 10px 15px; background: #f9f9f9; border-bottom: 1px solid #ddd; 
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .panel-header h2 { margin: 0; font-size: 1.2em; border: none; padding: 0; }
+        
+        #central-bank-list, #linked-questions-list { padding: 10px 15px; overflow-y: auto; flex-grow: 1; }
+        
         .question-item { display: flex; justify-content: space-between; align-items: center; padding: 12px 8px; border-bottom: 1px solid #eee; background: white; margin-bottom: 5px; border-radius: 4px; }
-        .question-item:hover { background-color: #f8f9fa; }
+        .question-item:hover { background-color: #f1f8ff; }
+        
         .add-btn { background-color: #28a745; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; }
         .remove-btn { background-color: #dc3545; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; }
-        .linked-tag { color: #6c757d; font-weight: bold; font-size: 0.9em; padding: 5px; }
-        #save-links-btn { background-color: #007bff; color: white; padding: 15px; font-size: 1.1em; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 20px; font-weight: bold; }
+        .linked-tag { color: #6c757d; font-weight: bold; font-size: 0.9em; padding: 5px; background: #e9ecef; border-radius: 4px; }
+        
+        #save-links-btn { background-color: #007bff; color: white; padding: 15px; font-size: 1.1em; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 20px; font-weight: bold; transition: background 0.3s; }
+        #save-links-btn:hover { background-color: #0056b3; }
         #save-links-btn:disabled { background-color: #ccc; cursor: not-allowed; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <h1 id="quiz-title">Quiz Question Manager</h1>
+    <div class="container-custom">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h1 id="quiz-title" class="m-0 border-0">Quiz Question Manager</h1>
+            <a href="/online-exam.html" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        </div>
+
         <div class="grid-container">
-            <div class="panel">
-                <h2>Central Question Bank (Total: <span id="central-count">0</span>)</h2>
-                <div id="central-bank-list"><p>Loading questions...</p></div>
+            <div class="panel shadow-sm">
+                <div class="panel-header">
+                    <h2>Central Question Bank (<span id="central-count">0</span>)</h2>
+                    <button class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#importCsvModal">
+                        <i class="fas fa-file-csv"></i> Import CSV
+                    </button>
+                </div>
+                <div id="central-bank-list">
+                    <div class="text-center mt-5"><div class="spinner-border text-primary"></div></div>
+                </div>
             </div>
-            <div class="panel">
-                <h2>Questions Linked to This Quiz (Total: <span id="linked-count">0</span>)</h2>
-                <div id="linked-questions-list"><p>No questions linked yet.</p></div>
+
+            <div class="panel shadow-sm">
+                <div class="panel-header" style="background: #e3f2fd;">
+                    <h2 class="text-primary">Questions in This Quiz (<span id="linked-count">0</span>)</h2>
+                </div>
+                <div id="linked-questions-list"><p class="text-muted text-center mt-3">No questions linked yet.</p></div>
             </div>
         </div>
-        <button id="save-links-btn" onclick="saveLinks()">Save Question Links & Order</button>
+
+        <button id="save-links-btn" onclick="saveLinks()">
+            <i class="fas fa-save"></i> Save Question Links & Order
+        </button>
     </div>
+
+    <div class="modal fade" id="importCsvModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header bg-success text-white">
+                    <h5 class="modal-title"><i class="fas fa-file-csv"></i> Upload Questions CSV</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-light border small">
+                        <strong>Format:</strong> question_text, option_a, option_b, option_c, option_d, correct_option, marks
+                    </div>
+                    
+                    <div class="mb-3 text-center">
+                        <button onclick="downloadSampleCSV()" class="btn btn-outline-success btn-sm">
+                            <i class="fas fa-download"></i> Download Sample Format
+                        </button>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="csvFileInput" class="form-label fw-bold">Select CSV File</label>
+                        <input class="form-control" type="file" id="csvFileInput" accept=".csv">
+                    </div>
+
+                    <div id="uploadStatus" class="mt-2 text-center" style="display:none;"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-success" onclick="uploadCSV()">Upload Now</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
     <script>
         let QUIZ_ID = null;
@@ -50,12 +116,19 @@
             
             options.headers = { 
                 'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json',
                 ...options.headers 
             };
+            
+            // Content-Type only if not sending FormData
+            if (!(options.body instanceof FormData)) {
+                options.headers['Content-Type'] = 'application/json';
+            }
 
             const response = await fetch(url, options);
-            if (!response.ok) throw new Error(`Status: ${response.status}`);
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.message || `Status: ${response.status}`);
+            }
             return response.status === 204 ? null : response.json();
         }
 
@@ -64,23 +137,26 @@
             const params = new URLSearchParams(window.location.search);
             QUIZ_ID = params.get('quizId');
             if (!QUIZ_ID) { alert("Quiz ID missing!"); return; }
-            document.getElementById('quiz-title').textContent = `Managing Quiz: ${QUIZ_ID}`;
+            document.getElementById('quiz-title').textContent = `Managing Quiz Questions`;
             
             await loadData();
         }
 
         async function loadData() {
             try {
-                // ১. আগে লিঙ্ক করা প্রশ্নগুলো নিয়ে আসা (Persistence Fix)
-                linkedQuestions = await handleApi(`/api/online-exam/quizzes/${QUIZ_ID}/links`);
-                
-                // ২. তারপর সব প্রশ্ন নিয়ে আসা
-                allCentralQuestions = await handleApi(`/api/online-exam/question-bank`);
+                // Parallel fetching for speed
+                const [linkedData, bankData] = await Promise.all([
+                    handleApi(`/api/online-exam/quizzes/${QUIZ_ID}/links`),
+                    handleApi(`/api/online-exam/question-bank`)
+                ]);
+
+                linkedQuestions = linkedData;
+                allCentralQuestions = bankData;
                 
                 renderAll();
             } catch (err) {
                 console.error(err);
-                alert("Failed to load data.");
+                // alert("Failed to load data: " + err.message);
             }
         }
 
@@ -96,13 +172,27 @@
             
             const linkedIds = new Set(linkedQuestions.map(q => q.question_id));
 
+            if(allCentralQuestions.length === 0) {
+                list.innerHTML = '<div class="text-center p-4 text-muted">Bank is empty.<br>Import CSV to add questions.</div>';
+                return;
+            }
+
             list.innerHTML = allCentralQuestions.map(q => {
                 const isLinked = linkedIds.has(q.question_id);
+                // Escape single quotes for the onclick handler
+                const safeText = q.question_text.replace(/'/g, "\\'");
+                
                 return `
-                    <div class="question-item">
-                        <span>${q.question_text} (ID: ${q.question_id})</span>
-                        ${isLinked ? '<span class="linked-tag">Linked</span>' : 
-                        `<button class="add-btn" onclick="addToList(${q.question_id}, '${q.question_text.replace(/'/g, "\\'")}')">Add</button>`}
+                    <div class="question-item animate__animated animate__fadeIn">
+                        <div style="flex:1;">
+                            <span class="fw-bold text-dark">Q${q.question_id}:</span> ${q.question_text}
+                        </div>
+                        ${isLinked ? 
+                            '<span class="linked-tag"><i class="fas fa-check"></i> Linked</span>' : 
+                            `<button class="add-btn" onclick="addToList(${q.question_id}, '${safeText}')">
+                                <i class="fas fa-plus"></i> Add
+                             </button>`
+                        }
                     </div>
                 `;
             }).join('');
@@ -113,14 +203,14 @@
             document.getElementById('linked-count').textContent = linkedQuestions.length;
 
             if (linkedQuestions.length === 0) {
-                list.innerHTML = '<p style="text-align:center; padding:20px;">Add questions from the bank.</p>';
+                list.innerHTML = '<p class="text-center mt-5 text-muted">Select questions from the left to add here.</p>';
                 return;
             }
 
             list.innerHTML = linkedQuestions.map((q, index) => `
-                <div class="question-item">
-                    <span><strong>${index + 1}.</strong> ${q.question_text}</span>
-                    <button class="remove-btn" onclick="removeFromList(${q.question_id})">Remove</button>
+                <div class="question-item" style="border-left: 4px solid #007bff;">
+                    <div><strong>${index + 1}.</strong> ${q.question_text}</div>
+                    <button class="remove-btn" onclick="removeFromList(${q.question_id})"><i class="fas fa-trash"></i></button>
                 </div>
             `).join('');
         }
@@ -137,29 +227,92 @@
             renderAll();
         }
 
-        // --- Save to DB (Full Sync) ---
+        // --- Save to DB ---
         async function saveLinks() {
             const btn = document.getElementById('save-links-btn');
             btn.disabled = true;
-            btn.textContent = "Saving to Database...";
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
 
             try {
-                // কুইজ আইডির অ্যারে তৈরি করা
                 const idArray = linkedQuestions.map(q => q.question_id);
                 
                 await handleApi(`/api/online-exam/quizzes/${QUIZ_ID}/link-questions`, {
                     method: 'PUT',
-                    body: JSON.stringify({ questionIds: idArray }) // আপনার ব্যাকএন্ড questionIds আশা করছে
+                    body: JSON.stringify({ questionIds: idArray })
                 });
 
-                alert("✅ Successfully saved! Data will persist on refresh.");
-                await loadData(); // রিফ্রেশ না করে পুনরায় ডাটা লোড করা
+                alert("✅ Quiz updated successfully!");
+                await loadData(); 
             } catch (err) {
                 alert("❌ Save failed: " + err.message);
             } finally {
                 btn.disabled = false;
-                btn.textContent = "Save Question Links & Order";
+                btn.innerHTML = '<i class="fas fa-save"></i> Save Question Links & Order';
             }
+        }
+
+        // --- CSV UPLOAD LOGIC ---
+        async function uploadCSV() {
+            const fileInput = document.getElementById('csvFileInput');
+            const statusDiv = document.getElementById('uploadStatus');
+            const token = localStorage.getItem('erp-token');
+
+            if (fileInput.files.length === 0) {
+                alert("Please select a file first!");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', fileInput.files[0]);
+
+            statusDiv.style.display = 'block';
+            statusDiv.innerHTML = '<div class="text-primary"><i class="fas fa-spinner fa-spin"></i> Uploading... Please wait.</div>';
+
+            try {
+                // Using standard fetch here to handle FormData correctly
+                const response = await fetch('/api/online-exam/question-bank/upload-csv', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }, // No Content-Type for FormData
+                    body: formData
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    statusDiv.innerHTML = `<div class="text-success fw-bold"><i class="fas fa-check-circle"></i> ${result.message}</div>`;
+                    
+                    // Reload data without refreshing page
+                    await loadData();
+                    
+                    setTimeout(() => {
+                        const modalEl = document.getElementById('importCsvModal');
+                        const modal = bootstrap.Modal.getInstance(modalEl);
+                        modal.hide();
+                        statusDiv.style.display = 'none';
+                        fileInput.value = ''; // Reset input
+                    }, 1500);
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                console.error('Upload Error:', error);
+                statusDiv.innerHTML = `<div class="text-danger"><i class="fas fa-exclamation-circle"></i> Error: ${error.message}</div>`;
+            }
+        }
+
+        function downloadSampleCSV() {
+            const csvContent = "data:text/csv;charset=utf-8," 
+                + "question_text,option_a,option_b,option_c,option_d,correct_option,marks\n"
+                + "What is the capital of France?,Berlin,Madrid,Paris,Rome,c,1\n"
+                + "Which is an input device?,Monitor,Printer,Mouse,Speaker,c,1";
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "sample_questions.csv");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
         }
 
         document.addEventListener('DOMContentLoaded', init);

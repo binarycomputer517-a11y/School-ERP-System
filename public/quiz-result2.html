@@ -3,125 +3,149 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Official Exam Result | School ERP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Official Exam Result | Student Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+    
     <style>
         :root {
-            --primary-blue: #005A9C;
-            --success-green: #28a745;
-            --danger-red: #dc3545;
-            --neutral-grey: #6c757d;
+            /* These will be overridden by global-config.js if loaded */
+            --primary-color: #002d72;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --neutral-color: #6c757d;
         }
 
-        body { font-family: 'Arial', sans-serif; background-color: #f4f4f9; padding: 20px; margin: 0; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; padding: 20px; }
         
         .container { 
-            max-width: 1000px; width: 100%; margin: 20px auto; background: white; padding: 30px; 
-            box-shadow: 0 0 15px rgba(0,0,0,0.2); border-radius: 12px; position: relative; border: 5px solid var(--primary-blue); 
+            max-width: 1000px; margin: 20px auto; background: white; padding: 30px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 12px; border-top: 5px solid var(--primary-color);
         }
 
-        .container::before, .container::after {
-            content: ''; position: absolute; left: 0; right: 0; height: 10px;
-            background: linear-gradient(to right, #6366f1, #a855f7, #ec4899); z-index: 1;
+        /* Branding Header */
+        .brand-header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px dashed #eee;
+            padding-bottom: 20px;
         }
-        .container::before { top: 0; } .container::after { bottom: 0; }
+        .global-school-logo { height: 60px; object-fit: contain; margin-bottom: 10px; }
+        .global-school-name { font-weight: 700; color: var(--primary-color); font-size: 1.5rem; text-transform: uppercase; margin: 0; }
 
+        /* Student Profile */
         .student-profile-header {
             display: flex; align-items: center; gap: 25px; padding: 20px;
             background: #f8fafc; border-radius: 15px; border: 1px solid #e2e8f0; margin-bottom: 25px;
         }
-
         .profile-pic-container {
-            width: 100px; height: 100px; border-radius: 12px; border: 3px solid var(--primary-blue);
+            width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--primary-color);
             overflow: hidden; background: #fff;
         }
         .profile-pic-container img { width: 100%; height: 100%; object-fit: cover; }
 
-        h1 { color: var(--primary-blue); text-align: center; font-size: 2.2em; margin-bottom: 20px; border-bottom: 3px dashed var(--primary-blue); padding-bottom: 10px; }
+        /* Score & Summary */
+        .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .summary-item { background: #fff; padding: 15px; border-radius: 8px; text-align: center; border: 1px solid #e2e8f0; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .summary-item strong { display: block; color: var(--neutral-color); font-size: 0.8em; text-transform: uppercase; letter-spacing: 1px; }
+        .summary-item span { font-size: 1.4em; font-weight: bold; color: #333; }
+
+        .score-box { text-align: center; margin: 30px 0; }
+        .score-val { font-size: 4em; font-weight: 900; color: var(--primary-color); line-height: 1; }
         
-        .summary-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 30px; padding: 15px; background-color: #eaf6ff; border-radius: 8px; }
-        .summary-item { background: white; padding: 15px; border-radius: 5px; text-align: center; border: 1px solid #bbddee; }
-        .summary-item strong { display: block; color: var(--primary-blue); margin-bottom: 5px; font-size: 0.85em; text-transform: uppercase; }
-        .summary-item span { font-size: 1.3em; font-weight: bold; }
-
-        .score-val { font-size: 3.5em; font-weight: 900; color: var(--success-green); text-align: center; }
-
-        #omr-sheet-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-top: 20px; padding: 15px; background: #f9f9f9; border-radius: 10px; }
-        .omr-question-block { border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: white; display: flex; flex-direction: column; align-items: center; }
-        .omr-bubbles { display: flex; gap: 4px; margin-top: 8px; }
+        /* OMR Grid */
+        #omr-sheet-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-top: 20px; padding: 20px; background: #f8f9fa; border-radius: 10px; }
+        .omr-question-block { border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: white; text-align: center; }
+        .omr-bubbles { display: flex; justify-content: center; gap: 5px; margin-top: 5px; }
         
         .omr-bubble {
-            width: 22px; height: 22px; border-radius: 50%; border: 1.5px solid #888;
-            display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: bold; color: #555;
+            width: 24px; height: 24px; border-radius: 50%; border: 1px solid #adb5bd;
+            display: flex; align-items: center; justify-content: center; font-size: 0.75em; font-weight: bold; color: #6c757d;
         }
 
         /* OMR Logic Colors */
-        .omr-bubble.correct-option { border-color: var(--success-green); color: var(--success-green); background: #e8f5e9; border-width: 2px; }
-        .omr-bubble.student-selected { background-color: var(--neutral-grey); border-color: var(--neutral-grey); color: white; }
-        .omr-bubble.student-selected.correct-option { background-color: var(--success-green) !important; border-color: var(--success-green) !important; color: white !important; }
-        .omr-bubble.student-selected:not(.correct-option) { background-color: var(--danger-red) !important; border-color: var(--danger-red) !important; color: white !important; }
+        .omr-bubble.correct-option { border-color: var(--success-color); background: #d4edda; color: var(--success-color); }
+        .omr-bubble.student-selected { background-color: #6c757d; color: white; border-color: #6c757d; }
+        .omr-bubble.student-selected.correct-option { background-color: var(--success-color) !important; border-color: var(--success-color) !important; }
+        .omr-bubble.student-selected:not(.correct-option) { background-color: var(--danger-color) !important; border-color: var(--danger-color) !important; }
 
-        .btn-home { display: block; width: 220px; margin: 30px auto; padding: 12px; background: var(--primary-blue); color: white; text-align: center; text-decoration: none; border-radius: 50px; font-weight: bold; }
+        /* Buttons */
+        .btn-custom { border-radius: 50px; padding: 10px 25px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; transition: all 0.3s; }
+        .btn-primary-custom { background: var(--primary-color); color: white; border: none; }
+        .btn-primary-custom:hover { opacity: 0.9; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); color: white;}
 
         @media print {
-            .btn-home, button, .fas { display: none !important; }
-            .container { box-shadow: none; border: 2px solid var(--primary-blue); margin: 0; width: 100%; }
+            .no-print { display: none !important; }
+            .container { box-shadow: none; border: none; margin: 0; width: 100%; max-width: 100%; }
         }
     </style>
 </head>
 <body>
 
     <div class="container animate__animated animate__fadeIn">
-        <h1>OFFICIAL RESULT SHEET</h1>
+        
+        <div class="brand-header">
+            <img src="" alt="Logo" class="global-school-logo">
+            <h1 class="global-school-name">Loading School...</h1>
+            <p class="text-muted">OFFICIAL EXAMINATION RESULT SHEET</p>
+        </div>
         
         <div class="student-profile-header">
             <div class="profile-pic-container">
                 <img id="student-pic" src="" alt="Student">
             </div>
-            <div class="student-info">
-                <h4 id="student-name">Loading Profile...</h4>
-                <div class="row g-2">
-                    <div class="col-md-6"><p>ROLL: <span id="student-roll">-</span></p></div>
-                    <div class="col-md-6"><p>COURSE: <span id="student-course">-</span></p></div>
-                    <div class="col-md-6"><p>BATCH: <span id="student-batch">-</span></p></div>
-                    <div class="col-md-6"><p>SUBJECT: <span id="student-subject">-</span></p></div>
+            <div class="student-info w-100">
+                <h4 id="student-name" class="fw-bold">Loading Profile...</h4>
+                <div class="row g-2 mt-1">
+                    <div class="col-md-3 col-6"><small class="text-muted">ROLL NO</small><div id="student-roll" class="fw-bold">-</div></div>
+                    <div class="col-md-3 col-6"><small class="text-muted">COURSE</small><div id="student-course" class="fw-bold">-</div></div>
+                    <div class="col-md-3 col-6"><small class="text-muted">BATCH</small><div id="student-batch" class="fw-bold">-</div></div>
+                    <div class="col-md-3 col-6"><small class="text-muted">EXAM ID</small><div id="exam-id-display" class="fw-bold">-</div></div>
                 </div>
             </div>
         </div>
 
         <div id="result-summary">
-            <h3 id="exam-title" style="text-align: center; color: #333;">Exam Title</h3>
-            <div class="score-val" id="total-score">0</div>
-            <p class="text-center fw-bold text-muted">TOTAL MARKS OBTAINED</p>
+            <h3 id="exam-title" class="text-center text-dark fw-bold">Exam Title</h3>
+            
+            <div class="score-box">
+                <div class="score-val" id="total-score">0</div>
+                <div class="text-muted fw-bold">TOTAL SCORE OBTAINED</div>
+            </div>
 
             <div class="summary-grid">
-                <div class="summary-item"><strong>Correct</strong><span id="correct-count" style="color: var(--success-green);">0</span></div>
-                <div class="summary-item"><strong>Incorrect</strong><span id="incorrect-count" style="color: var(--danger-red);">0</span></div>
-                <div class="summary-item"><strong>Unanswered</strong><span id="unanswered-count" style="color: var(--neutral-grey);">0</span></div>
-                <div class="summary-item"><strong>Violations</strong><span id="violation-count" style="color: #c0392b;">0</span></div>
+                <div class="summary-item"><strong>Correct</strong><span id="correct-count" class="text-success">0</span></div>
+                <div class="summary-item"><strong>Incorrect</strong><span id="incorrect-count" class="text-danger">0</span></div>
+                <div class="summary-item"><strong>Unanswered</strong><span id="unanswered-count" class="text-secondary">0</span></div>
                 <div class="summary-item"><strong>Max Marks</strong><span id="max-marks">0</span></div>
-                <div class="summary-item"><strong>Status</strong><span id="status" style="color: var(--primary-blue);">-</span></div>
+                <div class="summary-item"><strong>Result</strong><span id="status" style="color: var(--primary-color);">-</span></div>
             </div>
         </div>
 
-        <h4 class="text-center mt-4" style="color: var(--primary-blue);">Detailed OMR Analysis</h4>
+        <div class="text-center mb-5 no-print">
+            <button id="viewMarksheetBtn" class="btn btn-primary-custom btn-custom shadow me-2">
+                <i class="fas fa-file-signature me-2"></i> Official Marksheet
+            </button>
+            <button onclick="window.print()" class="btn btn-outline-secondary btn-custom shadow">
+                <i class="fas fa-print me-2"></i> Print Details
+            </button>
+        </div>
+
+        <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-th me-2"></i>OMR Sheet View</h5>
         <div id="omr-sheet-grid"></div>
 
         <div class="mt-5">
-            <h4 class="text-center" style="color: var(--primary-blue); margin-bottom: 20px;">
-                <i class="fas fa-list-check me-2"></i> ANSWER KEY DETAILS
-            </h4>
-            <div class="table-responsive shadow-sm" style="border-radius: 12px; overflow: hidden;">
-                <table class="table table-hover align-middle mb-0" style="background: white;">
-                    <thead style="background-color: var(--primary-blue); color: white;">
+            <h5 class="border-bottom pb-2 mb-3"><i class="fas fa-list-ul me-2"></i>Question Analysis</h5>
+            <div class="table-responsive shadow-sm rounded">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
                         <tr>
-                            <th class="text-center">Q.No</th>
-                            <th>Question</th>
-                            <th class="text-center">Your Ans</th>
-                            <th class="text-center">Correct Ans</th>
-                            <th class="text-center">Status</th>
+                            <th class="text-center" width="50">#</th>
+                            <th>Question Details</th>
+                            <th class="text-center" width="100">Your Ans</th>
+                            <th class="text-center" width="100">Correct</th>
+                            <th class="text-center" width="50">Status</th>
                         </tr>
                     </thead>
                     <tbody id="answer-key-body"></tbody>
@@ -129,21 +153,23 @@
             </div>
         </div>
 
-        <div class="text-center mt-4">
-            <button onclick="window.print()" class="btn btn-outline-secondary rounded-pill px-4 me-2">
-                <i class="fas fa-print me-2"></i> PRINT PDF
-            </button>
-            <a href="/my-quiz.html" class="btn-home d-inline-block">BACK TO DASHBOARD</a>
+        <div class="text-center mt-5 mb-3 no-print">
+            <a href="/my-quiz.html" class="text-decoration-none text-muted"><i class="fas fa-arrow-left me-1"></i> Back to Dashboard</a>
         </div>
     </div>
 
-    
+    <script src="/js/global-config.js"></script>
 
     <script>
         const QUIZ_ID = new URLSearchParams(window.location.search).get('quizId');
         const TOKEN = localStorage.getItem('erp-token');
 
         if (!TOKEN) window.location.href = '/login.html';
+
+        // Link Button to Official Marksheet Page
+        document.getElementById('viewMarksheetBtn').addEventListener('click', () => {
+            window.open(`/my-marksheet.html?quizId=${QUIZ_ID}`, '_blank');
+        });
 
         async function fetchResults() {
             try {
@@ -152,71 +178,81 @@
                 });
                 const data = await response.json();
 
-                // Profile & Summary Populate
-                document.getElementById('student-name').innerText = data.summary.student_name || 'N/A';
-                document.getElementById('student-roll').innerText = data.summary.roll_number || 'N/A';
-                document.getElementById('student-course').innerText = data.summary.course_name || 'N/A';
-                document.getElementById('student-batch').innerText = data.summary.batch_name || 'N/A';
-                document.getElementById('student-subject').innerText = data.summary.subject_name || 'N/A';
-                document.getElementById('student-pic').src = data.summary.profile_pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(data.summary.student_name)}&background=005A9C&color=fff`;
+                if(!response.ok) throw new Error(data.message);
 
-                document.getElementById('exam-title').innerText = data.summary.title || 'Exam Result';
-                document.getElementById('total-score').innerText = data.summary.total_score ?? 0;
-                document.getElementById('correct-count').innerText = data.summary.correct_count ?? 0;
-                document.getElementById('incorrect-count').innerText = data.summary.incorrect_count ?? 0;
-                document.getElementById('unanswered-count').innerText = data.summary.unanswered_count ?? 0;
-                document.getElementById('violation-count').innerText = data.summary.violation_count ?? 0;
-                document.getElementById('max-marks').innerText = data.summary.max_marks ?? 0;
-                document.getElementById('status').innerText = (data.summary.status || 'Submitted').toUpperCase();
+                const s = data.summary;
 
-                // OMR & Table Rendering
+                // Profile
+                document.getElementById('student-name').innerText = s.student_name;
+                document.getElementById('student-roll').innerText = s.roll_number;
+                document.getElementById('student-course').innerText = s.course_name || '-';
+                document.getElementById('student-batch').innerText = s.batch_name || '-';
+                document.getElementById('exam-id-display').innerText = QUIZ_ID.substring(0,8).toUpperCase();
+                document.getElementById('student-pic').src = s.profile_pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(s.student_name)}&background=random`;
+
+                // Summary
+                document.getElementById('exam-title').innerText = s.title;
+                document.getElementById('total-score').innerText = s.total_score;
+                document.getElementById('correct-count').innerText = s.correct_count;
+                document.getElementById('incorrect-count').innerText = s.incorrect_count;
+                document.getElementById('unanswered-count').innerText = s.unanswered_count;
+                document.getElementById('max-marks').innerText = s.max_marks;
+                document.getElementById('status').innerText = (s.status || 'Submitted').toUpperCase();
+
+                // OMR & Table Logic
                 const grid = document.getElementById('omr-sheet-grid');
                 const tableBody = document.getElementById('answer-key-body');
                 const options = ['a', 'b', 'c', 'd'];
 
                 data.details.forEach((item, index) => {
-                    // Case-insensitive normalization
                     const sAns = (item.student_answer || "").toString().toLowerCase().trim();
                     const cAns = (item.correct_answer || "").toString().toLowerCase().trim();
                     const isCorrect = (sAns === cAns);
 
-                    // OMR Block
+                    // OMR
                     const block = document.createElement('div');
                     block.className = 'omr-question-block';
-                    block.innerHTML = `<strong>Q.${index + 1}</strong>`;
+                    block.innerHTML = `<small class="fw-bold text-muted">Q${index + 1}</small>`;
                     const bubbles = document.createElement('div');
                     bubbles.className = 'omr-bubbles';
 
                     options.forEach(opt => {
-                        const bubble = document.createElement('div');
-                        bubble.className = 'omr-bubble';
-                        bubble.innerText = opt.toUpperCase();
-                        
-                        const currentOpt = opt.toLowerCase();
-                        // Logic to highlight correct and selected bubbles
-                        if (cAns === currentOpt) bubble.classList.add('correct-option');
-                        if (sAns === currentOpt) bubble.classList.add('student-selected');
-                        
-                        bubbles.appendChild(bubble);
+                        const b = document.createElement('div');
+                        b.className = 'omr-bubble';
+                        b.innerText = opt.toUpperCase();
+                        if (cAns === opt) b.classList.add('correct-option');
+                        if (sAns === opt) b.classList.add('student-selected');
+                        bubbles.appendChild(b);
                     });
                     block.appendChild(bubbles);
                     grid.appendChild(block);
 
-                    // Table Row logic
+                    // Table Row
                     const row = document.createElement('tr');
+                    
+                    // Options Display
+                    let opts = `<div class="small text-muted mt-1">`;
+                    ['a','b','c','d'].forEach(o => {
+                        if(item[`option_${o}`]) opts += `<span class="me-3 ${cAns===o?'text-success fw-bold':''}">${o.toUpperCase()}: ${item[`option_${o}`]}</span>`;
+                    });
+                    opts += `</div>`;
+
                     row.innerHTML = `
-                        <td class="text-center fw-bold">${index + 1}</td>
-                        <td class="small text-muted">${item.question_text || '---'}</td>
-                        <td class="text-center"><span class="badge ${sAns === "" ? 'bg-secondary' : (isCorrect ? 'bg-success' : 'bg-danger')}">${sAns.toUpperCase() || 'N/A'}</span></td>
+                        <td class="text-center fw-bold text-secondary">${index + 1}</td>
+                        <td>
+                            <div class="fw-bold text-dark">${item.question_text}</div>
+                            ${opts}
+                        </td>
+                        <td class="text-center"><span class="badge ${!sAns ? 'bg-secondary' : (isCorrect ? 'bg-success' : 'bg-danger')}">${sAns ? sAns.toUpperCase() : '-'}</span></td>
                         <td class="text-center fw-bold text-success">${cAns.toUpperCase()}</td>
-                        <td class="text-center">${isCorrect ? '<i class="fas fa-check-circle text-success"></i>' : (sAns === "" ? '<i class="fas fa-minus text-muted"></i>' : '<i class="fas fa-times-circle text-danger"></i>')}</td>
+                        <td class="text-center">${isCorrect ? '<i class="fas fa-check text-success"></i>' : '<i class="fas fa-times text-danger"></i>'}</td>
                     `;
                     tableBody.appendChild(row);
                 });
 
             } catch (err) {
                 console.error(err);
-                alert("Error loading results.");
+                alert("Could not load result data.");
             }
         }
         document.addEventListener('DOMContentLoaded', fetchResults);

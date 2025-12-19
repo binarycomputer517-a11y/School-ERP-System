@@ -3,188 +3,473 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View My Academic Transcript</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Official Consolidated Transcript</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
     <style>
-        body { background-color: #f0f2f8; font-family: sans-serif; }
-        .container { max-width: 800px; margin-top: 50px; }
-        .card { border-radius: 12px; box-shadow: 0 5px 20px rgba(0,0,0,0.1); position: relative; } 
-        h1 { color: #000080; font-weight: bold; }
-        .loader-container { 
-            text-align: center; 
-            padding: 50px; 
-            color: #5e35b1; 
-            font-size: 1.1em;
+        :root {
+            --primary-color: #0f172a; 
+            --accent-color: #3b82f6; 
+            --bg-color: #f8fafc;
+            --border-color: #e2e8f0;
+            --text-primary: #1e293b;
+            --success-color: #166534;
+            --danger-color: #991b1b;
         }
-        .text-primary-custom { color: #000080 !important; }
 
-        /* --- New Styles for Header and Watermark --- */
-        .header-area {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #EEE;
+        body {
+            background: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact; 
         }
-        .header-logo {
+
+        /* A4 Page Layout */
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
+            border-top: 10px solid var(--primary-color);
+        }
+
+        /* Watermark */
+        .watermark-container {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
             display: flex;
-            align-items: center;
             justify-content: center;
+            align-items: center;
         }
-        .header-logo img {
-            max-height: 80px;
-            margin-right: 15px;
+        .watermark-logo {
+            width: 400px;
+            opacity: 0.04;
+            filter: grayscale(100%);
         }
-        .school-name {
-            font-size: 1.6em;
-            font-weight: 700;
-            color: #000080;
+        .watermark-pattern {
+            position: absolute;
+            inset: -50%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: center;
+            gap: 60px;
+            opacity: 0.03;
+            transform: rotate(-30deg);
+        }
+        .watermark-text {
+            font-size: 14px;
+            font-weight: 800;
+            color: #000;
+            text-transform: uppercase;
+        }
+
+        .content { position: relative; z-index: 2; }
+
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 25px;
+            margin-bottom: 35px;
+        }
+        .school-branding { display: flex; align-items: center; gap: 20px; }
+        .school-logo { width: 85px; height: 85px; object-fit: contain; }
+        .school-info h1 {
+            font-size: 26px;
+            font-weight: 900;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            margin: 0;
             line-height: 1.2;
+        }
+        .doc-title { text-align: right; }
+        .doc-name {
+            font-size: 18px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+            color: var(--text-primary);
+        }
+        .doc-session {
+            font-size: 12px;
+            background: var(--primary-color);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: 600;
+            display: inline-block;
+            margin-top: 8px;
+        }
+
+        /* Student Profile */
+        .student-box {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 25px;
+            display: flex;
+            gap: 30px;
+            margin-bottom: 35px;
+            align-items: center;
+        }
+        .student-photo-frame {
+            width: 110px; height: 130px;
+            padding: 4px;
+            background: white;
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+        .student-photo { width: 100%; height: 100%; object-fit: cover; border-radius: 2px; }
+        
+        .info-grid {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px 40px;
+        }
+        .info-group { display: flex; flex-direction: column; }
+        .label { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 2px; }
+        .val { font-size: 15px; font-weight: 600; color: var(--text-primary); }
+
+        /* Results Table */
+        .table-custom {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-bottom: 35px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .table-custom th {
+            background: var(--primary-color);
+            color: white;
+            padding: 14px 16px;
+            font-size: 12px;
+            text-transform: uppercase;
+            text-align: left;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+        }
+        .table-custom td {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+            color: var(--text-primary);
+            vertical-align: middle;
+        }
+        .table-custom tr:last-child td { border-bottom: none; }
+        .table-custom tr:nth-child(even) { background-color: #fcfcfc; }
+        
+        .grade-badge {
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+            display: inline-block;
+            min-width: 35px;
             text-align: center;
         }
-        
-        /* Watermark Style (Appears behind content) */
-        .watermark {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) rotate(-30deg);
-            color: rgba(0, 0, 0, 0.08); /* Very light grey */
-            font-size: 8em;
-            font-weight: 900;
-            z-index: 1; 
-            pointer-events: none; 
-            white-space: nowrap;
+        .pass { background: #dcfce7; color: var(--success-color); }
+        .fail { background: #fee2e2; color: var(--danger-color); }
+
+        /* Dashboard Summary */
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 50px;
         }
+        .metric-card {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 20px 10px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.03);
+        }
+        .metric-title { font-size: 11px; color: #64748b; text-transform: uppercase; font-weight: 700; margin-bottom: 8px; }
+        .metric-val { font-size: 20px; font-weight: 800; color: var(--primary-color); }
+
+        /* Footer */
+        .footer {
+            margin-top: auto;
+            padding-top: 25px;
+            border-top: 2px dashed #cbd5e1;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .qr-section { display: flex; align-items: center; gap: 15px; }
+        .qr-text { font-size: 11px; color: #64748b; line-height: 1.5; }
+        
+        .signatures { display: flex; gap: 60px; }
+        .sign-box { text-align: center; }
+        .sign-line { width: 160px; border-top: 2px solid #333; margin-bottom: 8px; }
+        .sign-label { font-size: 12px; font-weight: 700; text-transform: uppercase; }
+
         @media print {
-            .watermark {
-                color: rgba(0, 0, 0, 0.15); 
-            }
+            body { background: white; margin: 0; }
+            .no-print { display: none !important; }
+            .page { margin: 0; box-shadow: none; border: none; width: 100%; height: auto; padding: 0; }
+            @page { margin: 10mm; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="card p-4">
-            
-            <div class="watermark" id="watermark-text">DRAFT</div>
-            <div class="header-area">
-                <div class="header-logo">
-                    <img id="school-logo" class="global-school-logo" src="" alt="School Logo" style="display:none;">
-                    <div class="school-name global-school-name" id="school-full-name">Academic Transcript</div>
+
+    <div class="text-center my-4 no-print" style="position:sticky; top:20px; z-index:100;">
+        <div class="bg-white p-3 rounded shadow d-inline-block border">
+            <button onclick="window.print()" class="btn btn-primary fw-bold px-4">
+                <i class="fas fa-print me-2"></i> Print Transcript
+            </button>
+            <a href="/student-dashboard.html" class="btn btn-outline-secondary fw-bold px-4 ms-2">Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div class="page">
+        <div class="watermark-container">
+            <img src="" class="watermark-logo global-school-logo" id="wm-logo" alt="Watermark">
+            <div class="watermark-pattern" id="bg-text-pattern"></div>
+        </div>
+
+        <div class="content">
+            <div class="header">
+                <div class="school-branding">
+                    <img src="" class="school-logo global-school-logo">
+                    <div class="school-info">
+                        <h1 class="global-school-name">Loading...</h1>
+                        <p class="global-school-address" style="margin:5px 0 0; font-size:12px; color:#64748b;">...</p>
+                    </div>
+                </div>
+                <div class="doc-title">
+                    <span class="doc-name">CONSOLIDATED<br>TRANSCRIPT</span>
+                    <span class="doc-session">Academic Year 2024-25</span>
                 </div>
             </div>
-            <h1 class="mb-4 text-primary-custom">My Official Transcript</h1>
-            
-            <div id="loading-area" class="loader-container">
-                <div class="spinner-border text-primary-custom" role="status">
-                    <span class="visually-hidden">Loading...</span>
+
+            <div class="student-box">
+                <div class="student-photo-frame">
+                    <img src="" id="s-photo" class="student-photo" alt="Student">
                 </div>
-                <p class="mt-3">Fetching your academic record...</p>
-                <p class="text-muted small">Your consolidated marksheet will open in a new window for viewing and printing.</p>
-                <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary mt-3">← Back to Dashboard</a>
+                <div class="info-grid">
+                    <div class="info-group">
+                        <span class="label">Student Name</span>
+                        <span class="val" id="s-name">Loading...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Roll Number</span>
+                        <span class="val" id="s-roll">...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Course</span>
+                        <span class="val" id="s-course">...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Batch</span>
+                        <span class="val" id="s-batch">...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Total Subjects</span>
+                        <span class="val" id="exam-count">0</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="label">Date of Issue</span>
+                        <span class="val" id="issue-date">...</span>
+                    </div>
+                </div>
+            </div>
+
+            <table class="table-custom">
+                <thead>
+                    <tr>
+                        <th width="8%">#</th>
+                        <th width="35%">Subject Name</th>
+                        <th width="25%">Exam Title</th>
+                        <th width="12%">Max Marks</th>
+                        <th width="12%">Obtained</th>
+                        <th width="8%">Grade</th>
+                    </tr>
+                </thead>
+                <tbody id="result-body">
+                    <tr><td colspan="6" class="text-center py-4 text-muted">Loading results...</td></tr>
+                </tbody>
+            </table>
+
+            <div class="dashboard">
+                <div class="metric-card">
+                    <div class="metric-title">Grand Total</div>
+                    <div class="metric-val"><span id="grand-obtained">0</span> / <span id="grand-max">0</span></div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Overall Percentage</div>
+                    <div class="metric-val" id="overall-percent">0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Final Result</div>
+                    <div class="metric-val" id="final-status">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Division</div>
+                    <div class="metric-val" id="final-division">-</div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="qr-section">
+                    <div id="qrcode"></div>
+                    <div class="qr-text">
+                        <b>Digital Verification</b><br>
+                        Scan this QR code to verify<br>the authenticity of this<br>transcript.
+                    </div>
+                </div>
+                <div class="signatures">
+                    <div class="sign-box">
+                        <div class="sign-line"></div>
+                        <div class="sign-label">Controller of Exams</div>
+                    </div>
+                    <div class="sign-box">
+                        <div class="sign-line"></div>
+                        <div class="sign-label">Principal</div>
+                    </div>
+                </div>
             </div>
             
-            <div id="error-area" style="display: none;">
-                <p class="text-danger">Error: Could not retrieve your academic record.</p>
-                <p id="error-detail" class="text-muted small"></p>
-                <button onclick="window.location.reload()" class="btn btn-primary mt-3">Try Again</button>
+            <div style="text-align:center; margin-top:30px; font-size:10px; color:#9ca3af;">
+                This consolidated transcript is electronically generated by the School ERP System and is valid without a physical signature.
             </div>
         </div>
     </div>
-    
-    <script src="js/global-config.js"></script>
-    <script src="exam-manager-client.js"></script>
 
+    <script src="/js/global-config.js"></script>
     <script>
-        // Use 'profile-id' for consistency if 'student-id' is undefined
-        const STUDENT_ID_KEY = 'profile-id'; 
-        
-        /**
-         * Function to load School Info from localStorage and apply it to the Watermark.
-         * The Header elements (.global-school-logo, .global-school-name) are handled 
-         * by global-config.js, this script only ensures the watermark is set quickly.
-         */
-        function applyWatermarkInfo() {
-            const watermarkElement = document.getElementById('watermark-text');
-            const schoolName = localStorage.getItem('school-name') || 'DRAFT';
-            
-            // Set Watermark text
-            watermarkElement.textContent = schoolName.toUpperCase();
+        const TOKEN = localStorage.getItem('erp-token');
+
+        function getGrade(p) {
+            if(p >= 90) return {g:'O', c:'pass'};
+            if(p >= 80) return {g:'A+', c:'pass'};
+            if(p >= 70) return {g:'A', c:'pass'};
+            if(p >= 60) return {g:'B+', c:'pass'};
+            if(p >= 50) return {g:'B', c:'pass'};
+            if(p >= 40) return {g:'C', c:'pass'};
+            return {g:'F', c:'fail'};
         }
 
-        async function handleApi(url, token) {
-            const response = await fetch(url, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
-            if (response.status === 401 || response.status === 403) {
-                 console.error('API Call Unauthorized (401/403). Token expired or invalid.');
-                 throw new Error('Unauthorized Access. Please log out and log in again.');
-            }
-            
-            if (!response.ok) {
-                 const errorBody = await response.json().catch(() => ({ message: 'Server error fetching data.' }));
-                 throw new Error(errorBody.message || `API Failed with status ${response.status}.`);
-            }
-            return response.json();
-        }
-
-        async function initViewTranscript() {
-            // Apply watermark as soon as possible
-            applyWatermarkInfo(); 
-            
-            // 1. Get IDs
-            const studentId = localStorage.getItem(STUDENT_ID_KEY) || localStorage.getItem('student-id');
-            const token = localStorage.getItem('erp-token');
-            const loadingArea = document.getElementById('loading-area');
-            const errorArea = document.getElementById('error-area');
-            const errorDetail = document.getElementById('error-detail');
-            
-            loadingArea.classList.remove('d-none');
-            errorArea.style.display = 'none';
-
-            if (!studentId || !token) {
-                loadingArea.classList.add('d-none');
-                errorArea.style.display = 'block';
-                errorDetail.textContent = 'Authentication required. Please log in.';
-                return;
-            }
-            
-            // Wait for external script to ensure window.viewMarksheet is available
-            if (typeof window.viewMarksheet !== 'function') {
-                setTimeout(initViewTranscript, 100); 
-                return;
-            }
+        async function loadTranscript() {
+            if(!TOKEN) return window.location.href = '/login.html';
 
             try {
+                // API কল করা হচ্ছে
+                const res = await fetch('/api/online-exam/student/consolidated-report', {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const data = await res.json();
                 
-                // 2. Execute the marksheet generation function, passing studentId directly
-                const success = await window.viewMarksheet(studentId); 
-                
-                // 3. Update the UI 
-                loadingArea.innerHTML = `
-                    <p class="text-success mt-3">✅ Your transcript generation initiated.</p>
-                    <p class="small">Please switch tabs to view the PDF/Print preview. (Using Student ID: ${studentId})</p>
-                    <a href="/student-dashboard.html" class="btn btn-outline-primary mt-3">Return to Dashboard</a>
-                `;
-                
-                if (success === false) {
-                     throw new Error("Transcript generation failed on the client side.");
+                if(!res.ok) throw new Error(data.message);
+
+                const s = data.student;
+                const results = data.results || [];
+
+                // 1. প্রোফাইল আপডেট
+                document.getElementById('s-name').innerText = s.first_name + ' ' + s.last_name;
+                document.getElementById('s-roll').innerText = s.roll_number;
+                document.getElementById('s-course').innerText = s.course_name || 'N/A';
+                document.getElementById('s-batch').innerText = s.batch_name || 'N/A';
+                document.getElementById('exam-count').innerText = results.length;
+                document.getElementById('issue-date').innerText = new Date().toLocaleDateString('en-GB');
+                document.getElementById('s-photo').src = s.profile_image_path || `https://ui-avatars.com/api/?name=${encodeURIComponent(s.first_name)}&background=random`;
+
+                // 2. টেবিল এবং ক্যালকুলেশন
+                const tbody = document.getElementById('result-body');
+                tbody.innerHTML = ''; // ক্লিয়ার করা
+
+                if(results.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">No completed assessments found for this student.</td></tr>`;
+                    return;
                 }
 
+                let totalObt = 0, totalMax = 0;
 
-            } catch (error) {
-                console.error('Transcript Initialization Error:', error);
-                loadingArea.classList.add('d-none');
-                errorArea.style.display = 'block';
-                errorDetail.textContent = `Details: ${error.message}`;
+                results.forEach((r, idx) => {
+                    const obt = Number(r.total_score) || 0;
+                    const max = Number(r.max_marks) || 0;
+                    
+                    totalObt += obt;
+                    totalMax += max;
+                    
+                    const percent = max > 0 ? (obt / max) * 100 : 0;
+                    const grade = getGrade(percent);
+
+                    const row = `
+                        <tr>
+                            <td>${idx + 1}</td>
+                            <td>
+                                <div class="fw-bold">${r.subject_name || 'General Subject'}</div>
+                                <div class="small text-muted">Code: ${r.subject_code || '-'}</div>
+                            </td>
+                            <td>${r.exam_title}</td>
+                            <td class="fw-bold">${max}</td>
+                            <td class="fw-bold">${obt}</td>
+                            <td><span class="grade-badge ${grade.c}">${grade.g}</span></td>
+                        </tr>
+                    `;
+                    tbody.innerHTML += row;
+                });
+
+                // 3. ড্যাশবোর্ড আপডেট
+                const overallP = totalMax > 0 ? ((totalObt / totalMax) * 100).toFixed(2) : 0;
+                
+                document.getElementById('grand-obtained').innerText = totalObt;
+                document.getElementById('grand-max').innerText = totalMax;
+                document.getElementById('overall-percent').innerText = overallP + '%';
+                
+                const statusEl = document.getElementById('final-status');
+                const isPassed = overallP >= 40;
+                statusEl.innerText = isPassed ? "PASSED" : "FAILED";
+                statusEl.style.color = isPassed ? "var(--success-color)" : "var(--danger-color)";
+
+                let division = "Fail";
+                if(isPassed) {
+                    if(overallP >= 75) division = "Distinction";
+                    else if(overallP >= 60) division = "First Class";
+                    else if(overallP >= 45) division = "Second Class";
+                    else division = "Third Class";
+                }
+                document.getElementById('final-division').innerText = division;
+
+                // 4. QR কোড জেনারেট
+                document.getElementById("qrcode").innerHTML = "";
+                new QRCode(document.getElementById("qrcode"), {
+                    text: `TRANSCRIPT|${s.roll_number}|SCORE:${totalObt}/${totalMax}|${overallP}%`,
+                    width: 70, height: 70,
+                    colorDark : "#0f172a", colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+
+            } catch (e) {
+                console.error(e);
+                document.getElementById('result-body').innerHTML = `<tr><td colspan="6" class="text-center py-4 text-danger">Error loading data: ${e.message}</td></tr>`;
             }
         }
-        
-        // Use DOMContentLoaded to start the process
-        document.addEventListener('DOMContentLoaded', initViewTranscript);
+
+        document.addEventListener('DOMContentLoaded', loadTranscript);
     </script>
 </body>
 </html>
