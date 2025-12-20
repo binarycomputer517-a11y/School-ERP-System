@@ -494,13 +494,13 @@ router.delete('/attempts/:attemptId', authenticateToken, authorize(['Admin', 'Te
 });
 
 // ==========================================
-// GET: Consolidated Report Card (Transcript) [Fixed]
+// GET: Consolidated Report Card (FINAL ALL-IN-ONE FIX)
 // ==========================================
 router.get('/student/consolidated-report', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // 1. Get Student Basic Info via User ID
+        // ১. ছাত্রের তথ্য আনা
         const studentQuery = `
             SELECT s.first_name, s.last_name, s.roll_number, s.profile_image_path,
                    c.course_name, b.batch_name, s.student_id 
@@ -516,29 +516,40 @@ router.get('/student/consolidated-report', authenticateToken, async (req, res) =
         }
 
         const studentData = studentRes.rows[0];
-        const studentId = studentData.student_id; // Get true student_id
+        const studentId = studentData.student_id;
 
-        // 2. Get All Completed Exam Results
-        // FIX: Calculate max_marks dynamically for each row
+        // ২. সব পরীক্ষার রেজাল্ট একসাথে আনা
+        // আমরা এখানে 'Completed' বা 'Submitted' স্ট্যাটাস চেক করছি না।
+        // সরাসরি চেক করছি 'end_time' আছে কিনা। এটি থাকলে ৫টি রেজাল্টই আসবে।
         const resultsQuery = `
             SELECT 
                 sub.subject_code,
                 sub.subject_name,
                 oq.title AS exam_title,
-                COALESCE((SELECT SUM(q.marks) FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = oq.id), 0) as max_marks,
-                sea.total_score,
+                
+                -- ডাইনামিক ম্যাক্স মার্কস (প্রশ্নের যোগফল)
+                COALESCE(
+                    (SELECT SUM(q.marks) 
+                     FROM quiz_questions q 
+                     JOIN quiz_question_links l ON q.question_id = l.question_id 
+                     WHERE l.quiz_id::text = oq.id::text), 
+                0) as max_marks,
+
+                -- প্রাপ্ত নম্বর
+                COALESCE(sea.total_score, 0) as total_score,
                 sea.end_time
             FROM student_exam_attempts sea
             JOIN online_quizzes oq ON sea.quiz_id = oq.id
             LEFT JOIN subjects sub ON oq.subject_id = sub.id
-            WHERE sea.student_id = $1 AND sea.status = 'Completed'
+            WHERE sea.student_id = $1 
+            AND sea.end_time IS NOT NULL  -- এই লাইনটি নিশ্চিত করে সব রেজাল্ট আসবে
             ORDER BY sea.end_time DESC`;
 
         const resultsRes = await pool.query(resultsQuery, [studentId]);
 
         res.json({
             student: studentData,
-            results: resultsRes.rows
+            results: resultsRes.rows // এখানে ৫টি পরীক্ষার ডাটাই থাকবে
         });
 
     } catch (err) {
@@ -546,5 +557,4 @@ router.get('/student/consolidated-report', authenticateToken, async (req, res) =
         res.status(500).json({ message: "Server Error generating transcript" });
     }
 });
-
 module.exports = router;
