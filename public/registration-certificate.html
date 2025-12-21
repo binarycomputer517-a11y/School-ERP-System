@@ -2,416 +2,259 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Registration Certificate</title>
-    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Playfair+Display:wght@700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Cinzel:wght@700;900&family=Great+Vibes&family=Playfair+Display:ital,wght@0,700;1,400&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
     <style>
-        body {
-            font-family: 'Roboto', sans-serif;
-            background-color: #f0f2f5;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            min-height: 100vh;
-        }
-
-        .certificate {
-            width: 850px; /* Adjusted width for landscape-like feel */
-            min-height: 550px;
-            background: #ffffff;
-            padding: 20px;
-            text-align: center;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-            position: relative;
-            border: 2px solid #004085; /* Main outer blue border */
-            box-sizing: border-box; /* Include padding and border in the element's total width and height */
-        }
-
-        /* --- Border Replication --- */
-        .certificate::before, .certificate::after {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            pointer-events: none;
-            box-sizing: border-box;
-        }
-
-        /* Inner patterned border */
-        .certificate::before {
-            border: 20px solid transparent; /* Gives space for the border image */
-            border-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 50 C25 25, 75 25, 100 50 S125 75, 150 50' stroke='%234285F4' stroke-width='2' fill='none'/%3E%3Ccircle cx='15' cy='15' r='5' fill='%234285F4'/%3E%3Ccircle cx='85' cy='15' r='5' fill='%234285F4'/%3E%3Ccircle cx='15' cy='85' r='5' fill='%234285F4'/%3E%3Ccircle cx='85' cy='85' r='5' fill='%234285F4'/%3E%3C/svg%3E") 20 round;
-        }
-
-        /* Innermost thin blue line */
-        .certificate::after {
-            inset: 18px; /* Positioned inside the border image */
-            border: 1px solid #0056b3;
-        }
-        /* --- End Border Replication --- */
-
-        .content-area {
-            position: relative;
-            z-index: 2;
-            padding: 15px; /* Inner padding after border */
-        }
-
-        .header-section {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 20px;
-        }
-
-        .header-left {
-            display: flex;
-            align-items: center;
-            text-align: left;
-            margin-right: 20px;
-        }
-
-        .institute-logo {
-            width: 70px;
-            height: 70px;
-            margin-right: 15px;
-            border-radius: 50%;
-            border: 1px solid #ccc;
-        }
-
-        .institute-title {
-            font-family: 'Playfair Display', serif;
-            font-size: 2em;
-            color: #004085;
-            margin: 0;
-            line-height: 1.2;
-            position: relative;
-            transform: translateY(5px); /* To visually align */
+        :root { --primary: #0e1b4d; --accent: #d4af37; --bg: #fff; }
+        
+        body { 
+            background: #555; 
+            font-family: 'Inter', sans-serif; 
+            -webkit-print-color-adjust: exact; 
+            print-color-adjust: exact; 
         }
         
-        /* Arched text effect for title (simulated) */
-        .institute-title span {
-            display: inline-block;
-            transform: rotate(-5deg);
-        }
-        .institute-title span:nth-child(2) { transform: rotate(-3deg); }
-        .institute-title span:nth-child(3) { transform: rotate(-1deg); }
-        .institute-title span:nth-child(4) { transform: rotate(1deg); }
-        .institute-title span:nth-child(5) { transform: rotate(3deg); }
-
-
-        .header-right {
-            text-align: right;
-            font-size: 0.8em;
-            color: #555;
-        }
-        .header-right p {
-            margin: 0;
-        }
-        .header-right strong {
-            color: #333;
+        /* Landscape Layout A4 */
+        .page {
+            width: 297mm; height: 210mm; margin: 10mm auto; background: white;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.4); position: relative; overflow: hidden;
+            display: flex; flex-direction: column; padding: 10mm; 
+            border: 10px solid var(--primary);
+            outline: 2px solid var(--accent);
+            outline-offset: -5px;
         }
 
-        .admit-heading {
-            font-family: 'Merriweather', serif;
-            font-size: 1.8em;
-            color: #e74c3c; /* Red accent as in the example */
-            margin: 15px 0 25px 0;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            text-decoration: underline;
-        }
+        /* --- SECURITY LAYERS --- */
+        .security-bg { position: absolute; inset: 0; z-index: 0; opacity: 0.08; pointer-events: none; background-image: repeating-linear-gradient(45deg, var(--primary) 0, var(--primary) 0.5px, transparent 0.5px, transparent 4px); }
+        
+        .watermark-text-layer { position: absolute; inset: -50%; z-index: 0; display: flex; flex-wrap: wrap; justify-content: center; align-content: center; gap: 80px; transform: rotate(-30deg); opacity: 0.03; pointer-events: none; }
+        .wm-item { font-family: 'Cinzel', serif; font-size: 20px; font-weight: 900; color: #000; text-transform: uppercase; white-space: nowrap; }
+        
+        .watermark-logo-center { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 500px; height: 500px; object-fit: contain; opacity: 0.05; filter: grayscale(100%); z-index: 0; pointer-events: none; }
+        
+        .guilloche-bg { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 800px; height: 800px; z-index: 0; opacity: 0.05; background: repeating-conic-gradient(from 0deg, var(--accent) 0deg 1deg, transparent 1deg 15deg); border-radius: 50%; pointer-events: none; }
+        
+        .microtext-border { position: absolute; inset: 5px; border: 1px solid transparent; z-index: 1; pointer-events: none; overflow: hidden; }
+        .microtext-line { position: absolute; font-size: 5px; color: var(--primary); text-transform: uppercase; white-space: nowrap; opacity: 0.8; font-weight: 700; font-family: sans-serif; letter-spacing: 1px; }
+        .mt-top { top: 0; left: 0; width: 100%; text-align: center; } .mt-bottom { bottom: 0; left: 0; width: 100%; text-align: center; } 
+        .mt-left { left: -200mm; top: 50%; width: 297mm; transform: rotate(-90deg); text-align: center; } 
+        .mt-right { right: -200mm; top: 50%; width: 297mm; transform: rotate(90deg); text-align: center; }
+        
+        .holo-strip { position: absolute; top: 0; bottom: 0; right: 15mm; width: 8px; background: linear-gradient(to bottom, #d4af37, #fff, #b8860b, #fff, #d4af37); z-index: 2; opacity: 0.6; box-shadow: 0 0 5px rgba(212,175,55,0.5); }
 
-        .main-details-grid {
-            display: grid;
-            grid-template-columns: 1.5fr 1fr;
-            gap: 20px;
-            margin-bottom: 30px;
-            text-align: left;
-            position: relative;
-        }
+        /* --- CONTENT --- */
+        .content { position: relative; z-index: 10; height: 100%; display: flex; flex-direction: column; justify-content: space-between; }
+        
+        .header { text-align: center; border-bottom: 3px double var(--accent); padding-bottom: 15px; margin-bottom: 20px; }
+        .school-branding { display: flex; justify-content: center; align-items: center; gap: 20px; }
+        .school-logo { height: 90px; width: 90px; object-fit: contain; }
+        .org-name { font-family: 'Cinzel', serif; font-size: 36px; color: var(--primary); font-weight: 900; margin: 0; line-height: 1; }
+        .school-address { font-size: 13px; color: #555; margin-top: 5px; }
+        .reg-title { font-size: 28px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 4px; margin-top: 15px; text-shadow: 1px 1px 0px rgba(0,0,0,0.1); }
 
-        .details-left {
-            display: grid;
-            grid-template-rows: repeat(2, auto);
-            gap: 15px;
-        }
+        .reg-body { display: flex; gap: 50px; align-items: flex-start; justify-content: center; margin-top: 20px; flex-grow: 1; }
+        
+        .photo-area { width: 150px; height: 180px; border: 5px solid var(--primary); padding: 5px; background: white; box-shadow: 5px 5px 15px rgba(0,0,0,0.15); border-radius: 4px; }
+        .photo-img { width: 100%; height: 100%; object-fit: cover; }
 
-        .detail-box-inline {
-            display: flex;
-            align-items: center;
-            background: #f8f8f8;
-            border: 1px solid #ddd;
-            padding: 8px 15px;
-            border-radius: 3px;
-            font-size: 0.9em;
-        }
-        .detail-box-inline label {
-            font-weight: 700;
-            color: #004085;
-            margin-right: 10px;
-            text-transform: uppercase;
-        }
-        .detail-box-inline span {
-            font-weight: 500;
-            color: #333;
-            flex-grow: 1;
+        .details-area { flex-grow: 1; max-width: 650px; }
+        .certify-line { font-family: 'Playfair Display', serif; font-size: 20px; color: #334155; margin-bottom: 20px; font-style: italic; line-height: 1.5; }
+        
+        /* Student Name */
+        .student-name { 
+            font-family: 'Great Vibes', cursive; 
+            font-size: 60px; 
+            font-weight: 400; 
+            color: var(--primary); 
+            border-bottom: 2px solid #ccc; 
+            display: inline-block; 
+            padding: 0 30px; 
+            margin-bottom: 25px; 
+            line-height: 1.1;
         }
         
-        .photo-container {
-            position: absolute;
-            top: 0;
-            right: 0;
-            width: 120px;
-            height: 150px;
-            border: 1px solid #ccc;
-            overflow: hidden;
-            background-color: #fff;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-        }
-        .photo-container img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
+        .data-table { width: 100%; font-size: 16px; border-collapse: separate; border-spacing: 0 10px; }
+        .data-table td { padding: 8px 10px; border-bottom: 1px dashed #e2e8f0; vertical-align: bottom; }
+        .label { font-weight: 800; color: #64748b; text-transform: uppercase; font-size: 11px; display: block; margin-bottom: 4px; letter-spacing: 0.5px; }
+        .val { font-weight: 700; color: #0f172a; font-size: 18px; font-family: 'Playfair Display', serif; }
 
-        .student-personal-info {
-            text-align: left;
-            font-size: 0.9em;
-            margin-top: 10px;
-            padding-right: 140px; /* Space for photo */
-        }
-        .student-personal-info p {
-            margin: 5px 0;
-            line-height: 1.5;
-        }
-        .student-personal-info strong {
-            color: #004085;
-            font-weight: 700;
-        }
-        .student-personal-info span {
-            border-bottom: 1px dashed #ccc;
-            padding-bottom: 2px;
-            font-weight: 500;
-            color: #333;
-        }
-
-        .block-section {
-            border: 1px solid #0056b3;
-            padding: 10px 15px;
-            margin-top: 20px;
-            text-align: left;
-            background-color: #fcfcfc;
-        }
-        .block-section h4 {
-            font-size: 0.9em;
-            color: #0056b3;
-            margin: 0 0 8px 0;
-            text-transform: uppercase;
-            text-decoration: underline;
-        }
-        .block-section p {
-            margin: 5px 0;
-            font-size: 0.85em;
-            line-height: 1.4;
-            color: #333;
-        }
-        .block-section span {
-            font-weight: 500;
-        }
-
-        .footer-section {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            margin-top: 40px;
-            font-size: 0.8em;
-        }
-
-        .signature-area {
-            text-align: right;
-            line-height: 1.4;
-        }
-        .signature-area p {
-            margin: 0;
-        }
-        .signature-line {
-            border-top: 1px solid #333;
-            width: 150px;
-            margin-left: auto;
-            margin-top: 10px;
-            padding-top: 5px;
-            font-weight: 700;
-        }
-        .signature-image {
-            width: 120px;
-            height: 50px; /* Placeholder for actual signature image */
-            display: block;
-            margin-left: auto;
-            margin-bottom: 5px;
-            background-color: #f0f0f0;
-            border: 1px dashed #ccc;
-        }
-
-        /* QR Code added */
-        .qr-code-section {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            text-align: center;
-        }
-        .qr-code-section img {
-            width: 70px;
-            height: 70px;
-            border: 1px solid #eee;
-            padding: 3px;
-        }
-        .qr-code-section p {
-            font-size: 0.7em;
-            color: #555;
-            margin-top: 5px;
-        }
+        .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; padding-top: 10px; border-top: 1px solid #eee; }
+        .sign-area { text-align: center; }
+        .sign-line { width: 220px; border-bottom: 2px solid var(--primary); margin-bottom: 8px; }
         
-        .barcode-section {
-            position: absolute;
-            bottom: 25px;
-            right: 25px;
-            text-align: right;
-        }
-        .barcode-section img {
-            width: 150px;
-            height: 40px;
-        }
+        /* Barcode for Reg No */
+        .barcode { font-family: 'Libre Barcode 39 Text', cursive; font-size: 40px; color: #000; margin-top: 10px; }
 
         @media print {
-            body { background-color: white; padding: 0; }
-            .certificate { box-shadow: none; border: 1px solid black; }
-            .certificate::before, .certificate::after { display: none; } /* Hide complex borders for print */
-            .print-button { display: none; }
+            body { background: white; margin: 0; }
+            .no-print { display: none !important; }
+            .page { margin: 0; box-shadow: none; border: 10px solid var(--primary); width: 297mm; height: 210mm; }
+            @page { size: landscape; margin: 0; }
         }
     </style>
 </head>
 <body>
-
-<div class="certificate">
-    <div class="content-area">
-        <div class="header-section">
-            <div class="header-left">
-                <img src="/images/institute_logo.png" alt="Institute Logo" class="institute-logo">
-                <h1 class="institute-title">
-                    <span>A</span><span>C</span><span>A</span><span>D</span><span>E</span><span>M</span><span>Y</span>
-                    <span> & </span>
-                    <span>U</span><span>N</span><span>I</span><span>V</span><span>E</span><span>R</span><span>S</span><span>I</span><span>T</span><span>Y</span>
-                </h1>
-            </div>
-            <div class="header-right">
-                <p>Document ID: <strong>REG-2024-001</strong></p>
-                <p>Issue Date: <strong>12.03.2024</strong></p>
-            </div>
-        </div>
-
-        <h3 class="admit-heading">Registration Acknowledgement</h3>
-
-        <div class="main-details-grid">
-            <div class="details-left">
-                <div class="detail-box-inline">
-                    <label>Enrollment ID:</label>
-                    <span id="enrollment-id">R24-54321-001</span>
-                </div>
-                <div class="detail-box-inline">
-                    <label>Student ID:</label>
-                    <span id="student-id">...</span>
-                </div>
-            </div>
-            <div class="photo-container">
-                <img id="student-photo" src="/images/default-avatar.png" alt="Student Photo">
-            </div>
-        </div>
-
-        <div class="student-personal-info">
-            <p>This certifies that <strong><span id="student-name">...</span></strong>, son/daughter of <strong><span id="father-name">...</span></strong>, has successfully registered for the Academic Year <strong><span id="admission-year">...</span></strong>.</p>
-            <p>Their date of birth is <strong><span id="dob">...</span></strong> and their assigned group is <strong><span id="blood-group">...</span></strong>.</p>
-        </div>
-
-        <div class="block-section">
-            <h4>Program Enrollment Details</h4>
-            <p><strong>Program:</strong> <span id="student-class">...</span></p>
-            <p><strong>Major:</strong> <span>Computer Science</span></p>
-            <p><strong>Minor:</strong> <span>Data Analytics</span></p>
-        </div>
-
-        <div class="block-section">
-            <h4>Registration Status</h4>
-            <p><strong>Status:</strong> <span>Active</span></p>
-            <p><strong>Effective Date:</strong> <span id="admission-date">...</span></p>
-        </div>
-
-        <div class="footer-section">
-            <div class="signature-area">
-                <div class="signature-image"></div>
-                <div class="signature-line">Registrar's Signature</div>
-            </div>
-        </div>
-        
-        <div class="qr-code-section">
-            <img id="qr-code-img" src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=student_id_12345" alt="QR Code">
-            <p>Scan for Verification</p>
-        </div>
-
-        <div class="barcode-section">
-            <img src="https://barcode.tec-it.com/barcode.ashx?data=REG2024001&code=Code128" alt="Barcode" />
-        </div>
-
+    <div class="text-center my-4 no-print">
+        <button onclick="window.print()" class="btn btn-dark btn-sm fw-bold px-4">Print Certificate</button>
+        <a href="/student-dashboard.html" class="btn btn-outline-secondary btn-sm ms-2 fw-bold px-4">Back</a>
     </div>
-</div>
 
-<button class="print-button" onclick="window.print()" style="margin-top: 20px; padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">Print Certificate</button>
+    <div class="page">
+        <div class="security-bg"></div>
+        <div class="watermark-text-layer" id="wm-text"></div>
+        <img src="" class="watermark-logo-center" id="wm-logo">
+        <div class="guilloche-bg"></div>
+        <div class="microtext-border">
+            <div class="microtext-line mt-top" id="mt-t"></div>
+            <div class="microtext-line mt-bottom" id="mt-b"></div>
+            <div class="microtext-line mt-left" id="mt-l"></div>
+            <div class="microtext-line mt-right" id="mt-r"></div>
+        </div>
+        <div class="holo-strip"></div>
 
-<script>
-    const token = localStorage.getItem('erp-token');
+        <div class="content">
+            <div class="header">
+                <div class="school-branding">
+                    <img src="" class="global-school-logo school-logo">
+                    <div>
+                        <div class="org-name global-school-name">Loading...</div>
+                        <div class="school-address global-school-address">...</div>
+                    </div>
+                </div>
+                <div class="reg-title">Certificate of Registration</div>
+            </div>
 
-    async function loadCertificateData() {
-        if (!token) {
-            document.body.innerHTML = '<h1>Error: Authentication token not found. Please log in.</h1>';
-            return;
+            <div class="reg-body">
+                <div class="photo-area">
+                    <img src="" id="s-photo" class="photo-img">
+                </div>
+                
+                <div class="details-area">
+                    <div class="certify-line">This is to certify that the following student is duly registered with this institution for the academic session <span id="s-session-inline" style="font-weight:bold;">...</span></div>
+                    <div class="student-name" id="s-name">...</div>
+                    
+                    <table class="data-table">
+                        <tr>
+                            <td width="50%"><span class="label">Father's Name</span><span class="val" id="s-father">...</span></td>
+                            <td width="50%"><span class="label">Registration No</span><span class="val" id="s-reg">...</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="label">Course Name</span><span class="val" id="s-course">...</span></td>
+                            <td><span class="label">Enrollment No</span><span class="val" id="s-enroll">...</span></td>
+                        </tr>
+                        <tr>
+                            <td><span class="label">Date of Birth</span><span class="val" id="s-dob">...</span></td>
+                            <td><span class="label">Center Code</span><span class="val">MAIN-001</span></td>
+                        </tr>
+                    </table>
+                </div>
+
+                <div style="text-align:center; display:flex; flex-direction:column; align-items:center; width: 120px;">
+                    <div id="qrcode" style="padding:5px; background:white; border:1px solid #ccc;"></div>
+                    <div style="font-size:10px; font-weight:bold; margin-top:5px;">Scan to Verify</div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div style="font-size:11px; color:#64748b; max-width:400px; line-height:1.5;">
+                    <strong>Note:</strong> This Registration Certificate is a unique document issued by the institution. It must be produced whenever required by the authority.<br>
+                    Generated on: <span id="issue-date" style="color:black; font-weight:600;">...</span>
+                </div>
+                
+                <div class="sign-area">
+                    <div class="barcode" id="s-barcode"></div>
+                </div>
+
+                <div class="sign-area">
+                    <div class="sign-line"></div>
+                    <div style="font-weight:800; font-size:12px; text-transform:uppercase; letter-spacing:1px;">Registrar / Principal</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/global-config.js"></script>
+    <script>
+        const TOKEN = localStorage.getItem('erp-token');
+
+        function generateSecurity(name) {
+            const wmContainer = document.getElementById('wm-text');
+            wmContainer.innerHTML = '';
+            for(let i=0; i<60; i++) {
+                let div = document.createElement('div'); div.className='wm-item'; div.innerText=name; wmContainer.appendChild(div);
+            }
+            const mtText = ("OFFICIAL REGISTRATION CERTIFICATE • " + name.toUpperCase() + " • ").repeat(80);
+            document.getElementById('mt-t').innerText = mtText; document.getElementById('mt-b').innerText = mtText;
+            document.getElementById('mt-l').innerText = mtText; document.getElementById('mt-r').innerText = mtText;
         }
 
-        try {
-            const res = await fetch(`/api/marks/registration-certificate`, { headers: { 'Authorization': `Bearer ${token}` } });
-            if (!res.ok) {
-                const errorText = await res.text();
-                throw new Error(errorText || 'Could not fetch certificate data.');
-            }
-            const data = await res.json();
-
-            const admissionDate = new Date(data.admission_date);
-            const dobDate = new Date(data.date_of_birth);
-
-            document.getElementById('student-name').textContent = `${data.first_name} ${data.last_name || ''}`;
-            document.getElementById('student-id').textContent = data.id;
-            document.getElementById('father-name').textContent = data.father_name || 'N/A';
-            document.getElementById('dob').textContent = dobDate.toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' });
-            document.getElementById('blood-group').textContent = data.blood_group || 'N/A';
-            document.getElementById('student-class').textContent = data.class_name || 'N/A';
-            document.getElementById('admission-year').textContent = admissionDate.getFullYear();
-            document.getElementById('admission-date').textContent = admissionDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' });
+        async function loadReg() {
+            if(!TOKEN) return window.location.href = '/login.html';
             
-            if (data.profile_photo_path) {
-                document.getElementById('student-photo').src = `/${data.profile_photo_path}`;
-            }
+            try {
+                // Fetch Student Profile (Consolidated Report contains all necessary profile data)
+                const res = await fetch('/api/online-exam/student/consolidated-report', { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+                const data = await res.json();
+                const s = data.student;
+                
+                // Name
+                document.getElementById('s-name').innerText = s.first_name + ' ' + s.last_name;
+                
+                // Father's Name Logic (Based on Schema: parent_first_name + parent_last_name)
+                let fatherName = s.father_name || s.parent_name || '';
+                if (!fatherName && s.parent_first_name) {
+                    fatherName = `${s.parent_first_name} ${s.parent_last_name || ''}`;
+                }
+                document.getElementById('s-father').innerText = fatherName || '---';
+                
+                // Registration/Enrollment Logic
+                // Schema has enrollment_no. We use that as the primary ID.
+                const regNo = s.enrollment_no || s.admission_id || '---';
+                document.getElementById('s-reg').innerText = regNo;
+                document.getElementById('s-enroll').innerText = s.roll_number || '---'; // Using Roll as secondary ID here if needed, or swap based on preference
+                
+                // Course & Session
+                document.getElementById('s-course').innerText = s.course_name || '';
+                const year = new Date().getFullYear();
+                document.getElementById('s-session-inline').innerText = `${year}-${year+1}`;
+                
+                // DOB
+                document.getElementById('s-dob').innerText = s.dob ? new Date(s.dob).toLocaleDateString('en-GB') : '---';
+                
+                // Photo & Dates
+                document.getElementById('s-photo').src = s.profile_image_path || '/images/default-profile.png';
+                document.getElementById('issue-date').innerText = new Date().toLocaleDateString('en-GB');
 
-            // Update QR code with actual student data
-            const qrData = `Student ID: ${data.id}\nName: ${data.first_name}\nProgram: ${data.class_name}`;
-            document.getElementById('qr-code-img').src = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(qrData)}`;
+                // Generate QR Code (Student UUID for unique verification)
+                document.getElementById("qrcode").innerHTML = "";
+                if(s.student_id) {
+                    new QRCode(document.getElementById("qrcode"), { text: `REG:${s.student_id}`, width: 90, height: 90 });
+                }
 
-        } catch (err) {
-            document.body.innerHTML = `<h1>Error: ${err.message}</h1>`;
+                // Generate Barcode (Reg No)
+                if(regNo !== '---') {
+                    document.getElementById('s-barcode').innerText = `*${regNo}*`;
+                }
+
+                // Init Security Visuals
+                const check = setInterval(() => {
+                    const nameEl = document.querySelector('.global-school-name');
+                    const logoEl = document.querySelector('.global-school-logo');
+                    if(nameEl && nameEl.innerText !== 'Loading...') {
+                        generateSecurity(nameEl.innerText);
+                        if(logoEl && logoEl.src) document.getElementById('wm-logo').src = logoEl.src;
+                        clearInterval(check);
+                    }
+                }, 500);
+
+            } catch(e) { console.error(e); }
         }
-    }
-    
-    window.onload = loadCertificateData;
-</script>
-<script src="js/global-config.js"></script>
+        document.addEventListener('DOMContentLoaded', loadReg);
+    </script>
 </body>
 </html>

@@ -209,12 +209,12 @@
                     
                     <div class="form-group-inline">
                         <div class="form-group">
-                            <label for="start-time">Start Date (Optional):</label>
-                            <input type="datetime-local" id="start-time">
+                            <label for="start-time">Start Date <span style="color:red">*</span>:</label>
+                            <input type="datetime-local" id="start-time" required>
                         </div>
                         <div class="form-group">
-                            <label for="end-time">End Date (Optional):</label>
-                            <input type="datetime-local" id="end-time">
+                            <label for="end-time">End Date <span style="color:red">*</span>:</label>
+                            <input type="datetime-local" id="end-time" required>
                         </div>
                     </div>
 
@@ -271,9 +271,8 @@
             
             const options = { method, headers: { 'Authorization': `Bearer ${token}` } };
             
-            // Handle FormData (File Upload) vs JSON
             if (body instanceof FormData) {
-                options.body = body; // Content-Type is auto-set
+                options.body = body; 
             } else if (body) {
                 options.headers['Content-Type'] = 'application/json';
                 options.body = JSON.stringify(body);
@@ -329,6 +328,11 @@
             assessmentList.innerHTML = quizzes.map(q => {
                 const safeTitle = q.title.replace(/'/g, "\\'");
                 const statusClass = q.status === 'Draft' ? 'status-draft' : 'status-published';
+                
+                // FIX: Ensure undefined dates are passed as empty strings, not "undefined" strings
+                const start = q.available_from ? q.available_from : '';
+                const end = q.available_to ? q.available_to : '';
+
                 return `
                     <tr>
                         <td><strong>${q.title}</strong></td>
@@ -337,7 +341,7 @@
                         <td>${q.time_limit || 60} min</td>
                         <td><span class="${statusClass}">${q.status}</span></td>
                         <td class="action-buttons">
-                            <button class="btn btn-primary" onclick="editQuiz('${q.id}', '${safeTitle}', '${q.assessment_type}', '${q.course_id}', '${q.subject_id}', '${q.time_limit}', '${q.status}', '${q.available_from}', '${q.available_to}')"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-primary" onclick="editQuiz('${q.id}', '${safeTitle}', '${q.assessment_type}', '${q.course_id}', '${q.subject_id}', '${q.time_limit}', '${q.status}', '${start}', '${end}')"><i class="fas fa-edit"></i></button>
                             <button class="btn btn-success" onclick="manageQuestions('${q.id}')" title="Add Questions"><i class="fas fa-list-ol"></i> Q's</button>
                             <button class="btn btn-secondary" onclick="viewResults('${q.id}')" title="View Results"><i class="fas fa-chart-bar"></i></button>
                             <button class="btn btn-danger" onclick="deleteQuiz('${q.id}')" title="Delete"><i class="fas fa-trash"></i></button>
@@ -358,8 +362,8 @@
                 subject_id: document.getElementById('subject-select').value,
                 time_limit: document.getElementById('time-limit').value,
                 status: document.getElementById('status-select').value,
-                available_from: document.getElementById('start-time').value || null,
-                available_to: document.getElementById('end-time').value || null
+                available_from: document.getElementById('start-time').value,
+                available_to: document.getElementById('end-time').value
             };
 
             try {
@@ -372,6 +376,7 @@
             } catch (err) { alert("Error: " + err.message); }
         }
 
+        // FIXED: Handles dates safely to avoid "undefined" errors
         function editQuiz(id, title, type, cId, sId, time, status, start, end) {
             document.getElementById('quiz-id').value = id;
             document.getElementById('quiz-title').value = title;
@@ -381,9 +386,11 @@
             document.getElementById('time-limit').value = time;
             document.getElementById('status-select').value = status;
             
-            const fmt = d => d && d !== 'null' ? d.slice(0, 16) : '';
-            document.getElementById('start-time').value = fmt(start);
-            document.getElementById('end-time').value = fmt(end);
+            // Safe Date Slicing (slice ISO string to 'YYYY-MM-DDTHH:MM')
+            const safeSlice = (d) => (d && d !== 'null' && d !== 'undefined') ? d.slice(0, 16) : '';
+            
+            document.getElementById('start-time').value = safeSlice(start);
+            document.getElementById('end-time').value = safeSlice(end);
 
             document.getElementById('form-title').innerText = 'Edit Assessment';
             document.getElementById('save-btn').innerText = 'Update';
@@ -398,7 +405,6 @@
             } catch (err) { alert(err.message); }
         }
 
-        // --- Import Logic (FormData) ---
         async function handleImportQuestions() {
             const input = document.getElementById('import-file');
             const status = document.getElementById('import-status');
@@ -411,7 +417,6 @@
             formData.append('file', input.files[0]);
 
             try {
-                // Using the specific route for CSV upload
                 const res = await handleApi(`${API_URL}/question-bank/upload-csv`, 'POST', formData);
                 status.innerHTML = `<span style="color:green">✅ ${res.message}</span>`;
                 setTimeout(() => { closeImportModal(); }, 2000);
@@ -420,7 +425,6 @@
             }
         }
 
-        // --- Nav & Modals ---
         function manageQuestions(id) { window.location.href = `question-management.html?quizId=${id}`; }
         function viewResults(id) { window.location.href = `quiz-results.html?quizId=${id}`; }
         

@@ -35,7 +35,6 @@ const DB = {
     SETTINGS: 'erp_settings' 
 };
 
-// const BASE_TUITION_FEE = 5000.00; // Removed as Tuition is no longer billed
 const FEE_ROLES = ['Admin', 'Staff', 'Super Admin', 'Finance'];
 
 // --- Helper Functions ---
@@ -1232,6 +1231,141 @@ router.get('/student/:studentId/receipts', authenticateToken, authorize(['Studen
             message: 'Failed to retrieve fee receipt history.', 
             error: error.message 
         });
+    }
+});
+
+// ==========================================
+// GET: Student Payment History
+// ==========================================
+// If putting this in server.js, change router.get to app.get and ensure URL is '/api/student/payment-history'
+router.get('/student/payment-history', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // 1. Get Student ID
+        const studentRes = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
+        if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student not found" });
+        const studentId = studentRes.rows[0].student_id;
+
+        // 2. Fetch Fee Records
+        // We use your actual DB columns: tuition_fee, amount_paid, due_date, status
+        const query = `
+            SELECT 
+                id,
+                tuition_fee as total_amount,
+                amount_paid,
+                (tuition_fee - amount_paid) as balance,
+                due_date,
+                status,
+                updated_at as payment_date
+            FROM fee_records 
+            WHERE student_id = $1
+            ORDER BY created_at DESC`;
+
+        const historyRes = await pool.query(query, [studentId]);
+        res.json(historyRes.rows);
+
+    } catch (err) {
+        console.error("Payment History Error:", err);
+        res.status(500).json({ message: "Server error fetching history" });
+    }
+});
+
+// ==========================================
+// CUSTOM ROUTE: Student Fee Receipts List
+// ==========================================
+// Note: Path becomes /api/finance/student/receipts
+router.get('/student/receipts', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        // 1. Get Student ID
+        const studentRes = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
+        if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student not found" });
+        const studentId = studentRes.rows[0].student_id;
+
+        // 2. Fetch Successful Payments (Receipts)
+        const query = `
+            SELECT 
+                fp.id,
+                fp.transaction_id,
+                fp.payment_date,
+                fp.amount,
+                fp.payment_mode,
+                fp.remarks,
+                si.invoice_number,
+                si.title as fee_type
+            FROM fee_payments fp
+            JOIN student_invoices si ON fp.invoice_id = si.id
+            WHERE si.student_id = $1
+            ORDER BY fp.payment_date DESC`;
+
+        const receipts = await pool.query(query, [studentId]);
+        res.json(receipts.rows);
+
+    } catch (err) {
+        console.error("Receipt Fetch Error:", err);
+        res.status(500).json({ message: "Server error fetching receipts" });
+    }
+});
+
+// ==========================================
+// CUSTOM ROUTE: Single Receipt Details (For Printing)
+// ==========================================
+// Note: Path becomes /api/finance/receipt/:id
+router.get('/receipt/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const query = `
+            SELECT 
+                fp.id, fp.transaction_id, fp.payment_date, fp.amount, fp.payment_mode,
+                s.first_name, s.last_name, s.enrollment_no, s.roll_number,
+                c.course_name,
+                si.invoice_number, si.title as fee_description
+            FROM fee_payments fp
+            JOIN student_invoices si ON fp.invoice_id = si.id
+            JOIN students s ON si.student_id = s.student_id
+            LEFT JOIN courses c ON s.course_id = c.id
+            WHERE fp.id = $1`;
+
+        const receipt = await pool.query(query, [id]);
+        
+        if (receipt.rows.length === 0) return res.status(404).json({ message: "Receipt not found" });
+        res.json(receipt.rows[0]);
+
+    } catch (err) {
+        console.error("Single Receipt Error:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+// ==========================================
+// GET: Specific Student's Scholarships / Waivers (Schema Fixed)
+// ==========================================
+router.get('/student/:studentId/scholarships', authenticateToken, async (req, res) => {
+    try {
+        const { studentId } = req.params;
+
+        const query = `
+            SELECT 
+                id, 
+                request_date, 
+                requested_amount AS amount,   -- Mapped DB column to API field
+                reason AS scholarship_name,   -- Using reason as the name
+                fee_type,                     -- Added fee_type for reference
+                status,
+                request_date AS created_at    -- Mapped request_date to created_at
+            FROM fee_waiver_requests
+            WHERE student_id = $1
+            ORDER BY request_date DESC
+        `;
+
+        const result = await pool.query(query, [studentId]);
+        res.json(result.rows);
+
+    } catch (err) {
+        console.error("Scholarship Fetch Error:", err);
+        res.status(500).json({ message: "Server error fetching scholarships" });
     }
 });
 module.exports = router;

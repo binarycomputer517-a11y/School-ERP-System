@@ -3,181 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Download Fee Receipts</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>My Fee Receipts</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f0f2f8; font-family: sans-serif; }
-        .container { max-width: 1000px; }
-        h1 { color: #003366; font-weight: bold; }
-        .text-primary { color: #003366 !important; }
-        .text-secondary { color: #5e35b1 !important; }
-        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .table thead th { background-color: #003366; color: white; border-bottom: none; }
-        .table tbody tr:hover { background-color: #f8f9fa; }
-        .text-end { text-align: right; }
-        .receipt-status-paid { color: #198754; font-weight: bold; }
-        .receipt-status-pending { color: #ffc107; font-weight: bold; }
-        .btn-outline-success { cursor: pointer; } /* Ensure button looks clickable */
+        :root { --primary: #0e1b4d; --accent: #d4af37; --bg: #f4f7f6; }
+        body { background-color: var(--bg); font-family: 'Inter', sans-serif; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
+        .header h2 { color: var(--primary); margin: 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
+        th { background-color: #f8f9fa; color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
+        .btn-print { background: var(--primary); color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 0.85rem; text-decoration: none; display: inline-flex; align-items: center; gap: 5px; }
+        .btn-print:hover { opacity: 0.9; }
+        .btn-back { text-decoration: none; color: white; background: #6c757d; padding: 8px 15px; border-radius: 5px; font-size: 0.9rem; }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1><i class="fas fa-file-invoice-dollar text-primary"></i> Fee Receipts</h1>
-            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
-        </header>
-
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h4 class="text-secondary mb-3">Your Payment Receipts History</h4>
-                
-                <div class="table-responsive">
-                    <table class="table table-striped table-hover align-middle">
-                        <thead class="table-dark">
-                            <tr>
-                                <th scope="col">Payment Date</th>
-                                <th scope="col">Receipt No.</th>
-                                <th scope="col">Invoice Ref</th>
-                                <th scope="col" class="text-end">Amount Paid</th>
-                                <th scope="col">Status</th>
-                                <th scope="col">Action</th>
-                            </tr>
-                        </thead>
-                        <tbody id="receipt-table-body">
-                            <tr>
-                                <td colspan="6" class="text-center">Loading receipt history...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                
-                <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
-            </div>
+    <div class="container">
+        <div class="header">
+            <h2><i class="fas fa-receipt"></i> My Fee Receipts</h2>
+            <a href="/student-dashboard.html" class="btn-back">Back to Dashboard</a>
+        </div>
+        <div style="overflow-x: auto;">
+            <table id="receipts-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Receipt No</th>
+                        <th>Fee Type</th>
+                        <th>Mode</th>
+                        <th>Amount</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body">
+                    <tr><td colspan="6" style="text-align:center;">Loading receipts...</td></tr>
+                </tbody>
+            </table>
         </div>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script src="/js/global-config.js"></script>
     <script>
-        const PROFILE_ID = localStorage.getItem('profile-id'); 
         const TOKEN = localStorage.getItem('erp-token');
-        const tableBody = document.getElementById('receipt-table-body');
-        const errorMessageDiv = document.getElementById('error-message');
-        
-        // Headers object used for fetching data and downloading receipts
-        const authHeaders = { 'Authorization': `Bearer ${TOKEN}` };
 
-
-        // --- Helper function for API calls ---
-        async function handleApi(url) {
-            const response = await fetch(url, { headers: authHeaders });
-            
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                     // Unauthorized/Session Expired
-                     alert('Session expired or unauthorized. Please log in again.');
-                     window.location.href = '/login.html';
-                     throw new Error('Unauthorized');
-                }
-                const error = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(`API call failed with status: ${response.status}. ${error.message}`);
-            }
-            return response.json();
-        }
-
-        function formatCurrency(amount) {
-            if (amount === undefined || amount === null) return 'N/A';
-            // Use IN-locale formatting for display
-            return `₹${Number(amount).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")}`;
-        }
-
-        function getStatusClass(status) {
-            const s = (status || '').toLowerCase();
-            if (s.includes('paid') || s.includes('success')) return 'receipt-status-paid';
-            if (s.includes('pending') || s.includes('partial')) return 'receipt-status-pending';
-            return 'text-muted';
-        }
-        
-        // ⭐ CRITICAL FIX: Download function using fetch and Auth header
-        function downloadReceipt(refId) {
-            if (!refId || refId === 'undefined') {
-                alert("Error: Receipt reference ID is missing for this transaction.");
-                return;
-            }
-
-            // Use Fetch API to send Authorization header
-            fetch(`/api/finance/receipt/${refId}`, { 
-                headers: authHeaders 
-            })
-            .then(res => {
-                if (res.status === 401) { 
-                    throw new Error('Unauthorized access. Please log in again.');
-                }
-                if(!res.ok) throw new Error('Receipt not found or failed to generate (Status: ' + res.status + ').');
-                return res.blob();
-            })
-            .then(blob => {
-                // Create a temporary link to trigger the download
-                const url = window.URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `Receipt_${refId}.pdf`;
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                window.URL.revokeObjectURL(url); // Clean up
-            })
-            .catch(err => alert(`Download Failed: ${err.message}`));
-        }
-
-
-        async function loadReceiptHistory() {
-            if (!PROFILE_ID || !TOKEN) {
-                errorMessageDiv.textContent = 'Login error: Profile ID or Token missing.';
-                errorMessageDiv.style.display = 'block';
-                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Authentication required.</td></tr>';
-                return;
-            }
-
+        async function loadReceipts() {
+            if(!TOKEN) return window.location.href = '/login.html';
             try {
-                // Fetching receipts list
-                const API_ENDPOINT = `/api/finance/student/${PROFILE_ID}/receipts`;
-                const receipts = await handleApi(API_ENDPOINT);
-                
-                if (!receipts || receipts.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-info">No downloadable receipts found.</td></tr>';
+                const res = await fetch('/api/finance/student/receipts', { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+                const data = await res.json();
+                const tbody = document.getElementById('table-body');
+                tbody.innerHTML = '';
+
+                if (data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#777;">No receipts found.</td></tr>`;
                     return;
                 }
 
-                tableBody.innerHTML = receipts.map(r => `
-                    <tr>
-                        <td>${new Date(r.payment_date).toLocaleDateString()}</td>
-                        <td>${r.receipt_number || 'N/A'}</td>
-                        <td>${r.invoice_number || 'N/A'}</td>
-                        <td class="text-end">${formatCurrency(r.amount)}</td>
-                        <td><span class="${getStatusClass(r.status)}">${r.status || 'Paid'}</span></td>
-                        <td>
-                            <button onclick="downloadReceipt('${r.receipt_id || r.receipt_number}')"
-                               class="btn btn-sm btn-outline-success">
-                                📥 Download
-                            </button>
-                        </td>
-                    </tr>
-                `).join('');
-
-            } catch (error) {
-                console.error('Error loading receipt history:', error);
-                errorMessageDiv.textContent = `Error: Failed to load receipt history. (${error.message})`;
-                errorMessageDiv.style.display = 'block';
-                tableBody.innerHTML = '<tr><td colspan="6" class="text-center text-danger">Failed to connect to the finance server.</td></tr>';
-            }
+                data.forEach(row => {
+                    const date = new Date(row.payment_date).toLocaleDateString('en-GB');
+                    const amount = parseFloat(row.amount).toFixed(2);
+                    const receiptNo = row.transaction_id || `REC-${row.id.substring(0,8).toUpperCase()}`;
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${date}</td>
+                            <td style="font-weight:600; color:#333;">${receiptNo}</td>
+                            <td>${row.fee_type || 'Tuition Fee'}</td>
+                            <td>${row.payment_mode}</td>
+                            <td style="font-weight:bold; color:#2e7d32;">$${amount}</td>
+                            <td>
+                                <a href="print-receipt.html?id=${row.id}" target="_blank" class="btn-print">
+                                    <i class="fas fa-print"></i> Print
+                                </a>
+                            </td>
+                        </tr>
+                    `;
+                });
+            } catch (error) { console.error(error); }
         }
-
-        // Expose downloadReceipt globally for onclick to access it
-        window.downloadReceipt = downloadReceipt;
-
-        document.addEventListener('DOMContentLoaded', loadReceiptHistory);
+        document.addEventListener('DOMContentLoaded', loadReceipts);
     </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>

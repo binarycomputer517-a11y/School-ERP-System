@@ -557,4 +557,51 @@ router.get('/student/consolidated-report', authenticateToken, async (req, res) =
         res.status(500).json({ message: "Server Error generating transcript" });
     }
 });
+
+// ==========================================
+// GET: Student Exam Schedule (For Admit Card)
+// ==========================================
+router.get('/student/schedule', authenticateToken, async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // 1. Get Student's Course Info
+        const studentRes = await pool.query(
+            `SELECT course_id FROM students WHERE user_id::text = $1`, 
+            [userId]
+        );
+
+        if (studentRes.rowCount === 0) {
+            return res.status(404).json({ message: "Student profile not found" });
+        }
+
+        const { course_id } = studentRes.rows[0];
+
+        // 2. Fetch Published Exams for this Course
+        const query = `
+            SELECT 
+                oq.id,
+                oq.title,
+                oq.assessment_type,
+                oq.time_limit_minutes,
+                oq.available_from,
+                oq.available_to,
+                s.subject_name,
+                s.subject_code,
+                oq.id as assessment_code
+            FROM online_quizzes oq
+            LEFT JOIN subjects s ON oq.subject_id = s.id
+            WHERE oq.course_id = $1 
+            AND oq.status = 'Published'
+            ORDER BY oq.available_from ASC`;
+
+        const scheduleRes = await pool.query(query, [course_id]);
+        
+        res.json(scheduleRes.rows);
+
+    } catch (err) {
+        console.error("Schedule Fetch Error:", err);
+        res.status(500).json({ message: "Error fetching schedule" });
+    }
+});
 module.exports = router;

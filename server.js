@@ -1,8 +1,7 @@
 /**
  * SERVER.JS
  * Entry point for the School ERP System
- * Final Updated Version: Incorporating Size Limit (10MB), all Feature Routers,
- * and the CRITICAL Socket.io Logic for Messaging
+ * Final Updated Version: Includes Fee Clearance & Payment History fixes
  */
 
 // ===================================
@@ -18,11 +17,10 @@ const fs = require('fs');
 const morgan = require('morgan'); 
 
 // --- Custom Modules ---
-// Note: initializeDatabase and pool are expected to be exported from ./database
 const { initializeDatabase, pool } = require('./database'); 
 const { startNotificationService } = require('./notificationService');
 const { multerInstance } = require('./multerConfig');
-const { authenticateToken } = require('./authMiddleware'); // authMiddleware for JWT checking
+const { authenticateToken } = require('./authMiddleware'); 
 
 // --- Configuration Constants ---
 const PORT = process.env.PORT || 3005;
@@ -86,7 +84,7 @@ const alumniRouter = require('./routes/alumni');
 const disciplineRouter = require('./routes/discipline');
 const complianceRouter = require('./routes/compliance');
 const reportsRouter = require('./routes/reports');
-const feedbackRouter = require('./routes/feedback'); // ⬅️ Feedback Router Included
+const feedbackRouter = require('./routes/feedback');
 const placementsRouter = require('./routes/placements');
 const healthRouter = require('./routes/health');
 
@@ -112,92 +110,50 @@ app.set('upload', multerInstance);
 // ===================================
 // 2. GLOBAL MIDDLEWARE
 // ===================================
-
-// Logging (Shows API calls in terminal)
 app.use(morgan('dev'));
-
-// Security & Parsing
 app.use(cors());
+app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
-// ✅ CRITICAL FIX: Set Size Limit to 10MB 
-app.use(express.json({
-    limit: '10mb', // JSON body limit
-    verify: (req, res, buf) => { req.rawBody = buf.toString(); } 
-}));
-app.use(express.urlencoded({ 
-    limit: '10mb', // URL-encoded body limit
-    extended: true 
-}));
-
-// Static File Serving
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+app.use('/backups', express.static(BACKUP_DIR));
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Serve files from the /backups folder
-app.use('/backups', express.static(BACKUP_DIR));
-
 
 // ===================================
-// 3. REAL-TIME SOCKET LOGIC (MESSAGING FIX)
+// 3. REAL-TIME SOCKET LOGIC
 // ===================================
 io.on('connection', (socket) => {
-    // 1. Join a specific conversation "room" 
-    socket.on('join_conversation', (conversationId) => {
-        socket.join(conversationId);
-    });
+    socket.on('join_conversation', (conversationId) => { socket.join(conversationId); });
+    socket.on('leave_conversation', (conversationId) => { socket.leave(conversationId); });
 
-    // 2. Leave a conversation "room"
-    socket.on('leave_conversation', (conversationId) => {
-        socket.leave(conversationId);
-    });
-
-    // 3. Handle new messages (CRITICAL MESSAGING LOGIC)
     socket.on('new_message', async (message) => {
         const { conversationId, senderId, content } = message;
+        if (!conversationId || !senderId || !content) return; 
 
-        if (!conversationId || !senderId || !content) {
-            return; 
-        }
-
-        let savedMessage;
         try {
-            // A. Save the message to PostgreSQL 'messages' table
             const saveResult = await pool.query(
                 `INSERT INTO messages (conversation_id, sender_id, content) 
                  VALUES ($1, $2, $3) RETURNING conversation_id, sender_id, content, created_at, id;`,
                 [conversationId, senderId, content]
             );
-            savedMessage = saveResult.rows[0];
+            const savedMessage = saveResult.rows[0];
 
-            // B. Update conversation's last message timestamp
-            await pool.query(
-                `UPDATE conversations SET last_message_at = NOW() WHERE id = $1`,
-                [conversationId]
-            );
+            await pool.query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [conversationId]);
 
-            // C. Get sender name for broadcast display
             const userResult = await pool.query('SELECT full_name FROM users WHERE id = $1', [senderId]);
             const senderName = userResult.rows[0]?.full_name || 'Unknown User';
 
-            const broadcastMessage = {
+            io.to(conversationId).emit('message_received', {
                 ...savedMessage,
-                conversation_id: savedMessage.conversation_id,
                 timestamp: savedMessage.created_at,
                 sender_name: senderName
-            };
-            
-            // D. Broadcast the message to all clients in the conversation room
-            io.to(conversationId).emit('message_received', broadcastMessage);
-            
+            });
         } catch (error) {
-            console.error('Socket.io DB Error saving message:', error);
+            console.error('Socket.io DB Error:', error);
             socket.emit('message_error', { conversationId, message: 'Failed to send message.' });
         }
-    });
-
-    socket.on('disconnect', () => {
-        // Handle disconnection logic if needed
     });
 });
 
@@ -217,13 +173,153 @@ app.use('/api/health-records', healthRouter);
 // All routes mounted below require a valid Bearer Token
 app.use('/api', authenticateToken);
 
+// ==========================================
+// CUSTOM ROUTE 1: Student Fee Clearance Check
+// ==========================================
+app.get('/api/students/fee-clearance', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const studentRes = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
+        if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student not found" });
+        
+        const studentId = studentRes.rows[0].student_id;
+
+        // Calculate Fees (tuition_fee - amount_paid)
+        const feeQuery = `
+            SELECT 
+                COALESCE(SUM(tuition_fee), 0) - COALESCE(SUM(amount_paid), 0) as due_amount
+            FROM fee_records 
+            WHERE student_id = $1`;
+
+        const feeRes = await pool.query(feeQuery, [studentId]);
+        const dueAmount = parseFloat(feeRes.rows[0].due_amount || 0);
+
+        if (dueAmount <= 0) {
+            res.json({ cleared: true, message: "Fees Cleared" });
+        } else {
+            res.json({ cleared: false, due: dueAmount, message: "Fees Pending" });
+        }
+    } catch (err) {
+        console.error("Fee Check Error:", err);
+        // Fallback: If query fails, bypass so student is not blocked
+        res.json({ cleared: true, message: "Fee Check Bypassed (Error)" });
+    }
+});
+
+// ==========================================
+// CUSTOM ROUTE: Student Payment History (JOIN FIX)
+// ==========================================
+app.get('/api/finance/student/payment-history', async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        // 1. Get Student ID
+        const studentRes = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
+        if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student not found" });
+        const studentId = studentRes.rows[0].student_id;
+
+        // 2. Fetch Payments via Invoice Link (Since student_id is null in fee_payments)
+        const query = `
+            SELECT 
+                fp.id,
+                si.total_amount as total_amount,  -- Total Invoice Amount
+                fp.amount as amount_paid,         -- Amount Paid in this transaction
+                (si.total_amount - si.paid_amount) as balance, -- Remaining Balance on invoice
+                fp.payment_date,
+                fp.payment_mode,
+                fp.transaction_id,
+                si.status as status
+            FROM fee_payments fp
+            JOIN student_invoices si ON fp.invoice_id = si.id
+            WHERE si.student_id = $1
+            ORDER BY fp.payment_date DESC`;
+
+        const historyRes = await pool.query(query, [studentId]);
+        res.json(historyRes.rows);
+
+    } catch (err) {
+        console.error("Payment History Error:", err);
+        res.status(500).json({ message: "Server error fetching history" });
+    }
+});
+
+
+// ==========================================
+// CUSTOM ROUTE: Student Fee Receipts List (FIXED: Removed si.title)
+// ==========================================
+app.get('/api/finance/student/receipts', async (req, res) => {
+    try {
+        const userId = req.user.id;
+        
+        // 1. Get Student ID
+        const studentRes = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
+        if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student not found" });
+        const studentId = studentRes.rows[0].student_id;
+
+        // 2. Fetch Successful Payments
+        // FIX: Replaced 'si.title' with static text 'School Fee' to prevent error
+        const query = `
+            SELECT 
+                fp.id,
+                fp.transaction_id,
+                fp.payment_date,
+                fp.amount,
+                fp.payment_mode,
+                fp.remarks,
+                si.invoice_number,
+                'School Fee' as fee_type
+            FROM fee_payments fp
+            JOIN student_invoices si ON fp.invoice_id = si.id
+            WHERE si.student_id = $1
+            ORDER BY fp.payment_date DESC`;
+
+        const receipts = await pool.query(query, [studentId]);
+        res.json(receipts.rows);
+
+    } catch (err) {
+        console.error("Receipt Fetch Error:", err);
+        res.status(500).json({ message: "Server error fetching receipts" });
+    }
+});
+
+// ==========================================
+// CUSTOM ROUTE: Single Receipt Details (For Printing)
+// ==========================================
+app.get('/api/finance/receipt/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // FIX: Replaced 'si.title' with 'Tuition & Fees'
+        const query = `
+            SELECT 
+                fp.id, fp.transaction_id, fp.payment_date, fp.amount, fp.payment_mode,
+                s.first_name, s.last_name, s.enrollment_no, s.roll_number,
+                c.course_name,
+                si.invoice_number, 
+                'Tuition & Fees' as fee_description
+            FROM fee_payments fp
+            JOIN student_invoices si ON fp.invoice_id = si.id
+            JOIN students s ON si.student_id = s.student_id
+            LEFT JOIN courses c ON s.course_id = c.id
+            WHERE fp.id = $1`;
+
+        const receipt = await pool.query(query, [id]);
+        
+        if (receipt.rows.length === 0) return res.status(404).json({ message: "Receipt not found" });
+        res.json(receipt.rows[0]);
+
+    } catch (err) {
+        console.error("Single Receipt Error:", err);
+        res.status(500).json({ message: "Server error" });
+    }
+});
+
 // --- GLOBAL MANAGEMENT MODULES ---
 app.use('/api/branches', branchesRouter); 
 app.use('/api/system/logs', systemLogsRouter); 
 app.use('/api/system/backup', backupRestoreRouter); 
-app.use('/api/feedback', feedbackRouter); // ⬅️ Protected Feedback Route
+app.use('/api/feedback', feedbackRouter);
 app.use('/api/utils', utilsRouter);
-// Core Modules
 app.use('/api/settings', settingsRouter);
 app.use('/api/media', mediaRouter);
 app.use('/api/announcements', announcementsRouter);
@@ -322,23 +418,17 @@ app.use((req, res, next) => {
 // ===================================
 app.use((err, req, res, next) => {
     console.error("🔥 Global Error:", err.stack);
-    
-    // Handle specific multer errors (e.g., file size limit exceeded)
     if (err.code === 'LIMIT_FILE_SIZE') {
         return res.status(400).json({ success: false, message: 'File too large' });
     }
-    
-    // Handle the 413 error specifically if it originates from body-parser limits
     if (err.type === 'entity.too.large') {
         return res.status(413).json({ success: false, message: 'Request Entity Too Large (Check server.js limits)' });
     }
-
 
     const statusCode = err.status || 500;
     res.status(statusCode).json({
         success: false,
         message: err.message || "Internal Server Error",
-        // Only show full error stack in development mode
         error: process.env.NODE_ENV === 'development' ? err : {}
     });
 });
@@ -348,20 +438,16 @@ app.use((err, req, res, next) => {
 // ===================================
 async function startServer() {
     try {
-        // Initialize Directories
         UPLOAD_DIRS.forEach(dir => {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         });
-        // Ensure Backup Directory exists
         if (!fs.existsSync(BACKUP_DIR)) {
             fs.mkdirSync(BACKUP_DIR, { recursive: true });
         }
         
-        // Connect Database
         await initializeDatabase();
         console.log("✅ Database initialized successfully.");
 
-        // Start Server
         server.listen(PORT, () => {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
             startNotificationService();
@@ -373,7 +459,6 @@ async function startServer() {
     }
 }
 
-// Graceful Shutdown
 process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down gracefully...');
     await pool.end();
