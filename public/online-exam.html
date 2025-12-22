@@ -57,6 +57,22 @@
         h1 { color: var(--text-dark); font-weight: 700; margin: 0; font-size: 2.0em; }
         h2 { color: var(--text-dark); font-weight: 600; border-bottom: 1px solid var(--border-color); padding-bottom: 10px; margin-top: 0; font-size: 1.5em; }
         
+        /* FILTERS */
+        .filter-container {
+            background-color: var(--light-bg);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 1px solid var(--border-color);
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            align-items: end;
+        }
+        .filter-group { flex: 1; min-width: 150px; }
+        .filter-group label { display: block; font-size: 0.85em; font-weight: 600; color: var(--text-muted); margin-bottom: 5px; }
+        .filter-group select, .filter-group input { width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 4px; }
+
         /* FORMS */
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-top: 10px; font-weight: 500; font-size: 0.9em; color: var(--text-muted); margin-bottom: 8px; }
@@ -83,7 +99,7 @@
         .btn-success { background-color: var(--success-color); }
         .btn-secondary { background-color: var(--secondary-color); }
         .btn-danger { background-color: var(--danger-color); }
-        .btn-danger:hover { background-color: #bd2130; }
+        .btn-warning { background-color: var(--warning-color); color: #212529; }
         .btn-block { width: 100%; }
 
         /* TABLE */
@@ -91,19 +107,19 @@
             background: #ffffff; border: 1px solid var(--border-color);
             border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05); overflow: hidden;
         }
-        #assessment-table { width: 100%; border-collapse: collapse; }
+        #assessment-table { width: 100%; border-collapse: collapse; min-width: 1300px; }
         #assessment-table th, #assessment-table td {
-            padding: 12px 25px; text-align: left; border-bottom: 1px solid var(--border-color);
-            font-size: 0.95em; vertical-align: middle;
+            padding: 12px 15px; text-align: left; border-bottom: 1px solid var(--border-color);
+            font-size: 0.9em; vertical-align: middle;
         }
-        #assessment-table th { background-color: var(--light-bg); color: var(--text-muted); font-weight: 600; }
+        #assessment-table th { background-color: var(--light-bg); color: var(--text-muted); font-weight: 700; white-space: nowrap; }
         #assessment-table tr:hover { background-color: #f1f3f5; }
         
         .action-buttons { display: flex; gap: 5px; white-space: nowrap; }
-        .action-buttons .btn { font-size: 0.85em; padding: 6px 10px; }
+        .action-buttons .btn { font-size: 0.8em; padding: 5px 8px; }
         
-        .status-draft { background-color: #fff3cd; color: #664d03; padding: 5px 10px; border-radius: 12px; font-weight: 500; font-size: 0.8em; text-transform: uppercase; }
-        .status-published { background-color: #d1e7dd; color: #0a3622; padding: 5px 10px; border-radius: 12px; font-weight: 500; font-size: 0.8em; text-transform: uppercase; }
+        .status-draft { background-color: #fff3cd; color: #664d03; padding: 4px 8px; border-radius: 12px; font-weight: 600; font-size: 0.75em; text-transform: uppercase; }
+        .status-published { background-color: #d1e7dd; color: #0a3622; padding: 4px 8px; border-radius: 12px; font-weight: 600; font-size: 0.75em; text-transform: uppercase; }
 
         /* MODAL */
         .modal {
@@ -130,28 +146,67 @@
         <div class="page-header">
             <h1>Assessment Manager</h1>
             <div>
-                <a href="/admin-dashboard.html" class="btn btn-outline-secondary" style="margin-right: 10px; border: 1px solid #ccc; background:white; color:#333;">Dashboard</a>
+                <a href="/admin-dashboard.html" class="btn btn-outline-secondary" style="margin-right: 10px; border: 1px solid #ccc; background:white; color:#333; text-decoration: none; display: inline-block;">Dashboard</a>
                 <button class="btn btn-secondary" onclick="openImportModal()" style="margin-right: 10px;"><i class="fas fa-file-import"></i> Import Questions</button>
                 <button class="btn btn-primary" onclick="openFormModal()"><i class="fas fa-plus"></i> Create Assessment</button>
             </div>
         </div>
 
+        <div class="filter-container">
+            <div class="filter-group">
+                <label>Search Title</label>
+                <input type="text" id="filter-title" placeholder="Search by title..." onkeyup="applyFilters()">
+            </div>
+            <div class="filter-group">
+                <label>Course</label>
+                <select id="filter-course" onchange="applyFilters()">
+                    <option value="">All Courses</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Subject</label>
+                <select id="filter-subject" onchange="applyFilters()">
+                    <option value="">All Subjects</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Status</label>
+                <select id="filter-status" onchange="applyFilters()">
+                    <option value="">All Statuses</option>
+                    <option value="Draft">Draft</option>
+                    <option value="Published">Published</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>Date</label>
+                <input type="date" id="filter-date" onchange="applyFilters()">
+            </div>
+            <div class="filter-group" style="flex: 0; min-width: auto;">
+                <label>&nbsp;</label>
+                <button class="btn btn-warning" onclick="clearFilters()" title="Clear Filters"><i class="fas fa-sync-alt"></i></button>
+            </div>
+        </div>
+
         <div class="panel" id="list-panel">
-            <h2>Active Assessments</h2>
             <div style="overflow-x: auto;">
                 <table id="assessment-table">
                     <thead>
                         <tr>
                             <th>Title</th>
-                            <th>Course/Subject</th>
-                            <th>Count</th>
-                            <th>Time</th>
+                            <th>Course</th>
+                            <th>Subject Code</th> 
+                            <th>Subject</th>
+                            <th style="text-align:center">Count</th>
+                            <th>Start Date</th>
+                            <th>End Date</th>
+                            <th>Start Time</th>
+                            <th>End Time</th>
                             <th>Status</th>
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="assessment-list">
-                        <tr><td colspan="6" style="text-align: center;">Loading assessments...</td></tr>
+                        <tr><td colspan="11" style="text-align: center;">Loading assessments...</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -195,7 +250,7 @@
                     
                     <div class="form-group-inline">
                         <div class="form-group">
-                            <label for="time-limit">Time (Minutes):</label>
+                            <label for="time-limit">Time Limit (Minutes):</label>
                             <input type="number" id="time-limit" value="60" min="5">
                         </div>
                         <div class="form-group">
@@ -209,11 +264,11 @@
                     
                     <div class="form-group-inline">
                         <div class="form-group">
-                            <label for="start-time">Start Date <span style="color:red">*</span>:</label>
+                            <label for="start-time">Start Date & Time <span style="color:red">*</span>:</label>
                             <input type="datetime-local" id="start-time" required>
                         </div>
                         <div class="form-group">
-                            <label for="end-time">End Date <span style="color:red">*</span>:</label>
+                            <label for="end-time">End Date & Time <span style="color:red">*</span>:</label>
                             <input type="datetime-local" id="end-time" required>
                         </div>
                     </div>
@@ -239,7 +294,7 @@
                 </div>
 
                 <p style="text-align: right; margin-top: -10px;">
-                    <a href="data:text/csv;charset=utf-8,question_text,subject_id,correct_option,option_a,option_b,option_c,option_d,marks%0AWhat is CPU?,YOUR_SUBJECT_UUID,b,Monitor,Processor,Mouse,Keyboard,5" download="template_questions.csv" class="text-link">
+                    <a href="data:text/csv;charset=utf-8,question_text,correct_option,option_a,option_b,option_c,option_d,marks,subject_id%0ASample Question,a,Option1,Option2,Option3,Option4,1," download="template_questions.csv" class="text-link">
                         <i class="fas fa-download"></i> Download Template
                     </a>
                 </p>
@@ -263,6 +318,8 @@
         const assessmentList = document.getElementById('assessment-list');
         const formModal = document.getElementById('form-modal');
         const importModal = document.getElementById('import-modal');
+        
+        let globalQuizzes = [];
 
         // --- API Helper ---
         async function handleApi(endpoint, method = 'GET', body = null) {
@@ -301,12 +358,24 @@
                 ]);
 
                 const cSelect = document.getElementById('course-select');
-                cSelect.innerHTML = '<option value="">-- Select Course --</option>';
-                courses.forEach(c => cSelect.innerHTML += `<option value="${c.id}">${c.course_name}</option>`);
-
                 const sSelect = document.getElementById('subject-select');
+                const cfSelect = document.getElementById('filter-course');
+                const sfSelect = document.getElementById('filter-subject');
+
+                cSelect.innerHTML = '<option value="">-- Select Course --</option>';
                 sSelect.innerHTML = '<option value="">-- Select Subject --</option>';
-                subjects.forEach(s => sSelect.innerHTML += `<option value="${s.id}">${s.subject_name}</option>`);
+
+                courses.forEach(c => {
+                    const opt = `<option value="${c.id}">${c.course_name}</option>`;
+                    cSelect.innerHTML += opt;
+                    cfSelect.innerHTML += opt;
+                });
+
+                subjects.forEach(s => {
+                    const opt = `<option value="${s.id}">${s.subject_name}</option>`;
+                    sSelect.innerHTML += opt;
+                    sfSelect.innerHTML += opt;
+                });
             } catch (e) { console.error("Dropdown Error:", e); }
         }
 
@@ -314,35 +383,91 @@
         async function loadQuizzes() {
             try {
                 const quizzes = await handleApi(`${API_URL}/quizzes`);
-                renderQuizList(quizzes);
+                globalQuizzes = quizzes;
+                applyFilters();
             } catch (error) {
-                assessmentList.innerHTML = `<tr><td colspan="6" class="text-danger text-center">Error: ${error.message}</td></tr>`;
+                assessmentList.innerHTML = `<tr><td colspan="11" class="text-danger text-center">Error: ${error.message}</td></tr>`;
             }
+        }
+
+        // --- Client-Side Filtering ---
+        function applyFilters() {
+            const titleVal = document.getElementById('filter-title').value.toLowerCase();
+            const courseVal = document.getElementById('filter-course').value;
+            const subjectVal = document.getElementById('filter-subject').value;
+            const statusVal = document.getElementById('filter-status').value;
+            const dateVal = document.getElementById('filter-date').value;
+
+            const filtered = globalQuizzes.filter(q => {
+                const matchesTitle = q.title.toLowerCase().includes(titleVal);
+                const matchesCourse = courseVal === "" || q.course_id?.toString() === courseVal.toString();
+                const matchesSubject = subjectVal === "" || q.subject_id?.toString() === subjectVal.toString();
+                const matchesStatus = statusVal === "" || q.status === statusVal;
+                
+                let matchesDate = true;
+                if (dateVal && q.available_from) {
+                    const quizDate = q.available_from.split('T')[0];
+                    matchesDate = quizDate === dateVal;
+                }
+
+                return matchesTitle && matchesCourse && matchesSubject && matchesStatus && matchesDate;
+            });
+
+            renderQuizList(filtered);
+        }
+
+        function clearFilters() {
+            document.getElementById('filter-title').value = '';
+            document.getElementById('filter-course').value = '';
+            document.getElementById('filter-subject').value = '';
+            document.getElementById('filter-status').value = '';
+            document.getElementById('filter-date').value = '';
+            applyFilters();
+        }
+
+        // --- Helper to extract Date and Time strings ---
+        function formatDateTimeSplit(isoString) {
+            if (!isoString) return { date: '-', time: '-' };
+            const dateObj = new Date(isoString);
+            if (isNaN(dateObj)) return { date: '-', time: '-' };
+
+            const date = dateObj.toLocaleDateString('en-GB'); 
+            const time = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }); 
+            return { date, time };
         }
 
         function renderQuizList(quizzes) {
             if (quizzes.length === 0) {
-                assessmentList.innerHTML = `<tr><td colspan="6" style="text-align: center;">No assessments found. Create one!</td></tr>`;
+                assessmentList.innerHTML = `<tr><td colspan="11" style="text-align: center;">No assessments found matching your criteria.</td></tr>`;
                 return;
             }
             assessmentList.innerHTML = quizzes.map(q => {
                 const safeTitle = q.title.replace(/'/g, "\\'");
                 const statusClass = q.status === 'Draft' ? 'status-draft' : 'status-published';
                 
-                // FIX: Ensure undefined dates are passed as empty strings, not "undefined" strings
                 const start = q.available_from ? q.available_from : '';
                 const end = q.available_to ? q.available_to : '';
 
+                const startObj = formatDateTimeSplit(start);
+                const endObj = formatDateTimeSplit(end);
+
                 return `
                     <tr>
-                        <td><strong>${q.title}</strong></td>
-                        <td>${q.course_name || '-'}<br><small style="color:#666">${q.subject_name || '-'}</small></td>
-                        <td>${q.total_questions || '0'}</td>
-                        <td>${q.time_limit || 60} min</td>
+                        <td style="font-weight:600; color:var(--primary-color)">${q.title}</td>
+                        <td>${q.course_name || '-'}</td>
+                        <td style="font-family:monospace; font-weight:600; color:#555;">${q.subject_code || '-'}</td> 
+                        <td>${q.subject_name || '-'}</td>
+                        <td style="text-align:center; font-weight:bold;">${q.total_questions || '0'}</td>
+                        
+                        <td style="white-space:nowrap">${startObj.date}</td>
+                        <td style="white-space:nowrap">${endObj.date}</td>
+                        <td style="white-space:nowrap">${startObj.time}</td>
+                        <td style="white-space:nowrap">${endObj.time}</td>
+                        
                         <td><span class="${statusClass}">${q.status}</span></td>
                         <td class="action-buttons">
-                            <button class="btn btn-primary" onclick="editQuiz('${q.id}', '${safeTitle}', '${q.assessment_type}', '${q.course_id}', '${q.subject_id}', '${q.time_limit}', '${q.status}', '${start}', '${end}')"><i class="fas fa-edit"></i></button>
-                            <button class="btn btn-success" onclick="manageQuestions('${q.id}')" title="Add Questions"><i class="fas fa-list-ol"></i> Q's</button>
+                            <button class="btn btn-primary" onclick="editQuiz('${q.id}', '${safeTitle}', '${q.assessment_type}', '${q.course_id}', '${q.subject_id}', '${q.time_limit}', '${q.status}', '${start}', '${end}')" title="Edit"><i class="fas fa-edit"></i></button>
+                            <button class="btn btn-success" onclick="manageQuestions('${q.id}')" title="Add Questions"><i class="fas fa-list-ol"></i></button>
                             <button class="btn btn-secondary" onclick="viewResults('${q.id}')" title="View Results"><i class="fas fa-chart-bar"></i></button>
                             <button class="btn btn-danger" onclick="deleteQuiz('${q.id}')" title="Delete"><i class="fas fa-trash"></i></button>
                         </td>
@@ -351,7 +476,7 @@
             }).join('');
         }
 
-        // --- Create/Edit ---
+        // --- Create/Edit Submit ---
         async function handleQuizFormSubmit(e) {
             e.preventDefault();
             const id = document.getElementById('quiz-id').value;
@@ -362,8 +487,8 @@
                 subject_id: document.getElementById('subject-select').value,
                 time_limit: document.getElementById('time-limit').value,
                 status: document.getElementById('status-select').value,
-                available_from: document.getElementById('start-time').value,
-                available_to: document.getElementById('end-time').value
+                start_time: document.getElementById('start-time').value,
+                end_time: document.getElementById('end-time').value
             };
 
             try {
@@ -376,7 +501,6 @@
             } catch (err) { alert("Error: " + err.message); }
         }
 
-        // FIXED: Handles dates safely to avoid "undefined" errors
         function editQuiz(id, title, type, cId, sId, time, status, start, end) {
             document.getElementById('quiz-id').value = id;
             document.getElementById('quiz-title').value = title;
@@ -386,15 +510,14 @@
             document.getElementById('time-limit').value = time;
             document.getElementById('status-select').value = status;
             
-            // Safe Date Slicing (slice ISO string to 'YYYY-MM-DDTHH:MM')
             const safeSlice = (d) => (d && d !== 'null' && d !== 'undefined') ? d.slice(0, 16) : '';
             
             document.getElementById('start-time').value = safeSlice(start);
             document.getElementById('end-time').value = safeSlice(end);
 
             document.getElementById('form-title').innerText = 'Edit Assessment';
-            document.getElementById('save-btn').innerText = 'Update';
-            openFormModal(id);
+            document.getElementById('save-btn').innerText = 'Update Assessment';
+            openFormModal(true);
         }
 
         async function deleteQuiz(id) {
@@ -431,7 +554,7 @@
         function openFormModal(isEdit) { 
             formModal.style.display = 'flex'; 
             if (!isEdit) {
-                document.getElementById('quiz-form').reset();
+                quizForm.reset();
                 document.getElementById('quiz-id').value = '';
                 document.getElementById('form-title').innerText = 'Create New Assessment';
                 document.getElementById('save-btn').innerText = 'Save Assessment';

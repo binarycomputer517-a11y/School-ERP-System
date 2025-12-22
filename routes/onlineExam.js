@@ -15,6 +15,16 @@ const isValidUUID = (id) => {
     return id && uuidRegex.test(id);
 };
 
+// SQL Snippet for Dynamic Max Marks (DRY Principle)
+const SQL_MAX_MARKS = `
+    COALESCE((
+        SELECT SUM(q.marks) 
+        FROM quiz_questions q 
+        JOIN quiz_question_links l ON q.question_id = l.question_id 
+        WHERE l.quiz_id = oq.id
+    ), 0)
+`;
+
 /** =================================================================
  * SECTION 1: QUIZ MANAGEMENT (Admin/Teacher Access)
  * =================================================================
@@ -34,7 +44,7 @@ router.post('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), asyn
         
         const result = await pool.query(
             `INSERT INTO online_quizzes 
-            (title, subject_id, course_id, time_limit_minutes, max_marks, status, assessment_type, available_from, available_to) 
+            (title, subject_id, course_id, time_limit, max_marks, status, assessment_type, available_from, available_to) 
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) 
              RETURNING *`,
             [title, safeSubjectId, safeCourseId, safeTimeLimit, safeMaxMarks, status || 'Draft', assessment_type || 'Quiz', start_time || null, end_time || null]
@@ -46,18 +56,47 @@ router.post('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), asyn
     }
 });
 
-// List All Quizzes (Admin View)
+// List All Quizzes (Admin View) - UPDATED
 router.get('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
     try {
-        // Calculate dynamic max marks for Admin View too
+        const { course_id, subject_id } = req.query;
+        let filterClause = '';
+        const params = [];
+
+        // ডাইনামিক ফিল্টারিং হ্যান্ডেল করা
+        if (isValidUUID(course_id)) {
+            params.push(course_id);
+            filterClause += ` AND oq.course_id = $${params.length}`;
+        }
+        if (isValidUUID(subject_id)) {
+            params.push(subject_id);
+            filterClause += ` AND oq.subject_id = $${params.length}`;
+        }
+
         const query = `
-            SELECT oq.*, c.course_name, s.subject_name,
-            COALESCE((SELECT SUM(q.marks) FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = oq.id), 0) as dynamic_max_marks
+            SELECT 
+                oq.id, 
+                oq.title, 
+                oq.assessment_type,
+                oq.course_id,
+                oq.subject_id,
+                oq.time_limit, -- ডাটাবেস কলাম রিনেম অনুযায়ী আপডেট করা হয়েছে
+                oq.status,
+                oq.available_from,
+                oq.available_to,
+                oq.created_at,
+                c.course_name, 
+                s.subject_name,
+                s.subject_code, -- সাবজেক্ট কোড এখন টেবিল থেকে আসবে
+                (SELECT COUNT(*) FROM quiz_question_links l WHERE l.quiz_id = oq.id) as total_questions,
+                ${SQL_MAX_MARKS} as dynamic_max_marks
             FROM online_quizzes oq
-            LEFT JOIN courses c ON oq.course_id::text = c.id::text
-            LEFT JOIN subjects s ON oq.subject_id::text = s.id::text
+            LEFT JOIN courses c ON oq.course_id = c.id
+            LEFT JOIN subjects s ON oq.subject_id = s.id
+            WHERE 1=1 ${filterClause}
             ORDER BY oq.created_at DESC`;
-        const result = await pool.query(query);
+
+        const result = await pool.query(query, params);
         res.json(result.rows);
     } catch (err) {
         console.error("Admin Quiz Fetch Error:", err);
@@ -82,7 +121,7 @@ router.put('/quizzes/:id', authenticateToken, authorize(['Admin', 'Teacher']), a
             SET title = $1, 
                 subject_id = $2, 
                 course_id = $3, 
-                time_limit_minutes = $4, 
+                time_limit = $4, 
                 max_marks = $5, 
                 status = $6,
                 assessment_type = $7,
@@ -140,21 +179,20 @@ router.get('/student/:userId/quizzes', authenticateToken, async (req, res) => {
 
         const { student_id, course_id } = studentRes.rows[0];
         
-        // FIX: Dynamic Max Marks Calculation
         const quizzesQuery = `
-            SELECT oq.id, oq.title, oq.time_limit_minutes, 
-                   COALESCE((SELECT SUM(q.marks) FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = oq.id), 0) as max_marks,
+            SELECT oq.id, oq.title, oq.time_limit, 
+                   ${SQL_MAX_MARKS} as max_marks,
                    s.subject_name, oq.available_from, oq.available_to,
                    (SELECT status FROM student_exam_attempts 
-                    WHERE quiz_id = oq.id AND student_id::text = $1 
+                    WHERE quiz_id = oq.id AND student_id = $1 
                     ORDER BY end_time DESC LIMIT 1) as attempt_status
             FROM online_quizzes oq
-            LEFT JOIN subjects s ON oq.subject_id::text = s.id::text
-            WHERE (oq.course_id::text = $2 OR oq.course_id IS NULL) 
+            LEFT JOIN subjects s ON oq.subject_id = s.id
+            WHERE (oq.course_id = $2 OR oq.course_id IS NULL) 
               AND oq.status = 'Published'
             ORDER BY oq.created_at DESC`;
 
-        const quizzes = await pool.query(quizzesQuery, [student_id.toString(), course_id.toString()]);
+        const quizzes = await pool.query(quizzesQuery, [student_id, course_id]);
         res.json(quizzes.rows);
     } catch (err) {
         console.error("Student Quiz Catalog Error:", err);
@@ -169,12 +207,12 @@ router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
     try {
         const studentQuery = `
             SELECT s.student_id, s.first_name, s.last_name, s.roll_number, s.profile_image_path,
-                   c.course_name, b.batch_name, sub.subject_name, oq.title, oq.time_limit_minutes
+                   c.course_name, b.batch_name, sub.subject_name, oq.title, oq.time_limit
             FROM students s
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
             CROSS JOIN online_quizzes oq
-            LEFT JOIN subjects sub ON oq.subject_id::text = sub.id::text
+            LEFT JOIN subjects sub ON oq.subject_id = sub.id
             WHERE s.user_id::text = $1 AND oq.id::text = $2`;
         
         const studentRes = await pool.query(studentQuery, [userId, quizId]);
@@ -182,7 +220,7 @@ router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
 
         const sId = studentRes.rows[0].student_id;
         const checkAttempt = await pool.query(
-            `SELECT attempt_id FROM student_exam_attempts WHERE student_id::text = $1 AND quiz_id::text = $2`,
+            `SELECT attempt_id FROM student_exam_attempts WHERE student_id = $1 AND quiz_id = $2`,
             [sId, quizId]
         );
         if (checkAttempt.rowCount > 0) return res.status(403).json({ message: 'You have already completed this exam' });
@@ -192,7 +230,7 @@ router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
             `SELECT q.question_id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.marks 
              FROM quiz_questions q
              JOIN quiz_question_links l ON q.question_id = l.question_id
-             WHERE l.quiz_id::text = $1 ORDER BY l.question_order ASC`, [quizId]
+             WHERE l.quiz_id = $1 ORDER BY l.question_order ASC`, [quizId]
         );
 
         res.json({ 
@@ -203,7 +241,7 @@ router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
                 course: studentRes.rows[0].course_name,
                 batch: studentRes.rows[0].batch_name,
                 subject: studentRes.rows[0].subject_name,
-                timeLimit: studentRes.rows[0].time_limit_minutes
+                timeLimit: studentRes.rows[0].time_limit
             }, 
             questions: questionsRes.rows 
         });
@@ -229,7 +267,7 @@ router.post('/submit/:quizId', authenticateToken, async (req, res) => {
             `SELECT q.question_id, q.correct_option, q.marks 
              FROM quiz_questions q 
              JOIN quiz_question_links l ON q.question_id = l.question_id 
-             WHERE l.quiz_id::text = $1`, [quizId]
+             WHERE l.quiz_id = $1`, [quizId]
         );
 
         let totalScore = 0, correctCount = 0, incorrectCount = 0, unansweredCount = 0;
@@ -280,10 +318,9 @@ router.get('/results/:quizId', authenticateToken, async (req, res) => {
     const { quizId } = req.params;
     const userId = req.user.id;
     try {
-        // FIX: Dynamic Max Marks Calculation
         const summaryQuery = `
             SELECT sea.*, oq.title, 
-                   COALESCE((SELECT SUM(q.marks) FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = oq.id), 0) as max_marks,
+                   ${SQL_MAX_MARKS} as max_marks,
                    s.first_name || ' ' || s.last_name AS student_name,
                    s.roll_number, s.profile_image_path AS profile_pic,
                    c.course_name, b.batch_name, sub.subject_name
@@ -292,7 +329,7 @@ router.get('/results/:quizId', authenticateToken, async (req, res) => {
             JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
-            LEFT JOIN subjects sub ON oq.subject_id::text = sub.id::text
+            LEFT JOIN subjects sub ON oq.subject_id = sub.id
             WHERE s.user_id::text = $1 AND sea.quiz_id::text = $2 
             ORDER BY sea.end_time DESC LIMIT 1`;
         
@@ -322,11 +359,11 @@ router.get('/admin/quiz-attempts/:quizId', authenticateToken, authorize(['Admin'
             SELECT sea.attempt_id, sea.student_id, sea.total_score, sea.status, sea.start_time, sea.end_time,
                    s.first_name, s.last_name, s.roll_number, s.profile_image_path,
                    oq.title, 
-                   COALESCE((SELECT SUM(q.marks) FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = oq.id), oq.max_marks) as max_marks
+                   ${SQL_MAX_MARKS} as max_marks
             FROM student_exam_attempts sea
             JOIN students s ON sea.student_id = s.student_id
             JOIN online_quizzes oq ON sea.quiz_id = oq.id
-            WHERE sea.quiz_id::text = $1
+            WHERE sea.quiz_id = $1
             ORDER BY sea.total_score DESC`;
             
         const result = await pool.query(query, [quizId]);
@@ -337,43 +374,49 @@ router.get('/admin/quiz-attempts/:quizId', authenticateToken, authorize(['Admin'
     }
 });
 
-// Admin: Marksheet View (Specific Attempt)
+// Admin: View Specific Attempt Details (The Marksheet)
 router.get('/admin/attempt/:attemptId', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
     const { attemptId } = req.params;
     try {
-        // FIX: Dynamic Max Marks Calculation
+        // 1. Fetch the attempt summary
         const summaryQuery = `
             SELECT sea.*, oq.title, 
                    COALESCE((SELECT SUM(q.marks) FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = oq.id), 0) as max_marks,
                    s.first_name || ' ' || s.last_name AS student_name,
                    s.roll_number, s.profile_image_path AS profile_pic,
-                   c.course_name, b.batch_name, sub.subject_name
+                   c.course_name, b.batch_name, sub.subject_name, sub.subject_code
             FROM student_exam_attempts sea
             JOIN online_quizzes oq ON sea.quiz_id = oq.id
             JOIN students s ON sea.student_id = s.student_id
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
-            LEFT JOIN subjects sub ON oq.subject_id::text = sub.id::text
-            WHERE sea.attempt_id = $1`;
+            LEFT JOIN subjects sub ON oq.subject_id = sub.id
+            WHERE sea.attempt_id::text = $1`; // Added ::text to handle various ID formats
 
         const summary = await pool.query(summaryQuery, [attemptId]);
-        if (summary.rowCount === 0) return res.status(404).json({ message: 'Attempt not found' });
 
-        const details = await pool.query(
-            `SELECT r.*, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.marks 
-             FROM student_quiz_results r 
-             JOIN quiz_questions q ON r.question_id = q.question_id 
-             WHERE r.attempt_id = $1`, 
-             [attemptId]
-        );
+        if (summary.rowCount === 0) {
+            return res.status(404).json({ message: 'Attempt record not found in database' });
+        }
 
-        res.json({ summary: summary.rows[0], details: details.rows });
+        // 2. Fetch individual question results for this attempt
+        const detailsQuery = `
+            SELECT r.*, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.marks 
+            FROM student_quiz_results r 
+            JOIN quiz_questions q ON r.question_id = q.question_id 
+            WHERE r.attempt_id::text = $1`;
+
+        const details = await pool.query(detailsQuery, [attemptId]);
+
+        res.json({ 
+            summary: summary.rows[0], 
+            details: details.rows 
+        });
     } catch (err) { 
-        console.error("Admin Attempt Fetch Error:", err);
-        res.status(500).json({ message: err.message }); 
+        console.error("Admin Marksheet Fetch Error:", err);
+        res.status(500).json({ message: "Internal Server Error: " + err.message }); 
     }
 });
-
 /** =================================================================
  * SECTION 3: QUESTION BANK & LINKING (Admin/Teacher Access)
  * =================================================================
@@ -394,10 +437,11 @@ router.post('/question-bank/upload-csv', authenticateToken, authorize(['Admin', 
                 let count = 0;
                 for (const row of results) {
                     if (row.question_text && row.correct_option) {
+                        const safeSubjectId = isValidUUID(row.subject_id) ? row.subject_id : null;
                         await client.query(
-                            `INSERT INTO quiz_questions (question_text, option_a, option_b, option_c, option_d, correct_option, marks) 
-                            VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                            [row.question_text, row.option_a, row.option_b, row.option_c, row.option_d, row.correct_option.toLowerCase(), row.marks || 1]
+                            `INSERT INTO quiz_questions (question_text, option_a, option_b, option_c, option_d, correct_option, marks, subject_id) 
+                            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+                            [row.question_text, row.option_a, row.option_b, row.option_c, row.option_d, row.correct_option.toLowerCase(), row.marks || 1, safeSubjectId]
                         );
                         count++;
                     }
@@ -427,7 +471,7 @@ router.get('/question-bank', authenticateToken, authorize(['Admin', 'Teacher']),
 
 router.get('/quizzes/:quizId/links', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
     try {
-        const result = await pool.query(`SELECT q.*, l.question_order FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id::text = $1 ORDER BY l.question_order ASC`, [req.params.quizId]);
+        const result = await pool.query(`SELECT q.*, l.question_order FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = $1 ORDER BY l.question_order ASC`, [req.params.quizId]);
         res.json(result.rows);
     } catch (e) { res.status(500).json({message: "Error loading links"}); }
 });
@@ -438,7 +482,7 @@ router.put('/quizzes/:quizId/link-questions', authenticateToken, authorize(['Adm
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM quiz_question_links WHERE quiz_id::text = $1', [quizId]);
+        await client.query('DELETE FROM quiz_question_links WHERE quiz_id = $1', [quizId]);
         if (Array.isArray(questionIds)) {
             for (let i = 0; i < questionIds.length; i++) {
                 await client.query(`INSERT INTO quiz_question_links (quiz_id, question_id, question_order) VALUES ($1, $2, $3)`, [quizId, questionIds[i], i + 1]);
@@ -463,6 +507,7 @@ router.post('/questions', authenticateToken, authorize(['Admin', 'Teacher']), as
     } catch (e) { res.status(500).json({ message: 'Add Error' }); }
 });
 
+// JSON Import (Alternative to CSV)
 router.post('/question-bank/import', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
     const { questions } = req.body;
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ message: 'No questions provided' });
@@ -500,7 +545,7 @@ router.get('/student/consolidated-report', authenticateToken, async (req, res) =
     try {
         const userId = req.user.id;
 
-        // ১. ছাত্রের তথ্য আনা
+        // 1. Get Student Info
         const studentQuery = `
             SELECT s.first_name, s.last_name, s.roll_number, s.profile_image_path,
                    c.course_name, b.batch_name, s.student_id 
@@ -518,38 +563,31 @@ router.get('/student/consolidated-report', authenticateToken, async (req, res) =
         const studentData = studentRes.rows[0];
         const studentId = studentData.student_id;
 
-        // ২. সব পরীক্ষার রেজাল্ট একসাথে আনা
-        // আমরা এখানে 'Completed' বা 'Submitted' স্ট্যাটাস চেক করছি না।
-        // সরাসরি চেক করছি 'end_time' আছে কিনা। এটি থাকলে ৫টি রেজাল্টই আসবে।
+        // 2. Fetch All Exam Results
         const resultsQuery = `
             SELECT 
                 sub.subject_code,
                 sub.subject_name,
                 oq.title AS exam_title,
                 
-                -- ডাইনামিক ম্যাক্স মার্কস (প্রশ্নের যোগফল)
-                COALESCE(
-                    (SELECT SUM(q.marks) 
-                     FROM quiz_questions q 
-                     JOIN quiz_question_links l ON q.question_id = l.question_id 
-                     WHERE l.quiz_id::text = oq.id::text), 
-                0) as max_marks,
+                -- Dynamic Max Marks (sum of linked questions)
+                ${SQL_MAX_MARKS} as max_marks,
 
-                -- প্রাপ্ত নম্বর
+                -- Obtained Score
                 COALESCE(sea.total_score, 0) as total_score,
                 sea.end_time
             FROM student_exam_attempts sea
             JOIN online_quizzes oq ON sea.quiz_id = oq.id
             LEFT JOIN subjects sub ON oq.subject_id = sub.id
             WHERE sea.student_id = $1 
-            AND sea.end_time IS NOT NULL  -- এই লাইনটি নিশ্চিত করে সব রেজাল্ট আসবে
+            AND sea.end_time IS NOT NULL
             ORDER BY sea.end_time DESC`;
 
         const resultsRes = await pool.query(resultsQuery, [studentId]);
 
         res.json({
             student: studentData,
-            results: resultsRes.rows // এখানে ৫টি পরীক্ষার ডাটাই থাকবে
+            results: resultsRes.rows 
         });
 
     } catch (err) {
@@ -583,7 +621,7 @@ router.get('/student/schedule', authenticateToken, async (req, res) => {
                 oq.id,
                 oq.title,
                 oq.assessment_type,
-                oq.time_limit_minutes,
+                oq.time_limit,
                 oq.available_from,
                 oq.available_to,
                 s.subject_name,
