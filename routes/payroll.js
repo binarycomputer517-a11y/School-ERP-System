@@ -309,6 +309,7 @@ router.get('/payslip/:recordId', async (req, res) => {
 
         const watermarkText = Array(360).fill(`<div class="wm">${school.school_name || 'ERP'}</div>`).join('');
 
+       
         // 4. Construct HTML Template
         const html = `
         <!DOCTYPE html>
@@ -408,6 +409,85 @@ router.get('/payslip/:recordId', async (req, res) => {
     } catch (error) {
         console.error('Payslip Error:', error);
         res.status(500).send("Failed to generate secure payslip.");
+    }
+});
+
+/**
+ * @route   POST /api/payroll/save-run
+ * @desc    Saves a payroll run with duplicate prevention logic
+ */
+router.post('/save-run', authorize(PAYROLL_MANAGER_ROLES), async (req, res) => {
+    const { run_name, pay_period_start, pay_period_end, details } = req.body;
+
+    if (!details || !Array.isArray(details) || details.length === 0) {
+        return res.status(400).json({ message: "No payroll details provided." });
+    }
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        const runMonth = new Date(pay_period_start).getMonth() + 1;
+        const runYear = new Date(pay_period_start).getFullYear();
+
+        
+        const runResult = await client.query(
+            `INSERT INTO payroll_runs (run_name, pay_period_start, pay_period_end, status) 
+             VALUES ($1, $2, $3, 'Paid') RETURNING run_id`,
+            [run_name, pay_period_start, pay_period_end]
+        );
+        const runId = runResult.rows[0].run_id;
+
+        // 
+        for (const item of details) {
+            
+            const checkDuplicate = await client.query(
+                `SELECT prd.id FROM payroll_run_details prd
+                 JOIN payroll_runs pr ON prd.run_id = pr.run_id
+                 WHERE prd.user_id = $1 
+                 AND EXTRACT(MONTH FROM pr.pay_period_start) = $2
+                 AND EXTRACT(YEAR FROM pr.pay_period_start) = $3`,
+                [item.user_id, runMonth, runYear]
+            );
+
+            if (checkDuplicate.rowCount > 0) {
+               
+                throw new Error(`Duplicate entry: Salary already exists for ${item.full_name} in ${runMonth}/${runYear}`);
+            }
+
+            // 
+            await client.query(
+                `INSERT INTO payroll_run_details 
+                (run_id, user_id, full_name, gross_pay, net_pay, deductions) 
+                VALUES ($1, $2, $3, $4, $5, $6)`,
+                [runId, item.user_id, item.full_name, item.gross_pay, item.net_pay, item.deductions]
+            );
+        }
+
+        await client.query('COMMIT');
+        res.status(201).json({ message: "Payroll saved successfully with no duplicates.", run_id: runId });
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Save Run Error:", error.message);
+        res.status(400).json({ message: error.message || "Failed to save payroll run." });
+    } finally {
+        client.release();
+    }
+});
+
+router.get('/verification-logs', authorize(['Admin', 'Super Admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT pv.scanned_at, pv.ip_address, pv.user_agent, u.username as employee_name, pv.record_id
+            FROM payroll_verifications pv
+            LEFT JOIN payroll_records pr ON pv.record_id = pr.id::text
+            LEFT JOIN users u ON pr.user_id = u.id
+            ORDER BY pv.scanned_at DESC LIMIT 100;`;
+        const result = await dbQuery(query);
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch security logs." });
     }
 });
 module.exports = router;
