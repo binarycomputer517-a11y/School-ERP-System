@@ -7,22 +7,31 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="/js/global-config.js"></script>
+
     <style>
-        :root { --primary: #6366f1; --bg: #f8fafc; }
+        :root { --primary: var(--primary-color, #6366f1); --bg: #f8fafc; --dark: #0f172a; }
         body { background: var(--bg); font-family: 'Plus Jakarta Sans', sans-serif; color: #1e293b; }
-        .hero-banner { background: #0f172a; color: white; padding: 3rem 0; border-radius: 0 0 40px 40px; }
+        .hero-banner { background: var(--dark); color: white; padding: 3rem 0; border-radius: 0 0 40px 40px; }
+        .global-school-logo { height: 80px; width: 80px; object-fit: contain; border-radius: 50%; background: white; padding: 5px; }
         .data-card { background: white; border-radius: 20px; border: 1px solid #e2e8f0; padding: 1.5rem; box-shadow: 0 4px 20px rgba(0,0,0,0.02); }
-        .status-badge { padding: 4px 12px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; }
+        .status-badge { padding: 4px 12px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
         .status-Generated { background: #e0f2fe; color: #0369a1; }
         .status-Paid { background: #dcfce7; color: #166534; }
+        .table thead th { border: none; font-size: 0.75rem; letter-spacing: 0.05em; }
     </style>
 </head>
 <body>
 
 <section class="hero-banner text-center">
     <div class="container">
-        <h2 class="fw-bold">Payroll Analytics</h2>
-        <p class="opacity-75">Live Earnings & Compensation History</p>
+        <div class="mb-3">
+            <img src="/images/default-logo.png" class="global-school-logo shadow-sm" alt="School Logo">
+        </div>
+        <h2 class="fw-bold global-school-name text-uppercase">ERP SYSTEM</h2>
+        <h4 class="fw-normal opacity-75">Payroll Analytics</h4>
+        <p class="opacity-50 small">Live Earnings & Compensation History</p>
     </div>
 </section>
 
@@ -37,21 +46,26 @@
             <div class="data-card">
                 <div class="d-flex justify-content-between align-items-center mb-4">
                     <h5 class="fw-bold mb-0">Payslip Archive</h5>
-                    <a href="/teacher-dashboard.html" class="btn btn-sm btn-outline-secondary">Dashboard</a>
+                    <a href="/teacher-dashboard.html" class="btn btn-sm btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i> Dashboard
+                    </a>
                 </div>
                 <div class="table-responsive">
                     <table class="table align-middle">
-                        <thead class="small text-uppercase text-muted">
+                        <thead class="text-uppercase text-muted">
                             <tr>
                                 <th>Period</th>
-                                <th>Gross</th>
+                                <th>Gross Pay</th>
                                 <th>Net Pay</th>
                                 <th>Status</th>
                                 <th class="text-end">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="livePayrollBody">
-                            <tr><td colspan="5" class="text-center py-5">Connecting to database...</td></tr>
+                            <tr><td colspan="5" class="text-center py-5">
+                                <div class="spinner-border spinner-border-sm text-primary"></div>
+                                Syncing ERP Settings...
+                            </td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -59,23 +73,28 @@
         </div>
 
         <div class="col-lg-4">
-            <div class="data-card mb-4">
+            <div class="data-card sticky-top" style="top: 20px;">
                 <h6 class="fw-bold text-muted mb-3">LATEST BREAKDOWN</h6>
                 <div class="d-flex justify-content-between mb-2">
                     <span>Base Gross</span>
-                    <span class="fw-bold" id="liveGross">$0.00</span>
+                    <span class="fw-bold text-dark" id="liveGross">0.00</span>
                 </div>
                 <div class="d-flex justify-content-between mb-2 text-danger">
-                    <span>Tax Estimate (20%)</span>
-                    <span class="fw-bold" id="liveTax">-$0.00</span>
+                    <span>Tax Estimate</span>
+                    <span class="fw-bold" id="liveTax">-0.00</span>
                 </div>
                 <div class="d-flex justify-content-between mb-3 text-danger border-bottom pb-3">
                     <span>Deductions</span>
-                    <span class="fw-bold" id="liveDed">-$0.00</span>
+                    <span class="fw-bold" id="liveDed">-0.00</span>
                 </div>
                 <div class="d-flex justify-content-between align-items-center">
-                    <span class="fw-bold">Final Net</span>
-                    <span class="fs-4 fw-bold text-primary" id="liveNet">$0.00</span>
+                    <span class="fw-bold">Final Net Pay</span>
+                    <span class="fs-4 fw-bold text-primary" id="liveNet">0.00</span>
+                </div>
+                <hr>
+                <div class="alert alert-light border-0 small text-muted mb-0">
+                    <i class="fas fa-info-circle me-1"></i> 
+                    Values are pulled from your most recent confirmed pay period.
                 </div>
             </div>
         </div>
@@ -85,20 +104,42 @@
 <script>
     const TOKEN = localStorage.getItem('erp-token');
 
+    /**
+     * Bootstraps the application after global-config.js is ready.
+     *
+     */
+    function initializePortal() {
+        console.log("Portal initialization triggered.");
+        if (typeof window.formatDate === 'function' && typeof window.formatCurrency === 'function') {
+            loadLivePayroll();
+        } else {
+            console.warn("Global helpers not found, retrying in 100ms...");
+            setTimeout(initializePortal, 100); 
+        }
+    }
+
+    // Listen for the custom readiness event from global-config.js
+    document.addEventListener('ERP_CONFIG_READY', initializePortal);
+
+    // Immediate check if settings already exist in memory
+    document.addEventListener('DOMContentLoaded', () => {
+        if (window.erpSettings) initializePortal();
+    });
+
     async function loadLivePayroll() {
         if (!TOKEN) return window.location.href = '/login.html';
 
         try {
-            // Fetch live data from /api/payroll/my-history
             const response = await fetch('/api/payroll/my-history', {
                 headers: { 'Authorization': `Bearer ${TOKEN}` }
             });
 
-            if (!response.ok) throw new Error("Database Fetch Failed");
+            if (!response.ok) throw new Error("API Connection Failed");
             const data = await response.json();
 
-            if (data.length === 0) {
-                document.getElementById('livePayrollBody').innerHTML = '<tr><td colspan="5" class="text-center py-5">No records found in database.</td></tr>';
+            if (!data || data.length === 0) {
+                document.getElementById('livePayrollBody').innerHTML = 
+                    '<tr><td colspan="5" class="text-center py-5 text-muted">No records found. Contact HR.</td></tr>';
                 return;
             }
 
@@ -107,60 +148,83 @@
             updateLiveSidebar(data[0]);
 
         } catch (err) {
-            console.error(err);
-            document.getElementById('livePayrollBody').innerHTML = `<tr><td colspan="5" class="text-center text-danger">Connection Error: ${err.message}</td></tr>`;
+            console.error("Payroll Error:", err);
+            document.getElementById('livePayrollBody').innerHTML = 
+                `<tr><td colspan="5" class="text-center text-danger py-5">Error: ${err.message}</td></tr>`;
         }
     }
 
     function renderPayrollTable(data) {
         const tbody = document.getElementById('livePayrollBody');
-        tbody.innerHTML = data.map(record => `
-            <tr>
-                <td>
-                    <div class="fw-bold">${new Date(record.end_date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}</div>
-                    <small class="text-muted">${new Date(record.start_date).toLocaleDateString('en-GB')} - ${new Date(record.end_date).toLocaleDateString('en-GB')}</small>
-                </td>
-                <td class="text-muted">$${parseFloat(record.gross_pay).toLocaleString()}</td>
-                <td class="fw-bold text-primary">$${parseFloat(record.net_pay).toLocaleString()}</td>
-                <td><span class="status-badge status-${record.status}">${record.status.toUpperCase()}</span></td>
-                <td class="text-end">
-                    <a href="/api/payroll/payslip/${record.id}?token=${TOKEN}" target="_blank" class="btn btn-sm btn-light border"><i class="fas fa-file-pdf"></i></a>
-                </td>
-            </tr>
-        `).join('');
+        tbody.innerHTML = data.map(record => {
+            // Use global formatting functions
+            const netVal = window.formatCurrency(record.net_pay);
+            const grossVal = window.formatCurrency(record.gross_pay);
+            const formattedDate = window.formatDate(record.end_date, 'long');
+
+            return `
+                <tr>
+                    <td>
+                        <div class="fw-bold text-dark">${formattedDate}</div>
+                        <small class="text-muted">TX: ${record.id.substring(0,8)}</small>
+                    </td>
+                    <td class="text-muted">${grossVal}</td>
+                    <td class="fw-bold text-primary">${netVal}</td>
+                    <td><span class="status-badge status-${record.status || 'Paid'}">${record.status || 'PAID'}</span></td>
+                    <td class="text-end">
+                        <a href="/api/payroll/payslip/${record.id}?token=${TOKEN}" target="_blank" class="btn btn-sm btn-light border shadow-sm">
+                            <i class="fas fa-file-pdf text-danger me-1"></i> View Slip
+                        </a>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
 
     function renderPayrollChart(data) {
         const ctx = document.getElementById('payrollChart').getContext('2d');
         const sorted = [...data].reverse(); 
-        new Chart(ctx, {
+        
+        if(window.myPayrollChart) window.myPayrollChart.destroy();
+
+        window.myPayrollChart = new Chart(ctx, {
             type: 'line',
             data: {
-                labels: sorted.map(r => new Date(r.end_date).toLocaleDateString('en-GB', { month: 'short' })),
+                labels: sorted.map(r => window.formatDate(r.end_date).split(' ')[1]), // Extract month name
                 datasets: [{
-                    label: 'Net Earnings',
-                    data: sorted.map(r => r.net_pay),
+                    label: 'Net Pay History',
+                    data: sorted.map(r => parseFloat(r.net_pay || 0)),
                     borderColor: '#6366f1',
                     backgroundColor: 'rgba(99, 102, 241, 0.1)',
                     fill: true,
-                    tension: 0.4
+                    tension: 0.4,
+                    pointRadius: 4
                 }]
             },
-            options: { maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            options: { 
+                maintainAspectRatio: false, 
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { 
+                        beginAtZero: true, 
+                        ticks: { callback: v => window.formatCurrency(v) } 
+                    }
+                }
+            }
         });
     }
 
     function updateLiveSidebar(latest) {
-        document.getElementById('liveGross').textContent = '$' + parseFloat(latest.gross_pay).toLocaleString();
-        document.getElementById('liveNet').textContent = '$' + parseFloat(latest.net_pay).toLocaleString();
-        // Calculation logic matches backend calculateNetPay function
-        const tax = latest.gross_pay * 0.20; 
-        const ded = latest.gross_pay - latest.net_pay - tax;
-        document.getElementById('liveTax').textContent = '-$' + tax.toLocaleString();
-        document.getElementById('liveDed').textContent = '-$' + (ded > 0 ? ded : 0).toLocaleString();
-    }
+        const gross = parseFloat(latest.gross_pay || 0);
+        const net = parseFloat(latest.net_pay || 0);
+        const tax = parseFloat(latest.taxes) || (gross * 0.20);
+        const ded = parseFloat(latest.deductions) || (gross - net - tax);
 
-    document.addEventListener('DOMContentLoaded', loadLivePayroll);
+        document.getElementById('liveGross').textContent = window.formatCurrency(gross);
+        document.getElementById('liveNet').textContent = window.formatCurrency(net);
+        document.getElementById('liveTax').textContent = '-' + window.formatCurrency(tax);
+        document.getElementById('liveDed').textContent = '-' + window.formatCurrency(ded);
+    }
 </script>
 </body>
 </html>
