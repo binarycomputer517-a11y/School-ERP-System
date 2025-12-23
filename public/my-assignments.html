@@ -3,44 +3,53 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Assignments & Modules</title>
+    <title>My Assignments & Progress | Enterprise ERP</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { background-color: #f0f2f8; font-family: sans-serif; }
-        .container { max-width: 1000px; }
-        h1 { color: #003366; font-weight: bold; }
-        .text-primary { color: #003366 !important; }
-        .text-secondary { color: #5e35b1 !important; }
-        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .list-group-item:hover { background-color: #f0f2f8; }
-        .status-badge { font-weight: bold; padding: 4px 8px; border-radius: 4px; font-size: 0.85em; }
+        :root { --erp-blue: #003366; --erp-purple: #5e35b1; }
+        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .container { max-width: 1100px; }
+        h1 { color: var(--erp-blue); font-weight: 800; letter-spacing: -0.5px; }
+        .card { border: none; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        .list-group-item { border: none; border-left: 5px solid transparent; margin-bottom: 10px; transition: 0.3s; background: white; border-radius: 8px !important; }
+        .list-group-item:hover { border-left: 5px solid var(--erp-purple); transform: translateX(5px); background-color: #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
         
-        /* Status colors */
-        .status-Assigned { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .status-Completed { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .status-Graded { background-color: #198754; color: #fff; border: 1px solid #155724; }
-        .status-Overdue { background-color: #ffc107; color: #383d41; border: 1px solid #ffeeba; }
-        .status-Draft { background-color: #f0f0f0; color: #6c757d; border: 1px solid #e9ecef; }
-        .status-Pending { background-color: #cff4fc; color: #055160; border: 1px solid #b6effb; }
-
+        /* Dynamic Status Badges */
+        .status-badge { font-weight: 700; padding: 6px 12px; border-radius: 50px; font-size: 0.75em; text-transform: uppercase; }
+        .status-Assigned { background-color: #fff3cd; color: #856404; }
+        .status-PendingReview { background-color: #cff4fc; color: #055160; }
+        .status-Graded { background-color: #d4edda; color: #155724; }
+        .status-Overdue { background-color: #f8d7da; color: #721c24; }
+        
+        .btn-action { border-radius: 50px; font-weight: 600; padding: 5px 20px; font-size: 0.85rem; }
     </style>
 </head>
 <body>
     <div class="container mt-5">
-        <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1>My Assignments & Learning Modules</h1>
-            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
+        <header class="mb-5 d-flex justify-content-between align-items-center">
+            <div>
+                <h1>Academic Assignments</h1>
+                <p class="text-muted">Track your homework, projects, and grading status.</p>
+            </div>
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary px-4 shadow-sm">← Dashboard</a>
         </header>
 
-        <div class="card shadow-sm">
+        <div class="card p-4">
             <div class="card-body">
-                <h4 class="text-secondary mb-3">Your Current Assignments</h4>
-                
-                <ul id="assignments-list" class="list-group list-group-flush">
-                    <li class="list-group-item text-center text-muted">Loading your assignments...</li>
+                <div id="status-filter" class="mb-4 d-flex gap-2">
+                    <button class="btn btn-sm btn-secondary active rounded-pill px-3" onclick="filterAssignments('all')">All</button>
+                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="filterAssignments('Pending Review')">Pending</button>
+                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="filterAssignments('Assigned')">To-Do</button>
+                </div>
+
+                <ul id="assignments-list" class="list-group">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Fetching your academic records...</p>
+                    </div>
                 </ul>
                 
-                <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
+                <p id="error-message" class="text-danger mt-3 text-center" style="display:none;"></p>
             </div>
         </div>
     </div>
@@ -48,143 +57,112 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const token = localStorage.getItem('erp-token');
-        
-        // Use the robust ID retrieval logic for consistency
-        const studentId = localStorage.getItem('student_id') || localStorage.getItem('profile-id') || localStorage.getItem('student-id'); 
-        
-        const ONLINE_LEARNING_API_BASE = '/api/online-learning'; // Define base URL
+        const studentId = localStorage.getItem('profile-id'); 
+        let allAssignments = [];
 
-        // --- Helper function for API calls ---
         async function handleApi(url) {
             const response = await fetch(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (!response.ok) {
                 if (response.status === 401 || response.status === 403) {
-                     alert('Session expired or unauthorized. Please log in again.');
-                     localStorage.clear(); 
                      window.location.href = '/login.html';
                      throw new Error('Unauthorized');
                 }
-                const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-                throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message}`);
+                throw new Error(`Error ${response.status}`);
             }
             return response.json();
         }
 
-        /**
-         * Determines the assignment status based on due date and completion date/status.
-         * @param {string} dueDateStr - The assignment due date.
-         * @param {string} completionDateStr - The submission date (from sub.submitted_at).
-         * @param {string} submissionStatus - Status provided by the backend (from sub.submission_status).
-         */
-        function getAssignmentStatus(dueDateStr, completionDateStr, submissionStatus) {
-            // Priority 1: Use direct status from backend if submitted
-            if (submissionStatus && submissionStatus !== 'Pending') {
+        function getAssignmentStatus(dueDateStr, submissionStatus) {
+            // Priority 1: Status from Database (Pending Review, Graded, etc.)
+            if (submissionStatus && submissionStatus !== 'Not Started') {
                 return submissionStatus;
             }
 
-            // Priority 2: Check for submission presence
-            if (completionDateStr) {
-                 // If there's a submission date but status is 'Pending', treat it as 'Pending'
-                 return 'Pending';
-            }
-
-            // Priority 3: Check for Overdue status
+            // Priority 2: Check for Overdue
             if (dueDateStr) {
                 const now = new Date();
                 const dueDate = new Date(dueDateStr);
-                
-                // If due date is in the past, it's overdue
-                if (!isNaN(dueDate) && dueDate < now) {
-                    return 'Overdue';
-                }
+                if (!isNaN(dueDate) && dueDate < now) return 'Overdue';
             }
             
-            // Priority 4: Default 
-            return 'Assigned'; // If no submission and not overdue
+            return 'Assigned';
         }
 
-        /**
-         * Loads and renders the list of modules/assignments for the student.
-         */
         async function loadAssignments() {
             const listElement = document.getElementById('assignments-list');
             const errorMessage = document.getElementById('error-message');
-            errorMessage.style.display = 'none';
 
-            // Initial check for critical data
             if (!studentId || !token) {
-                listElement.innerHTML = '<li class="list-group-item text-danger">Login error: ID/Token missing. Please log in again.</li>';
+                listElement.innerHTML = '<li class="list-group-item text-danger text-center">Authentication session missing.</li>';
                 return;
             }
-            
-            listElement.innerHTML = '<li class="list-group-item text-center text-muted">Loading your assignments...</li>';
 
             try {
-                // Fetch data using the corrected API endpoint
-                const url = `${ONLINE_LEARNING_API_BASE}/assignments/student/${studentId}`;
-                const assignments = await handleApi(url);
-
-                if (assignments.length === 0) {
-                    listElement.innerHTML = '<li class="list-group-item text-center text-info">You have no active assignments or modules currently assigned.</li>';
-                    return;
-                }
-
-                listElement.innerHTML = ''; // Clear loading message
-
-                assignments.forEach(assignment => {
-                    // completion_date is aliased from sub.submitted_at
-                    const completionDateStr = assignment.completion_date; 
-                    const submissionStatus = assignment.submission_status; // Aliased from sub.submission_status
-                    
-                    const status = getAssignmentStatus(assignment.due_date, completionDateStr, submissionStatus);
-                    
-                    const dueDate = assignment.due_date ? new Date(assignment.due_date).toLocaleDateString() : 'N/A';
-                    
-                    const actionUrl = `/student/assignment-viewer.html?id=${assignment.assignment_id}`; 
-                    
-                    // Button text logic
-                    let buttonText;
-                    if (status === 'Pending') {
-                        buttonText = 'Submitted (Pending Review)';
-                    } else if (status === 'Graded') {
-                        buttonText = 'View Grade';
-                    } else if (status === 'Completed') {
-                        buttonText = 'View Submission';
-                    } else {
-                        buttonText = 'Start/Submit';
-                    }
-                    
-                    listElement.innerHTML += `
-                        <li class="list-group-item d-flex justify-content-between align-items-center">
-                            <div style="flex-grow: 1;">
-                                <h5 class="mb-1 text-primary">
-                                    <a href="${actionUrl}" class="text-decoration-none text-primary">${assignment.title}</a>
-                                </h5>
-                                <p class="mb-0 small text-muted">
-                                    Subject: <strong>${assignment.subject_name || 'N/A'}</strong> &bull; 
-                                    Max Marks: ${assignment.max_marks || 'N/A'}
-                                </p>
-                                <p class="mb-0 small">Due: ${dueDate}</p>
-                            </div>
-                            
-                            <div class="d-flex flex-column align-items-end">
-                                <span class="status-badge status-${status.replace(/\s/g, '')} mb-2">${status.toUpperCase()}</span>
-                                <a href="${actionUrl}" class="btn btn-sm btn-outline-secondary">
-                                    ${buttonText}
-                                </a>
-                            </div>
-                        </li>
-                    `;
-                });
+                // Fetching from the 900-line backend route we built
+                const assignments = await handleApi(`/api/online-learning/assignments/student/${studentId}`);
+                allAssignments = assignments;
+                renderList(assignments);
 
             } catch (error) {
-                console.error('Error loading assignments:', error);
-                errorMessage.textContent = `Error: Failed to load assignments. (${error.message})`;
+                errorMessage.textContent = `Sync Error: ${error.message}`;
                 errorMessage.style.display = 'block';
-                listElement.innerHTML = '<li class="list-group-item text-center text-danger">Failed to connect to the assignment server.</li>';
+                listElement.innerHTML = '';
             }
+        }
+
+        function renderList(assignments) {
+            const listElement = document.getElementById('assignments-list');
+            if (assignments.length === 0) {
+                listElement.innerHTML = '<li class="list-group-item text-center text-muted py-5">No assignments found for your current batch.</li>';
+                return;
+            }
+
+            listElement.innerHTML = assignments.map(assignment => {
+                const status = getAssignmentStatus(assignment.due_date, assignment.submission_status);
+                const dueDate = assignment.due_date ? new Date(assignment.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'No Due Date';
+                const statusClass = status.replace(/\s/g, '');
+                
+                // Route to the syllabus/viewer page
+                const actionUrl = `/my-syllabus.html`; 
+
+                return `
+                    <li class="list-group-item d-flex justify-content-between align-items-center shadow-sm p-4 mb-3">
+                        <div style="flex-grow: 1;">
+                            <div class="d-flex align-items-center mb-2">
+                                <span class="badge bg-light text-dark border me-2" style="font-size:0.6rem;">${assignment.subject_code || 'GEN'}</span>
+                                <h5 class="mb-0 fw-bold text-primary">${assignment.title}</h5>
+                            </div>
+                            <p class="mb-1 small text-muted">
+                                <strong>${assignment.subject_name || 'General Subject'}</strong> &bull; 
+                                Max Marks: <span class="text-dark fw-bold">${assignment.max_marks || 100}</span>
+                            </p>
+                            <p class="mb-0 small ${status === 'Overdue' ? 'text-danger fw-bold' : 'text-muted'}">
+                                <i class="bi bi-clock"></i> Due: ${dueDate}
+                            </p>
+                        </div>
+                        
+                        <div class="text-end">
+                            <div class="mb-3">
+                                <span class="status-badge status-${statusClass}">${status}</span>
+                            </div>
+                            <a href="${actionUrl}" class="btn btn-action ${status === 'Graded' ? 'btn-success' : 'btn-outline-primary'}">
+                                ${status === 'Graded' ? 'View Grade' : 'Open Module'}
+                            </a>
+                        </div>
+                    </li>
+                `;
+            }).join('');
+        }
+
+        function filterAssignments(status) {
+            // Update active button state
+            document.querySelectorAll('#status-filter .btn').forEach(btn => btn.classList.remove('active', 'btn-secondary'));
+            document.querySelectorAll('#status-filter .btn').forEach(btn => btn.classList.add('btn-outline-secondary'));
+            
+            const filtered = status === 'all' ? allAssignments : allAssignments.filter(a => getAssignmentStatus(a.due_date, a.submission_status) === status);
+            renderList(filtered);
         }
 
         document.addEventListener('DOMContentLoaded', loadAssignments);

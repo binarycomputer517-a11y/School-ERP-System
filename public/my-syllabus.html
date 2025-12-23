@@ -3,121 +3,160 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Course Syllabus</title>
+    <title>My Syllabus | ERP Portal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        .list-group-item:hover {
-            background-color: #f8f9fa;
-        }
-        .text-primary { color: #003366 !important; }
-        .text-secondary { color: #5e35b1 !important; }
+        :root { --primary-blue: #003366; --gold: #b8860b; }
+        body { background-color: #f4f7f6; }
+        .syllabus-header { background: white; border-bottom: 4px solid var(--primary-blue); padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .subject-group { background: #e9ecef; padding: 10px 20px; font-weight: bold; color: var(--primary-blue); border-left: 5px solid var(--gold); margin-top: 20px; }
+        .module-item { background: white; border-bottom: 1px solid #eee; padding: 15px 25px; transition: 0.2s; }
+        .module-item:hover { background: #fdfdfd; }
+        .btn-submit { background: var(--primary-blue); color: white; border-radius: 0; font-weight: 600; }
+        .btn-submit:hover { background: #002244; color: white; }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1 class="text-primary">My Course Syllabus</h1>
-            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
-        </header>
 
-        <div id="syllabus-content" class="card shadow-sm">
-            <div class="card-body">
-                <div id="syllabus-list">
-                    <p class="text-muted">Loading your assigned subjects...</p>
-                </div>
+<div class="syllabus-header">
+    <div class="container d-flex justify-content-between align-items-center">
+        <h2 class="m-0 fw-bold">Academic Syllabus</h2>
+        <a href="/student-dashboard.html" class="btn btn-sm btn-outline-dark">Back to Dashboard</a>
+    </div>
+</div>
+
+<div class="container">
+    <div id="syllabus-content" class="card border-0 shadow-sm">
+        <div class="card-body p-0" id="main-list">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Loading your modules...</p>
             </div>
         </div>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</div>
 
-    <script>
-        const token = localStorage.getItem('erp-token');
-        // ⭐ UPDATED: Using 'profile-id' for student ID consistency across the application
-        const studentId = localStorage.getItem('profile-id'); 
+<div class="modal fade" id="submitModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content" style="border-top: 5px solid var(--primary-blue);">
+            <form id="submission-form">
+                <div class="modal-header">
+                    <h5 class="modal-title fw-bold">Submit Assignment</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="modal-module-id">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">UPLOAD PDF/DOCX</label>
+                        <input type="file" id="sub-file" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">COMMENTS</label>
+                        <textarea id="sub-comments" class="form-control" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="submit" id="btn-upload" class="btn btn-submit w-100">SUBMIT NOW</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-        // --- Helper function for authenticated API calls ---
-        async function handleApi(url) {
-            const response = await fetch(url, {
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const token = localStorage.getItem('erp-token');
+    const studentId = localStorage.getItem('profile-id');
+
+    async function loadSyllabus() {
+        const list = document.getElementById('main-list');
+        try {
+            const res = await fetch(`/api/online-learning/modules/student/${studentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!response.ok) {
-                // Handle unauthorized/expired session
-                if (response.status === 401 || response.status === 403) {
-                     // Optionally redirect to login page here for a smoother UX
-                     // window.location.href = '/login.html';
-                     throw new Error('Session expired or unauthorized. Please log in again.');
-                }
-                throw new Error(`API call failed with status: ${response.status}.`);
-            }
-            return response.json();
-        }
+            const data = await res.json();
 
-        /**
-         * Main function to fetch student course and associated subjects.
-         */
-        async function loadSyllabus() {
-            const syllabusList = document.getElementById('syllabus-list');
-            
-            if (!studentId || !token) {
-                syllabusList.innerHTML = '<p class="text-danger">Error: Not logged in or Profile ID missing.</p>';
+            if (!data.length) {
+                list.innerHTML = `<div class="p-5 text-center text-muted">No content assigned to your batch.</div>`;
                 return;
             }
-            
-            try {
-                // 1. Fetch Student Profile to get course_id and course_name
-                syllabusList.innerHTML = '<p class="text-info">Fetching profile...</p>';
-                const studentData = await handleApi(`/api/students/${studentId}`);
-                const courseId = studentData.course_id;
-                
-                if (!courseId) {
-                    syllabusList.innerHTML = `<p class="text-warning">Your profile has no course assigned yet.</p>`;
-                    return;
-                }
 
-                // 2. Fetch Subjects linked to the Course ID
-                syllabusList.innerHTML = '<p class="text-info">Fetching subjects...</p>';
-                const subjects = await handleApi(`/api/academicswithfees/courses/${courseId}/subjects`);
-                
-                // 3. Render the list of subjects
-                if (subjects.length === 0) {
-                    syllabusList.innerHTML = `<p class="text-info">No subjects have been assigned to your course (<strong>${studentData.course_name || 'N/A'}</strong>) yet.</p>`;
-                    return;
-                }
+            // Group by subject
+            const grouped = data.reduce((acc, m) => {
+                const sub = m.subject_name || "General";
+                if (!acc[sub]) acc[sub] = [];
+                acc[sub].push(m);
+                return acc;
+            }, {});
 
-                const courseHeader = document.createElement('h5');
-                courseHeader.className = 'mb-3 text-secondary';
-                courseHeader.innerHTML = `Subjects for Course: <strong>${studentData.course_name || 'N/A'}</strong>`;
-                
-                syllabusList.innerHTML = ''; // Clear the "Fetching..." message
-                syllabusList.appendChild(courseHeader);
-                
-                const ul = document.createElement('ul');
-                ul.className = 'list-group list-group-flush';
+            list.innerHTML = "";
+            for (const subject in grouped) {
+                const head = document.createElement('div');
+                head.className = 'subject-group';
+                head.innerText = subject.toUpperCase();
+                list.appendChild(head);
 
-                ul.innerHTML = subjects.map(subject => `
-                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                grouped[subject].forEach(mod => {
+                    const item = document.createElement('div');
+                    item.className = 'module-item d-flex justify-content-between align-items-center';
+                    item.innerHTML = `
                         <div>
-                            <strong class="text-primary">${subject.subject_name}</strong>
-                            <span class="text-muted ms-2">(${subject.subject_code})</span>
+                            <h6 class="m-0 fw-bold">${mod.title}</h6>
+                            <small class="text-muted">${mod.content_type}</small>
                         </div>
-                        <a href="/download-syllabus/${subject.subject_id}" class="btn btn-sm btn-outline-primary" target="_blank">
-                            Download Syllabus PDF
-                        </a>
-                    </li>
-                `).join('');
-                
-                syllabusList.appendChild(ul);
-
-            } catch (error) {
-                console.error("Failed to load syllabus:", error);
-                syllabusList.innerHTML = `<p class="text-danger">Failed to load syllabus: ${error.message}.</p>`;
+                        <div>
+                            <a href="${mod.content_url}" target="_blank" class="btn btn-sm btn-outline-dark me-2">View</a>
+                            <button onclick="openSubmit('${mod.module_id}')" class="btn btn-sm btn-submit">Submit</button>
+                        </div>
+                    `;
+                    list.appendChild(item);
+                });
             }
+        } catch (e) {
+            list.innerHTML = `<div class="p-5 text-center text-danger">Failed to load syllabus.</div>`;
         }
+    }
 
-        // Run the function when the page loads
-        document.addEventListener('DOMContentLoaded', loadSyllabus);
-    </script>
-    <script src="js/global-config.js"></script>
+    window.openSubmit = (id) => {
+        document.getElementById('modal-module-id').value = id;
+        new bootstrap.Modal(document.getElementById('submitModal')).show();
+    };
+
+    document.getElementById('submission-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('btn-upload');
+        btn.disabled = true;
+        btn.innerText = "Processing...";
+
+        const formData = new FormData();
+        formData.append('module_id', document.getElementById('modal-module-id').value);
+        formData.append('student_id', studentId);
+        formData.append('file', document.getElementById('sub-file').files[0]);
+        formData.append('comments', document.getElementById('sub-comments').value);
+
+        try {
+            const res = await fetch('/api/online-learning/assignments/submit', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+
+            if (res.ok) {
+                alert("✅ Success! Your assignment has been uploaded.");
+                location.reload();
+            } else {
+                const err = await res.json();
+                alert("❌ Error: " + (err.message || "Submission failed"));
+            }
+        } catch (error) {
+            alert("❌ Network Error");
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "SUBMIT NOW";
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', loadSyllabus);
+</script>
 </body>
 </html>
