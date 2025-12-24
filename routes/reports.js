@@ -519,5 +519,63 @@ router.get('/system-activity', authenticateToken, async (req, res) => {
     } catch (err) { res.json([]); }
 });
 
+/**
+ * @route   GET /api/reports/batch/:batchId
+ * @desc    Generate a summary report for all students in a specific batch
+ */
+router.get('/batch/:batchId', authenticateToken, authorize(['Teacher', 'Admin', 'Super Admin']), async (req, res) => {
+    const { batchId } = req.params;
+    const { session_id } = req.query;
 
+    if (!batchId || batchId === 'null' || batchId === 'undefined') {
+        return res.status(400).json({ 
+            success: false,
+            message: "A valid Batch ID is required to generate the report." 
+        });
+    }
+
+    try {
+        const query = `
+            SELECT 
+                s.student_id,
+                s.first_name || ' ' || s.last_name AS student_name,
+                s.roll_number,
+                COALESCE(AVG(m.total_marks_obtained), 0)::numeric(5,2) AS avg_marks,
+                (
+                    SELECT COUNT(*) 
+                    FROM attendance 
+                    WHERE student_id = s.student_id 
+                    -- সংশোধিত: আপনার Enum অনুযায়ী ছোট হাতের 'present' এবং ::text কাস্টিং ব্যবহার করা হয়েছে
+                    AND status::text = 'present' 
+                    ${session_id ? 'AND academic_session_id = $2::uuid' : ''}
+                ) AS present_days
+            FROM students s
+            LEFT JOIN marks m ON s.student_id = m.student_id
+            WHERE s.batch_id = $1::uuid
+            AND s.status = 'Enrolled'
+            GROUP BY s.student_id, s.first_name, s.last_name, s.roll_number
+            ORDER BY s.roll_number;
+        `;
+        
+        const params = session_id ? [batchId, session_id] : [batchId];
+        const result = await pool.query(query, params);
+        
+        if (result.rowCount === 0) {
+            return res.status(404).json({ 
+                success: false,
+                message: "No enrolled students found in this batch." 
+            });
+        }
+
+        res.json(result.rows);
+
+    } catch (error) {
+        console.error("Report Generation SQL Error:", error.message);
+        res.status(500).json({ 
+            success: false,
+            message: "Internal Server Error.", 
+            error: error.message 
+        });
+    }
+});
 module.exports = router;

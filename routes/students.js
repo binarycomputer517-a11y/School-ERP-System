@@ -525,25 +525,26 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
     const safeStudentId = toUUID(studentId);
 
     try {
+        // আপনার স্কিমা অনুযায়ী: 
+        // teacher_allocations টেবিলে কলামের নাম 'teacher_user_id' যা 'users' টেবিলের সাথে যুক্ত।
         const query = `
             SELECT 
-                t.full_name, s.subject_name, t.email
-            FROM teacher_allocations ta
-            JOIN teachers t ON ta.teacher_id = t.id  -- ✅ FIX APPLIED: Changed ta.teacher_ref_id to ta.teacher_id
-            JOIN subjects s ON ta.subject_id = s.id
-            JOIN students stu ON stu.batch_id = ta.batch_id
+                u.full_name, 
+                s.subject_name, 
+                u.email
+            FROM public.teacher_allocations ta
+            JOIN public.users u ON ta.teacher_user_id = u.id
+            JOIN public.subjects s ON ta.subject_id = s.id
+            JOIN public.students stu ON stu.batch_id = ta.batch_id
             WHERE stu.student_id = $1::uuid;
         `;
-        try {
-            const result = await pool.query(query, [safeStudentId]);
-            res.status(200).json(result.rows);
-        } catch (dbError) {
-            console.warn("Teacher query failed:", dbError.message);
-            res.status(200).json([]); 
-        }
+        
+        const result = await pool.query(query, [safeStudentId]);
+        res.status(200).json(result.rows);
+        
     } catch (error) {
-        console.error('Error fetching teachers:', error);
-        res.status(500).json({ message: 'Failed to retrieve teachers.' });
+        console.error('Teacher query failed:', error.message);
+        res.status(200).json([]); // এরর হলেও ড্যাশবোর্ড যাতে ক্রাশ না করে
     }
 });
 
