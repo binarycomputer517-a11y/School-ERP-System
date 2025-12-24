@@ -518,25 +518,26 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
 });
 
 // =========================================================
-// 8. GET: My Teachers (Dashboard/Profile Support)
+// 8. GET: My Teachers (Dashboard/Profile Support) - FIXED VERSION
 // =========================================================
 router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const studentId = req.params.id;
     const safeStudentId = toUUID(studentId);
 
     try {
-        // আপনার স্কিমা অনুযায়ী: 
-        // teacher_allocations টেবিলে কলামের নাম 'teacher_user_id' যা 'users' টেবিলের সাথে যুক্ত।
+        
         const query = `
-            SELECT 
-                u.full_name, 
+            SELECT DISTINCT
+                t.full_name, 
                 s.subject_name, 
-                u.email
-            FROM public.teacher_allocations ta
-            JOIN public.users u ON ta.teacher_user_id = u.id
-            JOIN public.subjects s ON ta.subject_id = s.id
-            JOIN public.students stu ON stu.batch_id = ta.batch_id
-            WHERE stu.student_id = $1::uuid;
+                t.email,
+                t.designation,
+                t.profile_image_path
+            FROM public.class_timetable ct
+            JOIN public.teachers t ON ct.teacher_id = t.id
+            JOIN public.subjects s ON ct.subject_id = s.id
+            JOIN public.students stu ON stu.batch_id = ct.batch_id
+            WHERE stu.student_id = $1::uuid AND ct.is_active = true;
         `;
         
         const result = await pool.query(query, [safeStudentId]);
@@ -544,7 +545,7 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
         
     } catch (error) {
         console.error('Teacher query failed:', error.message);
-        res.status(200).json([]); // এরর হলেও ড্যাশবোর্ড যাতে ক্রাশ না করে
+        res.status(200).json([]); 
     }
 });
 
