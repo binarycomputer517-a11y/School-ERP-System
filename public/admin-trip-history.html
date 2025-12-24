@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Trip & Fuel History | Admin Console</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f8fafc; padding: 30px; }
+        .container { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        h2 { color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #edf2f7; }
+        th { background: #f8fafc; color: #64748b; font-size: 0.85em; text-transform: uppercase; }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
+        .badge-fuel { background: #dcfce7; color: #166534; }
+        .location-link { color: #005A9C; text-decoration: none; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🚚 Trip & Fuel Consumption Log</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Vehicle</th>
+                <th>Driver</th>
+                <th>Odometer (KM)</th>
+                <th>Fuel (L)</th>
+                <th>Cost (₹)</th>
+                <th>Last Location</th>
+            </tr>
+        </thead>
+        <tbody id="history-table">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadHistory() {
+        const token = localStorage.getItem('erp-token');
+        try {
+            const res = await fetch('/api/transport/admin/trip-history', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            
+            const tbody = document.getElementById('history-table');
+            tbody.innerHTML = data.map(log => `
+                <tr>
+                    <td>${new Date(log.log_date).toLocaleDateString()}</td>
+                    <td><strong>${log.vehicle_number}</strong></td>
+                    <td>${log.driver_name}</td>
+                    <td>${log.odometer}</td>
+                    <td><span class="badge badge-fuel">${log.quantity} L</span></td>
+                    <td>₹${log.total_cost}</td>
+                    <td>
+                        <a class="location-link" target="_blank" 
+                           href="https://www.google.com/maps?q=${log.last_lat},${log.last_lon}">
+                           View Map
+                        </a>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (err) {
+            console.error("Load Error:", err);
+        }
+    }
+    window.onload = loadHistory;
+</script>
+</body>
+</html>

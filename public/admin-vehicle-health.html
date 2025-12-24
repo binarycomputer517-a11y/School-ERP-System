@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Vehicle Health Dashboard</title>
+    <style>
+        body { font-family: 'Poppins', sans-serif; background: #f1f5f9; padding: 30px; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
+        .health-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #005A9C; }
+        .metric { font-size: 2em; font-weight: bold; color: #1e293b; margin: 10px 0; }
+        .label { color: #64748b; font-size: 0.9em; text-transform: uppercase; }
+        .status-alert { color: #dc2626; font-weight: bold; animation: blink 1s infinite; }
+        @keyframes blink { 50% { opacity: 0; } }
+    </style>
+</head>
+<body>
+    <h2>🛠 Fleet Health & Efficiency</h2>
+    <div class="grid" id="health-grid">
+        </div>
+
+    <script>
+        async function loadHealth() {
+            const token = localStorage.getItem('erp-token');
+            const res = await fetch('/api/transport/admin/vehicle-health', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            
+            const grid = document.getElementById('health-grid');
+            grid.innerHTML = data.map(v => `
+                <div class="health-card">
+                    <div class="label">${v.model}</div>
+                    <h3 style="margin:5px 0;">${v.vehicle_number}</h3>
+                    <div class="label">Average Mileage</div>
+                    <div class="metric">${v.avg_kmpl || 'N/A'} <span style="font-size:0.5em;">KM/L</span></div>
+                    <div class="label">Current Odometer</div>
+                    <p>${v.current_km || 0} KM</p>
+                    ${v.last_sos_status === 'Active' ? '<div class="status-alert">⚠️ EMERGENCY ACTIVE</div>' : ''}
+                </div>
+            `).join('');
+        }
+        window.onload = loadHealth;
+    </script>
+</body>
+</html>

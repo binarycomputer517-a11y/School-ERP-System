@@ -2,73 +2,90 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Register New User</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register New User | School ERP</title>
     <style>
         /* --- CLASSIC STYLES --- */
-        body { font-family: 'Times New Roman', serif; background-color: #f8f8f8; padding: 2em; }
-        .container { max-width: 600px; margin: auto; padding: 30px; background: white; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; border-radius: 0; }
+        body { font-family: 'Times New Roman', serif; background-color: #f8f8f8; padding: 2em; margin: 0; }
+        .container { max-width: 600px; margin: auto; padding: 30px; background: white; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; }
         h1 { color: #000; font-weight: bold; border-bottom: 2px solid #555; padding-bottom: 10px; margin-bottom: 20px; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input[type="text"], input[type="password"], select, input[type="number"] { width: 100%; padding: 8px; margin-top: 5px; border: 1px solid #555; border-radius: 0; box-sizing: border-box; }
-        button { background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; border-radius: 0; box-shadow: 1px 1px 0 #000; cursor: pointer; margin-top: 15px; }
-        #message { margin-top: 15px; font-weight: bold; }
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input[type="text"], input[type="password"], select { 
+            width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #555; box-sizing: border-box; font-size: 1em;
+        }
+        button { 
+            background-color: #005A9C; color: white; padding: 12px 20px; border: 2px solid #000; 
+            font-weight: bold; cursor: pointer; margin-top: 20px; width: 100%;
+        }
+        button:hover { background-color: #00457A; }
+        .nav-links { margin-bottom: 15px; }
+        .nav-links a { text-decoration: none; color: #005A9C; font-weight: bold; }
+        #message { margin-top: 15px; font-weight: bold; padding: 10px; border-radius: 4px; }
+        .helper-text { font-size: 0.85em; color: #666; margin-top: 5px; line-height: 1.4; }
     </style>
 </head>
 <body>
     <script>
+        // Security Check: Only Admins can access this page
         const token = localStorage.getItem('erp-token');
         const userRole = localStorage.getItem('user-role');
-        // Ensure only Super Admin or Admin can access this registration page
+        
         if (!token || (userRole !== 'Admin' && userRole !== 'Super Admin')) {
             window.location.href = '/login.html';
         }
     </script>
+
     <div class="container">
-        <h1>Register New User</h1>
         <div class="nav-links">
-            <a href="/admin-dashboard.html">← Back to Dashboard</a>
+            <a href="/admin-dashboard.html">← Back to Admin Dashboard</a>
         </div>
+        <h1>Register New System User</h1>
 
         <form id="register-form">
-            <label for="username">Username:</label>
-            <input type="text" id="username" name="username" required>
+            <label for="username">Username / Login ID:</label>
+            <input type="text" id="username" name="username" placeholder="Enter unique username" required>
             
-            <label for="password">Password:</label>
+            <label for="password">Initial Password:</label>
             <input type="password" id="password" name="password" required>
 
-            <label for="role">Role:</label>
+            <label for="role">Access Role:</label>
             <select id="role" name="role" required>
-                 <option value="Admin">Prime Admin</option>
-                  <option value="Admin">Super Admin</option>
+                <option value="" disabled selected>-- Select User Role --</option>
+                <option value="Super Admin">Super Admin</option>
                 <option value="Admin">Admin</option>
                 <option value="Teacher">Teacher</option>
                 <option value="Student">Student</option>
+                <option value="Driver">Driver (Transport)</option> 
                 <option value="Parent">Parent</option>
                 <option value="Accountant">Accountant</option>
                 <option value="Librarian">Librarian</option>
                 <option value="Hostel Manager">Hostel Manager</option>
             </select>
 
-            <label for="reference_id">Reference ID (Optional UUID):</label>
-            <input type="text" id="reference_id" name="reference_id" placeholder="UUID of associated record (e.g., Student ID)">
-            <p style="font-size: 0.8em; color: #6c757d;">
-                For roles like 'Teacher', 'Student', or 'Parent', enter the corresponding ID (UUID) from their respective profile table here.
-            </p>
+            <label for="reference_id">Reference ID (Profile UUID):</label>
+            <input type="text" id="reference_id" name="reference_id" placeholder="Copy UUID from Profile table">
             
-            <button type="submit">Register User</button>
+            <div class="helper-text">
+                <strong>Important:</strong> If the role is 'Driver', enter the <strong>ID (UUID)</strong> from the <code>transport_drivers</code> table here. Without this, the driver will not be able to see their specific vehicle or route data upon logging in.
+            </div>
+            
+            <button type="submit" id="submit-btn">Register User</button>
         </form>
-        <div id="message" style="margin-top: 15px;"></div>
+
+        <div id="message"></div>
     </div>
+
     <script>
         document.getElementById('register-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const messageDiv = document.getElementById('message');
+            const submitBtn = document.getElementById('submit-btn');
             const data = Object.fromEntries(new FormData(e.target).entries());
 
-            // Clean up: ensure empty fields are null for the API (especially UUIDs)
-            if (!data.reference_id) {
-                data.reference_id = null;
-            }
+            // Provide UI Feedback
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Processing...';
+            messageDiv.textContent = '';
 
             try {
                 const response = await fetch('/api/auth/register', {
@@ -83,19 +100,22 @@
                 const result = await response.json();
 
                 if (response.ok) {
-                    messageDiv.textContent = `User ${data.username} registered successfully!`;
-                    messageDiv.style.color = 'green';
+                    messageDiv.textContent = `Success! User "${data.username}" has been registered as ${data.role}.`;
+                    messageDiv.style.color = '#155724';
+                    messageDiv.style.backgroundColor = '#d4edda';
                     e.target.reset();
                 } else {
-                    // Throw error to catch block for centralized error display
-                    throw new Error(result.message || 'Registration failed. The username might already exist.');
+                    throw new Error(result.message || 'Registration failed.');
                 }
             } catch (error) {
-                messageDiv.textContent = error.message;
-                messageDiv.style.color = 'red';
+                messageDiv.textContent = 'Error: ' + error.message;
+                messageDiv.style.color = '#721c24';
+                messageDiv.style.backgroundColor = '#f8d7da';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Register User';
             }
         });
     </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Trip Tracking | Driver Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #005A9C;
+            --success: #059669;
+            --danger: #dc2626;
+            --bg: #f1f5f9;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            width: 100%;
+            max-width: 450px;
+            text-align: center;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 50px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            text-transform: uppercase;
+            font-size: 0.85em;
+        }
+
+        .status-off { background: #fee2e2; color: #b91c1c; }
+        .status-on { background: #dcfce7; color: #166534; animation: pulse 2s infinite; }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
+
+        .gps-display {
+            background: #f8fafc;
+            padding: 15px;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
+            margin: 20px 0;
+            font-family: monospace;
+            font-size: 1.1em;
+            color: #475569;
+        }
+
+        .btn-main {
+            width: 100%;
+            padding: 20px;
+            font-size: 1.25em;
+            font-weight: 700;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .btn-start { background-color: var(--success); }
+        .btn-stop { background-color: var(--danger); }
+        .btn-main:active { transform: scale(0.98); }
+
+        .back-link {
+            display: block;
+            margin-top: 25px;
+            color: #64748b;
+            text-decoration: none;
+            font-size: 0.9em;
+        }
+
+        #map-placeholder {
+            width: 100%;
+            height: 150px;
+            background: #e2e8f0;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #94a3b8;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div id="status-badge" class="status-badge status-off">GPS Inactive</div>
+        <h1 style="margin: 0; color: #1e293b;">Trip Console</h1>
+        <p style="color: #64748b;">Vehicle: <span id="vehicle-num" style="font-weight:600;">WB36A3221</span></p>
+
+        <div id="map-placeholder">
+            📡 GPS Signal Ready
+        </div>
+
+        <div class="gps-display" id="gps-coords">
+            Lat: --.---- | Lon: --.----
+        </div>
+
+        <button id="trip-btn" class="btn-main btn-start" onclick="toggleTrip()">START TRIP</button>
+        
+        <a href="/driver-dashboard.html" class="back-link">← Return to Dashboard</a>
+    </div>
+
+    <script>
+        let isTracking = false;
+        let watchId = null;
+        const token = localStorage.getItem('erp-token');
+
+        function toggleTrip() {
+            const btn = document.getElementById('trip-btn');
+            const badge = document.getElementById('status-badge');
+
+            if (!isTracking) {
+                if (navigator.geolocation) {
+                    isTracking = true;
+                    btn.textContent = "STOP TRIP";
+                    btn.className = "btn-main btn-stop";
+                    badge.textContent = "Live Tracking Active";
+                    badge.className = "status-badge status-on";
+
+                    // Start high-accuracy watch
+                    watchId = navigator.geolocation.watchPosition(sendLocation, handleError, {
+                        enableHighAccuracy: true,
+                        maximumAge: 0,
+                        timeout: 5000
+                    });
+                } else {
+                    alert("Geolocation is not supported by your browser.");
+                }
+            } else {
+                stopTracking();
+            }
+        }
+
+        function stopTracking() {
+            isTracking = false;
+            const btn = document.getElementById('trip-btn');
+            const badge = document.getElementById('status-badge');
+            
+            btn.textContent = "START TRIP";
+            btn.className = "btn-main btn-start";
+            badge.textContent = "GPS Inactive";
+            badge.className = "status-badge status-off";
+            
+            if (watchId) navigator.geolocation.clearWatch(watchId);
+            document.getElementById('gps-coords').innerText = "Lat: --.---- | Lon: --.----";
+        }
+
+        async function sendLocation(position) {
+            const { latitude, longitude } = position.coords;
+            document.getElementById('gps-coords').innerText = `Lat: ${latitude.toFixed(4)} | Lon: ${longitude.toFixed(4)}`;
+
+            try {
+                // Sending to backend location monitoring service
+                const response = await fetch('/api/transport/update-location', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        lat: latitude, 
+                        lon: longitude,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+            } catch (err) {
+                console.error("Transmission Error:", err);
+            }
+        }
+
+        function handleError(error) {
+            console.error("GPS Error:", error.message);
+            alert("Error: Unable to get your location. Please enable GPS.");
+            stopTracking();
+        }
+    </script>
+</body>
+</html>

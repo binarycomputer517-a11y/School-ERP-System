@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Pickup List | Driver</title>
+    <style>
+        body { font-family: 'Poppins', sans-serif; background: #f4f6f9; padding: 20px; }
+        .list-container { max-width: 800px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { color: #005A9C; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #eee; }
+        th { background: #f8fafc; color: #64748b; font-size: 0.85em; text-transform: uppercase; }
+        .status-on { color: green; font-weight: bold; }
+        .btn-back { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #005A9C; font-weight: 600; }
+    </style>
+</head>
+<body>
+    <div class="list-container">
+        <a href="/driver-dashboard.html" class="btn-back">← Back to Dashboard</a>
+        <h2 id="route-title">Route: Loading...</h2>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th>Student Name</th>
+                    <th>Roll No</th>
+                    <th>Stop Name</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="student-list">
+                </tbody>
+        </table>
+    </div>
+
+    <script>
+        async function fetchStudents() {
+            const token = localStorage.getItem('erp-token');
+            try {
+                // First get the driver's route ID
+                const statusRes = await fetch('/api/transport/driver/status', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const statusData = await statusRes.json();
+                
+                if (statusRes.ok) {
+                    document.getElementById('route-title').innerText = `Route: ${statusData.route_name}`;
+                    
+                    // Now fetch students assigned to this route
+                    const res = await fetch(`/api/transport/route/${statusData.route_id}/students`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const students = await res.json();
+                    
+                    const tbody = document.getElementById('student-list');
+                    tbody.innerHTML = students.map(s => `
+                        <tr>
+                            <td><strong>${s.full_name}</strong></td>
+                            <td>${s.roll_number || 'N/A'}</td>
+                            <td>${s.stop_name || 'Main Point'}</td>
+                            <td class="status-on">Assigned</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error("List Error:", err);
+            }
+        }
+        window.onload = fetchStudents;
+    </script>
+</body>
+</html>

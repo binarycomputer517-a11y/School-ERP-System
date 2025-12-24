@@ -36,19 +36,21 @@ document.getElementById('login-form').addEventListener('submit', async function(
             localStorage.setItem('username', data.username || username);
             
             // --- B. Identifier Synchronization ---
-            // Save general User ID
             const userId = data['user-id'] || data.userId || data.id;
             if (userId) localStorage.setItem('profile-id', userId);
 
-            // --- C. Student Reference Fix (Matches Payment & Dashboard) ---
+            // --- C. Role-Specific Identifiers (Reference Linking) ---
             if (data.role === 'Student' && data.student_id) {
-                // We save it under both keys to ensure compatibility across all modules
                 localStorage.setItem('student_id', data.student_id); 
                 localStorage.setItem('user-reference-id', data.student_id); 
-                console.log("Student reference linked:", data.student_id);
+            } else if (data.role === 'Driver' && data.driver_id) {
+                // Link Driver ID for transport module lookups
+                localStorage.setItem('driver_id', data.driver_id);
+                console.log("Driver reference linked:", data.driver_id);
             } else {
-                // Clear old student data if logging in as different role
+                // Cleanup cross-role data
                 localStorage.removeItem('student_id');
+                localStorage.removeItem('driver_id');
                 localStorage.removeItem('user-reference-id');
             }
 
@@ -58,7 +60,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
             }
             localStorage.setItem('active_branch_id', data.userBranchId || '');
 
-            // --- E. Role-Based Redirection ---
+            // --- E. Role-Based Redirection (FULL & FINAL) ---
             const role = data.role;
             if (['Admin', 'Super Admin', 'HR', 'Accountant'].includes(role)) {
                 window.location.href = '/admin-dashboard.html';
@@ -69,6 +71,10 @@ document.getElementById('login-form').addEventListener('submit', async function(
             else if (role === 'Teacher') {
                 window.location.href = '/teacher-dashboard.html'; 
             } 
+            else if (role === 'Driver') {
+                // REDIRECT TO DRIVER DASHBOARD
+                window.location.href = '/driver-dashboard.html'; 
+            }
             else {
                 window.location.href = '/dashboard.html'; 
             }
@@ -82,7 +88,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorMsg.style.color = '#ef4444';
         errorMsg.textContent = err.message;
         
-        // Reset button state
         loginButton.disabled = false;
         loginButton.textContent = 'Login';
     }

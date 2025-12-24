@@ -718,6 +718,211 @@ router.get('/my-bus', authenticateToken, authorize(['Student', 'Super Admin']), 
     }
 });
 
+/**
+ * @route   GET /api/transport/driver/status
+ * @desc    Fetch driver assignment details
+ */
+router.get('/driver/status', authenticateToken, authorize(['Driver', 'Admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                d.id AS driver_id,
+                d.full_name, 
+                d.license_number,
+                v.id AS vehicle_id,
+                v.vehicle_number, 
+                v.model AS bus_model,
+                r.route_name,
+                r.id AS route_id,
+                (SELECT COUNT(*) 
+                 FROM student_transport_assignments 
+                 WHERE route_id = r.id AND is_active = true) as student_count
+            FROM transport_drivers d
+            JOIN transport_vehicles v ON v.assigned_driver_id = d.id
+            JOIN transport_routes r ON r.vehicle_id = v.id
+            WHERE d.user_id = $1;
+        `;
+            
+        const result = await pool.query(query, [req.user.id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "No driver profile linked to this account." });
+        }
+        
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("Driver Status API Error:", err.message);
+        res.status(500).json({ message: "Internal Server Error" });
+    }
+});
 
+/**
+ * @route   GET /api/transport/route/:routeId/students
+ */
+router.get('/route/:routeId/students', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT u.full_name, s.roll_number, rs.stop_name
+            FROM student_transport_assignments sta
+            JOIN students s ON sta.student_id = s.student_id
+            JOIN users u ON s.user_id = u.id
+            LEFT JOIN route_stops rs ON sta.stop_id = rs.id
+            WHERE sta.route_id = $1 AND sta.is_active = true
+            ORDER BY u.full_name ASC;
+        `;
+        const result = await pool.query(query, [req.params.routeId]);
+        res.json(result.rows);
+    } catch (err) {
+        res.status(500).json({ message: "Error fetching student list" });
+    }
+});
+
+/**
+ * @route   POST /api/transport/maintenance
+ * @desc    Logs maintenance. Use lowercase roles to match authMiddleware normalization.
+ */
+router.post('/maintenance', authenticateToken, authorize(['driver', 'admin']), async (req, res) => {
+    const { vehicle_id, service_date, odometer_reading, details, cost } = req.body;
+    try {
+        const query = `
+            INSERT INTO vehicle_maintenance (vehicle_id, service_date, odometer_reading, details, cost)
+            VALUES ($1, $2, $3, $4, $5)
+        `;
+        await pool.query(query, [vehicle_id, service_date, odometer_reading, details, cost || 0]);
+        res.status(201).json({ message: 'Maintenance record logged successfully.' });
+    } catch (error) {
+        console.error('Maintenance Log Error:', error.message);
+        res.status(500).json({ message: 'Failed to log maintenance record.' });
+    }
+});
+
+/**
+ * @route   POST /api/transport/update-location
+ * @desc    Updates bus coordinates. Access: driver
+ */
+router.post('/update-location', authenticateToken, authorize(['driver']), async (req, res) => {
+    const { lat, lon } = req.body;
+    const userId = req.user.id; // Correctly uses req.user.id from middleware
+
+    try {
+        const query = `
+            UPDATE transport_vehicles 
+            SET last_lat = $1, last_lon = $2, last_updated = NOW() 
+            WHERE assigned_driver_id = (SELECT id FROM transport_drivers WHERE user_id = $3)
+        `;
+        const result = await pool.query(query, [lat, lon, userId]);
+        res.status(200).json({ success: true });
+    } catch (err) {
+        console.error("GPS Tracking Error:", err.message);
+        res.status(500).json({ message: "Internal server error" });
+    }
+});
+
+/**
+ * @route   POST /api/transport/fuel-logs
+ */
+router.post('/fuel-logs', authenticateToken, authorize(['Driver', 'Admin']), async (req, res) => {
+    const { vehicle_id, odometer, quantity, total_cost, log_date } = req.body;
+    try {
+        const query = `
+            INSERT INTO fuel_logs (vehicle_id, odometer, quantity, total_cost, log_date)
+            VALUES ($1, $2, $3, $4, $5)
+        `;
+        await pool.query(query, [vehicle_id, odometer, quantity, total_cost, log_date]);
+        res.status(201).json({ message: 'Fuel log recorded successfully.' });
+    } catch (error) {
+        console.error('Fuel Log Error:', error.message);
+        res.status(500).json({ message: 'Internal server error recording fuel log.' });
+    }
+});
+
+/**
+ * @route   POST /api/transport/sos
+ */
+router.post('/sos', authenticateToken, authorize(['Driver']), async (req, res) => {
+    const { type, lat, lon } = req.body;
+    const userId = req.user.id;
+
+    try {
+        const logQuery = `
+            INSERT INTO transport_emergencies (driver_id, vehicle_id, emergency_type, latitude, longitude, status)
+            SELECT d.id, v.id, $1, $2, $3, 'Active'
+            FROM transport_drivers d
+            JOIN transport_vehicles v ON v.assigned_driver_id = d.id
+            WHERE d.user_id = $4
+            RETURNING id;
+        `;
+        const result = await pool.query(logQuery, [type, lat, lon, userId]);
+        console.log(`🚨 SOS ALERT: ${type} reported at ${lat}, ${lon}`);
+        res.status(200).json({ message: 'Emergency services alerted.' });
+    } catch (err) {
+        console.error("SOS Error:", err.message);
+        res.status(500).json({ message: 'Failed to process SOS signal.' });
+    }
+});
+
+/**
+ * @route   GET /api/transport/admin/trip-history
+ * @desc    Fetch all fuel logs and vehicle status for Admin reporting
+ */
+router.get('/admin/trip-history', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                fl.log_date,
+                v.vehicle_number,
+                d.full_name AS driver_name,
+                fl.odometer,
+                fl.quantity,
+                fl.total_cost,
+                v.last_lat,
+                v.last_lon,
+                v.last_updated
+            FROM fuel_logs fl
+            JOIN transport_vehicles v ON fl.vehicle_id = v.id
+            JOIN transport_drivers d ON v.assigned_driver_id = d.id
+            ORDER BY fl.log_date DESC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Trip History Error:", err.message);
+        res.status(500).json({ message: "Failed to retrieve history" });
+    }
+});
+
+/**
+ * @route   GET /api/transport/admin/vehicle-health
+ * @desc    Calculates mileage and maintenance status for the fleet
+ */
+router.get('/admin/vehicle-health', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
+    try {
+        const query = `
+            WITH mileage_calc AS (
+                SELECT 
+                    vehicle_id,
+                    odometer,
+                    quantity,
+                    log_date,
+                    LAG(odometer) OVER (PARTITION BY vehicle_id ORDER BY log_date ASC) as prev_odometer
+                FROM fuel_logs
+            )
+            SELECT 
+                v.vehicle_number,
+                v.model,
+                MAX(m.odometer) as current_km,
+                ROUND(AVG((m.odometer - m.prev_odometer) / NULLIF(m.quantity, 0)), 2) as avg_kmpl,
+                (SELECT status FROM transport_emergencies WHERE vehicle_id = v.id ORDER BY created_at DESC LIMIT 1) as last_sos_status
+            FROM transport_vehicles v
+            LEFT JOIN mileage_calc m ON v.id = m.vehicle_id
+            GROUP BY v.id, v.vehicle_number, v.model;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Health Dashboard Error:", err.message);
+        res.status(500).json({ message: "Failed to calculate health metrics" });
+    }
+});
 
 module.exports = router;
