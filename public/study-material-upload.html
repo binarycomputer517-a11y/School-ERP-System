@@ -3,39 +3,183 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload Materials | ERP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <title>Upload Study Materials | Instructor Console</title>
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        body { background: #f8fafc; font-family: 'Plus Jakarta Sans', sans-serif; }
-        .upload-zone { border: 2px dashed #cbd5e1; border-radius: 20px; padding: 3rem; text-align: center; background: white; cursor: pointer; }
-        .upload-zone:hover { border-color: #6366f1; background: #f5f3ff; }
+        /* --- CLASSIC ERP STYLING --- */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #F4F4F4; color: #111; }
+        .container { max-width: 1200px; margin: auto; padding: 30px; background-color: #FFF; border: 2px solid #333; box-shadow: 10px 10px 0 #999; }
+        h1 { text-align: center; border-bottom: 5px double #333; padding-bottom: 15px; text-transform: uppercase; color: #005A9C; }
+        
+        .layout { display: grid; grid-template-columns: 450px 1fr; gap: 30px; margin-top: 20px; }
+        .form-section { background: #f9f9f9; padding: 20px; border: 1px solid #ccc; }
+        
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9em; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #555; box-sizing: border-box; font-family: inherit; }
+        
+        .btn-upload { background: #005A9C; color: white; padding: 12px; width: 100%; border: 2px solid #000; font-weight: bold; cursor: pointer; margin-top: 20px; box-shadow: 3px 3px 0 #000; text-transform: uppercase; }
+        .btn-upload:hover { background: #003d6b; }
+
+        /* Status Badges */
+        .badge { padding: 4px 8px; font-size: 0.8em; font-weight: bold; text-transform: uppercase; border: 1px solid #000; }
+        .badge-video { background: #e74c3c; color: #fff; }
+        .badge-pdf { background: #3498db; color: #fff; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 0.9em; }
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+        th { background: #333; color: white; }
     </style>
 </head>
 <body>
-    <div class="container py-5">
-        <h2 class="fw-bold mb-4">Upload Study Materials</h2>
-        <div class="card border-0 rounded-4 p-4 shadow-sm">
-            <form id="materialForm">
-                <div class="mb-3">
-                    <label class="form-label fw-bold">Title</label>
-                    <input type="text" name="title" class="form-control rounded-3" required>
+
+<div class="container">
+    <div style="float: right;"><a href="/teacher-dashboard.html" style="font-weight: bold; color: #005A9C;">&larr; Exit Console</a></div>
+    <h1>Study Material Hub</h1>
+
+    <div class="layout">
+        <div class="form-section">
+            <h2 style="margin-top: 0; border-bottom: 2px solid #005A9C; padding-bottom: 5px;">Upload New Resource</h2>
+            <form id="material-form">
+                <label>Resource Title:</label>
+                <input type="text" id="title" required placeholder="e.g., Chapter 1: Introduction to Algebra">
+
+                <label>Content Type:</label>
+                <select id="content_type" onchange="toggleInputFields()">
+                    <option value="VIDEO">Video Lecture (YouTube/Link)</option>
+                    <option value="PDF">PDF Document (Notes/Book)</option>
+                </select>
+
+                <div id="url-input-div">
+                    <label>Video URL:</label>
+                    <input type="url" id="content_url" placeholder="https://youtube.com/watch?v=...">
                 </div>
-                <div class="mb-4">
-                    <label class="form-label fw-bold">Select Subject</label>
-                    <select id="subject_id" name="subject_id" class="form-select rounded-3" required>
-                        </select>
+
+                <div id="file-input-div" style="display: none;">
+                    <label>Upload PDF File:</label>
+                    <input type="file" id="content_file" accept=".pdf">
                 </div>
-                <div class="upload-zone mb-4" onclick="document.getElementById('file').click()">
-                    <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
-                    <p class="fw-bold mb-0">Drag and drop file here</p>
-                    <p class="text-muted small">Max file size: 10MB</p>
-                    <input type="file" id="file" name="material_file" hidden>
-                </div>
-                <button type="submit" class="btn btn-primary w-100 py-3 fw-bold rounded-3">PUBLISH TO MODULE</button>
+
+                <label>Assign to Course:</label>
+                <select id="course-select" required></select>
+
+                <label>Subject:</label>
+                <select id="subject-select" required></select>
+
+                <label>Publish Schedule (Optional):</label>
+                <input type="datetime-local" id="publish_date">
+
+                <button type="submit" class="btn-upload">Publish to Students</button>
             </form>
         </div>
+
+        <div class="list-section">
+            <h2 style="margin-top: 0;">Previously Uploaded Materials</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Title</th>
+                        <th>Type</th>
+                        <th>Course</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="materials-tbody">
+                    <tr><td colspan="4" style="text-align: center;">Loading resources...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
+</div>
+
+
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const API_BASE = '/api/online-learning';
+
+    function toggleInputFields() {
+        const type = document.getElementById('content_type').value;
+        document.getElementById('url-input-div').style.display = type === 'VIDEO' ? 'block' : 'none';
+        document.getElementById('file-input-div').style.display = type === 'PDF' ? 'block' : 'none';
+    }
+
+    async function loadResources() {
+        const headers = { 'Authorization': `Bearer ${token}` };
+        try {
+            const [courses, subjects, modules] = await Promise.all([
+                fetch('/api/academicswithfees/courses', { headers }).then(r => r.json()),
+                fetch('/api/academicswithfees/subjects', { headers }).then(r => r.json()),
+                fetch(`${API_BASE}/modules`, { headers }).then(r => r.json())
+            ]);
+
+            // Load Selects
+            document.getElementById('course-select').innerHTML = courses.map(c => `<option value="${c.course_id}">${c.course_name}</option>`).join('');
+            document.getElementById('subject-select').innerHTML = subjects.map(s => `<option value="${s.id || s.subject_id}">${s.subject_name}</option>`).join('');
+
+            // Filter only Study Materials (Video/PDF)
+            const materials = modules.filter(m => m.content_type === 'VIDEO' || m.content_type === 'PDF');
+            renderTable(materials);
+        } catch (e) { console.error(e); }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('materials-tbody');
+        if(data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No study materials found.</td></tr>';
+            return;
+        }
+        tbody.innerHTML = data.map(m => `
+            <tr>
+                <td><b>${m.title}</b></td>
+                <td><span class="badge badge-${m.content_type.toLowerCase()}">${m.content_type}</span></td>
+                <td>${m.course_name || 'N/A'}</td>
+                <td>
+                    <button onclick="deleteMaterial('${m.id}')" style="background:red; color:white; border:none; padding:5px; cursor:pointer;">Delete</button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    document.getElementById('material-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        const type = document.getElementById('content_type').value;
+
+        formData.append('title', document.getElementById('title').value);
+        formData.append('content_type', type);
+        formData.append('course_id', document.getElementById('course-select').value);
+        formData.append('subject_id', document.getElementById('subject-select').value);
+        formData.append('publish_date', document.getElementById('publish_date').value || new Date().toISOString());
+
+        if (type === 'VIDEO') {
+            formData.append('content_url', document.getElementById('content_url').value);
+        } else {
+            const file = document.getElementById('content_file').files[0];
+            if(file) formData.append('file', file);
+        }
+
+        const res = await fetch(`${API_BASE}/modules`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+
+        if(res.ok) {
+            alert("✅ Material Uploaded Successfully!");
+            document.getElementById('material-form').reset();
+            loadResources();
+        }
+    };
+
+    async function deleteMaterial(id) {
+        if(!confirm("Are you sure?")) return;
+        await fetch(`${API_BASE}/modules/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        loadResources();
+    }
+
+    window.onload = loadResources;
+</script>
 </body>
 </html>

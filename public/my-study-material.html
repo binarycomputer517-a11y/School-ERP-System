@@ -3,173 +3,122 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Study Material & Resources</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>My Study Materials | Student Portal</title>
     <style>
-        body { background-color: #f0f2f8; font-family: sans-serif; }
-        .container { max-width: 1000px; }
-        h1 { color: #003366; font-weight: bold; }
-        .text-primary { color: #003366 !important; }
-        .text-secondary { color: #5e35b1 !important; }
-        .card { border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        .list-group-item:hover { background-color: #f0f2f8; }
-        .subject-header { 
-            background-color: #e8eaf6; 
-            color: #003366; 
-            font-weight: bold; 
-            padding: 10px 15px; 
-            margin-top: 15px;
-            border-bottom: 2px solid #5e35b1;
-        }
-        .icon-small { font-size: 1.2em; margin-right: 8px; }
+        /* --- CLASSIC ACADEMIC DOCUMENT STYLE --- */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #F0F2F5; color: #111; line-height: 1.6; }
+        .container { max-width: 1200px; margin: auto; padding: 40px; background-color: #FFFFFF; border: 1px solid #333; box-shadow: 10px 10px 0 #888; }
+        h1 { color: #000; font-weight: bold; text-transform: uppercase; text-align: center; border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; font-size: 2.2em; }
+        
+        /* --- FILTERS SECTION --- */
+        .filter-bar { background: #F9F9F9; padding: 20px; border: 1px solid #CCC; margin-bottom: 30px; display: flex; gap: 20px; align-items: center; }
+        .filter-bar select { padding: 10px; border: 1px solid #333; flex: 1; font-family: inherit; }
+        
+        /* --- MATERIAL GRID --- */
+        .material-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 25px; }
+        .material-card { background: #FFF; border: 1px solid #333; padding: 20px; position: relative; transition: 0.2s; display: flex; flex-direction: column; }
+        .material-card:hover { transform: translateY(-5px); box-shadow: 5px 5px 0 #005A9C; }
+        
+        .content-type-tag { position: absolute; top: 10px; right: 10px; background: #005A9C; color: #FFF; padding: 3px 10px; font-size: 0.7em; font-weight: bold; text-transform: uppercase; }
+        .material-card h3 { margin: 10px 0 5px 0; color: #005A9C; font-size: 1.2em; border-bottom: 1px solid #EEE; padding-bottom: 5px; }
+        .material-card p { margin: 5px 0; font-size: 0.9em; color: #555; }
+        
+        .action-area { margin-top: auto; padding-top: 15px; }
+        .view-btn { display: block; text-align: center; background: #005A9C; color: #FFF; padding: 10px; text-decoration: none; font-weight: bold; border: 2px solid #000; box-shadow: 3px 3px 0 #000; }
+        .view-btn:hover { background: #003d6b; }
+        
+        .empty-msg { text-align: center; padding: 50px; grid-column: 1 / -1; font-style: italic; color: #777; }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <header class="mb-4 d-flex justify-content-between align-items-center">
-            <h1>Study Material & Resources</h1>
-            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary">← Back to Dashboard</a>
-        </header>
 
-        <div class="card shadow-sm">
-            <div class="card-body">
-                <h4 class="text-secondary mb-3">Available Modules & Downloads</h4>
-                
-                <div id="material-container">
-                    <p class="text-center text-muted">Loading your assigned resources...</p>
-                </div>
-                
-                <p id="error-message" class="text-danger mt-3" style="display:none;"></p>
-            </div>
-        </div>
+<div class="container">
+    <h1>My Digital Study Materials</h1>
+    <div style="margin-bottom: 20px;"><a href="/student-dashboard.html" style="font-weight: bold; color: #005A9C;">&larr; Exit to Dashboard</a></div>
+
+    <div class="filter-bar">
+        <strong>Filter By:</strong>
+        <select id="subject-filter" onchange="filterMaterials()">
+            <option value="all">All Subjects</option>
+        </select>
+        <select id="type-filter" onchange="filterMaterials()">
+            <option value="all">All Content Types</option>
+            <option value="VIDEO">Video Lectures</option>
+            <option value="PDF">PDF Notes/Documents</option>
+            <option value="QUIZ">Assessments/Quizzes</option>
+        </select>
     </div>
-    
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        const token = localStorage.getItem('erp-token');
-        const studentId = localStorage.getItem('profile-id'); 
-        
-        // Base URL for the online learning API
-        const ONLINE_LEARNING_API_BASE = '/api/online-learning';
 
-        // --- Helper function for API calls (using the standard structure) ---
-        async function handleApi(url) {
-            const response = await fetch(url, {
+    <div id="material-list" class="material-grid">
+        <div class="empty-msg">Fetching resources from academic server...</div>
+    </div>
+</div>
+
+
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const API_BASE = '/api/online-learning';
+    let allMaterials = [];
+
+    async function loadResources() {
+        const container = document.getElementById('material-list');
+        const subjectFilter = document.getElementById('subject-filter');
+
+        try {
+            const res = await fetch(`${API_BASE}/modules`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                     alert('Session expired or unauthorized. Please log in again.');
-                     localStorage.clear(); 
-                     window.location.href = '/login.html';
-                     throw new Error('Unauthorized');
-                }
-                const errorBody = await response.json().catch(() => ({ message: 'No detailed response body.' }));
-                throw new Error(`API call failed with status: ${response.status}. Message: ${errorBody.message || response.statusText}`);
-            }
-            return response.json();
+            allMaterials = await res.json();
+
+            // Populate Subject Filter
+            const subjects = [...new Set(allMaterials.map(m => m.subject_name))];
+            subjects.forEach(sub => {
+                if(sub) subjectFilter.innerHTML += `<option value="${sub}">${sub}</option>`;
+            });
+
+            renderMaterials(allMaterials);
+        } catch (e) {
+            container.innerHTML = '<div class="empty-msg" style="color:red;">Error loading resources. Please try again.</div>';
+        }
+    }
+
+    function renderMaterials(data) {
+        const container = document.getElementById('material-list');
+        if (data.length === 0) {
+            container.innerHTML = '<div class="empty-msg">No study materials available for the selected filters.</div>';
+            return;
         }
 
-        /**
-         * Maps content type to a visual icon and action text.
-         */
-        function getContentDetails(contentType) {
-            // Ensure contentType is defined before calling toUpperCase()
-            const type = (contentType || 'DEFAULT').toUpperCase();
-            switch (type) {
-                case 'PDF': return { icon: '📄', action: 'Download PDF', color: 'btn-outline-danger' };
-                case 'VIDEO': return { icon: '▶️', action: 'Watch Video', color: 'btn-outline-primary' };
-                case 'EXTERNAL': return { icon: '🔗', action: 'View Link', color: 'btn-outline-info' };
-                case 'QUIZ': return { icon: '📝', action: 'Start Quiz', color: 'btn-outline-warning' };
-                case 'DOCUMENT': return { icon: '📑', action: 'View Document', color: 'btn-outline-secondary' };
-                default: return { icon: '📚', action: 'Open Resource', color: 'btn-outline-secondary' };
-            }
-        }
-
-        /**
-         * Loads, filters, and renders study material from the assigned modules.
-         */
-        async function loadStudyMaterial() {
-            const container = document.getElementById('material-container');
-            const errorMessage = document.getElementById('error-message');
-            errorMessage.style.display = 'none';
-
-            if (!studentId || !token) {
-                container.innerHTML = '<p class="text-danger text-center">Login error: ID/Token missing. Please log in again.</p>';
-                return;
-            }
-            
-            container.innerHTML = '<p class="text-center text-muted">Loading your assigned resources...</p>';
-
-            try {
-                // Fetch study modules specifically assigned to this student
-                // NOTE: This URL requires a new route in routes/onlineLearning.js
-                const url = `${ONLINE_LEARNING_API_BASE}/modules/student/${studentId}`;
-                const modules = await handleApi(url);
-
-                if (modules.length === 0) {
-                    container.innerHTML = '<p class="text-center text-info">No study material or modules are currently assigned to you.</p>';
-                    return;
-                }
-
-                // Group materials by subject for cleaner display
-                const groupedMaterial = modules.reduce((acc, module) => {
-                    // Assuming the backend returns 'subject_name'
-                    const subjectName = module.subject_name || 'Uncategorized';
-                    if (!acc[subjectName]) acc[subjectName] = [];
-                    acc[subjectName].push(module);
-                    return acc;
-                }, {});
-
-                container.innerHTML = ''; // Clear loading message
+        container.innerHTML = data.map(m => `
+            <div class="material-card">
+                <span class="content-type-tag">${m.content_type}</span>
+                <h3>${m.title}</h3>
+                <p><b>Subject:</b> ${m.subject_name || 'General'}</p>
+                <p><b>Topic:</b> ${m.course_name || 'Academic Course'}</p>
+                <p style="font-size: 0.8em; color: #888;">Published: ${new Date(m.created_at).toLocaleDateString()}</p>
                 
-                // Render the grouped materials
-                for (const subject in groupedMaterial) {
-                    container.innerHTML += `<div class="subject-header">${subject}</div>`;
-                    
-                    const ul = document.createElement('ul');
-                    ul.className = 'list-group list-group-flush mb-4';
+                <div class="action-area">
+                    <a href="/view-module.html?id=${m.id}" class="view-btn">ACCESS CONTENT</a>
+                </div>
+            </div>
+        `).join('');
+    }
 
-                    groupedMaterial[subject].forEach(material => {
-                        const details = getContentDetails(material.content_type);
-                        
-                        // Use content_url for the link
-                        const contentUrl = material.content_url || '#';
-                        const isDisabled = contentUrl === '#';
-                        
-                        const li = document.createElement('li');
-                        li.className = 'list-group-item d-flex justify-content-between align-items-center';
-                        li.innerHTML = `
-                            <div style="flex-grow: 1;">
-                                <h5 class="mb-1 text-primary">
-                                    <span class="icon-small">${details.icon}</span> 
-                                    ${material.title}
-                                </h5>
-                                <p class="mb-0 small text-muted">
-                                    Content Type: ${material.content_type || 'General'}
-                                </p>
-                            </div>
-                            
-                            <a href="${contentUrl}" target="_blank" class="btn btn-sm ${details.color} ${isDisabled ? 'disabled' : ''}" 
-                               ${isDisabled ? 'aria-disabled="true"' : ''}>
-                                ${details.action}
-                            </a>
-                        `;
-                        ul.appendChild(li);
-                    });
-                    container.appendChild(ul);
-                }
+    function filterMaterials() {
+        const subVal = document.getElementById('subject-filter').value;
+        const typeVal = document.getElementById('type-filter').value;
 
-            } catch (error) {
-                console.error('Error loading study material:', error);
-                errorMessage.textContent = `Error: Failed to load study material. Please try again. (${error.message})`;
-                errorMessage.style.display = 'block';
-                container.innerHTML = '<p class="text-center text-danger">Failed to connect to the resources server.</p>';
-            }
-        }
+        const filtered = allMaterials.filter(m => {
+            const subMatch = subVal === 'all' || m.subject_name === subVal;
+            const typeMatch = typeVal === 'all' || m.content_type === typeVal;
+            return subMatch && typeMatch;
+        });
 
-        document.addEventListener('DOMContentLoaded', loadStudyMaterial);
-    </script>
-    <script src="js/global-config.js"></script>
+        renderMaterials(filtered);
+    }
+
+    window.onload = loadResources;
+</script>
 </body>
 </html>

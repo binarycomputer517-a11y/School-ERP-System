@@ -3,170 +3,177 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Assignments & Progress | Enterprise ERP</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>My Assignments | Student Portal</title>
     <style>
-        :root { --erp-blue: #003366; --erp-purple: #5e35b1; }
-        body { background-color: #f8f9fa; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .container { max-width: 1100px; }
-        h1 { color: var(--erp-blue); font-weight: 800; letter-spacing: -0.5px; }
-        .card { border: none; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
-        .list-group-item { border: none; border-left: 5px solid transparent; margin-bottom: 10px; transition: 0.3s; background: white; border-radius: 8px !important; }
-        .list-group-item:hover { border-left: 5px solid var(--erp-purple); transform: translateX(5px); background-color: #fff; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        /* --- ACADEMIC STYLING --- */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #F4F7F6; color: #333; }
+        .container { max-width: 1100px; margin: auto; background: #FFF; padding: 40px; border: 1px solid #222; box-shadow: 10px 10px 0 #999; }
+        h1 { text-align: center; border-bottom: 5px double #222; padding-bottom: 15px; text-transform: uppercase; letter-spacing: 1px; }
         
-        /* Dynamic Status Badges */
-        .status-badge { font-weight: 700; padding: 6px 12px; border-radius: 50px; font-size: 0.75em; text-transform: uppercase; }
-        .status-Assigned { background-color: #fff3cd; color: #856404; }
-        .status-PendingReview { background-color: #cff4fc; color: #055160; }
-        .status-Graded { background-color: #d4edda; color: #155724; }
-        .status-Overdue { background-color: #f8d7da; color: #721c24; }
+        /* Assignment Cards */
+        .assignment-card { border: 1px solid #444; padding: 25px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 220px; gap: 20px; align-items: center; background: #fff; }
+        .assignment-card:hover { border-color: #005A9C; background: #fafafa; }
         
-        .btn-action { border-radius: 50px; font-weight: 600; padding: 5px 20px; font-size: 0.85rem; }
+        .info h3 { margin: 0 0 10px 0; color: #005A9C; font-size: 1.4em; }
+        .info p { margin: 5px 0; font-size: 0.95em; color: #555; }
+        
+        .status-tag { display: inline-block; padding: 5px 12px; font-size: 0.75em; font-weight: bold; border: 1px solid #000; text-transform: uppercase; margin-bottom: 10px; }
+        .status-not-submitted { background: #eee; color: #333; }
+        .status-pending-review { background: #fff3cd; color: #856404; }
+        .status-graded { background: #d4edda; color: #155724; }
+
+        .btn-action { background: #005A9C; color: white; padding: 12px; border: 2px solid #000; cursor: pointer; font-weight: bold; text-align: center; text-decoration: none; box-shadow: 3px 3px 0 #000; display: block; width: 100%; box-sizing: border-box; font-size: 0.9em; }
+        .btn-action:hover { background: #003d6b; }
+        .btn-action:disabled { background: #999; cursor: not-allowed; box-shadow: none; border-color: #777; }
+
+        /* Modal */
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 30px; border: 3px solid #005A9C; width: 450px; box-shadow: 10px 10px 0 #000; }
+        
+        .error-display { color: #c0392b; font-weight: bold; text-align: center; padding: 30px; border: 2px dashed #c0392b; background: #fff; }
     </style>
 </head>
 <body>
-    <div class="container mt-5">
-        <header class="mb-5 d-flex justify-content-between align-items-center">
-            <div>
-                <h1>Academic Assignments</h1>
-                <p class="text-muted">Track your homework, projects, and grading status.</p>
-            </div>
-            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary px-4 shadow-sm">← Dashboard</a>
-        </header>
 
-        <div class="card p-4">
-            <div class="card-body">
-                <div id="status-filter" class="mb-4 d-flex gap-2">
-                    <button class="btn btn-sm btn-secondary active rounded-pill px-3" onclick="filterAssignments('all')">All</button>
-                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="filterAssignments('Pending Review')">Pending</button>
-                    <button class="btn btn-sm btn-outline-secondary rounded-pill px-3" onclick="filterAssignments('Assigned')">To-Do</button>
-                </div>
-
-                <ul id="assignments-list" class="list-group">
-                    <div class="text-center py-5">
-                        <div class="spinner-border text-primary" role="status"></div>
-                        <p class="mt-2 text-muted">Fetching your academic records...</p>
-                    </div>
-                </ul>
-                
-                <p id="error-message" class="text-danger mt-3 text-center" style="display:none;"></p>
-            </div>
-        </div>
+<div class="container">
+    <h1>Academic Assignments & Submissions</h1>
+    <div style="margin-bottom: 25px;">
+        <a href="/student-dashboard.html" style="font-weight: bold; color: #005A9C; text-decoration: none; border-bottom: 1px solid #005A9C;">&larr; Return to Dashboard</a>
     </div>
     
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        const token = localStorage.getItem('erp-token');
-        const studentId = localStorage.getItem('profile-id'); 
-        let allAssignments = [];
+    <div id="assignment-list">
+        <div style="text-align: center; padding: 40px; font-style: italic;">Loading assignment records...</div>
+    </div>
+</div>
 
-        async function handleApi(url) {
-            const response = await fetch(url, {
+<div id="submit-modal" class="modal">
+    <div class="modal-content">
+        <h2 style="margin-top: 0; color: #005A9C; text-transform: uppercase;">Submit Your Work</h2>
+        <form id="upload-form">
+            <input type="hidden" id="submit-id">
+            
+            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Attach Assignment File (PDF/DOC/Image):</label>
+            <input type="file" id="submission-file" required style="margin-bottom: 15px; width: 100%;">
+            
+            <label style="display: block; margin-bottom: 8px; font-weight: bold;">Notes for Instructor:</label>
+            <textarea id="student-notes" rows="3" style="width: 100%; padding: 10px; border: 1px solid #333; box-sizing: border-box;" placeholder="Optional comments..."></textarea>
+            
+            <div style="margin-top: 25px; display: flex; gap: 15px;">
+                <button type="submit" class="btn-action" style="flex: 2;">CONFIRM SUBMISSION</button>
+                <button type="button" class="btn-action" style="background: #777; flex: 1; box-shadow: 3px 3px 0 #333;" onclick="closeModal()">CANCEL</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+
+
+<script>
+    const token = localStorage.getItem('erp-token');
+
+    // উন্নত টোকেন পার্সিং লজিক (null আইডি সমস্যা এড়াতে)
+    function getStudentId() {
+        if (!token) return null;
+        try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload.studentId || payload.id || localStorage.getItem('student-id');
+        } catch (e) {
+            console.error("Token error:", e);
+            return localStorage.getItem('student-id');
+        }
+    }
+
+    const currentStudentId = getStudentId();
+
+    async function loadAssignments() {
+        const listDiv = document.getElementById('assignment-list');
+
+        if (!currentStudentId || currentStudentId === "null") {
+            listDiv.innerHTML = `<div class="error-display">Profile Identity Missing. Please log out and log in again to sync your student ID.</div>`;
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/online-learning/assignments/student/${currentStudentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            if (!response.ok) {
-                if (response.status === 401 || response.status === 403) {
-                     window.location.href = '/login.html';
-                     throw new Error('Unauthorized');
-                }
-                throw new Error(`Error ${response.status}`);
-            }
-            return response.json();
-        }
 
-        function getAssignmentStatus(dueDateStr, submissionStatus) {
-            // Priority 1: Status from Database (Pending Review, Graded, etc.)
-            if (submissionStatus && submissionStatus !== 'Not Started') {
-                return submissionStatus;
-            }
+            if (!res.ok) throw new Error("Synchronization failure with server.");
 
-            // Priority 2: Check for Overdue
-            if (dueDateStr) {
-                const now = new Date();
-                const dueDate = new Date(dueDateStr);
-                if (!isNaN(dueDate) && dueDate < now) return 'Overdue';
-            }
-            
-            return 'Assigned';
-        }
+            const assignments = await res.json();
 
-        async function loadAssignments() {
-            const listElement = document.getElementById('assignments-list');
-            const errorMessage = document.getElementById('error-message');
-
-            if (!studentId || !token) {
-                listElement.innerHTML = '<li class="list-group-item text-danger text-center">Authentication session missing.</li>';
-                return;
-            }
-
-            try {
-                // Fetching from the 900-line backend route we built
-                const assignments = await handleApi(`/api/online-learning/assignments/student/${studentId}`);
-                allAssignments = assignments;
-                renderList(assignments);
-
-            } catch (error) {
-                errorMessage.textContent = `Sync Error: ${error.message}`;
-                errorMessage.style.display = 'block';
-                listElement.innerHTML = '';
-            }
-        }
-
-        function renderList(assignments) {
-            const listElement = document.getElementById('assignments-list');
             if (assignments.length === 0) {
-                listElement.innerHTML = '<li class="list-group-item text-center text-muted py-5">No assignments found for your current batch.</li>';
+                listDiv.innerHTML = '<div style="text-align:center; padding:50px; border:1px dashed #ccc;">No assignments have been assigned to your profile yet.</div>';
                 return;
             }
 
-            listElement.innerHTML = assignments.map(assignment => {
-                const status = getAssignmentStatus(assignment.due_date, assignment.submission_status);
-                const dueDate = assignment.due_date ? new Date(assignment.due_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'No Due Date';
-                const statusClass = status.replace(/\s/g, '');
-                
-                // Route to the syllabus/viewer page
-                const actionUrl = `/my-syllabus.html`; 
+            listDiv.innerHTML = assignments.map(a => {
+                const statusSlug = a.submission_status.toLowerCase().replace(/\s+/g, '-');
+                const isLocked = a.submission_status !== 'Not Submitted';
 
                 return `
-                    <li class="list-group-item d-flex justify-content-between align-items-center shadow-sm p-4 mb-3">
-                        <div style="flex-grow: 1;">
-                            <div class="d-flex align-items-center mb-2">
-                                <span class="badge bg-light text-dark border me-2" style="font-size:0.6rem;">${assignment.subject_code || 'GEN'}</span>
-                                <h5 class="mb-0 fw-bold text-primary">${assignment.title}</h5>
-                            </div>
-                            <p class="mb-1 small text-muted">
-                                <strong>${assignment.subject_name || 'General Subject'}</strong> &bull; 
-                                Max Marks: <span class="text-dark fw-bold">${assignment.max_marks || 100}</span>
-                            </p>
-                            <p class="mb-0 small ${status === 'Overdue' ? 'text-danger fw-bold' : 'text-muted'}">
-                                <i class="bi bi-clock"></i> Due: ${dueDate}
-                            </p>
+                    <div class="assignment-card">
+                        <div class="info">
+                            <span class="status-tag status-${statusSlug}">${a.submission_status}</span>
+                            <h3>${a.title}</h3>
+                            <p><b>Reference Material:</b> <a href="${a.content_url}" target="_blank" style="color:#005A9C;">View Study Content</a></p>
+                            <p><b>Grade:</b> ${a.marks_obtained || '--'} / ${a.max_marks}</p>
+                            ${a.feedback ? `<div style="margin-top:12px; padding:10px; background:#e3f2fd; border-left:4px solid #005A9C; font-size:0.9em;"><b>Teacher Feedback:</b> ${a.feedback}</div>` : ''}
                         </div>
-                        
-                        <div class="text-end">
-                            <div class="mb-3">
-                                <span class="status-badge status-${statusClass}">${status}</span>
-                            </div>
-                            <a href="${actionUrl}" class="btn btn-action ${status === 'Graded' ? 'btn-success' : 'btn-outline-primary'}">
-                                ${status === 'Graded' ? 'View Grade' : 'Open Module'}
-                            </a>
+                        <div class="actions">
+                            ${!isLocked ? 
+                                `<button class="btn-action" onclick="openModal('${a.id}')">UPLOAD WORK</button>` : 
+                                `<button class="btn-action" style="background: #27ae60; border-color: #1e8449; cursor:default;" disabled>✔ SUBMITTED</button>`
+                            }
                         </div>
-                    </li>
+                    </div>
                 `;
             }).join('');
-        }
 
-        function filterAssignments(status) {
-            // Update active button state
-            document.querySelectorAll('#status-filter .btn').forEach(btn => btn.classList.remove('active', 'btn-secondary'));
-            document.querySelectorAll('#status-filter .btn').forEach(btn => btn.classList.add('btn-outline-secondary'));
-            
-            const filtered = status === 'all' ? allAssignments : allAssignments.filter(a => getAssignmentStatus(a.due_date, a.submission_status) === status);
-            renderList(filtered);
+        } catch (err) {
+            listDiv.innerHTML = `<div class="error-display">Connection Error: Unable to fetch data. Please check your internet.</div>`;
         }
+    }
 
-        document.addEventListener('DOMContentLoaded', loadAssignments);
-    </script>
-    <script src="js/global-config.js"></script>
+    function openModal(id) {
+        document.getElementById('submit-id').value = id;
+        document.getElementById('submit-modal').style.display = 'flex';
+    }
+
+    function closeModal() {
+        document.getElementById('submit-modal').style.display = 'none';
+        document.getElementById('upload-form').reset();
+    }
+
+    document.getElementById('upload-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const file = document.getElementById('submission-file').files[0];
+        if (!file) return alert("Please select a file.");
+
+        const formData = new FormData();
+        formData.append('submission_id', document.getElementById('submit-id').value);
+        formData.append('student_notes', document.getElementById('student-notes').value);
+        formData.append('submission_file', file);
+
+        try {
+            const res = await fetch('/api/online-learning/assignments/submit', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: formData
+            });
+
+            const result = await res.json();
+            if (!res.ok) throw new Error(result.message || "Upload failed");
+
+            alert("✅ Assignment successfully uploaded for review!");
+            closeModal();
+            loadAssignments();
+        } catch (err) {
+            alert("❌ Error: " + err.message);
+        }
+    };
+
+    window.onload = loadAssignments;
+</script>
 </body>
 </html>

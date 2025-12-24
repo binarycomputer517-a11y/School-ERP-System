@@ -7,23 +7,18 @@ const fs = require('fs');
 const { pool } = require('../database'); 
 const { authenticateToken, authorize } = require('../authMiddleware'); 
 
-// --- Enterprise Constants ---
+// --- Constants ---
 const MODULES_TABLE = 'online_learning_modules';
 const ASSIGNMENTS_CORE_TABLE = 'homework_assignments'; 
 const SUBMISSIONS_TABLE = 'assignment_submissions';    
-const MODULE_CONFIG_TABLE = 'online_module_configurations'; 
 const AUDIT_LOG_TABLE = 'academic_audit_logs';
 
 const ROLES = {
-    ADMINS: ['Super Admin', 'Admin'],
     MANAGERS: ['Super Admin', 'Admin', 'Teacher'],
     STUDENTS: ['Student']
 };
 
-// =========================================================
-// INTERNAL UTILITIES
-// =========================================================
-
+// --- Storage Config ---
 const uploadDir = 'public/uploads/assignments';
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
@@ -31,11 +26,12 @@ const storage = multer.diskStorage({
     destination: (req, file, cb) => cb(null, uploadDir),
     filename: (req, file, cb) => {
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, `student-${req.body.student_id || 'uuid'}-${uniqueSuffix}${path.extname(file.originalname)}`);
+        cb(null, `doc-${uniqueSuffix}${path.extname(file.originalname)}`);
     }
 });
 const upload = multer({ storage: storage });
 
+// --- Audit Utility ---
 async function logAction(userId, action, targetId, metadata = {}) {
     try {
         await pool.query(
@@ -46,178 +42,222 @@ async function logAction(userId, action, targetId, metadata = {}) {
 }
 
 // =========================================================
-// 1. MODULE & SYLLABUS DELIVERY
+// 1. MODULE MANAGEMENT (CRUD)
 // =========================================================
-
-/**
- * @route   GET /api/online-learning/modules/student/:studentId
- * @desc    Fetch student syllabus with submission status.
- */
-router.get('/modules/student/:studentId', authenticateToken, async (req, res) => {
-    const { studentId } = req.params; 
-    try {
-        const query = `
-            SELECT
-                olm.id AS module_id, olm.title, olm.content_type, olm.content_url,
-                s.subject_name,
-                COALESCE(sub.submission_status, 'Not Started') as current_status,
-                sub.submitted_at as last_submission
-            FROM ${MODULES_TABLE} olm
-            JOIN students stud ON stud.user_id = $1  
-            LEFT JOIN subjects s ON olm.subject_id = s.id
-            LEFT JOIN ${ASSIGNMENTS_CORE_TABLE} ha ON ha.module_id = olm.id
-            LEFT JOIN ${SUBMISSIONS_TABLE} sub 
-                ON sub.assignment_id = ha.id AND sub.student_id = stud.student_id
-            WHERE olm.course_id = stud.course_id 
-              AND (olm.batch_id = stud.batch_id OR olm.batch_id IS NULL)
-              AND olm.status = 'Published'
-              AND (olm.is_deleted = false OR olm.is_deleted IS NULL)
-            ORDER BY s.subject_name, olm.created_at;
-        `;
-        const result = await pool.query(query, [studentId]); 
-        res.status(200).json(result.rows);
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to sync syllabus.' });
-    }
-});
 
 /**
  * @route   GET /api/online-learning/modules
- * @desc    Admin view of all modules.
+ * @desc    Fetch Modules (Managers see all, Students see filtered syllabus)
  */
-router.get('/modules', authenticateToken, authorize(ROLES.MANAGERS), async (req, res) => {
+router.get('/modules', authenticateToken, authorize([...ROLES.MANAGERS, ...ROLES.STUDENTS]), async (req, res) => {
     try {
-        const query = `
-            SELECT olm.*, c.course_name, s.subject_name
-            FROM ${MODULES_TABLE} olm
-            LEFT JOIN courses c ON olm.course_id = c.id
-            LEFT JOIN subjects s ON olm.subject_id = s.id
-            WHERE (olm.is_deleted = false OR olm.is_deleted IS NULL)
-            ORDER BY olm.created_at DESC;
-        `;
-        const result = await pool.query(query); 
-        res.status(200).json(result.rows);
-    } catch (error) {
-        res.status(500).json({ message: 'Failed to retrieve modules.' });
-    }
+        let query;
+        if (req.user.role === 'Student') {
+            query = `
+                SELECT olm.*, s.subject_name
+                FROM ${MODULES_TABLE} olm
+                LEFT JOIN subjects s ON olm.subject_id = s.id
+                WHERE (olm.is_deleted = false OR olm.is_deleted IS NULL)
+                AND (olm.publish_date <= NOW() OR olm.publish_date IS NULL)
+                AND (olm.expiry_date > NOW() OR olm.expiry_date IS NULL)
+                AND olm.status = 'Published'
+                ORDER BY olm.publish_date DESC;
+            `;
+        } else {
+            query = `
+                SELECT olm.*, c.course_name, b.batch_name, s.subject_name
+                FROM ${MODULES_TABLE} olm
+                LEFT JOIN courses c ON olm.course_id = c.id
+                LEFT JOIN batches b ON olm.batch_id = b.id
+                LEFT JOIN subjects s ON olm.subject_id = s.id
+                WHERE (olm.is_deleted = false OR olm.is_deleted IS NULL)
+                ORDER BY olm.created_at DESC;
+            `;
+        }
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
-// =========================================================
-// 2. CRUD OPERATIONS (CREATE, UPDATE, DELETE)
-// =========================================================
-
-router.post('/modules', authenticateToken, authorize(ROLES.MANAGERS), async (req, res) => {
-    const { title, content_type, content_url, course_id, subject_id, status, batch_id } = req.body;
+/**
+ * @route   GET /api/online-learning/modules/:id
+ * @desc    Fetch single module details (Allowed for both Managers & Students)
+ */
+router.get('/modules/:id', authenticateToken, authorize([...ROLES.MANAGERS, ...ROLES.STUDENTS]), async (req, res) => {
     try {
         const query = `
-            INSERT INTO ${MODULES_TABLE} (title, content_type, content_url, course_id, subject_id, status, batch_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id;
+            SELECT olm.*, s.subject_name 
+            FROM ${MODULES_TABLE} olm
+            LEFT JOIN subjects s ON olm.subject_id = s.id
+            WHERE olm.id = $1 AND (olm.is_deleted = false OR olm.is_deleted IS NULL)
         `;
-        const result = await pool.query(query, [title, content_type, content_url, course_id, subject_id, status, batch_id]);
+        const result = await pool.query(query, [req.params.id]);
+        
+        if (result.rowCount === 0) return res.status(404).json({ message: 'Module not found' });
+        
+        const moduleData = result.rows[0];
+
+        // Security check for Students
+        if (req.user.role === 'Student') {
+            const now = new Date();
+            if (moduleData.status !== 'Published' || 
+               (moduleData.publish_date && new Date(moduleData.publish_date) > now) ||
+               (moduleData.expiry_date && new Date(moduleData.expiry_date) < now)) {
+                return res.status(403).json({ message: 'Content is not accessible at this time.' });
+            }
+        }
+
+        res.json(moduleData);
+    } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+/**
+ * @route   POST /api/online-learning/modules
+ * @desc    Create a new module with Optional File Upload
+ */
+router.post('/modules', authenticateToken, authorize(ROLES.MANAGERS), upload.single('file'), async (req, res) => {
+    const { title, content_type, content_url, course_id, subject_id, batch_id, due_date, max_marks, publish_date, expiry_date } = req.body;
+    let finalUrl = content_url || '';
+
+    if (req.file) finalUrl = `/uploads/assignments/${req.file.filename}`;
+
+    try {
+        const query = `
+            INSERT INTO ${MODULES_TABLE} 
+            (title, content_type, content_url, course_id, subject_id, batch_id, due_date, max_marks, publish_date, expiry_date, status) 
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'Published') 
+            RETURNING id;
+        `;
+        const result = await pool.query(query, [
+            title, content_type || 'ASSIGNMENT', finalUrl, course_id, subject_id, batch_id || null, 
+            due_date || null, max_marks || 0, publish_date || new Date(), expiry_date || null
+        ]);
+
         await logAction(req.user.id, 'CREATE_MODULE', result.rows[0].id, { title });
-        res.status(201).json({ message: 'Success', id: result.rows[0].id });
-    } catch (error) {
-        res.status(500).json({ message: 'Insert failure.' });
-    }
+        res.status(201).json({ success: true, id: result.rows[0].id });
+    } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+/**
+ * @route   PUT /api/online-learning/modules/:id
+ * @desc    Update Module parameters
+ */
+router.put('/modules/:id', authenticateToken, authorize(ROLES.MANAGERS), upload.single('file'), async (req, res) => {
+    const { title, course_id, subject_id, batch_id, due_date, max_marks, status, content_url, publish_date, expiry_date } = req.body;
+    let finalUrl = content_url;
+
+    if (req.file) finalUrl = `/uploads/assignments/${req.file.filename}`;
+
+    try {
+        const query = `
+            UPDATE ${MODULES_TABLE} 
+            SET title=$1, course_id=$2, subject_id=$3, batch_id=$4, due_date=$5, max_marks=$6, status=$7, content_url=$8, publish_date=$9, expiry_date=$10, updated_at=NOW() 
+            WHERE id=$11 RETURNING id;
+        `;
+        await pool.query(query, [title, course_id, subject_id, batch_id, due_date, max_marks, status || 'Published', finalUrl, publish_date, expiry_date, req.params.id]);
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 /**
  * @route   DELETE /api/online-learning/modules/:id
- * @desc    Delete module with cascade check.
+ * @desc    Soft Delete Module
  */
 router.delete('/modules/:id', authenticateToken, authorize(ROLES.MANAGERS), async (req, res) => {
-    const { id } = req.params;
     try {
-        const result = await pool.query(`DELETE FROM ${MODULES_TABLE} WHERE id = $1 RETURNING id`, [id]);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Module not found or already deleted.' });
-        }
-        await logAction(req.user.id, 'DELETE_MODULE', id);
-        res.status(200).json({ message: 'Deleted successfully.' });
-    } catch (error) {
-        console.error('Delete Error:', error.message);
-        res.status(500).json({ message: 'Delete failed.' });
-    }
+        await pool.query(`UPDATE ${MODULES_TABLE} SET is_deleted = true WHERE id = $1`, [req.params.id]);
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 // =========================================================
-// 3. ASSIGNMENT SUBMISSION
+// 2. ASSIGNMENT SUBMISSION & STUDENT OPS
 // =========================================================
 
-router.post('/assignments/submit', authenticateToken, upload.single('file'), async (req, res) => {
-    const { module_id, student_id, comments } = req.body;
-    const submission_path = req.file ? `/uploads/assignments/${req.file.filename}` : null;
-
-    if (!module_id || !submission_path) {
-        return res.status(400).json({ message: 'Missing module ID or file.' });
-    }
+/**
+ * @route   GET /api/online-learning/assignments/student/:studentId
+ */
+router.get('/assignments/student/:studentId', authenticateToken, authorize(ROLES.STUDENTS), async (req, res) => {
+    const { studentId } = req.params;
+    if (!studentId || studentId === 'null') return res.status(400).json({ message: "Invalid Student ID" });
 
     try {
-        const assignmentRes = await pool.query(
-            `SELECT id FROM ${ASSIGNMENTS_CORE_TABLE} WHERE module_id = $1 LIMIT 1`,
-            [module_id]
-        );
-
-        if (assignmentRes.rowCount === 0) return res.status(404).json({ message: 'No assignment linked.' });
-
-        const assignment_id = assignmentRes.rows[0].id;
         const query = `
-            INSERT INTO ${SUBMISSIONS_TABLE} (assignment_id, student_id, submission_path, submission_text, submission_status, submitted_at)
-            VALUES ($1, $2, $3, $4, 'Pending Review', NOW())
-            ON CONFLICT (assignment_id, student_id) DO UPDATE SET 
-            submission_path = EXCLUDED.submission_path, submitted_at = NOW(), submission_status = 'Pending Review'
-            RETURNING id;
+            SELECT sub.*, ha.title, ha.max_marks, olm.content_url
+            FROM ${SUBMISSIONS_TABLE} sub
+            JOIN ${ASSIGNMENTS_CORE_TABLE} ha ON sub.assignment_id = ha.id
+            JOIN ${MODULES_TABLE} olm ON ha.module_id = olm.id
+            WHERE sub.student_id = $1
+            ORDER BY sub.submitted_at DESC NULLS LAST;
         `;
-        await pool.query(query, [assignment_id, student_id, submission_path, comments || '']);
-        res.status(200).json({ success: true });
-    } catch (error) {
-        res.status(500).json({ message: 'Submission failed.' });
-    }
+        const result = await pool.query(query, [studentId]);
+        res.json(result.rows);
+    } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
 /**
- * @route   GET /assignments/student/:studentId
- * @desc    Get assigned homework and their current submission status for a student.
+ * @route   POST /api/online-learning/assignments/submit
  */
-router.get('/assignments/student/:studentId', authenticateToken, async (req, res) => {
-    const { studentId } = req.params;
+router.post('/assignments/submit', authenticateToken, authorize(ROLES.STUDENTS), upload.single('submission_file'), async (req, res) => {
+    const { submission_id, student_notes } = req.body;
+    let filePath = req.file ? `/uploads/assignments/${req.file.filename}` : null;
+
+    if (!filePath) return res.status(400).json({ message: "File required" });
 
     try {
-        const query = `
-            SELECT
-                ha.id AS assignment_id,
-                ha.title, 
-                ha.due_date,
-                ha.instructions,
-                ha.max_marks,
-                s.subject_name,
-                s.subject_code,
-                -- Get submission status from the submission table
-                sub.submission_status, 
-                sub.submitted_at AS completion_date
-            FROM ${ASSIGNMENTS_CORE_TABLE} ha
-            
-            -- Join to ensure we are looking at the correct student
-            JOIN students stud ON stud.user_id = $1 
-            LEFT JOIN subjects s ON ha.subject_id = s.id
-            
-            -- Join submissions to see if the student has already uploaded something
-            LEFT JOIN ${SUBMISSIONS_TABLE} sub 
-                ON sub.assignment_id = ha.id 
-                AND sub.student_id = stud.student_id 
-            
-            -- Filter by the student's actual enrollment
-            WHERE ha.course_id = stud.course_id 
-              AND ha.batch_id = stud.batch_id
-            
-            ORDER BY ha.due_date DESC;
-        `;
-        const result = await pool.query(query, [studentId]); 
-        res.status(200).json(result.rows);
-    } catch (error) {
-        console.error(`Error fetching assignments:`, error);
-        res.status(500).json({ message: 'Failed to retrieve student assignments.' });
-    }
+        const result = await pool.query(
+            `UPDATE ${SUBMISSIONS_TABLE} 
+             SET submission_file_url = $1, student_notes = $2, submission_status = 'Pending Review', submitted_at = NOW()
+             WHERE id = $3 AND (submission_status = 'Not Submitted' OR submission_status = 'Pending Review')
+             RETURNING id`,
+            [filePath, student_notes, submission_id]
+        );
+        if (result.rowCount === 0) return res.status(400).json({ message: "Update failed" });
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ message: error.message }); }
 });
 
+// =========================================================
+// 3. SPECIAL FEATURES (QR & GRADING)
+// =========================================================
+
+router.get('/modules/:id/qr', authenticateToken, async (req, res) => {
+    try {
+        const qrUrl = `${req.protocol}://${req.get('host')}/view-module.html?id=${req.params.id}`;
+        res.json({ success: true, qr_data: qrUrl });
+    } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+router.post('/submissions/grade', authenticateToken, authorize(ROLES.MANAGERS), async (req, res) => {
+    const { submission_id, marks, feedback } = req.body;
+    try {
+        await pool.query(
+            `UPDATE ${SUBMISSIONS_TABLE} SET marks_obtained = $1, feedback = $2, submission_status = 'Graded', graded_by = $3, graded_at = NOW() WHERE id = $4`,
+            [marks, feedback, req.user.id, submission_id]
+        );
+        res.json({ success: true });
+    } catch (error) { res.status(500).json({ message: error.message }); }
+});
+
+/**
+ * @route   GET /api/online-learning/submissions/pending
+ * @desc    Fetch all pending assignments for teacher review
+ */
+router.get('/submissions/pending', authenticateToken, authorize(ROLES.MANAGERS), async (req, res) => {
+    try {
+        const query = `
+            SELECT sub.*, u.full_name as student_name, ha.title as assignment_title
+            FROM ${SUBMISSIONS_TABLE} sub
+            JOIN students s ON sub.student_id = s.student_id
+            JOIN users u ON s.user_id = u.id
+            JOIN ${ASSIGNMENTS_CORE_TABLE} ha ON sub.assignment_id = ha.id
+            WHERE sub.submission_status = 'Pending Review'
+            ORDER BY sub.submitted_at ASC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (error) {
+        res.status(500).json({ message: "Review Fetch Error: " + error.message });
+    }
+});
 module.exports = router;

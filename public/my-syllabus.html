@@ -3,160 +3,125 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Syllabus | ERP Portal</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>My Academic Syllabus | Student Portal</title>
     <style>
-        :root { --primary-blue: #003366; --gold: #b8860b; }
-        body { background-color: #f4f7f6; }
-        .syllabus-header { background: white; border-bottom: 4px solid var(--primary-blue); padding: 20px; margin-bottom: 30px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
-        .subject-group { background: #e9ecef; padding: 10px 20px; font-weight: bold; color: var(--primary-blue); border-left: 5px solid var(--gold); margin-top: 20px; }
-        .module-item { background: white; border-bottom: 1px solid #eee; padding: 15px 25px; transition: 0.2s; }
-        .module-item:hover { background: #fdfdfd; }
-        .btn-submit { background: var(--primary-blue); color: white; border-radius: 0; font-weight: 600; }
-        .btn-submit:hover { background: #002244; color: white; }
+        /* --- CLASSIC ACADEMIC STYLING --- */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #F0F2F5; color: #1a1a1a; }
+        .container { max-width: 1100px; margin: auto; background: #FFF; padding: 40px; border: 1px solid #333; box-shadow: 8px 8px 0 #888; }
+        h1 { text-align: center; border-bottom: 5px double #333; padding-bottom: 15px; text-transform: uppercase; letter-spacing: 2px; }
+        
+        .student-header { background: #f9f9f9; padding: 20px; border-left: 6px solid #005A9C; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center; }
+        .course-info h2 { margin: 0; color: #005A9C; font-size: 1.4em; }
+        
+        /* --- SYLLABUS GRID --- */
+        .syllabus-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .module-item { border: 1px solid #444; padding: 25px; display: flex; justify-content: space-between; align-items: center; background: #fff; position: relative; }
+        .module-item:hover { border-color: #005A9C; background-color: #fdfdfd; }
+        
+        .content-info h3 { margin: 0 0 10px 0; font-size: 1.3em; color: #2c3e50; }
+        .meta-data { font-size: 0.85em; color: #666; display: flex; gap: 15px; }
+        .tag { background: #333; color: #fff; padding: 2px 8px; font-size: 0.75em; text-transform: uppercase; }
+        
+        .expiry-warning { font-size: 0.8em; color: #c0392b; font-weight: bold; margin-top: 10px; }
+        
+        .btn-start { background-color: #005A9C; color: #fff; padding: 12px 25px; text-decoration: none; font-weight: bold; border: 2px solid #000; box-shadow: 3px 3px 0 #000; text-transform: uppercase; font-size: 0.9em; transition: 0.2s; }
+        .btn-start:hover { transform: translate(-2px, -2px); box-shadow: 5px 5px 0 #000; }
+        .btn-start:active { transform: translate(0, 0); box-shadow: 1px 1px 0 #000; }
+
+        .error-box { background: #fee; border: 1px solid #c00; padding: 20px; text-align: center; color: #c00; font-weight: bold; }
+        .no-data { text-align: center; padding: 50px; color: #7f8c8d; font-style: italic; border: 1px dashed #bdc3c7; }
     </style>
 </head>
 <body>
 
-<div class="syllabus-header">
-    <div class="container d-flex justify-content-between align-items-center">
-        <h2 class="m-0 fw-bold">Academic Syllabus</h2>
-        <a href="/student-dashboard.html" class="btn btn-sm btn-outline-dark">Back to Dashboard</a>
-    </div>
-</div>
-
 <div class="container">
-    <div id="syllabus-content" class="card border-0 shadow-sm">
-        <div class="card-body p-0" id="main-list">
-            <div class="text-center py-5">
-                <div class="spinner-border text-primary" role="status"></div>
-                <p class="mt-2 text-muted">Loading your modules...</p>
-            </div>
+    <h1>My Academic Syllabus</h1>
+    
+    <div class="student-header">
+        <div class="course-info">
+            <h2 id="student-course">Loading Course Details...</h2>
+            <p style="margin: 5px 0 0 0;">Academic Session: 2025-26</p>
         </div>
+        <div style="text-align: right;">
+            <a href="/student-dashboard.html" style="color: #005A9C; font-weight: bold;">&larr; Back to Dashboard</a>
+        </div>
+    </div>
+
+    <div id="syllabus-content" class="syllabus-grid">
+        <div class="no-data">Synchronizing with learning server...</div>
     </div>
 </div>
 
-<div class="modal fade" id="submitModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog">
-        <div class="modal-content" style="border-top: 5px solid var(--primary-blue);">
-            <form id="submission-form">
-                <div class="modal-header">
-                    <h5 class="modal-title fw-bold">Submit Assignment</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="modal-module-id">
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">UPLOAD PDF/DOCX</label>
-                        <input type="file" id="sub-file" class="form-control" required>
-                    </div>
-                    <div class="mb-3">
-                        <label class="form-label fw-bold small">COMMENTS</label>
-                        <textarea id="sub-comments" class="form-control" rows="3"></textarea>
-                    </div>
-                </div>
-                <div class="modal-footer">
-                    <button type="submit" id="btn-upload" class="btn btn-submit w-100">SUBMIT NOW</button>
-                </div>
-            </form>
-        </div>
-    </div>
-</div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
 <script>
     const token = localStorage.getItem('erp-token');
-    const studentId = localStorage.getItem('profile-id');
+    const API_BASE = '/api/online-learning';
 
     async function loadSyllabus() {
-        const list = document.getElementById('main-list');
+        const container = document.getElementById('syllabus-content');
+        const courseHeader = document.getElementById('student-course');
+
+        if (!token) {
+            container.innerHTML = '<div class="error-box">Authentication Required. Please log in as a student.</div>';
+            return;
+        }
+
         try {
-            const res = await fetch(`/api/online-learning/modules/student/${studentId}`, {
+            const res = await fetch(`${API_BASE}/modules`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
-            const data = await res.json();
 
-            if (!data.length) {
-                list.innerHTML = `<div class="p-5 text-center text-muted">No content assigned to your batch.</div>`;
+            if (res.status === 403) {
+                container.innerHTML = '<div class="error-box">403 Forbidden: You do not have student permissions to view this syllabus.</div>';
                 return;
             }
 
-            // Group by subject
-            const grouped = data.reduce((acc, m) => {
-                const sub = m.subject_name || "General";
-                if (!acc[sub]) acc[sub] = [];
-                acc[sub].push(m);
-                return acc;
-            }, {});
+            const modules = await res.json();
 
-            list.innerHTML = "";
-            for (const subject in grouped) {
-                const head = document.createElement('div');
-                head.className = 'subject-group';
-                head.innerText = subject.toUpperCase();
-                list.appendChild(head);
-
-                grouped[subject].forEach(mod => {
-                    const item = document.createElement('div');
-                    item.className = 'module-item d-flex justify-content-between align-items-center';
-                    item.innerHTML = `
-                        <div>
-                            <h6 class="m-0 fw-bold">${mod.title}</h6>
-                            <small class="text-muted">${mod.content_type}</small>
-                        </div>
-                        <div>
-                            <a href="${mod.content_url}" target="_blank" class="btn btn-sm btn-outline-dark me-2">View</a>
-                            <button onclick="openSubmit('${mod.module_id}')" class="btn btn-sm btn-submit">Submit</button>
-                        </div>
-                    `;
-                    list.appendChild(item);
-                });
+            if (!modules || modules.length === 0) {
+                container.innerHTML = '<div class="no-data">No active modules found in your syllabus at this time.</div>';
+                courseHeader.innerText = "General Studies";
+                return;
             }
-        } catch (e) {
-            list.innerHTML = `<div class="p-5 text-center text-danger">Failed to load syllabus.</div>`;
+
+            // Update Header with the first module's course name
+            courseHeader.innerText = modules[0].course_name || "Assigned Course Syllabus";
+
+            container.innerHTML = modules.map(m => {
+                const expiryDate = m.expiry_date ? new Date(m.expiry_date) : null;
+                const isUrgent = expiryDate && (expiryDate - new Date() < 86400000); // 24 hours left
+
+                return `
+                    <div class="module-item">
+                        <div class="content-info">
+                            <span class="tag">${m.content_type}</span>
+                            <h3>${m.title}</h3>
+                            <div class="meta-data">
+                                <span>Subject: <b>${m.subject_name || 'General'}</b></span>
+                                <span>Published: ${new Date(m.created_at).toLocaleDateString()}</span>
+                            </div>
+                            ${expiryDate ? `
+                                <div class="expiry-warning" style="${isUrgent ? 'color: red;' : ''}">
+                                    ${isUrgent ? '⚠ EXPIRES SOON: ' : 'Closes on: '} ${expiryDate.toLocaleString()}
+                                </div>
+                            ` : ''}
+                        </div>
+                        <div class="actions">
+                            <a href="/view-module.html?id=${m.id}" class="btn-start">Start Learning</a>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (error) {
+            console.error("Syllabus Error:", error);
+            container.innerHTML = '<div class="error-box">Failed to connect to the learning server. Please try again later.</div>';
         }
     }
 
-    window.openSubmit = (id) => {
-        document.getElementById('modal-module-id').value = id;
-        new bootstrap.Modal(document.getElementById('submitModal')).show();
-    };
-
-    document.getElementById('submission-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('btn-upload');
-        btn.disabled = true;
-        btn.innerText = "Processing...";
-
-        const formData = new FormData();
-        formData.append('module_id', document.getElementById('modal-module-id').value);
-        formData.append('student_id', studentId);
-        formData.append('file', document.getElementById('sub-file').files[0]);
-        formData.append('comments', document.getElementById('sub-comments').value);
-
-        try {
-            const res = await fetch('/api/online-learning/assignments/submit', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: formData
-            });
-
-            if (res.ok) {
-                alert("✅ Success! Your assignment has been uploaded.");
-                location.reload();
-            } else {
-                const err = await res.json();
-                alert("❌ Error: " + (err.message || "Submission failed"));
-            }
-        } catch (error) {
-            alert("❌ Network Error");
-        } finally {
-            btn.disabled = false;
-            btn.innerText = "SUBMIT NOW";
-        }
-    });
-
-    document.addEventListener('DOMContentLoaded', loadSyllabus);
+    // Initialize
+    window.onload = loadSyllabus;
 </script>
 </body>
 </html>
