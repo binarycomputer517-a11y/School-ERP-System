@@ -2,66 +2,138 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Online Fee Payment</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Fee Payment | SaaS ERP</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+
+    <style>
+        :root { --primary: #4f46e5; --bg: #f8fafc; --text: #1e293b; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        
+        .payment-card { 
+            background: white; 
+            padding: 40px; 
+            border-radius: 24px; 
+            box-shadow: 0 20px 50px rgba(0,0,0,0.05); 
+            border: 1px solid #e2e8f0; 
+            width: 100%; 
+            max-width: 450px; 
+            text-align: center;
+        }
+
+        .icon-header { font-size: 3rem; color: var(--primary); margin-bottom: 20px; }
+        h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 10px; color: var(--text); }
+        p { color: #64748b; font-size: 0.9rem; margin-bottom: 30px; }
+
+        .form-group { text-align: left; margin-bottom: 20px; }
+        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: #475569; }
+        input { 
+            width: 100%; 
+            padding: 14px; 
+            border: 1px solid #e2e8f0; 
+            border-radius: 12px; 
+            font-size: 1rem; 
+            box-sizing: border-box; 
+            transition: 0.3s;
+        }
+        input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1); }
+
+        .btn-pay { 
+            width: 100%; 
+            background: var(--primary); 
+            color: white; 
+            padding: 16px; 
+            border: none; 
+            border-radius: 12px; 
+            font-weight: 700; 
+            font-size: 1rem;
+            cursor: pointer; 
+            transition: 0.3s; 
+        }
+        .btn-pay:hover { background: #4338ca; transform: translateY(-2px); }
+
+        .back-link { display: block; margin-top: 20px; color: #64748b; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+        .back-link:hover { color: var(--primary); }
+    </style>
 </head>
 <body>
+
+<div class="payment-card">
+    <div class="icon-header"><i class="fa-solid fa-file-invoice-dollar"></i></div>
+    <h1>Online Fee Payment</h1>
+    <p>Securely pay your tuition and academic fees.</p>
+
+    <form id="payment-form">
+        <div class="form-group">
+            <label for="amount">Payment Amount (INR)</label>
+            <input type="number" id="amount" placeholder="Enter amount" required min="1">
+        </div>
+        <button type="submit" class="btn-pay" id="pay-button">Proceed to Payment</button>
+    </form>
+
+    <a href="/admin-dashboard.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Dashboard</a>
+</div>
+
 <script>
+    // --- Auth & Session Setup ---
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
     const studentId = localStorage.getItem('user-reference-id');
-    if (!token || (userRole !== 'Student' && userRole !== 'Parent')) { 
-        // Allow Admins too for testing, but ideally this is a student/parent page
-        if (userRole !== 'Admin') window.location.href = '/login'; 
-    }
-</script>
-<div class="container" style="max-width: 500px;">
-    <h1>Online Fee Payment</h1>
-    <div class="nav-links"><a href="/admin-dashboard.html">Back to Dashboard</a></div>
-    <form id="payment-form">
-        <p>You are paying for your own account.</p>
-        <label for="amount">Amount to Pay (INR):</label>
-        <input type="number" id="amount" required min="1">
-        <button type="submit" style="margin-top: 20px;">Pay Now</button>
-    </form>
-</div>
-<script>
-    const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-    const form = document.getElementById('payment-form');
 
-    form.addEventListener('submit', async (event) => {
-        event.preventDefault();
+    // Protect Route
+    if (!token) window.location.href = '/login.html';
+
+    const cashfree = Cashfree({ mode: "sandbox" }); // Toggle "production" for live
+
+    document.getElementById('payment-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
         const amount = document.getElementById('amount').value;
-        const studentIdForPayment = localStorage.getItem('user-reference-id');
+        const btn = document.getElementById('pay-button');
 
-        if (!studentIdForPayment) {
-            alert('Your user account is not linked to a student profile. Please contact administration.');
+        // Validation against the localStorage issue you faced
+        if (!studentId || studentId === "undefined" || studentId === "null") {
+            alert('CRITICAL ERROR: Your account link is missing. Please log out and log back in to refresh your session.');
             return;
         }
-        if (!amount || amount < 1) {
-            alert('Please enter a valid amount.');
-            return;
-        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+
         try {
             const response = await fetch('/api/finance/create-cashfree-order', {
                 method: 'POST',
-                headers: authHeaders,
-                body: JSON.stringify({ amount, studentId: studentIdForPayment })
+                headers: { 
+                    'Authorization': `Bearer ${token}`, 
+                    'Content-Type': 'application/json' 
+                },
+                body: JSON.stringify({ amount, studentId })
             });
-            if (!response.ok) throw new Error('Failed to create payment order.');
-            const orderData = await response.json();
-            const cashfree = new cashfree.Cashfree({ mode: "sandbox" }); // Use "production" for live
-            cashfree.checkout({
-                paymentSessionId: orderData.payment_session_id,
-                redirectTarget: "_self"
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Server error occurred.');
+            }
+
+            const { payment_session_id } = await response.json();
+
+            // Launch Cashfree Checkout
+            await cashfree.checkout({
+                paymentSessionId: payment_session_id,
+                redirectTarget: "_self" 
             });
+
         } catch (error) {
-            console.error(error);
-            alert(error.message);
+            console.error('Payment Error:', error);
+            alert('Payment Initiation Failed: ' + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'Proceed to Payment';
         }
     });
 </script>
-<script src="js/global-config.js"></script>
 </body>
 </html>

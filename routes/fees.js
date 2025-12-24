@@ -1309,34 +1309,70 @@ router.get('/student/receipts', authenticateToken, async (req, res) => {
     }
 });
 
-// ==========================================
-// CUSTOM ROUTE: Single Receipt Details (For Printing)
-// ==========================================
-// Note: Path becomes /api/finance/receipt/:id
-router.get('/receipt/:id', authenticateToken, async (req, res) => {
+// routes/fees.js
+
+/**
+ * FINAL FIX: Single Receipt Details & PDF Generation
+ * Handles both Internal UUIDs and Cashfree Transaction Strings
+ */
+router.get('/receipt/:id', async (req, res) => {
+    // 1. Get token from header or query string
+    const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+
     try {
+        const jwt = require('jsonwebtoken');
+        jwt.verify(token, process.env.JWT_SECRET);
+
         const { id } = req.params;
         
+        // 2. Identify if the incoming ID is a UUID or a Cashfree String
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+
+        // 3. Conditional SQL query to avoid 'invalid input syntax for type uuid'
         const query = `
             SELECT 
                 fp.id, fp.transaction_id, fp.payment_date, fp.amount, fp.payment_mode,
                 s.first_name, s.last_name, s.enrollment_no, s.roll_number,
                 c.course_name,
-                si.invoice_number, si.title as fee_description
+                si.invoice_number, 
+                si.title as fee_description
             FROM fee_payments fp
             JOIN student_invoices si ON fp.invoice_id = si.id
             JOIN students s ON si.student_id = s.student_id
             LEFT JOIN courses c ON s.course_id = c.id
-            WHERE fp.id = $1`;
+            WHERE ${isUUID ? 'fp.id = $1::uuid' : 'fp.transaction_id = $1'}
+        `;
 
-        const receipt = await pool.query(query, [id]);
+        const result = await pool.query(query, [id]);
         
-        if (receipt.rows.length === 0) return res.status(404).json({ message: "Receipt not found" });
-        res.json(receipt.rows[0]);
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: "Receipt record not found." });
+        }
+
+        const data = result.rows[0];
+
+        // 4. Generate PDF if it's a browser download (has token in query)
+        if (req.query.token) {
+            const doc = new PDFDocument({ margin: 50 });
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=Receipt_${data.transaction_id || 'Fee'}.pdf`);
+            doc.pipe(res);
+
+            doc.fontSize(20).text('FEE PAYMENT RECEIPT', { align: 'center' }).moveDown();
+            doc.fontSize(12).text(`Transaction ID: ${data.transaction_id || data.id}`);
+            doc.text(`Date: ${new Date(data.payment_date).toLocaleDateString()}`).moveDown();
+            doc.text(`Student Name: ${data.first_name} ${data.last_name}`);
+            doc.text(`Amount Paid: INR ${data.amount}`);
+            doc.text(`Payment Mode: ${data.payment_mode}`);
+            doc.end();
+        } else {
+            res.json(data);
+        }
 
     } catch (err) {
-        console.error("Single Receipt Error:", err);
-        res.status(500).json({ message: "Server error" });
+        console.error("Receipt System Error:", err.message);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 });
 // ==========================================
@@ -1366,6 +1402,246 @@ router.get('/student/:studentId/scholarships', authenticateToken, async (req, re
     } catch (err) {
         console.error("Scholarship Fetch Error:", err);
         res.status(500).json({ message: "Server error fetching scholarships" });
+    }
+});
+
+
+// --- DEPENDENCIES ---
+// Ensure these are at the VERY TOP of your routes/fees.js file
+const axios = require('axios'); 
+const { sendPaymentEmail } = require('../utils/mailer'); 
+
+/**
+ * 1. CREATE CASHFREE ORDER
+ * @route   POST /api/finance/create-cashfree-order
+ * @desc    Initializes a payment session with Cashfree Sandbox
+ */
+router.post('/create-cashfree-order', authenticateToken, async (req, res) => {
+    try {
+        const { amount, studentId } = req.body;
+
+        // Fetch Student/User details from DB for the Cashfree payload
+        const userRes = await pool.query(`
+            SELECT u.email, u.phone_number, u.username 
+            FROM users u 
+            JOIN students s ON s.user_id = u.id 
+            WHERE s.student_id = $1::uuid`, [studentId]);
+        
+        const user = userRes.rows[0] || {};
+
+        // Request a real Session ID from Cashfree Sandbox using .env credentials
+        const response = await axios.post(
+            'https://sandbox.cashfree.com/pg/orders',
+            {
+                order_amount: parseFloat(amount).toFixed(2),
+                order_currency: "INR",
+                order_id: `ORDER_${Date.now()}`, 
+                customer_details: {
+                    customer_id: studentId,
+                    customer_email: user.email || 'guest@example.com',
+                    customer_phone: user.phone_number || '9999999999'
+                },
+                order_meta: {
+                    // Redirects to success page which triggers verification
+                    return_url: "http://localhost:3005/payment-success.html?order_id={order_id}"
+                }
+            },
+            {
+                headers: {
+                    'x-client-id': process.env.CASHFREE_APP_ID, 
+                    'x-client-secret': process.env.CASHFREE_SECRET_KEY, 
+                    'x-api-version': '2023-08-01',
+                    'Content-Type': 'application/json'
+                }
+            }
+        );
+
+        res.status(200).json({
+            payment_session_id: response.data.payment_session_id,
+            order_id: response.data.order_id
+        });
+
+    } catch (error) {
+        console.error("Cashfree Order Error:", error.response?.data || error.message);
+        res.status(500).json({ message: "Failed to create payment order" });
+    }
+});
+
+/**
+ * 2. VERIFY PAYMENT & UPDATE DATABASE
+ * @route   GET /api/finance/verify-payment/:orderId
+ * @desc    Verifies status, updates invoices, records payment, and emails student
+ */
+router.get('/verify-payment/:orderId', authenticateToken, async (req, res) => {
+    const { orderId } = req.params;
+    const client = await pool.connect();
+
+    try {
+        // 1. Verify status with Cashfree
+        const cfResponse = await axios.get(
+            `https://sandbox.cashfree.com/pg/orders/${orderId}`,
+            {
+                headers: {
+                    'x-client-id': process.env.CASHFREE_APP_ID,
+                    'x-client-secret': process.env.CASHFREE_SECRET_KEY,
+                    'x-api-version': '2023-08-01'
+                }
+            }
+        );
+
+        if (cfResponse.data.order_status === 'PAID') {
+            const { order_amount, cf_order_id, customer_details } = cfResponse.data;
+            const studentId = customer_details.customer_id;
+
+            await client.query('BEGIN');
+
+            // 2. DB UPDATE: Find the oldest pending invoice
+            const invoiceRes = await client.query(
+                `SELECT id, total_amount, paid_amount FROM student_invoices 
+                 WHERE student_id = $1::uuid AND status != 'Paid' 
+                 ORDER BY due_date ASC LIMIT 1`, 
+                [studentId]
+            );
+
+            if (invoiceRes.rows.length > 0) {
+                const invoice = invoiceRes.rows[0];
+                
+                // Record the payment
+                await client.query(
+                    `INSERT INTO fee_payments (invoice_id, amount, payment_mode, transaction_id, remarks) 
+                     VALUES ($1, $2, 'Online', $3, 'Cashfree Payment Successful')`,
+                    [invoice.id, order_amount, cf_order_id]
+                );
+
+                // Update invoice status
+                const newPaidAmount = parseFloat(invoice.paid_amount) + parseFloat(order_amount);
+                const newStatus = (newPaidAmount >= (parseFloat(invoice.total_amount) - 0.01)) ? 'Paid' : 'Partial';
+
+                await client.query(
+                    `UPDATE student_invoices SET paid_amount = $1, status = $2 WHERE id = $3`,
+                    [newPaidAmount, newStatus, invoice.id]
+                );
+            }
+
+            // 3. Get User details for email
+            const userRes = await client.query(
+                `SELECT u.email, u.username FROM users u 
+                 JOIN students s ON s.user_id = u.id 
+                 WHERE s.student_id = $1::uuid`, [studentId]
+            );
+
+            await client.query('COMMIT');
+
+            // 4. Trigger Confirmation Email
+            if (userRes.rows.length > 0) {
+                const { email, username } = userRes.rows[0];
+                await sendPaymentEmail(email, username, order_amount, cf_order_id);
+            }
+
+            res.status(200).json({ success: true, transactionId: cf_order_id, amount: order_amount });
+        } else {
+            res.status(400).json({ success: false, message: 'Payment status: ' + cfResponse.data.order_status });
+        }
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error("Verification Error:", error.message);
+        res.status(500).json({ message: 'Internal Server Error' });
+    } finally {
+        client.release();
+    }
+});
+
+// routes/fees.js
+router.get('/receipt/:idOrTxn', async (req, res) => {
+    // Check for token in headers OR query string
+    const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+    
+    if (!token) {
+        return res.status(401).json({ message: 'Authentication required' });
+    }
+
+    try {
+        // Manually verify token if it came from the query string
+        const jwt = require('jsonwebtoken');
+        jwt.verify(token, process.env.JWT_SECRET);
+        
+        // ... Rest of your existing PDF generation logic ...
+    } catch (err) {
+        return res.status(403).json({ message: 'Invalid Token' });
+    }
+});
+
+
+/**
+ * @route   GET /api/finance/receipt/:id
+ * @desc    Fetch receipt data OR generate PDF based on query parameter
+ */
+router.get('/receipt/:id', async (req, res) => {
+    // 1. Unified Authentication (Headers or Query for browser downloads)
+    const token = req.headers.authorization?.split(' ')[1] || req.query.token;
+    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+
+    try {
+        const jwt = require('jsonwebtoken');
+        jwt.verify(token, process.env.JWT_SECRET);
+
+        const { id } = req.params;
+        
+        // 2. Prevent UUID Syntax Error: Detect ID type
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+
+        const query = `
+            SELECT 
+                fp.id, fp.transaction_id, fp.payment_date, fp.amount, fp.payment_mode,
+                s.first_name, s.last_name, s.enrollment_no, s.roll_number,
+                c.course_name,
+                si.invoice_number, 
+                si.title as fee_description
+            FROM fee_payments fp
+            JOIN student_invoices si ON fp.invoice_id = si.id
+            JOIN students s ON si.student_id = s.student_id
+            LEFT JOIN courses c ON s.course_id = c.id
+            WHERE ${isUUID ? 'fp.id = $1::uuid' : 'fp.transaction_id = $1'}
+        `;
+
+        const result = await pool.query(query, [id]);
+        if (result.rows.length === 0) return res.status(404).json({ message: "Receipt not found" });
+
+        const data = result.rows[0];
+
+        // 3. Conditional Output: JSON or PDF
+        if (req.query.token) {
+            // GENERATE PDF
+            const doc = new PDFDocument({ margin: 50, size: 'A4' });
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename=Receipt_${data.transaction_id || 'Fee'}.pdf`);
+            doc.pipe(res);
+
+            // PDF Content Layout
+            doc.fontSize(22).fillColor('#4f46e5').text('FEE PAYMENT RECEIPT', { align: 'center' }).moveDown();
+            doc.fontSize(10).fillColor('#64748b').text(`Receipt Number: ${data.invoice_number || 'N/A'}`, { align: 'right' });
+            doc.text(`Transaction ID: ${data.transaction_id || data.id}`, { align: 'right' });
+            doc.text(`Date: ${new Date(data.payment_date).toLocaleDateString()}`, { align: 'right' }).moveDown();
+            
+            doc.rect(50, doc.y, 500, 2).fill('#4f46e5').moveDown();
+            
+            doc.fillColor('#1e293b').fontSize(12).text(`Student: ${data.first_name} ${data.last_name}`, { continued: true });
+            doc.text(`  |  Roll: ${data.roll_number || 'N/A'}`, { align: 'left' });
+            doc.text(`Course: ${data.course_name || 'N/A'}`).moveDown();
+            
+            doc.fontSize(14).text(`Description: ${data.fee_description || 'School Fee Payment'}`);
+            doc.moveDown();
+            doc.fontSize(18).fillColor('#22c55e').text(`TOTAL PAID: INR ${data.amount}`, { align: 'right' });
+            
+            doc.end();
+        } else {
+            // RETURN JSON for Frontend UI
+            res.json(data);
+        }
+
+    } catch (err) {
+        console.error("Receipt System Error:", err.message);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 });
 module.exports = router;

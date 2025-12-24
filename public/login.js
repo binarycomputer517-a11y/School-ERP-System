@@ -6,62 +6,60 @@ document.getElementById('login-form').addEventListener('submit', async function(
     const errorMsg = document.getElementById('error-msg');
     const loginButton = document.getElementById('login-button');
 
-    // 1. UI Feedback: Disable button and clear old errors
+    // 1. UI Feedback: Disable button and show loading state
     errorMsg.textContent = '';
     loginButton.disabled = true;
-    loginButton.textContent = 'Logging in...';
+    loginButton.textContent = 'Authenticating...';
 
     try {
-        // 2. Make the API Request
+        // 2. API Request
         const response = await fetch('/api/auth/login', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username, password })
         });
 
         const data = await response.json();
 
-        // 3. Handle HTTP Errors (401, 404, 500)
+        // 3. Handle Errors
         if (!response.ok) {
-            throw new Error(data.message || 'Login failed. Please check credentials.');
+            throw new Error(data.message || 'Login failed. Invalid credentials.');
         }
 
-        // 4. Validate Critical Data
-        if (data.token && data.role && data.activeSessionId) {
-            
-            console.log("Login Successful, saving session data...");
+        // 4. Validate and Save Session Data
+        if (data.token && data.role) {
+            console.log("Login Successful, synchronizing storage...");
 
-            // --- A. Save Core Auth Data ---
+            // --- A. Authentication Data ---
             localStorage.setItem('erp-token', data.token);
             localStorage.setItem('user-role', data.role);
-            localStorage.setItem('user-name', data.username);
+            localStorage.setItem('username', data.username || username);
             
-            // --- B. Save IDs ---
-            const userId = data['user-id'] || data.userId || data.reference_id;
-            if (userId) {
-                localStorage.setItem('profile-id', userId); 
-            }
+            // --- B. Identifier Synchronization ---
+            // Save general User ID
+            const userId = data['user-id'] || data.userId || data.id;
+            if (userId) localStorage.setItem('profile-id', userId);
 
-            // ✅ CRITICAL FIX: Save Student ID using the authoritative value from the server response
+            // --- C. Student Reference Fix (Matches Payment & Dashboard) ---
             if (data.role === 'Student' && data.student_id) {
-                // Server (auth.js) sends the student's actual UUID in data.student_id
+                // We save it under both keys to ensure compatibility across all modules
                 localStorage.setItem('student_id', data.student_id); 
+                localStorage.setItem('user-reference-id', data.student_id); 
+                console.log("Student reference linked:", data.student_id);
             } else {
-                // Ensure no stale student_id is left if the user is not a student
+                // Clear old student data if logging in as different role
                 localStorage.removeItem('student_id');
+                localStorage.removeItem('user-reference-id');
             }
 
-            // --- C. Save Configuration IDs ---
-            localStorage.setItem('active_session_id', data.activeSessionId);
-            
-            // Save Branch ID safely
+            // --- D. Global Config & Branching ---
+            if (data.activeSessionId) {
+                localStorage.setItem('active_session_id', data.activeSessionId);
+            }
             localStorage.setItem('active_branch_id', data.userBranchId || '');
 
-            // --- D. Dynamic Redirection based on Role ---
+            // --- E. Role-Based Redirection ---
             const role = data.role;
-
             if (['Admin', 'Super Admin', 'HR', 'Accountant'].includes(role)) {
                 window.location.href = '/admin-dashboard.html';
             } 
@@ -72,19 +70,16 @@ document.getElementById('login-form').addEventListener('submit', async function(
                 window.location.href = '/teacher-dashboard.html'; 
             } 
             else {
-                // Fallback for any other roles (e.g., Librarian, Driver)
                 window.location.href = '/dashboard.html'; 
             }
 
         } else {
-            // Debugging log to see exactly what is missing in the console
-            console.error("Missing Data in Response:", data);
-            throw new Error('Login successful, but server response is missing required data (Token, Role, or Session ID).');
+            throw new Error('Server response missing required session fields.');
         }
 
     } catch (err) {
         console.error('Login Error:', err);
-        errorMsg.style.color = 'red';
+        errorMsg.style.color = '#ef4444';
         errorMsg.textContent = err.message;
         
         // Reset button state

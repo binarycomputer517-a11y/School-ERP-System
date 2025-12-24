@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Successful | School ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #4f46e5; --success: #22c55e; --bg: #f8fafc; --text-main: #1e293b; --text-muted: #64748b; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        .card { background: white; padding: 40px; border-radius: 24px; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); text-align: center; max-width: 420px; width: 90%; }
+        .icon-circle { width: 80px; height: 80px; background: #f0fdf4; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 24px; }
+        .icon { font-size: 40px; color: var(--success); }
+        h1 { color: var(--text-main); font-size: 24px; margin: 0 0 12px; }
+        p { color: var(--text-muted); line-height: 1.6; margin: 0 0 24px; }
+        .details { background: #f1f5f9; padding: 20px; border-radius: 16px; text-align: left; margin-bottom: 24px; border: 1px solid #e2e8f0; }
+        .detail-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; }
+        .label { color: var(--text-muted); }
+        .value { color: var(--text-main); font-weight: 600; }
+        .button-group { display: flex; flex-direction: column; gap: 12px; }
+        .btn { display: block; padding: 14px; border-radius: 12px; text-decoration: none; font-weight: 600; font-size: 15px; transition: 0.2s; border: none; cursor: pointer; width: 100%; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-primary:hover { background: #4338ca; }
+        .btn-outline { background: #ecf0ff; color: var(--primary); }
+        #loading { color: var(--text-muted); font-weight: 500; }
+    </style>
+</head>
+<body>
+    <div class="card" id="status-card">
+        <div id="loading">Verifying your transaction...</div>
+
+        <div id="success-ui" style="display:none;">
+            <div class="icon-circle"><div class="icon">✓</div></div>
+            <h1>Payment Received!</h1>
+            <p>Your fee payment has been verified and your records are updated.</p>
+            
+            <div class="details">
+                <div class="detail-row"><span class="label">Transaction ID</span><span class="value" id="txn-id">---</span></div>
+                <div class="detail-row"><span class="label">Amount Paid</span><span class="value">₹<span id="paid-amount">0.00</span></span></div>
+            </div>
+
+            <div class="button-group">
+                <button onclick="downloadReceipt()" class="btn btn-primary">📥 Download Receipt (PDF)</button>
+                <a href="/student-dashboard.html" class="btn btn-outline">Go to Dashboard</a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let globalTxnId = '';
+
+        async function verify() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('order_id');
+            const token = localStorage.getItem('erp-token');
+
+            if (!orderId) {
+                showError("Invalid Order Reference", "Order ID missing.");
+                return;
+            }
+
+            try {
+                // Hits your /api/finance/verify-payment/:orderId route
+                const response = await fetch(`/api/finance/verify-payment/${orderId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                const data = await response.json();
+
+                if (data.success) {
+                    // Store the transactionId returned by the backend
+                    globalTxnId = data.transactionId; 
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('success-ui').style.display = 'block';
+                    document.getElementById('txn-id').innerText = data.transactionId;
+                    document.getElementById('paid-amount').innerText = data.amount;
+                } else {
+                    throw new Error(data.message || "Verification failed");
+                }
+            } catch (err) {
+                showError("Verification Error", err.message);
+            }
+        }
+
+        function showError(title, msg) {
+            document.getElementById('status-card').innerHTML = `
+                <h1 style="color: #ef4444">${title}</h1>
+                <p>${msg}</p>
+                <a href="/online-payment.html" class="btn btn-primary">Try Again</a>`;
+        }
+
+        function downloadReceipt() {
+            if (!globalTxnId) return alert("Receipt not ready.");
+            const token = localStorage.getItem('erp-token');
+            
+            // FIX: Append token to URL to prevent 401 Unauthorized errors
+            window.location.href = `/api/finance/receipt/${globalTxnId}?token=${token}`;
+        }
+
+        verify();
+    </script>
+</body>
+</html>
