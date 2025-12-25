@@ -540,7 +540,7 @@ router.get('/vehicles/:id/details', authenticateToken, authorize(['Admin', 'Supe
     }
 });
 
-router.post('/maintenance', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+router.post('/maintenance', authenticateToken, authorize(['driver', 'admin', 'super admin']), async (req, res) => {
     const { vehicle_id, service_date, odometer_reading, details, cost } = req.body;
     try {
         await pool.query(
@@ -813,7 +813,7 @@ router.get('/route/:routeId/students', authenticateToken, async (req, res) => {
  * @route   POST /api/transport/maintenance
  * @desc    Logs maintenance. Use lowercase roles to match authMiddleware normalization.
  */
-router.post('/maintenance', authenticateToken, authorize(['driver', 'admin']), async (req, res) => {
+router.post('/maintenance', authenticateToken, authorize(['driver', 'admin', 'super admin']), async (req, res) => {
     const { vehicle_id, service_date, odometer_reading, details, cost } = req.body;
     try {
         const query = `
