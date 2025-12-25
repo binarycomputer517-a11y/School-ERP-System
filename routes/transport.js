@@ -1051,51 +1051,78 @@ router.get('/fuel/history', authenticateToken, async (req, res) => {
 
 /**
  * @route   POST /api/transport/fuel/log
- * @desc    Submit a new fuel log and update vehicle odometer
+ * @desc    Submit a new fuel log with receipt image support
  */
 router.post('/fuel/log', authenticateToken, async (req, res) => {
-    const { odometer, quantity, total_cost, prev_odometer } = req.body;
+    // 1. Get the upload instance configured in your server.js
+    const upload = req.app.get('upload');
     
-    try {
-        // 1. Identify the vehicle assigned to this driver
-        const vehicleQuery = await pool.query(
-            `SELECT v.id FROM transport_vehicles v 
-             JOIN transport_drivers d ON v.assigned_driver_id = d.id 
-             WHERE d.user_id = $1`, 
-            [req.user.id]
-        );
-
-        if (vehicleQuery.rowCount === 0) {
-            return res.status(404).json({ message: "No vehicle assigned to your profile." });
-        }
-
-        const vehicleId = vehicleQuery.rows[0].id;
-
-        // 2. Calculate Final KMPL
-        let kmpl = null;
-        if (prev_odometer > 0 && odometer > prev_odometer) {
-            kmpl = (parseFloat(odometer) - parseFloat(prev_odometer)) / parseFloat(quantity);
-        }
-
-        // 3. Insert into fuel_logs
-        await pool.query(
-            `INSERT INTO fuel_logs (
-                vehicle_id, odometer, quantity, total_cost, kmpl, prev_odometer, log_date
-            ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE)`,
-            [vehicleId, odometer, quantity, total_cost, kmpl, prev_odometer]
-        );
-
-        // 4. Update the vehicle's current odometer in the master table
-        await pool.query(
-            `UPDATE transport_vehicles SET last_updated = NOW() WHERE id = $1`,
-            [vehicleId]
-        );
-
-        res.status(200).json({ message: "Fuel log saved successfully!" });
-    } catch (err) {
-        console.error("POST Fuel Log Error:", err.message);
-        res.status(500).json({ message: "Internal Server Error" });
+    if (!upload) {
+        return res.status(500).json({ message: "Upload service not initialized." });
     }
+
+    // 2. Execute the upload for the field named 'receipt'
+    upload.single('receipt')(req, res, async (err) => {
+        if (err) {
+            console.error("Multer Error:", err.message);
+            return res.status(500).json({ message: "File upload failed." });
+        }
+
+        // 3. Destructure fields from req.body (populated by multer)
+        const { odometer, quantity, total_cost, prev_odometer } = req.body;
+        const receipt_url = req.file ? `/uploads/receipts/${req.file.filename}` : null;
+
+        // Validation Guard: Ensure odometer isn't null before proceeding
+        if (!odometer) {
+            return res.status(400).json({ message: "Odometer reading is required." });
+        }
+
+        try {
+            // 4. Identify the vehicle assigned to this driver
+            const vehicleQuery = await pool.query(
+                `SELECT v.id FROM transport_vehicles v 
+                 JOIN transport_drivers d ON v.assigned_driver_id = d.id 
+                 WHERE d.user_id = $1`, 
+                [req.user.id]
+            );
+
+            if (vehicleQuery.rowCount === 0) {
+                return res.status(404).json({ message: "No vehicle assigned to your profile." });
+            }
+
+            const vehicleId = vehicleQuery.rows[0].id;
+
+            // 5. Calculate KMPL (Mileage)
+            let kmpl = null;
+            const currentOdo = parseFloat(odometer);
+            const previousOdo = parseFloat(prev_odometer);
+            const qty = parseFloat(quantity);
+
+            if (previousOdo > 0 && currentOdo > previousOdo) {
+                kmpl = (currentOdo - previousOdo) / qty;
+            }
+
+            // 6. Insert into fuel_logs
+            await pool.query(
+                `INSERT INTO fuel_logs (
+                    vehicle_id, odometer, quantity, total_cost, kmpl, prev_odometer, receipt_url, log_date
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_DATE)`,
+                [vehicleId, currentOdo, qty, total_cost, kmpl, previousOdo, receipt_url]
+            );
+
+            // 7. Update vehicle heartbeat
+            await pool.query(
+                `UPDATE transport_vehicles SET last_updated = NOW() WHERE id = $1`,
+                [vehicleId]
+            );
+
+            res.status(200).json({ message: "Fuel log and receipt saved successfully!" });
+
+        } catch (dbErr) {
+            console.error("Database Error:", dbErr.message);
+            res.status(500).json({ message: "Database error saving fuel log." });
+        }
+    });
 });
 
 module.exports = router;

@@ -93,39 +93,63 @@
     let prevOdo = 0;
 
     async function init() {
-        const res = await fetch('/api/transport/fuel/last-entry', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const last = await res.json();
-        prevOdo = last.odometer || 0;
-        document.getElementById('last-odo-display').innerText = `${prevOdo.toLocaleString()} KM`;
-        fetchHistory();
+        try {
+            const res = await fetch('/api/transport/fuel/last-entry', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const last = await res.json();
+            prevOdo = parseFloat(last.odometer) || 0;
+            document.getElementById('last-odo-display').innerText = `${prevOdo.toLocaleString()} KM`;
+            fetchHistory();
+        } catch (err) {
+            console.error("Initialization failed:", err);
+        }
     }
 
     function calculateKMPL() {
         const current = parseFloat(document.getElementById('odometer').value);
         const qty = parseFloat(document.getElementById('quantity').value);
         const box = document.getElementById('kmpl-box');
+        const btn = document.getElementById('submitBtn');
         
+        // Prevent submission if odo is less than previous
+        if (current > 0 && current <= prevOdo) {
+            box.style.display = 'block';
+            box.style.background = '#fee2e2';
+            box.style.color = '#b91c1c';
+            box.innerHTML = `⚠️ Odometer must be greater than ${prevOdo}`;
+            btn.disabled = true;
+            return;
+        }
+
         if (current > prevOdo && qty > 0) {
             const kmpl = ((current - prevOdo) / qty).toFixed(2);
             box.style.display = 'block';
             box.style.background = '#dcfce7';
             box.style.color = '#166534';
             box.innerHTML = `✨ Predicted Mileage: ${kmpl} KMPL`;
+            btn.disabled = false;
         } else {
             box.style.display = 'none';
+            btn.disabled = false;
         }
     }
 
     document.getElementById('fuelForm').onsubmit = async (e) => {
         e.preventDefault();
+        
+        const odometerVal = document.getElementById('odometer').value;
+        if (!odometerVal || parseFloat(odometerVal) <= prevOdo) {
+            alert("Please enter a valid odometer reading higher than the last one.");
+            return;
+        }
+
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
         btn.innerText = "Saving...";
 
         const formData = new FormData();
-        formData.append('odometer', document.getElementById('odometer').value);
+        formData.append('odometer', odometerVal);
         formData.append('quantity', document.getElementById('quantity').value);
         formData.append('total_cost', document.getElementById('total_cost').value);
         formData.append('prev_odometer', prevOdo);
@@ -133,48 +157,61 @@
         const receiptFile = document.getElementById('receipt').files[0];
         if (receiptFile) formData.append('receipt', receiptFile);
 
-        const res = await fetch('/api/transport/fuel/log', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-            body: formData
-        });
+        try {
+            const res = await fetch('/api/transport/fuel/log', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${token}` },
+                // Note: No Content-Type header; browser sets multipart boundary automatically
+                body: formData
+            });
 
-        if (res.ok) {
-            alert("Fuel entry successfully logged!");
-            location.reload();
-        } else {
-            alert("Error logging fuel.");
+            if (res.ok) {
+                alert("Fuel entry successfully logged!");
+                location.reload();
+            } else {
+                const errData = await res.json();
+                throw new Error(errData.message || "Failed to log fuel");
+            }
+        } catch (err) {
+            alert("Error: " + err.message);
             btn.disabled = false;
             btn.innerText = "Save Fuel Entry";
         }
     };
 
     async function fetchHistory() {
-        const res = await fetch('/api/transport/fuel/history', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const logs = await res.json();
-        const container = document.getElementById('historyList');
+        try {
+            const res = await fetch('/api/transport/fuel/history', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const logs = await res.json();
+            const container = document.getElementById('historyList');
 
-        // Update Dashboard
-        const totalCost = logs.reduce((sum, l) => sum + parseFloat(l.total_cost), 0);
-        const avgKmpl = (logs.reduce((sum, l) => sum + parseFloat(l.kmpl || 0), 0) / (logs.length || 1)).toFixed(1);
-        
-        document.getElementById('weekly-total').innerText = `₹ ${totalCost.toLocaleString()}`;
-        document.getElementById('avg-kmpl').innerText = `${avgKmpl} KMPL`;
+            if (logs.length > 0) {
+                const totalCost = logs.reduce((sum, l) => sum + parseFloat(l.total_cost), 0);
+                const avgKmpl = (logs.reduce((sum, l) => sum + parseFloat(l.kmpl || 0), 0) / logs.length).toFixed(1);
+                
+                document.getElementById('weekly-total').innerText = `₹ ${totalCost.toLocaleString()}`;
+                document.getElementById('avg-kmpl').innerText = `${avgKmpl} KMPL`;
 
-        container.innerHTML = logs.map(l => `
-            <div class="history-item">
-                <div>
-                    <strong>${new Date(l.log_date).toLocaleDateString()}</strong>
-                    <div style="font-size:0.8em; color:#64748b;">₹${(l.total_cost/l.quantity).toFixed(2)}/L • ${l.quantity}L</div>
-                </div>
-                <div style="text-align:right;">
-                    <div style="color:var(--success); font-weight:700;">${l.kmpl || '--'} km/L</div>
-                    ${l.receipt_url ? `<a href="${l.receipt_url}" target="_blank" class="view-receipt">📄 View Receipt</a>` : ''}
-                </div>
-            </div>
-        `).join('');
+                container.innerHTML = logs.map(l => `
+                    <div class="history-item">
+                        <div>
+                            <strong>${new Date(l.log_date).toLocaleDateString()}</strong>
+                            <div style="font-size:0.8em; color:#64748b;">₹${(l.total_cost/l.quantity).toFixed(2)}/L • ${l.quantity}L</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="color:var(--success); font-weight:700;">${l.kmpl || '--'} km/L</div>
+                            ${l.receipt_url ? `<a href="${l.receipt_url}" target="_blank" class="view-receipt">📄 View Receipt</a>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                container.innerHTML = `<p style="text-align:center; color:#64748b;">No history found.</p>`;
+            }
+        } catch (err) {
+            console.error("History fetch failed:", err);
+        }
     }
 
     window.onload = init;
