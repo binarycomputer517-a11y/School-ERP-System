@@ -1,7 +1,7 @@
 /**
  * SERVER.JS
  * Entry point for the School ERP System
- * Final Updated Version: Includes Fee Clearance & Payment History fixes
+ * Final Updated Version: Includes CORS Fix for Subdomains & Main Domain
  */
 
 // ===================================
@@ -100,7 +100,15 @@ const calendarRoutes = require('./routes/calendar');
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
+    cors: { 
+        origin: [
+            'https://bcsm.org.in',
+            'https://www.bcsm.org.in',
+            'https://portal.bcsm.org.in',
+            'http://localhost:3000'
+        ],
+        methods: ["GET", "POST"] 
+    }
 });
 
 // Make Socket.io & Upload accessible globally
@@ -111,7 +119,20 @@ app.set('upload', multerInstance);
 // 2. GLOBAL MIDDLEWARE
 // ===================================
 app.use(morgan('dev'));
-app.use(cors());
+
+// ✅ UPDATED CORS CONFIGURATION
+// এটি আপনার মেইন ওয়েবসাইট এবং পোর্টালকে নিরাপদ কানেকশন দেবে
+app.use(cors({
+    origin: [
+        'https://bcsm.org.in',       // আপনার মেইন ওয়েবসাইট
+        'https://www.bcsm.org.in',
+        'https://portal.bcsm.org.in', // আপনার নতুন ইআরপি পোর্টাল
+        'http://localhost:3000'      // টেস্টিংয়ের জন্য
+    ],
+    credentials: true, // কুকিজ এবং হেডার পাঠানোর অনুমতি
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+}));
+
 app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 

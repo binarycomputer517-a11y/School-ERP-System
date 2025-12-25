@@ -7,7 +7,7 @@
     <style>
         /* --- MODERNIZED DESIGN STYLES --- */
         body { 
-            font-family: Arial, Helvetica, sans-serif; /* Modern Font */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Modern Font */
             margin: 0; padding: 2em; 
             background-color: #f4f7f9; /* Soft background */
             color: #333; 
@@ -157,6 +157,15 @@
             background-color: #e6ffed;
             border-left: 4px solid #28a745;
         }
+        /* Custom Switch for Active Toggle */
+        .switch { position: relative; display: inline-block; width: 34px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; }
+        input:checked + .slider { background-color: #2196F3; }
+        input:checked + .slider:before { transform: translateX(14px); }
+        .slider.round { border-radius: 34px; }
+        .slider.round:before { border-radius: 50%; }
     </style>
 </head>
 <body>
@@ -226,6 +235,13 @@
                             </div>
                         </div>
                         
+                        <div style="margin-top: 15px; margin-bottom: 15px; background: #e8f0fe; padding: 10px; border-radius: 5px; border: 1px solid #b3d7ff;">
+                            <label style="display: flex; align-items: center; cursor: pointer; margin-top:0;">
+                                <input type="checkbox" id="publishToWeb" name="publishToWeb" style="width: auto; margin-right: 10px; transform: scale(1.2);">
+                                <span style="font-weight: bold; color: #0056b3;">🌐 Publish to Website (bcsm.org.in)</span>
+                            </label>
+                        </div>
+
                         <label for="required-action">Required Action/RSVP (Optional):</label>
                         <input type="text" id="required-action" name="required_action" placeholder="e.g., Acknowledge, Reply by 2026-01-15, Attending">
 
@@ -325,6 +341,7 @@
             </form>
         </div>
     </div>
+
     <div id="history-modal" class="modal" style="display:none;">
         <div class="modal-content" style="max-width: 800px;">
             <span class="close-btn" onclick="document.getElementById('history-modal').style.display='none'">&times;</span>
@@ -334,6 +351,7 @@
             </div>
         </div>
     </div>
+
     <script>
         const API_BASE = '/api/notices';
         const TOKEN = localStorage.getItem('erp-token');
@@ -359,9 +377,9 @@
         const aiSummary = document.getElementById('ai-summary');
         const aiTone = document.getElementById('ai-tone');
         const aiLength = document.getElementById('ai-length');
-        const historyModal = document.getElementById('history-modal'); // New DOM
-        const historyTitleDisplay = document.getElementById('history-modal-title-display'); // New DOM
-        const historyContentArea = document.getElementById('history-content-area'); // New DOM
+        const historyModal = document.getElementById('history-modal');
+        const historyTitleDisplay = document.getElementById('history-modal-title-display');
+        const historyContentArea = document.getElementById('history-content-area');
 
         let todayBirthdays = []; 
 
@@ -387,7 +405,7 @@
             element.style.display = 'block';
         }
 
-        // --- NEW: Content Templating Logic ---
+        // --- Content Templating Logic ---
         window.handleTemplateSelect = function(type) {
             const titleInput = document.getElementById('title');
             const contentTextarea = document.getElementById('content');
@@ -415,15 +433,12 @@
                 titleInput.value = templates[type].title;
                 contentTextarea.value = templates[type].content;
                 
-                // Set a default expiry date
                 const defaultExpiry = new Date();
                 defaultExpiry.setDate(defaultExpiry.getDate() + templates[type].expiryOffsetDays);
                 expiryInput.value = defaultExpiry.toISOString().split('T')[0];
 
-                // Re-analyze the content
                 analyzeContent(contentTextarea.value);
             } else {
-                // Clear if 'Select a Template' is chosen
                 titleInput.value = '';
                 contentTextarea.value = '';
                 expiryInput.value = '';
@@ -456,15 +471,12 @@
         });
         
         // --- Delivery Channel Health Check ---
-        
         window.checkDeliveryChannelHealth = async function() {
             channelStatusDisplay.textContent = 'Checking server status...';
             const HEALTH_API = '/api/utils/delivery-health'; 
             
             try {
-                // NOTE: This assumes you have created and mounted the /api/utils/delivery-health endpoint
                 const result = await handleApi(HEALTH_API); 
-                
                 let statusText = `Last checked: ${new Date().toLocaleTimeString()}. `;
                 
                 if (result.sms === 'OK' && result.email === 'OK') {
@@ -480,26 +492,18 @@
             }
         }
 
-        // =========================================================
-        // 10. BIRTHDAY FEATURE IMPLEMENTATION (FINAL FIX)
-        // =========================================================
-        
-        /**
-         * 1. Loads today's birthdays from the backend API.
-         */
+        // --- Birthday Feature ---
         async function loadTodayBirthdays() {
             birthdayList.innerHTML = '<li>Fetching birthdays...</li>'; 
             sendBirthdayWishBtn.disabled = true;
 
             try {
-                // Calls the correct backend route: GET /api/notices/birthdays/today
                 const data = await handleApi(`${API_BASE}/birthdays/today`); 
                 todayBirthdays = data;
 
                 if (todayBirthdays.length > 0) {
                     let listHtml = '';
                     todayBirthdays.forEach(person => {
-                        // Formatting name and role for display
                         const dob = new Date(person.dob_date).toLocaleDateString();
                         listHtml += `<li>✅ ${person.full_name} (${person.role}) - DOB: ${dob}</li>`;
                     });
@@ -509,7 +513,6 @@
                     birthdayList.innerHTML = '<li>No birthdays today.</li>';
                     sendBirthdayWishBtn.disabled = true;
                 }
-
             } catch (error) {
                 console.error('Birthday Fetch Error:', error);
                 birthdayList.innerHTML = '<li>❌ Error loading birthdays. Check console.</li>';
@@ -517,47 +520,37 @@
             }
         }
 
-
-        /**
-         * 2. Handles sending the bulk birthday wish notice.
-         */
         sendBirthdayWishBtn.addEventListener('click', async () => {
             if (todayBirthdays.length === 0) {
                 showMessage(birthdayMessage, 'No recipients found to send wishes.', 'info');
                 return;
             }
-            
             sendBirthdayWishBtn.disabled = true;
             showMessage(birthdayMessage, `Sending wishes to ${todayBirthdays.length} recipients...`, 'info');
 
             try {
-                // Calls the correct backend route: POST /api/notices/birthdays/send-wish
                 const result = await handleApi(`${API_BASE}/birthdays/send-wish`, {
                     method: 'POST',
-                    body: JSON.stringify({ /* API only needs authentication, data is fetched internally */ })
+                    body: JSON.stringify({})
                 });
 
                 showMessage(birthdayMessage, `✅ ${result.message}`, 'success');
-                // After sending, refresh the notices list
                 loadRecentNotices(); 
-
             } catch (error) {
                 showMessage(birthdayMessage, `❌ Failed to send wishes: ${error.message}`, 'error');
             } finally {
                 sendBirthdayWishBtn.disabled = false;
-                // Reload the birthday list to clear the current list after successful sending
                 loadTodayBirthdays(); 
             }
         });
 
-        // --- 1. Notice Creation ---
-
+        // --- 1. Notice Creation (UPDATED with Web Publish Logic) ---
         createNoticeForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;
             const submitBtn = form.querySelector('button[type="submit"]');
             submitBtn.disabled = true;
-            showMessage(noticeMessage, 'Posting/Scheduling notice...', 'info');
+            showMessage(noticeMessage, 'Posting notice...', 'info');
 
             const scheduledAt = form.elements['scheduled-at'].value;
             const isScheduled = !!scheduledAt;
@@ -571,7 +564,9 @@
                 notice_type: form.elements['notice-type'].value || 'General',
                 scheduled_at: isScheduled ? new Date(scheduledAt).toISOString() : null,
                 delivery_channels: Array.from(form.querySelectorAll('input[name="delivery_channels"]:checked'))
-                                       .map(input => input.value)
+                                       .map(input => input.value),
+                // ✅ UPDATE: Send checkbox status to backend
+                publishToWeb: document.getElementById('publishToWeb').checked 
             };
 
             if (formData.delivery_channels.length === 0) {
@@ -586,20 +581,26 @@
                     body: JSON.stringify(formData) 
                 });
                 
-                showMessage(noticeMessage, `✅ ${result.message}`, 'success');
+                // ✅ UPDATE: Show success message for Website link
+                let msg = `✅ ${result.message}`;
+                if (result.wpLink) {
+                    msg += `\n🌐 Also published to Website!`;
+                }
+
+                showMessage(noticeMessage, msg, 'success');
                 form.reset();
+                document.getElementById('publishToWeb').checked = false; // Reset checkbox
                 analyzeContent('');
                 loadRecentNotices(); 
                 
             } catch (error) {
-                showMessage(noticeMessage, `❌ Posting/Scheduling Failed: ${error.message}`, 'error');
+                showMessage(noticeMessage, `❌ Failed: ${error.message}`, 'error');
             } finally {
                 submitBtn.disabled = false;
             }
         });
 
-        // --- 2. Notice Log & Audit (UPDATED rendering) ---
-        
+        // --- 2. Notice Log & Audit ---
         async function loadRecentNotices() {
             noticesTbody.innerHTML = '<tr><td colspan="6">Loading notices...</td></tr>'; 
             auditTbody.innerHTML = '<tr><td colspan="4">No delivery audit loaded.</td></tr>';
@@ -615,7 +616,6 @@
                 notices.forEach(n => {
                     const isActive = n.is_active !== false; 
                     const isScheduled = !!n.scheduled_at && new Date(n.scheduled_at) > new Date();
-                    
                     const postInfo = isScheduled 
                         ? `<strong style="color: #f39c12;">Scheduled:</strong> ${new Date(n.scheduled_at).toLocaleDateString()}`
                         : `Posted: ${new Date(n.created_at).toLocaleDateString()}`;
@@ -624,7 +624,6 @@
                     const readRateHtml = isScheduled 
                         ? 'N/A' 
                         : `<strong style="color: ${readRatePercent < 50 ? '#c0392b' : '#27ae60'};">${readRatePercent}%</strong> (${n.read_rate || 0}/${n.total_users || 0})`;
-
 
                     const toggleHtml = `
                         <label class="switch" style="cursor: pointer;">
@@ -641,7 +640,7 @@
                             <td>${readRateHtml}</td> <td>${toggleHtml}</td>
                             <td>
                                 <button onclick="viewRevisionHistory('${n.id}', '${n.title}')" style="background-color:#3498db; margin-bottom: 5px;">History</button>
-                                <button onclick="viewDeliveryLog('${n.id}', '${n.title}')" style="margin-bottom: 5px;">Audit Log</button>
+                                <button onclick="viewDeliveryLog('${n.id}', '${n.title}')" style="margin-bottom: 5px;">Audit</button>
                                 <button onclick="openEditModal('${n.id}')" style="margin-bottom: 5px;">Edit</button> 
                                 <button class="delete-btn" onclick="deleteNotice('${n.id}', '${n.title}')">Delete</button>
                             </td>
@@ -655,23 +654,19 @@
             }
         }
         
-        // --- Revision History Functions ---
-        
+        // --- Revision History ---
         window.viewRevisionHistory = async function(noticeId, noticeTitle) {
             historyTitleDisplay.textContent = noticeTitle;
             historyContentArea.innerHTML = '<p class="info">Loading history...</p>';
             historyModal.style.display = 'flex'; 
 
             try {
-                // Endpoint: GET /api/notices/:noticeId/history
                 const history = await handleApi(`${API_BASE}/${noticeId}/history`);
-
                 if (history.length === 0) {
-                    historyContentArea.innerHTML = '<p class="info">No revision history found for this notice.</p>';
+                    historyContentArea.innerHTML = '<p class="info">No revision history found.</p>';
                     return;
                 }
 
-                // Render history (reversed to show newest first)
                 historyContentArea.innerHTML = history.reverse().map((rev, index) => `
                     <div class="revision-log-entry">
                         <p style="margin: 0; font-weight: bold;">Version ${history.length - index} (${rev.action})</p>
@@ -689,19 +684,14 @@
 
             } catch (error) {
                 historyContentArea.innerHTML = `<p class="error">Failed to load history: ${error.message}</p>`;
-                console.error("History Load Error:", error);
             }
         }
 
-        // --- Toggle Notice Active Status ---
+        // --- Toggle Status ---
         window.toggleNoticeActive = async function(noticeId, isActive) {
             const STATUS_API = `${API_BASE}/${noticeId}/status`; 
-            
             try {
-                await handleApi(STATUS_API, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ is_active: isActive })
-                });
+                await handleApi(STATUS_API, { method: 'PATCH', body: JSON.stringify({ is_active: isActive }) });
                 console.log(`Notice ${noticeId} status set to ${isActive}`);
             } catch (error) {
                 alert(`Failed to change status: ${error.message}`);
@@ -709,16 +699,33 @@
             }
         }
 
+        // --- View Delivery Log (FILLED) ---
         window.viewDeliveryLog = async function(noticeId, noticeTitle) {
              auditTbody.innerHTML = '<tr><td colspan="4" class="info">Fetching audit log...</td></tr>';
-             // *** Your implementation for fetching and displaying the delivery log ***
-             // NOTE: Implementation of this function is required here.
+             try {
+                const logs = await handleApi(`${API_BASE}/${noticeId}/delivery-log`); // Ensure backend has this endpoint
+                if (logs.length === 0) {
+                    auditTbody.innerHTML = '<tr><td colspan="4">No delivery data found.</td></tr>';
+                    return;
+                }
+                auditTbody.innerHTML = logs.map(log => `
+                    <tr>
+                        <td>${log.user_name || log.user_id}</td>
+                        <td>${log.channel}</td>
+                        <td style="color:${log.status === 'Sent' || log.status === 'Read' ? 'green' : 'red'}">${log.status}</td>
+                        <td>${new Date(log.timestamp).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+             } catch (error) {
+                auditTbody.innerHTML = `<tr><td colspan="4" class="error">Error: ${error.message}</td></tr>`;
+             }
         }
 
+        // --- Open Edit Modal ---
         window.openEditModal = async function(noticeId) {
             currentEditNoticeId = noticeId;
             showMessage(editMessage, 'Loading notice details...', 'info');
-            editModal.style.display = 'flex'; // Show modal
+            editModal.style.display = 'flex'; 
 
             try {
                 const notice = await handleApi(`${API_BASE}/${noticeId}`);
@@ -732,13 +739,12 @@
                 const expiryDate = notice.expiry_date ? new Date(notice.expiry_date).toISOString().split('T')[0] : '';
                 document.getElementById('edit-expiry-date').value = expiryDate;
                 
-                document.getElementById('edit-is-active').value = String(notice.is_active); // Set Active status in modal
+                document.getElementById('edit-is-active').value = String(notice.is_active); 
 
                 editMessage.style.display = 'none';
 
             } catch (error) {
-                showMessage(editMessage, `Failed to load notice for editing: ${error.message}`, 'error');
-                console.error("Edit Load Error:", error);
+                showMessage(editMessage, `Failed to load notice: ${error.message}`, 'error');
             }
         }
 
@@ -750,13 +756,12 @@
             showMessage(editMessage, 'Saving changes...', 'info');
 
             const noticeId = form.elements['edit-notice-id'].value;
-            // Collect all fields from the edit modal
             const formData = {
                 title: form.elements['edit-title'].value,
                 content: form.elements['edit-content'].value,
                 target_role: form.elements['edit-target-role'].value,
                 expiry_date: form.elements['edit-expiry-date'].value || null,
-                is_active: form.elements['edit-is-active'].value === 'true' // Send boolean
+                is_active: form.elements['edit-is-active'].value === 'true'
             };
 
             try {
@@ -766,7 +771,7 @@
                 });
 
                 showMessage(editMessage, `✅ ${result.message}`, 'success');
-                loadRecentNotices(); // Refresh table
+                loadRecentNotices(); 
                 setTimeout(() => { editModal.style.display = 'none'; }, 1500);
 
             } catch (error) {
@@ -776,20 +781,23 @@
             }
         });
 
+        // --- Delete Notice (FILLED) ---
         window.deleteNotice = async function(noticeId, noticeTitle) {
-             // *** Your implementation for deleting a notice ***
-             // NOTE: Implementation of this function is required here.
+             if(!confirm(`Are you sure you want to delete "${noticeTitle}"?`)) return;
+             try {
+                await handleApi(`${API_BASE}/${noticeId}`, { method: 'DELETE' });
+                alert(`✅ Notice deleted successfully.`);
+                loadRecentNotices();
+             } catch (error) {
+                alert(`❌ Failed to delete: ${error.message}`);
+             }
         }
 
         // --- Initialization ---
-
         document.addEventListener('DOMContentLoaded', () => {
             userRoleDisplay.textContent = USER_ROLE;
-            
-            // 🛑 CRITICAL ACTION: Load the necessary data on page load
             loadRecentNotices();
             loadTodayBirthdays(); 
-            
             analyzeContent(contentTextarea.value); 
             checkDeliveryChannelHealth();
         });
