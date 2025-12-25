@@ -3,199 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Trip Tracking | Driver Console</title>
+    <title>Live Trip Console | School ERP</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        :root {
-            --primary: #005A9C;
-            --success: #059669;
-            --danger: #dc2626;
-            --bg: #f1f5f9;
+        :root { --primary: #005A9C; --success: #059669; --danger: #dc2626; --warning: #f59e0b; --sos: #991b1b; }
+        body { font-family: 'Poppins', sans-serif; background: #f1f5f9; margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        .speed-warning { animation: blink-bg 0.5s infinite; }
+        @keyframes blink-bg { 0% { background-color: #f8fafc; } 50% { background-color: #fee2e2; } 100% { background-color: #f8fafc; } }
+
+        .header { background: white; padding: 12px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); z-index: 1000; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75em; font-weight: 700; background: #eee; }
+        .status-live { background: #dcfce7; color: var(--success); }
+        .sync-indicator { font-size: 0.7em; margin-left: 10px; color: var(--success); }
+
+        #map { flex-grow: 1; width: 100%; z-index: 1; }
+
+        .controls { background: white; padding: 15px 20px; border-radius: 24px 24px 0 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.1); z-index: 1000; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stat-box { background: #f8fafc; padding: 10px; border-radius: 12px; text-align: center; border: 1px solid #e2e8f0; }
+        .stat-box small { color: #64748b; font-size: 0.65em; display: block; text-transform: uppercase; }
+        .stat-box span { font-weight: 700; color: var(--primary); font-size: 1.1em; }
+
+        .proximity-alert { 
+            background: var(--warning); color: #000; padding: 12px; border-radius: 10px; 
+            margin-bottom: 12px; font-weight: 700; text-align: center; display: none;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
         }
 
-        body {
-            font-family: 'Poppins', sans-serif;
-            background-color: var(--bg);
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            padding: 20px;
-        }
-
-        .container {
-            background: white;
-            padding: 30px;
-            border-radius: 20px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 450px;
-            text-align: center;
-        }
-
-        .status-badge {
-            display: inline-block;
-            padding: 8px 16px;
-            border-radius: 50px;
-            font-weight: 600;
-            margin-bottom: 20px;
-            text-transform: uppercase;
-            font-size: 0.85em;
-        }
-
-        .status-off { background: #fee2e2; color: #b91c1c; }
-        .status-on { background: #dcfce7; color: #166534; animation: pulse 2s infinite; }
-
-        @keyframes pulse {
-            0% { opacity: 1; }
-            50% { opacity: 0.6; }
-            100% { opacity: 1; }
-        }
-
-        .gps-display {
-            background: #f8fafc;
-            padding: 15px;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
-            margin: 20px 0;
-            font-family: monospace;
-            font-size: 1.1em;
-            color: #475569;
-        }
-
-        .btn-main {
-            width: 100%;
-            padding: 20px;
-            font-size: 1.25em;
-            font-weight: 700;
-            border: none;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            color: white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .btn-start { background-color: var(--success); }
-        .btn-stop { background-color: var(--danger); }
-        .btn-main:active { transform: scale(0.98); }
-
-        .back-link {
-            display: block;
-            margin-top: 25px;
-            color: #64748b;
-            text-decoration: none;
-            font-size: 0.9em;
-        }
-
-        #map-placeholder {
-            width: 100%;
-            height: 150px;
-            background: #e2e8f0;
-            border-radius: 12px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #94a3b8;
-        }
+        .action-buttons { display: grid; grid-template-columns: 1fr 3fr; gap: 10px; }
+        .btn-sos { background: var(--sos); color: white; border: none; border-radius: 12px; font-weight: 700; cursor: pointer; }
+        .btn-main { padding: 16px; border: none; border-radius: 12px; font-size: 1.1em; font-weight: 700; cursor: pointer; color: white; }
+        .btn-start { background: var(--success); }
+        .btn-stop { background: var(--danger); }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div id="status-badge" class="status-badge status-off">GPS Inactive</div>
-        <h1 style="margin: 0; color: #1e293b;">Trip Console</h1>
-        <p style="color: #64748b;">Vehicle: <span id="vehicle-num" style="font-weight:600;">WB36A3221</span></p>
-
-        <div id="map-placeholder">
-            📡 GPS Signal Ready
+    <div class="header">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <h2 style="margin:0; font-size: 1em;">Trip Console <span id="sync-status" class="sync-indicator">● Online</span></h2>
+                <p style="margin:2px 0 0; font-size: 0.75em; color: #64748b;">Bus: <strong id="bus-id">WB36A3221</strong></p>
+            </div>
+            <div id="status" class="status-badge">STANDBY</div>
         </div>
-
-        <div class="gps-display" id="gps-coords">
-            Lat: --.---- | Lon: --.----
-        </div>
-
-        <button id="trip-btn" class="btn-main btn-start" onclick="toggleTrip()">START TRIP</button>
-        
-        <a href="/driver-dashboard.html" class="back-link">← Return to Dashboard</a>
     </div>
 
+    <div id="map"></div>
+
+    <div class="controls">
+        <div id="stop-alert" class="proximity-alert">🔔 NEAR STOP: <span id="stop-name">---</span></div>
+        
+        <div class="stats-grid">
+            <div class="stat-box"><small>Duration</small><span id="timer">00:00:00</span></div>
+            <div id="speed-box" class="stat-box"><small>Speed</small><span id="speed">0 km/h</span></div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-sos" onclick="sendSOS()">SOS</button>
+            <button id="trip-btn" class="btn-main btn-start" onclick="toggleTrip()">START TRIP</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        let isTracking = false;
-        let watchId = null;
-        const token = localStorage.getItem('erp-token');
+        let isTracking = false, watchId = null, timerInterval = null, startTime = null;
+        let map, marker, circle, polyline, breadcrumbs = [];
+        let routeStops = []; // To be fetched from DB
+        const SPEED_LIMIT = 60;
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([22.5726, 88.3639], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+            marker = L.marker([22.5726, 88.3639]).addTo(map);
+            circle = L.circle([22.5726, 88.3639], { radius: 20, color: '#005A9C' }).addTo(map);
+            polyline = L.polyline([], { color: '#005A9C', weight: 4 }).addTo(map);
+            fetchStops();
+        }
+
+        async function fetchStops() {
+            // Mock fetching stops - in production call: /api/transport/route/:id/stops
+            routeStops = [{ name: "Main Gate", lat: 22.5730, lon: 88.3640 }];
+        }
 
         function toggleTrip() {
             const btn = document.getElementById('trip-btn');
-            const badge = document.getElementById('status-badge');
-
             if (!isTracking) {
-                if (navigator.geolocation) {
-                    isTracking = true;
-                    btn.textContent = "STOP TRIP";
-                    btn.className = "btn-main btn-stop";
-                    badge.textContent = "Live Tracking Active";
-                    badge.className = "status-badge status-on";
-
-                    // Start high-accuracy watch
-                    watchId = navigator.geolocation.watchPosition(sendLocation, handleError, {
-                        enableHighAccuracy: true,
-                        maximumAge: 0,
-                        timeout: 5000
-                    });
-                } else {
-                    alert("Geolocation is not supported by your browser.");
-                }
+                isTracking = true;
+                startTime = Date.now();
+                btn.textContent = "FINISH TRIP";
+                btn.className = "btn-main btn-stop";
+                document.getElementById('status').className = "status-badge status-live";
+                document.getElementById('status').textContent = "LIVE";
+                timerInterval = setInterval(updateTimer, 1000);
+                startGps();
             } else {
-                stopTracking();
+                if(confirm("End trip and save logs?")) stopTrip();
             }
         }
 
-        function stopTracking() {
-            isTracking = false;
-            const btn = document.getElementById('trip-btn');
-            const badge = document.getElementById('status-badge');
-            
-            btn.textContent = "START TRIP";
-            btn.className = "btn-main btn-start";
-            badge.textContent = "GPS Inactive";
-            badge.className = "status-badge status-off";
-            
-            if (watchId) navigator.geolocation.clearWatch(watchId);
-            document.getElementById('gps-coords').innerText = "Lat: --.---- | Lon: --.----";
+        function startGps() {
+            watchId = navigator.geolocation.watchPosition(updateLocation, handleGpsError, {
+                enableHighAccuracy: true, maximumAge: 0
+            });
         }
 
-        async function sendLocation(position) {
-            const { latitude, longitude } = position.coords;
-            document.getElementById('gps-coords').innerText = `Lat: ${latitude.toFixed(4)} | Lon: ${longitude.toFixed(4)}`;
+        async function updateLocation(position) {
+            const { latitude, longitude, speed } = position.coords;
+            const kmh = speed ? Math.round(speed * 3.6) : 0;
+            const pos = [latitude, longitude];
 
+            map.panTo(pos);
+            marker.setLatLng(pos);
+            circle.setLatLng(pos);
+            breadcrumbs.push(pos);
+            polyline.setLatLngs(breadcrumbs);
+
+            document.getElementById('speed').innerText = `${kmh} km/h`;
+            document.getElementById('speed-box').classList.toggle('speed-warning', kmh > SPEED_LIMIT);
+
+            checkProximity(latitude, longitude);
+            syncWithServer(latitude, longitude, kmh);
+        }
+
+        function checkProximity(lat, lon) {
+            routeStops.forEach(stop => {
+                const dist = getDistance(lat, lon, stop.lat, stop.lon);
+                const alertDiv = document.getElementById('stop-alert');
+                if (dist < 0.1) { // 100 meters
+                    alertDiv.style.display = 'block';
+                    document.getElementById('stop-name').innerText = stop.name;
+                } else {
+                    alertDiv.style.display = 'none';
+                }
+            });
+        }
+
+        function getDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371; // km
+            const dLat = (lat2-lat1) * Math.PI / 180;
+            const dLon = (lon2-lon1) * Math.PI / 180;
+            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        async function syncWithServer(lat, lon, speed) {
             try {
-                // Sending to backend location monitoring service
-                const response = await fetch('/api/transport/update-location', {
+                const res = await fetch('/api/transport/update-location', {
                     method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({ 
-                        lat: latitude, 
-                        lon: longitude,
-                        timestamp: new Date().toISOString()
-                    })
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('erp-token')}` },
+                    body: JSON.stringify({ lat, lon, speed })
                 });
-            } catch (err) {
-                console.error("Transmission Error:", err);
+                document.getElementById('sync-status').style.color = res.ok ? "var(--success)" : "var(--danger)";
+            } catch (e) {
+                document.getElementById('sync-status').style.color = "var(--danger)";
+                document.getElementById('sync-status').innerText = "● Offline";
             }
         }
 
-        function handleError(error) {
-            console.error("GPS Error:", error.message);
-            alert("Error: Unable to get your location. Please enable GPS.");
-            stopTracking();
+        async function sendSOS() {
+            if(!confirm("Send Emergency SOS to Admin?")) return;
+            // Call your /api/transport/sos endpoint here
+            alert("SOS Sent! Help is on the way.");
         }
+
+        function updateTimer() {
+            const diff = Date.now() - startTime;
+            const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
+            const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+            const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+            document.getElementById('timer').innerText = `${h}:${m}:${s}`;
+        }
+
+        function stopTrip() {
+            isTracking = false;
+            clearInterval(timerInterval);
+            navigator.geolocation.clearWatch(watchId);
+            window.location.href = "/driver-dashboard.html";
+        }
+
+        function handleGpsError(err) { console.error("GPS Error"); }
+
+        window.onload = initMap;
     </script>
 </body>
 </html>

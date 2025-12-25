@@ -612,45 +612,70 @@ router.get('/routes/:id/attendance-sheet', authenticateToken, authorize(['Admin'
 
 /**
  * @route   POST /api/transport/attendance
- * @desc    Marks attendance. FIX: Lookup User ID from Student ID before inserting.
+ * @desc    Marks student boarding status. Accessible by Drivers and Admins.
  */
-router.post('/attendance', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
-    // student_id comes from frontend (Student UUID)
+router.post('/attendance', authenticateToken, authorize(['driver', 'admin', 'super admin']), async (req, res) => {
     const { student_id, route_id, status } = req.body; 
+
+    // --- NEW VALIDATION GUARD ---
+    // This stops the "undefined" UUID error from crashing the request
+    if (!student_id || student_id === 'undefined' || !route_id || route_id === 'undefined') {
+        console.error("Missing or malformed IDs in attendance request:", { student_id, route_id });
+        return res.status(400).json({ message: 'Invalid Student or Route ID provided.' });
+    }
     
     try {
-        // 1. Verify assignment
-        const check = await pool.query(
-            `SELECT 1 FROM ${ASSIGNMENTS_TABLE} WHERE student_id = $1 AND route_id = $2;`, 
+        // 1. Verify student is actually assigned to this route
+        const checkAssignment = await pool.query(
+            `SELECT 1 FROM ${ASSIGNMENTS_TABLE} WHERE student_id = $1 AND route_id = $2`, 
             [student_id, route_id]
         );
         
-        if (check.rowCount === 0) {
+        if (checkAssignment.rowCount === 0) {
             return res.status(403).json({ message: 'Student is not assigned to this route.' });
         }
 
-        // 2. CRITICAL FIX: Get the User ID associated with this Student ID
-        const userLookup = await pool.query(`SELECT user_id FROM ${STUDENTS_TABLE} WHERE student_id = $1`, [student_id]);
+        // 2. Get the User ID (Required for Foreign Key in attendance table)
+        const userLookup = await pool.query(
+            `SELECT user_id FROM ${STUDENTS_TABLE} WHERE student_id = $1`, 
+            [student_id]
+        );
         
         if (userLookup.rowCount === 0 || !userLookup.rows[0].user_id) {
-             return res.status(400).json({ message: 'Student record is missing a valid User ID. Cannot mark attendance.' });
+             return res.status(400).json({ message: 'Student record is missing a valid User ID.' });
         }
         
         const userIdToSave = userLookup.rows[0].user_id;
 
-        // 3. Insert the User ID (because database enforces Foreign Key to USERS table)
+        // 3. Prevent duplicate attendance for the same student on the same day
+        // Using timezone-safe CURRENT_DATE comparison
+        const duplicateCheck = await pool.query(
+            `SELECT id FROM ${ATTENDANCE_TABLE} 
+             WHERE student_id = $1 AND route_id = $2 AND created_at::date = CURRENT_DATE`,
+            [userIdToSave, route_id]
+        );
+
+        if (duplicateCheck.rowCount > 0) {
+            await pool.query(
+                `UPDATE ${ATTENDANCE_TABLE} SET status = $1, created_at = NOW() 
+                 WHERE student_id = $2 AND route_id = $3 AND created_at::date = CURRENT_DATE`,
+                [status, userIdToSave, route_id]
+            );
+            return res.status(200).json({ message: 'Attendance updated successfully.' });
+        }
+
+        // 4. Insert new attendance record
         await pool.query(
-            `INSERT INTO ${ATTENDANCE_TABLE} (student_id, route_id, status) VALUES ($1, $2, $3);`,
+            `INSERT INTO ${ATTENDANCE_TABLE} (student_id, route_id, status) VALUES ($1, $2, $3)`,
             [userIdToSave, route_id, status]
         );
         
         res.status(200).json({ message: 'Attendance marked successfully.' });
     } catch (error) {
         console.error('Error marking attendance:', error);
-        res.status(500).json({ message: 'Failed to mark attendance.' });
+        res.status(500).json({ message: 'Internal server error.' });
     }
 });
-
 
 // =========================================================
 // 9. STUDENT/USER VIEW ROUTES (FIX FOR my-bus.html)
@@ -755,14 +780,19 @@ router.get('/driver/status', authenticateToken, authorize(['Driver', 'Admin']), 
         res.status(500).json({ message: "Internal Server Error" });
     }
 });
-
 /**
  * @route   GET /api/transport/route/:routeId/students
+ * @desc    Fetch students for a specific route (Fixed to include student_id)
  */
 router.get('/route/:routeId/students', authenticateToken, async (req, res) => {
     try {
         const query = `
-            SELECT u.full_name, s.roll_number, rs.stop_name
+            SELECT 
+                s.student_id,           -- CRITICAL: Added this so frontend has the ID
+                u.full_name, 
+                s.enrollment_no,        -- Changed roll_number to enrollment_no to match standard schema
+                u.phone_number,         -- Added for the 'Call Parent' feature
+                COALESCE(rs.stop_name, 'Not Assigned') as stop_name
             FROM student_transport_assignments sta
             JOIN students s ON sta.student_id = s.student_id
             JOIN users u ON s.user_id = u.id
@@ -771,12 +801,14 @@ router.get('/route/:routeId/students', authenticateToken, async (req, res) => {
             ORDER BY u.full_name ASC;
         `;
         const result = await pool.query(query, [req.params.routeId]);
+        
+        console.log(`Fetched ${result.rowCount} students for route ${req.params.routeId}`);
         res.json(result.rows);
     } catch (err) {
+        console.error("Fetch students error:", err.message);
         res.status(500).json({ message: "Error fetching student list" });
     }
 });
-
 /**
  * @route   POST /api/transport/maintenance
  * @desc    Logs maintenance. Use lowercase roles to match authMiddleware normalization.
@@ -922,6 +954,147 @@ router.get('/admin/vehicle-health', authenticateToken, authorize(['admin', 'supe
     } catch (err) {
         console.error("Health Dashboard Error:", err.message);
         res.status(500).json({ message: "Failed to calculate health metrics" });
+    }
+});
+
+/**
+ * @route   GET /api/transport/my-vehicle-health
+ * @desc    Authorized check for a driver's specific vehicle maintenance status
+ */
+router.get('/my-vehicle-health', authenticateToken, authorize(['driver']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                v.vehicle_number,
+                MAX(fl.odometer) as current_km,
+                COALESCE(MAX(vm.odometer_reading), 0) as last_service_km
+            FROM transport_vehicles v
+            LEFT JOIN fuel_logs fl ON v.id = fl.vehicle_id
+            LEFT JOIN vehicle_maintenance vm ON v.id = vm.vehicle_id
+            WHERE v.assigned_driver_id = (SELECT id FROM transport_drivers WHERE user_id = $1)
+            GROUP BY v.vehicle_number;
+        `;
+        const result = await pool.query(query, [req.user.id]);
+        if (result.rows.length === 0) return res.status(404).json({ message: "No assigned vehicle found." });
+        res.json(result.rows[0]);
+    } catch (err) {
+        console.error("My Vehicle Health Error:", err.message);
+        res.status(500).json({ message: "Error fetching maintenance status" });
+    }
+});
+
+/**
+ * @route   GET /api/transport/admin/document-alerts
+ * @desc    Fetch documents expiring within 30 days
+ */
+router.get('/admin/document-alerts', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                v.vehicle_number,
+                d.document_type,
+                d.expiry_date,
+                (d.expiry_date - CURRENT_DATE) AS days_remaining
+            FROM vehicle_documents d
+            JOIN transport_vehicles v ON d.vehicle_id = v.id
+            WHERE d.expiry_date <= (CURRENT_DATE + INTERVAL '30 days')
+            ORDER BY d.expiry_date ASC;
+        `;
+        const result = await pool.query(query);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("Document Alert Error:", err.message);
+        res.status(500).json({ message: "Failed to fetch document alerts." });
+    }
+});
+/**
+ * @route   GET /api/transport/fuel/last-entry
+ * @desc    Fetch last odometer using the correct driver-to-vehicle mapping
+ */
+router.get('/fuel/last-entry', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT fl.odometer 
+            FROM fuel_logs fl
+            JOIN transport_vehicles v ON fl.vehicle_id = v.id
+            JOIN transport_drivers d ON v.assigned_driver_id = d.id
+            WHERE d.user_id = $1
+            ORDER BY fl.created_at DESC LIMIT 1;
+        `;
+        const result = await pool.query(query, [req.user.id]);
+        res.json(result.rows[0] || { odometer: 0 });
+    } catch (err) {
+        console.error("Last entry error:", err.message);
+        res.status(500).json({ message: "Database mapping error" });
+    }
+});
+
+/**
+ * @route   GET /api/transport/fuel/history
+ */
+router.get('/fuel/history', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT fl.* FROM fuel_logs fl
+            JOIN transport_vehicles v ON fl.vehicle_id = v.id
+            JOIN transport_drivers d ON v.assigned_driver_id = d.id
+            WHERE d.user_id = $1
+            ORDER BY fl.log_date DESC, fl.created_at DESC;
+        `;
+        const result = await pool.query(query, [req.user.id]);
+        res.json(result.rows);
+    } catch (err) {
+        console.error("History error:", err.message);
+        res.status(500).json({ message: "Failed to load history" });
+    }
+});
+
+/**
+ * @route   POST /api/transport/fuel/log
+ * @desc    Submit a new fuel log and update vehicle odometer
+ */
+router.post('/fuel/log', authenticateToken, async (req, res) => {
+    const { odometer, quantity, total_cost, prev_odometer } = req.body;
+    
+    try {
+        // 1. Identify the vehicle assigned to this driver
+        const vehicleQuery = await pool.query(
+            `SELECT v.id FROM transport_vehicles v 
+             JOIN transport_drivers d ON v.assigned_driver_id = d.id 
+             WHERE d.user_id = $1`, 
+            [req.user.id]
+        );
+
+        if (vehicleQuery.rowCount === 0) {
+            return res.status(404).json({ message: "No vehicle assigned to your profile." });
+        }
+
+        const vehicleId = vehicleQuery.rows[0].id;
+
+        // 2. Calculate Final KMPL
+        let kmpl = null;
+        if (prev_odometer > 0 && odometer > prev_odometer) {
+            kmpl = (parseFloat(odometer) - parseFloat(prev_odometer)) / parseFloat(quantity);
+        }
+
+        // 3. Insert into fuel_logs
+        await pool.query(
+            `INSERT INTO fuel_logs (
+                vehicle_id, odometer, quantity, total_cost, kmpl, prev_odometer, log_date
+            ) VALUES ($1, $2, $3, $4, $5, $6, CURRENT_DATE)`,
+            [vehicleId, odometer, quantity, total_cost, kmpl, prev_odometer]
+        );
+
+        // 4. Update the vehicle's current odometer in the master table
+        await pool.query(
+            `UPDATE transport_vehicles SET last_updated = NOW() WHERE id = $1`,
+            [vehicleId]
+        );
+
+        res.status(200).json({ message: "Fuel log saved successfully!" });
+    } catch (err) {
+        console.error("POST Fuel Log Error:", err.message);
+        res.status(500).json({ message: "Internal Server Error" });
     }
 });
 

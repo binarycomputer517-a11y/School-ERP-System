@@ -3,132 +3,143 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Driver Dashboard - School ERP</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <title>Driver Console | School ERP</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --primary: #005A9C;
-            --accent: #f59e0b; /* Transport Yellow */
-            --bg-light: #f4f6f9;
-            --text-dark: #333;
-            --danger: #dc2626;
+            --accent: #f59e0b;
+            --bg-light: #f8fafc;
+            --text-dark: #1e293b;
+            --danger: #e11d48;
+            --success: #10b981;
+            --card-shadow: 0 4px 20px rgba(0,0,0,0.06);
         }
 
         body {
             font-family: 'Poppins', sans-serif;
             background-color: var(--bg-light);
             margin: 0;
-            display: flex;
-            flex-direction: column;
-            min-height: 100vh;
+            color: var(--text-dark);
         }
 
-        /* --- Maintenance Alert --- */
+        /* Top Alert for Service */
         #maintenance-alert {
             display: none;
-            background: var(--danger);
+            background: linear-gradient(to right, #be123c, #e11d48);
             color: white;
             text-align: center;
-            padding: 10px;
+            padding: 14px;
             font-weight: 600;
-            animation: slideDown 0.5s ease;
-        }
-
-        @keyframes slideDown {
-            from { transform: translateY(-100%); }
-            to { transform: translateY(0); }
+            font-size: 0.9em;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
         }
 
         .header {
             background: var(--primary);
             color: white;
-            padding: 20px 40px;
+            padding: 25px 30px;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            box-shadow: 0 4px 10px rgba(0,90,156,0.2);
         }
 
         .dashboard-container {
-            max-width: 1200px;
-            margin: 40px auto;
+            max-width: 1000px;
+            margin: -20px auto 40px;
             padding: 0 20px;
-            width: 100%;
         }
 
+        /* --- Profile Bar --- */
         .info-bar {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
+            gap: 15px;
             margin-bottom: 30px;
         }
 
         .info-card {
             background: white;
-            padding: 20px;
-            border-radius: 12px;
-            border-left: 5px solid var(--accent);
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            padding: 18px;
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            border-bottom: 3px solid var(--accent);
         }
 
-        .info-card h3 { margin: 0; font-size: 0.85em; color: #666; text-transform: uppercase; }
-        .info-card p { margin: 10px 0 0; font-size: 1.4em; font-weight: 700; color: var(--primary); }
+        .info-card h3 { margin: 0; font-size: 0.75em; color: #64748b; text-transform: uppercase; }
+        .info-card p { margin: 5px 0 0; font-size: 1.15em; font-weight: 700; color: var(--primary); }
 
+        /* --- Action Grid --- */
         .card-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-            gap: 25px;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
         }
 
         .menu-card {
             background: white;
-            padding: 30px;
-            border-radius: 15px;
+            padding: 30px 10px;
+            border-radius: 20px;
             text-align: center;
             text-decoration: none;
             color: var(--text-dark);
-            border: 1px solid #ddd;
-            transition: all 0.3s ease;
+            box-shadow: var(--card-shadow);
+            transition: 0.3s;
             display: flex;
             flex-direction: column;
             align-items: center;
+            border: 1px solid transparent;
         }
 
         .menu-card:hover {
-            transform: translateY(-5px);
-            border-color: var(--accent);
-            box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+            transform: translateY(-8px);
+            border-color: var(--primary);
         }
 
-        .menu-card .icon { font-size: 3em; margin-bottom: 15px; }
-        .menu-card span { font-weight: 600; font-size: 1.1em; }
+        .menu-card.trip-active {
+            background: #ecfdf5;
+            border: 2px solid var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .menu-card .icon { font-size: 2.8em; margin-bottom: 15px; }
+        .menu-card span { font-weight: 600; font-size: 0.9em; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
 
         .btn-logout {
-            background: #C0392B;
+            background: rgba(255,255,255,0.15);
             color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 6px;
+            border: 1.5px solid rgba(255,255,255,0.5);
+            padding: 8px 20px;
+            border-radius: 10px;
             cursor: pointer;
             font-weight: 600;
         }
 
-        @media (max-width: 768px) {
-            .header { flex-direction: column; text-align: center; gap: 15px; }
+        @media (max-width: 600px) {
+            .card-grid { grid-template-columns: 1fr 1fr; }
+            .header { padding: 30px 20px; flex-direction: column; gap: 15px; text-align: center; }
         }
     </style>
 </head>
 <body>
 
-    <div id="maintenance-alert">
-        ⚠️ MAINTENANCE DUE: This vehicle has exceeded 5,000 KM since last service.
-    </div>
+    <div id="maintenance-alert"></div>
 
     <div class="header">
         <div>
-            <h1 style="margin:0; font-size: 1.8em;">Transport Console</h1>
-            <p id="current-date" style="margin:5px 0 0; opacity: 0.8;"></p>
+            <h1 style="margin:0; font-size: 1.8em; letter-spacing: -0.5px;">Driver Console</h1>
+            <p id="current-date" style="margin:5px 0 0; opacity: 0.8; font-size: 0.9em;"></p>
         </div>
         <button class="btn-logout" onclick="logout()">Logout</button>
     </div>
@@ -136,41 +147,37 @@
     <div class="dashboard-container">
         <div class="info-bar">
             <div class="info-card">
-                <h3>Driver Name</h3>
-                <p id="driver-name">Loading...</p>
+                <h3>Assigned Driver</h3>
+                <p id="driver-name">...</p>
             </div>
             <div class="info-card">
                 <h3>Vehicle Number</h3>
-                <p id="bus-no">---</p>
+                <p id="bus-no">...</p>
             </div>
             <div class="info-card">
-                <h3>Active Route</h3>
-                <p id="route-name">---</p>
-            </div>
-            <div class="info-card">
-                <h3>Students</h3>
-                <p id="student-count">0</p>
+                <h3>Current Route</h3>
+                <p id="route-name">...</p>
             </div>
         </div>
 
         <div class="card-grid">
-            <a href="/start-trip.html" class="menu-card">
-                <span class="icon">🏁</span><span>Start Live Trip</span>
+            <a href="/start-trip.html" id="trip-card" class="menu-card">
+                <span class="icon">🏁</span><span id="trip-label">Start Trip</span>
             </a>
             <a href="/route-students.html" class="menu-card">
-                <span class="icon">🧑‍🎓</span><span>Student Pickup List</span>
-            </a>
-            <a href="/driver-id-card.html" class="menu-card">
-                <span class="icon">🪪</span><span>My ID Card</span>
-            </a>
-            <a href="/vehicle-maintenance.html" class="menu-card">
-                <span class="icon">🔧</span><span>Vehicle Status</span>
+                <span class="icon">🧑‍🎓</span><span>Pickup List</span>
             </a>
             <a href="/fuel-logs.html" class="menu-card">
-                <span class="icon">⛽</span><span>Fuel Entry</span>
+                <span class="icon">⛽</span><span>Fuel Log</span>
             </a>
-            <a href="/emergency-sos.html" class="menu-card">
-                <span class="icon">🆘</span><span>SOS Emergency</span>
+            <a href="/vehicle-maintenance.html" class="menu-card">
+                <span class="icon">🔧</span><span>Maintenance</span>
+            </a>
+            <a href="/emergency-sos.html" class="menu-card" style="background: #fff1f2; border-color: #fecaca;">
+                <span class="icon">🆘</span><span style="color: var(--danger);">SOS Alert</span>
+            </a>
+            <a href="/driver-id-card.html" class="menu-card">
+                <span class="icon">🪪</span><span>ID Profile</span>
             </a>
         </div>
     </div>
@@ -179,53 +186,59 @@
         const token = localStorage.getItem('erp-token');
         const role = localStorage.getItem('user-role');
 
-        // Security Check
-        if (!token || (role !== 'Driver' && role !== 'driver')) {
+        if (!token || (role && role.toLowerCase() !== 'driver')) {
             window.location.href = '/login.html';
         }
 
         async function initDashboard() {
+            // Display Formatted Date
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             document.getElementById('current-date').innerText = new Date().toLocaleDateString(undefined, options);
 
+            // Check if a trip is currently active in localStorage
+            if (localStorage.getItem('active_trip_route')) {
+                const tripCard = document.getElementById('trip-card');
+                tripCard.classList.add('trip-active');
+                document.getElementById('trip-label').innerText = "Continue Trip";
+            }
+
             try {
-                // Fetch driver details
                 const response = await fetch('/api/transport/driver/status', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+                
+                if (response.status === 401) logout();
+                
                 const data = await response.json();
 
                 if (response.ok) {
                     document.getElementById('driver-name').innerText = data.full_name;
-                    document.getElementById('bus-no').innerText = data.vehicle_number || 'N/A';
-                    document.getElementById('route-name').innerText = data.route_name || 'No Assigned Route';
-                    document.getElementById('student-count').innerText = data.student_count || '0';
-
-                    // Check for Maintenance Threshold
-                    checkMaintenanceDue(data.vehicle_id);
+                    document.getElementById('bus-no').innerText = data.vehicle_number || 'No Bus Assigned';
+                    document.getElementById('route-name').innerText = data.route_name || 'Standby';
+                    
+                    checkMaintenance();
                 }
             } catch (err) {
-                console.error("System Error:", err);
+                console.error("Dashboard data load failed.");
             }
         }
 
-        async function checkMaintenanceDue(vehicleId) {
+        async function checkMaintenance() {
             try {
-                // Reusing health dashboard endpoint for threshold check
-                const res = await fetch('/api/transport/admin/vehicle-health', {
+                const res = await fetch('/api/transport/my-vehicle-health', {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const healthData = await res.json();
-                
-                // Find current vehicle's status
-                const vehicle = healthData.find(v => v.vehicle_number === document.getElementById('bus-no').innerText);
-                
-                if (vehicle && (vehicle.current_km - vehicle.last_service_km >= 5000)) {
-                    document.getElementById('maintenance-alert').style.display = 'block';
+                if (!res.ok) return;
+
+                const vehicle = await res.json();
+                const diff = vehicle.current_km - vehicle.last_service_km;
+
+                if (diff >= 5000) {
+                    const alertBox = document.getElementById('maintenance-alert');
+                    alertBox.style.display = 'block';
+                    alertBox.innerHTML = `⚠️ Service Overdue by ${diff} KM. Please schedule maintenance.`;
                 }
-            } catch (err) {
-                console.warn("Could not check maintenance status.");
-            }
+            } catch (e) { }
         }
 
         function logout() {

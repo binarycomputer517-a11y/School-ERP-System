@@ -3,106 +3,181 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fuel Log Entry | Driver Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <title>Fuel Management | Driver Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Poppins', sans-serif; background: #f1f5f9; padding: 20px; margin: 0; }
-        .container { max-width: 500px; margin: auto; background: white; padding: 25px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
-        h2 { color: #005A9C; margin-bottom: 20px; text-align: center; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
-        .form-group { margin-bottom: 15px; }
-        label { display: block; font-weight: 600; margin-bottom: 5px; color: #334155; }
-        input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; box-sizing: border-box; font-size: 1em; }
-        .btn-submit { background: #059669; color: white; border: none; padding: 15px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: 700; font-size: 1.1em; margin-top: 10px; }
-        .btn-submit:hover { background: #047857; }
-        .info-box { background: #f8fafc; padding: 10px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #005A9C; }
-        #message { margin-top: 15px; padding: 12px; border-radius: 8px; display: none; text-align: center; font-weight: 600; }
-        .back-link { display: block; margin-top: 20px; text-align: center; text-decoration: none; color: #64748b; font-size: 0.9em; }
+        :root { --primary: #005A9C; --success: #059669; --danger: #dc2626; --bg: #f8fafc; }
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; padding: 15px; }
+        .container { max-width: 500px; margin: auto; }
+        
+        /* Dashboard Card */
+        .dash-card { 
+            background: linear-gradient(135deg, var(--primary), #003d6b); 
+            color: white; padding: 22px; border-radius: 18px; margin-bottom: 20px; 
+            box-shadow: 0 10px 20px rgba(0,90,156,0.2);
+        }
+        .dash-stats { display: flex; justify-content: space-between; margin-top: 15px; border-top: 1px solid rgba(255,255,255,0.2); padding-top: 15px; }
+        
+        .entry-card { background: white; padding: 25px; border-radius: 18px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h3 { margin: 0 0 20px; color: #1e293b; font-size: 1.2em; display: flex; align-items: center; gap: 10px; }
+        
+        .form-group { margin-bottom: 18px; }
+        label { font-size: 0.75em; color: #64748b; font-weight: 700; text-transform: uppercase; display: block; margin-bottom: 6px; }
+        input { width: 100%; padding: 12px; border: 1.5px solid #e2e8f0; border-radius: 10px; box-sizing: border-box; font-family: inherit; font-size: 1em; }
+        
+        .kmpl-alert { padding: 12px; border-radius: 12px; text-align: center; font-weight: 700; margin: 15px 0; display: none; }
+
+        .btn-save { 
+            width: 100%; padding: 16px; background: var(--primary); color: white; 
+            border: none; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 1.1em; 
+        }
+
+        .history-item { 
+            background: white; padding: 15px; border-radius: 14px; margin-bottom: 12px; 
+            display: flex; justify-content: space-between; align-items: center; border: 1px solid #e2e8f0; 
+        }
+        .view-receipt { font-size: 0.75em; color: var(--primary); text-decoration: none; font-weight: 600; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>⛽ Fuel Log Entry</h2>
-    
-    <div class="info-box">
-        <small style="color: #64748b;">Assigned Vehicle:</small><br>
-        <strong id="vehicle-num">WB36A3221</strong>
+    <div class="dash-card">
+        <small style="opacity: 0.8;">Previous Odometer Reading</small>
+        <h2 id="last-odo-display" style="margin: 5px 0 0; font-size: 1.8em;">0 KM</h2>
+        <div class="dash-stats">
+            <div><small style="opacity: 0.8; font-size: 0.7em;">AVG MILEAGE</small><div id="avg-kmpl" style="font-weight: 700;">--</div></div>
+            <div><small style="opacity: 0.8; font-size: 0.7em;">TOTAL COST (WEEK)</small><div id="weekly-total" style="font-weight: 700;">₹ 0</div></div>
+        </div>
     </div>
 
-    <div id="message"></div>
+    <div class="entry-card">
+        <h3>⛽ Log Fuel Refill</h3>
+        <form id="fuelForm">
+            <div class="form-group">
+                <label>Current Odometer (KM)</label>
+                <input type="number" id="odometer" required oninput="calculateKMPL()">
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                <div class="form-group">
+                    <label>Quantity (Liters)</label>
+                    <input type="number" step="0.01" id="quantity" required oninput="calculateKMPL()">
+                </div>
+                <div class="form-group">
+                    <label>Total Cost (₹)</label>
+                    <input type="number" step="0.01" id="total_cost" required>
+                </div>
+            </div>
 
-    <form id="fuel-form">
-        <div class="form-group">
-            <label>Current Odometer (KM)</label>
-            <input type="number" name="odometer" placeholder="e.g. 45200" required>
-        </div>
+            <div class="form-group">
+                <label>Fuel Receipt</label>
+                <input type="file" id="receipt" accept="image/*" capture="environment">
+            </div>
 
-        <div class="form-group">
-            <label>Fuel Quantity (Liters)</label>
-            <input type="number" step="0.01" name="quantity" placeholder="e.g. 50.5" required>
-        </div>
+            <div id="kmpl-box" class="kmpl-alert"></div>
 
-        <div class="form-group">
-            <label>Total Cost (₹)</label>
-            <input type="number" step="0.01" name="total_cost" placeholder="e.g. 5000" required>
-        </div>
+            <button type="submit" class="btn-save" id="submitBtn">Save Fuel Entry</button>
+        </form>
+    </div>
 
-        <div class="form-group">
-            <label>Date</label>
-            <input type="date" name="log_date" id="log-date" required>
-        </div>
-
-        <button type="submit" class="btn-submit">Save Fuel Log</button>
-    </form>
-
-    <a href="/driver-dashboard.html" class="back-link">← Return to Dashboard</a>
+    <div class="history-list" id="historyList"></div>
+    
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="/driver-dashboard.html" style="color: #64748b; text-decoration: none; font-size: 0.85em;">← Back to Dashboard</a>
+    </div>
 </div>
 
 <script>
     const token = localStorage.getItem('erp-token');
-    document.getElementById('log-date').valueAsDate = new Date();
+    let prevOdo = 0;
 
-    document.getElementById('fuel-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const msg = document.getElementById('message');
-        const formData = Object.fromEntries(new FormData(e.target).entries());
+    async function init() {
+        const res = await fetch('/api/transport/fuel/last-entry', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const last = await res.json();
+        prevOdo = last.odometer || 0;
+        document.getElementById('last-odo-display').innerText = `${prevOdo.toLocaleString()} KM`;
+        fetchHistory();
+    }
 
-        try {
-            // 1. Get driver status to find the linked vehicle_id
-            const statusRes = await fetch('/api/transport/driver/status', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const statusData = await statusRes.json();
-            if (!statusRes.ok) throw new Error("Could not identify vehicle.");
-
-            // 2. Submit fuel entry
-            const response = await fetch('/api/transport/fuel-logs', {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json', 
-                    'Authorization': `Bearer ${token}` 
-                },
-                body: JSON.stringify({ ...formData, vehicle_id: statusData.vehicle_id })
-            });
-
-            if (response.ok) {
-                msg.style.display = 'block';
-                msg.style.background = '#dcfce7';
-                msg.style.color = '#166534';
-                msg.textContent = "Fuel log saved successfully!";
-                e.target.reset();
-                document.getElementById('log-date').valueAsDate = new Date();
-            } else {
-                throw new Error("Failed to save fuel log.");
-            }
-        } catch (err) {
-            msg.style.display = 'block';
-            msg.style.background = '#fee2e2';
-            msg.style.color = '#b91c1c';
-            msg.textContent = err.message;
+    function calculateKMPL() {
+        const current = parseFloat(document.getElementById('odometer').value);
+        const qty = parseFloat(document.getElementById('quantity').value);
+        const box = document.getElementById('kmpl-box');
+        
+        if (current > prevOdo && qty > 0) {
+            const kmpl = ((current - prevOdo) / qty).toFixed(2);
+            box.style.display = 'block';
+            box.style.background = '#dcfce7';
+            box.style.color = '#166534';
+            box.innerHTML = `✨ Predicted Mileage: ${kmpl} KMPL`;
+        } else {
+            box.style.display = 'none';
         }
-    });
-</script>
+    }
 
+    document.getElementById('fuelForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerText = "Saving...";
+
+        const formData = new FormData();
+        formData.append('odometer', document.getElementById('odometer').value);
+        formData.append('quantity', document.getElementById('quantity').value);
+        formData.append('total_cost', document.getElementById('total_cost').value);
+        formData.append('prev_odometer', prevOdo);
+        
+        const receiptFile = document.getElementById('receipt').files[0];
+        if (receiptFile) formData.append('receipt', receiptFile);
+
+        const res = await fetch('/api/transport/fuel/log', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+
+        if (res.ok) {
+            alert("Fuel entry successfully logged!");
+            location.reload();
+        } else {
+            alert("Error logging fuel.");
+            btn.disabled = false;
+            btn.innerText = "Save Fuel Entry";
+        }
+    };
+
+    async function fetchHistory() {
+        const res = await fetch('/api/transport/fuel/history', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const logs = await res.json();
+        const container = document.getElementById('historyList');
+
+        // Update Dashboard
+        const totalCost = logs.reduce((sum, l) => sum + parseFloat(l.total_cost), 0);
+        const avgKmpl = (logs.reduce((sum, l) => sum + parseFloat(l.kmpl || 0), 0) / (logs.length || 1)).toFixed(1);
+        
+        document.getElementById('weekly-total').innerText = `₹ ${totalCost.toLocaleString()}`;
+        document.getElementById('avg-kmpl').innerText = `${avgKmpl} KMPL`;
+
+        container.innerHTML = logs.map(l => `
+            <div class="history-item">
+                <div>
+                    <strong>${new Date(l.log_date).toLocaleDateString()}</strong>
+                    <div style="font-size:0.8em; color:#64748b;">₹${(l.total_cost/l.quantity).toFixed(2)}/L • ${l.quantity}L</div>
+                </div>
+                <div style="text-align:right;">
+                    <div style="color:var(--success); font-weight:700;">${l.kmpl || '--'} km/L</div>
+                    ${l.receipt_url ? `<a href="${l.receipt_url}" target="_blank" class="view-receipt">📄 View Receipt</a>` : ''}
+                </div>
+            </div>
+        `).join('');
+    }
+
+    window.onload = init;
+</script>
 </body>
 </html>
