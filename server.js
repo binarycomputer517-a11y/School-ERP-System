@@ -1,7 +1,7 @@
 /**
  * SERVER.JS
  * Entry point for the School ERP System
- * Final Updated Version: Includes CORS Fix for Subdomains & Main Domain
+ * Final Updated Version: Fixed UUID vs Receipt Number Logic
  */
 
 // ===================================
@@ -121,15 +121,14 @@ app.set('upload', multerInstance);
 app.use(morgan('dev'));
 
 // ✅ UPDATED CORS CONFIGURATION
-// এটি আপনার মেইন ওয়েবসাইট এবং পোর্টালকে নিরাপদ কানেকশন দেবে
 app.use(cors({
     origin: [
-        'https://bcsm.org.in',       // আপনার মেইন ওয়েবসাইট
+        'https://bcsm.org.in',       
         'https://www.bcsm.org.in',
-        'https://portal.bcsm.org.in', // আপনার নতুন ইআরপি পোর্টাল
-        'http://localhost:3000'      // টেস্টিংয়ের জন্য
+        'https://portal.bcsm.org.in', 
+        'http://localhost:3000'      
     ],
-    credentials: true, // কুকিজ এবং হেডার পাঠানোর অনুমতি
+    credentials: true, 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 }));
 
@@ -205,7 +204,6 @@ app.get('/api/students/fee-clearance', async (req, res) => {
         
         const studentId = studentRes.rows[0].student_id;
 
-        // Calculate Fees (tuition_fee - amount_paid)
         const feeQuery = `
             SELECT 
                 COALESCE(SUM(tuition_fee), 0) - COALESCE(SUM(amount_paid), 0) as due_amount
@@ -222,30 +220,27 @@ app.get('/api/students/fee-clearance', async (req, res) => {
         }
     } catch (err) {
         console.error("Fee Check Error:", err);
-        // Fallback: If query fails, bypass so student is not blocked
         res.json({ cleared: true, message: "Fee Check Bypassed (Error)" });
     }
 });
 
 // ==========================================
-// CUSTOM ROUTE: Student Payment History (JOIN FIX)
+// CUSTOM ROUTE: Student Payment History
 // ==========================================
 app.get('/api/finance/student/payment-history', async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // 1. Get Student ID
         const studentRes = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
         if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student not found" });
         const studentId = studentRes.rows[0].student_id;
 
-        // 2. Fetch Payments via Invoice Link (Since student_id is null in fee_payments)
         const query = `
             SELECT 
                 fp.id,
-                si.total_amount as total_amount,  -- Total Invoice Amount
-                fp.amount as amount_paid,         -- Amount Paid in this transaction
-                (si.total_amount - si.paid_amount) as balance, -- Remaining Balance on invoice
+                si.total_amount as total_amount,  
+                fp.amount as amount_paid,         
+                (si.total_amount - si.paid_amount) as balance, 
                 fp.payment_date,
                 fp.payment_mode,
                 fp.transaction_id,
@@ -266,19 +261,16 @@ app.get('/api/finance/student/payment-history', async (req, res) => {
 
 
 // ==========================================
-// CUSTOM ROUTE: Student Fee Receipts List (FIXED: Removed si.title)
+// CUSTOM ROUTE: Student Fee Receipts List
 // ==========================================
 app.get('/api/finance/student/receipts', async (req, res) => {
     try {
         const userId = req.user.id;
         
-        // 1. Get Student ID
         const studentRes = await pool.query('SELECT student_id FROM students WHERE user_id = $1', [userId]);
         if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student not found" });
         const studentId = studentRes.rows[0].student_id;
 
-        // 2. Fetch Successful Payments
-        // FIX: Replaced 'si.title' with static text 'School Fee' to prevent error
         const query = `
             SELECT 
                 fp.id,
@@ -304,13 +296,27 @@ app.get('/api/finance/student/receipts', async (req, res) => {
 });
 
 // ==========================================
-// CUSTOM ROUTE: Single Receipt Details (For Printing)
+// ✅ CUSTOM ROUTE: Single Receipt Details (FIXED: UUID vs String)
 // ==========================================
+
+
 app.get('/api/finance/receipt/:id', async (req, res) => {
     try {
         const { id } = req.params;
         
-        // FIX: Replaced 'si.title' with 'Tuition & Fees'
+        // 1. Check if the ID provided is a valid UUID
+        const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+
+        let queryCondition = '';
+
+        if (isUUID) {
+            // Case A: User clicked 'View' from an internal list (Uses Database UUID)
+            queryCondition = 'fp.id = $1';
+        } else {
+            // Case B: User searched by Receipt Number (Uses String/Transaction ID)
+            queryCondition = 'fp.transaction_id = $1';
+        }
+
         const query = `
             SELECT 
                 fp.id, fp.transaction_id, fp.payment_date, fp.amount, fp.payment_mode,
@@ -322,7 +328,7 @@ app.get('/api/finance/receipt/:id', async (req, res) => {
             JOIN student_invoices si ON fp.invoice_id = si.id
             JOIN students s ON si.student_id = s.student_id
             LEFT JOIN courses c ON s.course_id = c.id
-            WHERE fp.id = $1`;
+            WHERE ${queryCondition}`;
 
         const receipt = await pool.query(query, [id]);
         

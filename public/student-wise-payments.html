@@ -3,322 +3,188 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Ledger Report | School ERP</title>
+    <title>Student Ledger | BCSM</title>
     
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
     <style>
-        :root {
-            --primary-color: #005A9C;
-            --secondary-color: #f8f9fa;
-            --text-dark: #2c3e50;
-            --border-color: #dee2e6;
+        /* Print Specific Styles */
+        @media print {
+            body { background: white !important; }
+            .no-print, .controls-section { display: none !important; }
+            .glass-card { box-shadow: none !important; border: 1px solid #ddd !important; }
+            .ledger-table thead th { background-color: #f0f0f0 !important; color: black !important; border: 1px solid #000 !important; }
+            .ledger-table td { border: 1px solid #ccc !important; }
         }
 
-        body {
-            background-color: #eef2f7;
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            color: var(--text-dark);
-        }
-
-        /* Paper Style Container */
-        .report-container {
-            background: white;
-            max-width: 1000px;
-            margin: 30px auto;
-            padding: 40px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.08);
-            border-radius: 8px;
-            border-top: 5px solid var(--primary-color);
-        }
-
-        /* Controls Section (Hidden in Print) */
-        .controls-section {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            margin-bottom: 25px;
-            max-width: 1000px;
-            margin-left: auto;
-            margin-right: auto;
-        }
-
-        /* Summary Cards */
-        .summary-card {
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
+        .summary-box {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 10px;
             padding: 15px;
             text-align: center;
-            background: #fff;
         }
-        .summary-card h6 { color: #6c757d; font-size: 0.9rem; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.5px; }
-        .summary-card h4 { font-weight: 700; margin: 0; }
-
-        /* Ledger Table */
-        .ledger-table thead th {
-            background-color: var(--primary-color);
-            color: white;
-            font-weight: 500;
-            text-transform: uppercase;
-            font-size: 0.85rem;
-            border: none;
-        }
-        .ledger-table tbody tr:nth-of-type(even) { background-color: rgba(0,0,0,0.02); }
-        .ledger-table td { vertical-align: middle; font-size: 0.95rem; }
-
-        /* Typography Colors */
-        .text-debit { color: #dc3545; font-weight: 600; } /* Red for Dues */
-        .text-credit { color: #198754; font-weight: 600; } /* Green for Payments */
-        .text-balance { color: var(--primary-color); font-weight: 700; }
-
-        /* Header Info */
-        .school-header { border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 20px; }
-        .global-school-logo { max-height: 70px; margin-bottom: 10px; }
-        .global-school-name { font-size: 1.8rem; font-weight: 800; color: var(--primary-color); text-transform: uppercase; margin: 0; }
-        .student-info-box { background: #f8f9fa; padding: 15px; border-radius: 5px; border-left: 4px solid var(--primary-color); }
-
-        /* Loading Spinner */
-        .loader-overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(255,255,255,0.8); z-index: 9999;
-            display: none; justify-content: center; align-items: center;
-        }
-
-        /* PRINT MEDIA QUERY (UPDATED) */
-        @media print {
-            body { 
-                background: white; 
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            .no-print, .controls-section { display: none !important; }
-            .report-container { box-shadow: none; border: none; padding: 0; margin: 0; width: 100%; max-width: 100%; }
-            .ledger-table thead th { background-color: #005A9C !important; color: white !important; }
-            
-            .student-info-box { 
-                background-color: #f8f9fa !important; 
-                -webkit-print-color-adjust: exact;
-                print-color-adjust: exact;
-            }
-            
-            footer { position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 10px; color: #999; }
-        }
+        .text-debit { color: #dc3545; font-weight: 700; }
+        .text-credit { color: #198754; font-weight: 700; }
     </style>
 </head>
 <body>
 
-<div class="loader-overlay" id="loader">
-    <div class="spinner-border text-primary" role="status">
-        <span class="visually-hidden">Loading...</span>
-    </div>
-</div>
-
-<div class="container mt-4 no-print">
-    <div class="d-flex justify-content-between align-items-center">
-        <a href="/admin-dashboard.html" class="btn btn-outline-secondary btn-sm">
-            <i class="fas fa-arrow-left"></i> Back to Dashboard
+<div class="container" style="max-width: 1000px; padding-top: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-file-invoice me-2"></i>Student Ledger</h2>
+            <p class="text-muted mb-0 small">Financial Statement & History</p>
+        </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
         </a>
-        <h5 class="text-muted m-0">Finance Module</h5>
     </div>
-</div>
 
-<div class="container mt-3 no-print">
-    <div class="controls-section">
+    <div class="glass-card mb-4 no-print controls-section">
         <div class="row g-3 align-items-end">
             <div class="col-md-8">
-                <label for="studentSelect" class="form-label fw-bold">Select Student:</label>
-                <div class="input-group">
-                    <span class="input-group-text bg-white"><i class="fas fa-user-graduate"></i></span>
-                    <select id="studentSelect" class="form-select" onchange="fetchLedger()">
-                        <option value="">-- Start typing or select a student --</option>
-                    </select>
-                </div>
+                <label class="form-label fw-bold small">Select Student</label>
+                <select id="studentSelect" class="form-select" onchange="fetchLedger()">
+                    <option value="">-- Loading Students... --</option>
+                </select>
             </div>
             <div class="col-md-4 text-end">
-                <button onclick="window.print()" class="btn btn-primary" id="printBtn" disabled>
-                    <i class="fas fa-print"></i> Print Ledger
+                <button onclick="window.print()" class="btn btn-primary rounded-pill shadow-sm px-4" id="printBtn" disabled>
+                    <i class="fas fa-print me-2"></i> Print Report
                 </button>
             </div>
         </div>
     </div>
-</div>
 
-<div class="report-container" id="ledgerReport" style="display: none;">
-    
-    <div class="school-header text-center">
-        <img src="" alt="Logo" class="global-school-logo" id="headerLogo">
-        <h1 class="global-school-name">School ERP System</h1>
-        <p class="mb-0"><span class="global-school-address">Address Line</span></p>
-        <p class="small text-muted">Email: <span class="global-school-email">email@school.com</span> | Phone: <span class="global-school-phone">+91 0000000000</span></p>
-        <div class="mt-2 text-decoration-underline fw-bold">STUDENT FINANCIAL LEDGER</div>
-    </div>
+    <div class="glass-card" id="ledgerReport" style="display: none;">
+        
+        <div class="text-center mb-4 pb-3 border-bottom">
+            <h3 class="fw-bold text-dark mb-1 global-school-name">SCHOOL NAME</h3>
+            <p class="text-muted small mb-0 global-school-address">Address Line</p>
+            <h5 class="mt-3 text-uppercase fw-bold text-primary">Student Financial Ledger</h5>
+        </div>
 
-    <div class="row mb-4">
-        <div class="col-md-8">
-            <div class="student-info-box">
-                <table style="width: 100%;">
-                    <tr>
-                        <td style="width: 100px;" class="fw-bold text-muted">Name:</td>
-                        <td class="fw-bold fs-5" id="stName">...</td>
-                    </tr>
-                    <tr>
-                        <td class="fw-bold text-muted">Roll No:</td>
-                        <td id="stRoll">...</td>
-                    </tr>
-                    <tr>
-                        <td class="fw-bold text-muted">Course:</td>
-                        <td id="stBatch">...</td>
-                    </tr>
+        <div class="row mb-4 bg-light p-3 rounded mx-0">
+            <div class="col-md-8">
+                <table class="w-100">
+                    <tr><td class="text-muted small w-25">Student Name:</td><td class="fw-bold" id="stName">...</td></tr>
+                    <tr><td class="text-muted small">Roll / ID:</td><td class="fw-bold" id="stRoll">...</td></tr>
+                    <tr><td class="text-muted small">Course:</td><td class="fw-bold" id="stBatch">...</td></tr>
                 </table>
             </div>
-        </div>
-        <div class="col-md-4 text-end align-self-end">
-            <p class="mb-1"><strong>Report Date:</strong> <span id="genDate"></span></p>
-            <p class="mb-0"><strong>Ref ID:</strong> <span id="refId">...</span></p>
-        </div>
-    </div>
-
-    <div class="row mb-4">
-        <div class="col-4">
-            <div class="summary-card">
-                <h6>Total Billed (Debit)</h6>
-                <h4 class="text-debit" id="cardDebit">₹0.00</h4>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <p class="mb-0 small"><strong>Date:</strong> <span id="genDate">...</span></p>
+                <p class="mb-0 small"><strong>Ref:</strong> <span id="refId">...</span></p>
             </div>
         </div>
-        <div class="col-4">
-            <div class="summary-card">
-                <h6>Total Paid (Credit)</h6>
-                <h4 class="text-credit" id="cardCredit">₹0.00</h4>
+
+        <div class="row g-3 mb-4">
+            <div class="col-4">
+                <div class="summary-box">
+                    <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Total Billed</small>
+                    <h5 class="text-debit mb-0" id="cardDebit">₹0.00</h5>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="summary-box">
+                    <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Total Paid</small>
+                    <h5 class="text-credit mb-0" id="cardCredit">₹0.00</h5>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="summary-box bg-primary bg-opacity-10 border-primary">
+                    <small class="text-primary text-uppercase fw-bold" style="font-size: 0.7rem;">Net Balance</small>
+                    <h5 class="text-primary mb-0" id="cardBalance">₹0.00</h5>
+                </div>
             </div>
         </div>
-        <div class="col-4">
-            <div class="summary-card" style="background-color: #f0f8ff; border-color: #b6d4fe;">
-                <h6>Net Balance Due</h6>
-                <h4 class="text-balance" id="cardBalance">₹0.00</h4>
+
+        <div class="table-responsive">
+            <table class="table table-bordered ledger-table mb-0" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Ref No</th>
+                        <th>Description</th>
+                        <th class="text-end">Debit (₹)</th>
+                        <th class="text-end">Credit (₹)</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerBody"></tbody>
+                <tfoot class="table-light border-top-2">
+                    <tr>
+                        <td colspan="3" class="text-end fw-bold">TOTALS:</td>
+                        <td class="text-end fw-bold text-debit" id="footerDebit">0.00</td>
+                        <td class="text-end fw-bold text-credit" id="footerCredit">0.00</td>
+                    </tr>
+                    <tr class="bg-light">
+                        <td colspan="4" class="text-end fw-bold py-3">CLOSING BALANCE (DUE):</td>
+                        <td class="text-end fw-bold text-primary fs-6 py-3" id="footerBalance">0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="row mt-5 pt-4">
+            <div class="col-4 text-center">
+                <div class="border-top border-secondary w-75 mx-auto"></div>
+                <small class="text-muted">Guardian</small>
+            </div>
+            <div class="col-4 text-center">
+                <div class="border-top border-secondary w-75 mx-auto"></div>
+                <small class="text-muted">Accountant</small>
+            </div>
+            <div class="col-4 text-center">
+                <div class="border-top border-secondary w-75 mx-auto"></div>
+                <small class="text-muted">Principal</small>
             </div>
         </div>
-    </div>
-
-    <div class="table-responsive">
-        <table class="table table-bordered ledger-table">
-            <thead>
-                <tr>
-                    <th style="width: 15%">Date</th>
-                    <th style="width: 15%">Ref No</th>
-                    <th style="width: 35%">Description</th>
-                    <th style="width: 15%" class="text-end">Debit (₹)</th>
-                    <th style="width: 15%" class="text-end">Credit (₹)</th>
-                </tr>
-            </thead>
-            <tbody id="ledgerBody">
-                </tbody>
-            <tfoot class="table-light">
-                <tr>
-                    <td colspan="3" class="text-end fw-bold">GRAND TOTAL:</td>
-                    <td class="text-end fw-bold text-debit" id="footerDebit">0.00</td>
-                    <td class="text-end fw-bold text-credit" id="footerCredit">0.00</td>
-                </tr>
-                <tr style="background-color: #e7f1ff;">
-                    <td colspan="4" class="text-end fw-bold">CLOSING BALANCE (DUE):</td>
-                    <td class="text-end fw-bold text-primary fs-5" id="footerBalance">0.00</td>
-                </tr>
-            </tfoot>
-        </table>
-    </div>
-
-    <div class="row mt-5 pt-5">
-        <div class="col-4 text-center">
-            <div style="border-top: 1px solid #ccc; width: 80%; margin: 0 auto;"></div>
-            <p class="small text-muted mt-2">Guardian Signature</p>
-        </div>
-        <div class="col-4 text-center">
-            <div style="border-top: 1px solid #ccc; width: 80%; margin: 0 auto;"></div>
-            <p class="small text-muted mt-2">Accounts Officer</p>
-        </div>
-        <div class="col-4 text-center">
-            <div style="border-top: 1px solid #ccc; width: 80%; margin: 0 auto;"></div>
-            <p class="small text-muted mt-2">Principal / Director</p>
+        
+        <div class="text-center mt-4 pt-2 border-top">
+            <small class="text-muted" style="font-size: 10px;">Computer generated report. Valid without signature.</small>
         </div>
     </div>
-    
-    <footer class="mt-4 text-center text-muted small no-print">
-        <hr>
-        <p>This report is computer generated and valid without a signature unless required for official purposes.</p>
-    </footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
 <script>
-    const token = localStorage.getItem('erp-token');
-    const API_BASE = '/api';
-
-    // Helper: Currency Formatter
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-IN', {
-            style: 'currency',
-            currency: 'INR',
-            minimumFractionDigits: 2
-        }).format(amount);
-    };
-
-    // Helper: Date Formatter
-    const formatDate = (dateString) => {
-        if(!dateString) return '-';
-        return new Date(dateString).toLocaleDateString('en-GB', {
-            day: '2-digit', month: 'short', year: 'numeric'
-        });
-    };
-    
-    function showLoader(show) {
-        document.getElementById('loader').style.display = show ? 'flex' : 'none';
-    }
-
-    // 1. Initial Load
     document.addEventListener('DOMContentLoaded', () => {
-        if(!token) {
-            alert("Please login first.");
-            window.location.href = '/login.html';
-        }
+        const token = localStorage.getItem('erp-token');
+        if(!token) window.location.href = '/login.html';
         loadStudents();
     });
 
-    // 2. Fetch Student List
+    // 1. Load Students
     async function loadStudents() {
-        showLoader(true);
         try {
-            const res = await fetch(`${API_BASE}/students`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await window.authFetch('/api/students');
             const students = await res.json();
             
             const select = document.getElementById('studentSelect');
             select.innerHTML = '<option value="">-- Select Student --</option>';
             
-            // ⭐ FIX: Ensure 'username' exists before comparing. Use || '' as a fallback.
-            students.sort((a, b) => {
-                const nameA = a.username || '';
-                const nameB = b.username || '';
-                return nameA.localeCompare(nameB);
-            });
+            students.sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
 
             students.forEach(s => {
-                const option = document.createElement('option');
-                option.value = s.student_id;
-                // Use robust name retrieval and display
-                const displayName = s.username || s.student_name || 'Student (Name Missing)';
-                option.text = `${displayName} (Roll: ${s.roll_number || 'N/A'}) - ${s.course_name || ''}`;
-                select.appendChild(option);
+                const opt = document.createElement('option');
+                opt.value = s.student_id;
+                opt.text = `${s.first_name} ${s.last_name} (${s.roll_number || 'N/A'})`;
+                select.appendChild(opt);
             });
         } catch (error) {
             console.error("Error loading students", error);
-            alert("Failed to load student list.");
-        } finally {
-            showLoader(false);
         }
     }
 
-    // 3. Fetch Ledger Data
+    // 2. Fetch Ledger
     async function fetchLedger() {
         const studentId = document.getElementById('studentSelect').value;
         const reportDiv = document.getElementById('ledgerReport');
@@ -330,13 +196,9 @@
             return;
         }
 
-        showLoader(true);
         try {
-            // ⭐ CRITICAL FIX: Change /api/fees/ledger to /api/finance/ledger
-            const res = await fetch(`${API_BASE}/finance/ledger/${studentId}`, { 
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            
+            // Updated Endpoint: /api/finance/ledger/:id
+            const res = await window.authFetch(`/api/finance/ledger/${studentId}`);
             if(!res.ok) throw new Error("Data fetch failed");
             
             const data = await res.json();
@@ -347,79 +209,67 @@
 
         } catch (error) {
             console.error(error);
-            alert("Error: " + error.message);
+            alert("Error loading ledger: " + error.message);
             reportDiv.style.display = 'none';
-        } finally {
-            showLoader(false);
         }
     }
 
-    // 4. Render the Report
+    // 3. Render Report
     function renderReport(data) {
         const { student, ledger } = data;
-        
-        // A. Set Header Data
-        document.getElementById('stName').innerText = student.username;
+        const config = window.erpSettings || {};
+
+        // Header Info
+        document.querySelector('.global-school-name').innerText = config.school_name || 'BCSM SCHOOL';
+        document.querySelector('.global-school-address').innerText = config.school_address || 'Address Line';
+
+        document.getElementById('stName').innerText = `${student.username || student.first_name}`;
         document.getElementById('stRoll').innerText = student.roll_number || 'N/A';
         document.getElementById('stBatch').innerText = `${student.course_name || '-'} ${student.batch_name ? '(' + student.batch_name + ')' : ''}`;
-        document.getElementById('genDate').innerText = formatDate(new Date());
+        document.getElementById('genDate').innerText = new Date().toLocaleDateString();
         document.getElementById('refId').innerText = 'LED-' + Math.floor(100000 + Math.random() * 900000);
 
-        // B. Process Ledger Table
+        // Table
         const tbody = document.getElementById('ledgerBody');
         tbody.innerHTML = '';
 
-        let runningBalance = 0; // Running balance starts at 0
         let sumDebit = 0;
         let sumCredit = 0;
 
-        if (ledger.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No financial records found for this student.</td></tr>';
+        if (!ledger || ledger.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No records found.</td></tr>';
         } else {
             ledger.forEach(row => {
-                const debit = parseFloat(row.debit);
-                const credit = parseFloat(row.credit);
-                
-                // Balance Calculation
-                runningBalance = runningBalance + debit - credit;
+                const debit = parseFloat(row.debit || 0);
+                const credit = parseFloat(row.credit || 0);
                 
                 sumDebit += debit;
                 sumCredit += credit;
 
-                const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${formatDate(row.date)}</td>
-                    <td class="small text-muted">${row.ref_no}</td>
-                    <td>
-                        <span class="fw-bold text-dark">${row.type}</span>: ${row.description}
-                    </td>
-                    <td class="text-end">${debit > 0 ? formatCurrency(debit) : '-'}</td>
-                    <td class="text-end">${credit > 0 ? formatCurrency(credit) : '-'}</td>
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${new Date(row.date).toLocaleDateString()}</td>
+                        <td class="text-muted small">${row.ref_no || '-'}</td>
+                        <td><span class="fw-bold">${row.type}</span>: ${row.description}</td>
+                        <td class="text-end">${debit > 0 ? window.formatCurrency(debit) : '-'}</td>
+                        <td class="text-end">${credit > 0 ? window.formatCurrency(credit) : '-'}</td>
+                    </tr>
                 `;
-                tbody.appendChild(tr);
             });
         }
 
         const finalBalance = sumDebit - sumCredit;
 
-        // C. Update Summaries
-        // 1. Cards
-        document.getElementById('cardDebit').innerText = formatCurrency(sumDebit);
-        document.getElementById('cardCredit').innerText = formatCurrency(sumCredit);
-        document.getElementById('cardBalance').innerText = formatCurrency(finalBalance);
+        // Summaries
+        document.getElementById('cardDebit').innerText = window.formatCurrency(sumDebit);
+        document.getElementById('cardCredit').innerText = window.formatCurrency(sumCredit);
+        document.getElementById('cardBalance').innerText = window.formatCurrency(finalBalance);
 
-        // 2. Footer Table
-        document.getElementById('footerDebit').innerText = formatCurrency(sumDebit);
-        document.getElementById('footerCredit').innerText = formatCurrency(sumCredit);
-        document.getElementById('footerBalance').innerText = formatCurrency(finalBalance);
-    }
-
-    function showLoader(show) {
-        document.getElementById('loader').style.display = show ? 'flex' : 'none';
+        document.getElementById('footerDebit').innerText = window.formatCurrency(sumDebit);
+        document.getElementById('footerCredit').innerText = window.formatCurrency(sumCredit);
+        document.getElementById('footerBalance').innerText = window.formatCurrency(finalBalance);
     }
 </script>
-
-<script src="js/global-config.js"></script>
 
 </body>
 </html>

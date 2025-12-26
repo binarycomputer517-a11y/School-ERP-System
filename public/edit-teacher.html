@@ -2,301 +2,322 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Edit Teacher</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Staff Profile | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        .container { max-width: 700px; margin: auto; padding: 30px; background: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; margin-bottom: 20px; }
-        input[type="text"], input[type="email"], input[type="tel"], input[type="date"], input[type="number"], input[type="password"], input[type="file"], select, textarea {
-            width: 100%;
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            box-sizing: border-box;
-            display: block; 
+        :root {
+            --primary-dark: #005A9C; 
+            --glass-bg: rgba(255, 255, 255, 0.85);
         }
-        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; }
-        .btn-warning { background-color: #ffc107; color: #333; }
-        .btn-secondary { background-color: #6c757d; color: white; }
-        .form-group-custom { margin-bottom: 15px; }
-        .current-path { font-size: 0.8em; color: #555; margin-top: -8px; margin-bottom: 10px; }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: linear-gradient(180deg, #FF9933 0%, #FFFFFF 50%, #138808 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding-bottom: 50px;
+        }
+
+        .container { max-width: 900px; padding-top: 30px; }
+
+        /* Glass Card */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            color: var(--primary-dark);
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+            margin-top: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.95rem;
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid rgba(0,0,0,0.1);
+            background: rgba(255,255,255,0.9);
+        }
+        .form-control:focus {
+            border-color: var(--primary-dark);
+            box-shadow: 0 0 0 3px rgba(0, 90, 156, 0.15);
+        }
+        
+        .current-file-link {
+            font-size: 0.85rem;
+            margin-top: 5px;
+            display: inline-block;
+            color: var(--primary-dark);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .current-file-link:hover { text-decoration: underline; }
+
+        .img-preview {
+            width: 80px; height: 80px; 
+            border-radius: 50%; 
+            object-fit: cover;
+            border: 3px solid #fff;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
+
 <div class="container">
-    <h1>Edit Teacher Record</h1>
-    <div class="nav-links">
-        <a href="/view-teachers.html" class="btn btn-secondary">← Back to Teacher List</a>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-user-edit me-2"></i>Edit Profile</h2>
+            <p class="text-muted mb-0 small">Update staff details and permissions</p>
+        </div>
+        <a href="/view-teachers.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </a>
     </div>
-    
-    <form id="edit-teacher-form" enctype="multipart/form-data">
-        <p id="loading-message">Loading teacher data...</p>
+
+    <div class="glass-card" id="loading-panel">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Loading staff data...</p>
+        </div>
+    </div>
+
+    <div class="glass-card d-none" id="form-panel">
+        <form id="edit-teacher-form" enctype="multipart/form-data">
+            
+            <input type="hidden" id="teacher_id_hidden" name="id">
+
+            <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
+                <img src="https://placehold.co/80" id="preview-photo" class="img-preview me-3">
+                <div>
+                    <h4 class="mb-0 fw-bold" id="header-name">Staff Name</h4>
+                    <span class="badge bg-primary rounded-pill" id="header-id">ID: ...</span>
+                </div>
+            </div>
+
+            <h5 class="section-title">Professional Information</h5>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Full Name</label>
+                    <input type="text" name="full_name" id="full_name" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Employee ID (Read Only)</label>
+                    <input type="text" id="employee_id" class="form-control bg-light" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Designation</label>
+                    <input type="text" name="designation" id="designation" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Department</label>
+                    <select name="department_id" id="department_select" class="form-select">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Hire Date</label>
+                    <input type="date" name="hire_date" id="hire_date" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Account Status</label>
+                    <select name="is_active" id="is_active" class="form-select">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive / On Leave</option>
+                    </select>
+                </div>
+            </div>
+
+            <h5 class="section-title">Contact Details</h5>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Email Address</label>
+                    <input type="email" name="email" id="email" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Phone Number</label>
+                    <input type="tel" name="phone_number" id="phone_number" class="form-control">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Address</label>
+                    <input type="text" name="address" id="address" class="form-control">
+                </div>
+            </div>
+
+            <h5 class="section-title">Files & Security</h5>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Change Profile Photo</label>
+                    <input type="file" name="profile_photo" class="form-control" accept="image/*">
+                    <div id="current-photo-link"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Update CV / Resume</label>
+                    <input type="file" name="cv_file" class="form-control" accept=".pdf,.doc,.docx">
+                    <div id="current-cv-link"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small text-danger">New Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">System Role</label>
+                    <select name="new_role" id="new_role" class="form-select">
+                        <option value="Teacher">Teacher</option>
+                        <option value="Admin">Admin</option>
+                        <option value="HR">HR</option>
+                        <option value="Employee">Employee</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end pt-3 border-top">
+                <button type="submit" id="submit-btn" class="btn btn-primary rounded-pill px-5 shadow">
+                    <i class="fas fa-save me-2"></i> Save Changes
+                </button>
+            </div>
         </form>
+    </div>
 </div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
 <script>
-    const form = document.getElementById('edit-teacher-form');
-    const teacherId = new URLSearchParams(window.location.search).get('id');
-    const API_URL = `/api/teachers/${teacherId}`;
-    const API_DEPARTMENTS_URL = `/api/hr/departments`;
-    const TOKEN = localStorage.getItem('erp-token');
-    
-    let allDepartments = []; // Store fetched departments globally
+    const urlParams = new URLSearchParams(window.location.search);
+    const teacherId = urlParams.get('id');
 
-    function formatDate(dateString) {
-        if (!dateString) return '';
-        return dateString.split('T')[0];
-    }
-    
-    async function loadDepartments() {
-        try {
-            const response = await fetch(API_DEPARTMENTS_URL, {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
-            });
-            if (!response.ok) throw new Error('Failed to load departments.');
-            allDepartments = await response.json();
-        } catch (error) {
-            console.error('Error loading departments:', error);
-            alert('Warning: Could not load departments list. Department ID must be entered manually.');
-        }
-    }
+    document.addEventListener('DOMContentLoaded', async () => {
+        const token = localStorage.getItem('erp-token');
+        if(!token) window.location.href = '/login.html';
+        if(!teacherId) { alert("No ID provided"); window.location.href='/view-teachers.html'; return; }
 
-    // Function to render the full form after data and departments are loaded
-    function renderForm(teacher, data) {
-        // Build Department Options
-        let deptOptions = `<option value="">-- Select Department --</option>`;
-        
-        // Find the current department name from the list or use the fetched name (for display)
-        const currentDeptName = teacher.department_name || '';
-        
-        allDepartments.sort((a, b) => a.name.localeCompare(b.name));
-        allDepartments.forEach(d => {
-            const isSelected = d.id === data.department_id;
-            deptOptions += `<option value="${d.id}" ${isSelected ? 'selected' : ''}>${d.name}</option>`;
-        });
-
-        // Build Role Options
-        const roles = ['Teacher', 'Employee', 'HR', 'Coordinator', 'Admin'];
-        let roleOptions = roles.map(role => `<option value="${role}" ${teacher.role === role ? 'selected' : ''}>${role}</option>`).join('');
-
-        form.innerHTML = `
-            <h3>Editing: ${data.full_name} (ID: ${data.employee_id})</h3>
-            <input type="hidden" name="id" value="${teacherId}">
-            
-            <h4 style="margin-top: 20px;">Personal & Employment</h4>
-            <div class="form-group-custom">
-                <label>Full Name:</label>
-                <input type="text" name="full_name" value="${data.full_name}" required>
-            </div>
-            <div class="form-group-custom">
-                <label>Employee ID:</label>
-                <input type="text" value="${data.employee_id}" readonly style="background-color: #eee;">
-            </div>
-            <div class="form-group-custom">
-                <label>Designation:</label>
-                <input type="text" name="designation" value="${data.designation}">
-            </div>
-            
-            <div class="form-group-custom">
-                <label>Department:</label>
-                <select id="department_select" name="department_id">
-                    ${deptOptions}
-                </select>
-                <small class="text-muted">Current: ${currentDeptName || 'N/A'}</small>
-            </div>
-            
-            <h4 style="margin-top: 20px;">Contact Details</h4>
-            <div class="form-group-custom">
-                <label>Email Address:</label>
-                <input type="email" name="email" value="${data.email}" required>
-            </div>
-            <div class="form-group-custom">
-                <label>Phone Number:</label>
-                <input type="tel" name="phone_number" value="${data.phone_number}">
-            </div>
-            <div class="form-group-custom">
-                <label>Address:</label>
-                <input type="text" name="address" value="${data.address}">
-            </div>
-            
-            <h4 style="margin-top: 20px;">Dates & Status</h4>
-            <div class="form-group-custom">
-                <label for="date_of_birth">Date of Birth:</label>
-                <input type="date" id="date_of_birth" name="date_of_birth" value="${data.date_of_birth}">
-            </div>
-            
-            <div class="form-group-custom">
-                <label for="hire_date">Hire Date:</label>
-                <input type="date" id="hire_date" name="hire_date" value="${data.hire_date}">
-            </div>
-
-            <div class="form-group-custom">
-                <label for="is_active">Account Status:</label>
-                <select name="is_active" id="is_active">
-                    <option value="true" ${data.is_active ? 'selected' : ''}>Active</option>
-                    <option value="false" ${!data.is_active ? 'selected' : ''}>Deactivated / On Leave</option>
-                </select>
-            </div>
-            
-            <div class="form-group-custom">
-                <label for="new_role">System Role:</label>
-                <select name="new_role" id="new_role">
-                    ${roleOptions}
-                </select>
-            </div>
-
-            <h4 style="margin-top: 30px;">Files & Password</h4>
-            
-            <div class="form-group-custom">
-                <label for="password">New Password (Leave blank to keep existing):</label>
-                <input type="password" id="password" name="password" placeholder="Enter new password">
-                <small class="text-muted">Password must be at least 6 characters long if changed.</small>
-            </div>
-
-            <div class="form-group-custom">
-                <label for="profile_photo">Profile Photo (.jpg/.png):</label>
-                <input type="file" id="profile_photo" name="profile_photo" accept="image/*">
-                ${data.profile_image_path ? `<p class="current-path">Current: <a href="/${data.profile_image_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
-            </div>
-
-            <div class="form-group-custom">
-                <label for="cv_file">CV / Resume (.pdf/.doc):</label>
-                <input type="file" id="cv_file" name="cv_file" accept=".pdf,.doc,.docx">
-                ${data.cv_resume_path ? `<p class="current-path">Current: <a href="/${data.cv_resume_path}" target="_blank">View File</a></p>` : `<p class="current-path">Current: None</p>`}
-            </div>
-            
-            <button type="submit" class="btn-warning" style="margin-top: 30px;">Save Changes</button>
-            <input type="text" name="employee_id_display" value="Login Username: ${teacher.username || 'N/A'}" readonly style="background-color: #eee; margin-top: 10px;">
-        `;
-    }
-
-    async function loadTeacherData() {
-        if (!teacherId || teacherId === "undefined" || !TOKEN) {
-            alert('Error: Teacher ID is missing from the URL. Redirecting to list view.');
-            window.location.href = '/view-teachers.html';
-            return;
-        }
-        
-        // 1. Load Departments first
-        await loadDepartments();
-
-        const loadingMessageEl = document.getElementById('loading-message'); 
-
-        try {
-            const response = await fetch(API_URL, {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
-            });
-
-            if (!response.ok) {
-                if (response.status === 404) {
-                    throw new Error("Teacher not found in the database.");
-                }
-                throw new Error(`Failed to fetch data: ${response.statusText}`);
-            }
-            
-            const teacher = await response.json();
-            
-            // Map DB fields to form fields
-            const data = {
-                // Personal/Employment
-                full_name: teacher.full_name || '',
-                employee_id: teacher.employee_id || '',
-                designation: teacher.designation || '',
-                department_id: teacher.department_id || '',
-                email: teacher.email || '',
-                phone_number: teacher.phone_number || '',
-                date_of_birth: formatDate(teacher.date_of_birth),
-                hire_date: formatDate(teacher.hire_date),
-                address: teacher.address || '',
-                is_active: teacher.is_active || false,
-                // File Paths (paths are relative to server root, prepending '/' is safer for links)
-                profile_image_path: teacher.profile_image_path ? teacher.profile_image_path.replace(/^(uploads)/, '$1') : '',
-                cv_resume_path: teacher.cv_resume_path ? teacher.cv_resume_path.replace(/^(uploads)/, '$1') : ''
-            };
-
-            if (loadingMessageEl) {
-                loadingMessageEl.style.display = 'none'; 
-            }
-
-            // 2. Render the form with populated data
-            renderForm(teacher, data); 
-
-        } catch (error) {
-            alert('Error loading teacher data: ' + error.message);
-            console.error(error);
-            
-            if (loadingMessageEl) {
-                 loadingMessageEl.textContent = `Error: Could not load data. ${error.message}`;
-            } else {
-                 form.innerHTML = '<p style="color: red;">Error: Could not load data. Please check the ID and try again.</p>';
-            }
-        }
-    }
-
-    form.addEventListener('submit', async function(event) {
-        event.preventDefault();
-        
-        // 1. CRITICAL: Use FormData for submission as files are present
-        const formData = new FormData(this); 
-        
-        // 2. Client-side Validation Check
-        const fullName = formData.get('full_name');
-        const emailAddress = formData.get('email');
-        const newPassword = formData.get('password');
-        
-        if (!fullName || fullName.trim() === '' || !emailAddress || emailAddress.trim() === '') {
-            alert('Full Name and Email are required fields.');
-            return;
-        }
-
-        // Validate new password if present
-        if (newPassword && newPassword.length < 6) {
-            alert('New password must be at least 6 characters long.');
-            return;
-        }
-        
-        // 3. Department ID Cleanup: If user selected '-- Select Department --' (value=""), remove it so backend defaults to NULL
-        if (formData.get('department_id') === "") {
-             formData.delete('department_id');
-        }
-
-        // 4. Update the is_active status to boolean string
-        const isActiveValue = document.getElementById('is_active').value;
-        formData.set('is_active', isActiveValue);
-        
-        // 5. If new_role select is present, its value will be in formData. No need for manual update unless validation is needed.
-
-        try {
-            // NOTE: The backend (routes/teachers.js) handles PUT requests with multipart/form-data via Multer.
-            const response = await fetch(API_URL, {
-                method: 'PUT',
-                headers: { 
-                    'Authorization': `Bearer ${TOKEN}`
-                    // IMPORTANT: DO NOT set 'Content-Type': 'multipart/form-data'. Browser sets it automatically.
-                },
-                body: formData // Send the raw FormData containing files and text
-            });
-
-            if (response.ok) {
-                alert('Teacher updated successfully!');
-                window.location.href = '/view-teachers.html';
-            } else {
-                const errorText = await response.text();
-                try {
-                     const errorJson = JSON.parse(errorText);
-                     alert(errorJson.message || 'Update failed.');
-                } catch {
-                     alert(`Update failed: HTTP Status ${response.status}. ${errorText.substring(0, 50)}...`);
-                }
-            }
-        } catch (error) {
-            alert('A network error occurred during update.');
-            console.error(error);
-        }
+        await loadData();
     });
 
-    document.addEventListener('DOMContentLoaded', loadTeacherData);
+    async function loadData() {
+        try {
+            // 1. Fetch Departments
+            const deptRes = await window.authFetch('/api/hr/departments');
+            const departments = await deptRes.json();
+            
+            const deptSelect = document.getElementById('department_select');
+            deptSelect.innerHTML = '<option value="">-- Select --</option>';
+            if(Array.isArray(departments)) {
+                departments.forEach(d => {
+                    deptSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+                });
+            }
+
+            // 2. Fetch Teacher Data
+            const res = await window.authFetch(`/api/teachers/${teacherId}`);
+            if(!res.ok) throw new Error("Teacher not found");
+            
+            const data = await res.json();
+            populateForm(data);
+
+            // Show Form
+            document.getElementById('loading-panel').classList.add('d-none');
+            document.getElementById('form-panel').classList.remove('d-none');
+
+        } catch(e) {
+            console.error(e);
+            alert("Error loading data: " + e.message);
+            window.location.href = '/view-teachers.html';
+        }
+    }
+
+    function populateForm(data) {
+        document.getElementById('header-name').textContent = data.full_name;
+        document.getElementById('header-id').textContent = data.employee_id;
+        document.getElementById('teacher_id_hidden').value = teacherId;
+
+        // Inputs
+        document.getElementById('full_name').value = data.full_name || '';
+        document.getElementById('employee_id').value = data.employee_id || '';
+        document.getElementById('designation').value = data.designation || '';
+        document.getElementById('department_select').value = data.department_id || '';
+        document.getElementById('email').value = data.email || '';
+        document.getElementById('phone_number').value = data.phone_number || '';
+        document.getElementById('address').value = data.address || '';
+        document.getElementById('is_active').value = data.is_active ? 'true' : 'false';
+        document.getElementById('new_role').value = data.role || 'Teacher';
+
+        // Dates
+        if(data.hire_date) document.getElementById('hire_date').value = data.hire_date.split('T')[0];
+
+        // Files Logic
+        const baseUrl = window.erpSettings?.API_BASE || '';
+        
+        // Photo
+        if(data.profile_image_path) {
+            const photoUrl = data.profile_image_path.startsWith('http') ? data.profile_image_path : `${baseUrl}${data.profile_image_path}`;
+            document.getElementById('preview-photo').src = photoUrl;
+            document.getElementById('current-photo-link').innerHTML = `Current: <a href="${photoUrl}" target="_blank" class="current-file-link">View Photo</a>`;
+        }
+
+        // CV
+        if(data.cv_resume_path) {
+            const cvUrl = data.cv_resume_path.startsWith('http') ? data.cv_resume_path : `${baseUrl}${data.cv_resume_path}`;
+            document.getElementById('current-cv-link').innerHTML = `Current: <a href="${cvUrl}" target="_blank" class="current-file-link"><i class="fas fa-file-pdf"></i> View CV</a>`;
+        }
+    }
+
+    // --- SUBMISSION ---
+    document.getElementById('edit-teacher-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const btn = document.getElementById('submit-btn');
+        const oldText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+        btn.disabled = true;
+
+        const formData = new FormData(e.target);
+
+        try {
+            const baseUrl = window.erpSettings?.API_BASE || '';
+            const token = localStorage.getItem('erp-token');
+
+            // Using raw fetch for Multipart
+            const response = await fetch(`${baseUrl}/api/teachers/${teacherId}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }, // No Content-Type
+                body: formData
+            });
+
+            if(response.ok) {
+                alert("Profile updated successfully!");
+                window.location.href = '/view-teachers.html';
+            } else {
+                const err = await response.json();
+                alert("Update failed: " + (err.message || response.statusText));
+            }
+
+        } catch(error) {
+            console.error(error);
+            alert("Network error occurred.");
+        } finally {
+            btn.innerHTML = oldText;
+            btn.disabled = false;
+        }
+    });
 </script>
-<script src="js/global-config.js"></script>
+
 </body>
 </html>
