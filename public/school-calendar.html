@@ -3,98 +3,309 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>School Academic Calendar (Admin)</title>
-    <link rel="stylesheet" href="css/style.css">
-    <link rel="stylesheet" href="css/calendar.css"> 
+    <title>Academic Calendar | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="js/global-config.js"></script>
+
     <style>
-        /* Basic styling for the calendar view */
-        .calendar-container {
-            max-width: 900px;
-            margin: 50px auto;
-            padding: 20px;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        :root {
+            --primary-color: #1476B2;
+            --primary-dark: #003358;
+            --bg-page: #F3F6F9;
+            --glass-bg: rgba(255, 255, 255, 0.85);
+            --glass-border: 1px solid rgba(255, 255, 255, 0.5);
+            --shadow-soft: 0 8px 30px rgba(0,0,0,0.05);
         }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-page);
+            color: #333;
+            margin-top: 20px;
+        }
+
+        /* --- UNIQUE CALENDAR GRID STYLE --- */
+        .calendar-wrapper {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: var(--glass-border);
+            border-radius: 20px;
+            box-shadow: var(--shadow-soft);
+            padding: 25px;
+            overflow: hidden;
+        }
+
         .calendar-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
+
+        .calendar-header h2 {
+            font-weight: 700;
+            color: var(--primary-dark);
+            margin: 0;
+            font-size: 1.8rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-btn {
+            background: white;
+            border: 1px solid #ddd;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            color: var(--primary-dark);
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+        .nav-btn:hover {
+            background: var(--primary-color);
+            color: white;
+            transform: scale(1.1);
+            border-color: var(--primary-color);
+        }
+
+        /* The Grid Layout */
         .calendar-grid {
             display: grid; 
             grid-template-columns: repeat(7, 1fr);
-            gap: 1px;
-            background-color: #ddd;
+            gap: 12px; /* Gap creates the floating card effect */
         }
-        .day-name, .day-cell {
-            padding: 10px;
-            text-align: center;
-            background-color: #fff;
-            border: 1px solid #eee;
-            min-height: 80px; 
-        }
+
         .day-name {
-            font-weight: bold;
-            background-color: #f2f2f2;
-            min-height: auto;
+            text-align: center;
+            font-weight: 600;
+            color: #888;
+            text-transform: uppercase;
+            font-size: 0.85rem;
+            padding-bottom: 10px;
         }
-        .event {
-            font-size: 0.75em;
+
+        .day-cell {
+            background: white;
+            border-radius: 12px;
+            min-height: 110px;
+            padding: 10px;
+            position: relative;
+            border: 1px solid transparent;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+            cursor: pointer;
+        }
+
+        /* Hover Effect - Lift Up */
+        .day-cell:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+            border-color: var(--primary-color);
+            z-index: 2;
+        }
+
+        .day-number {
+            font-weight: 700;
+            color: var(--primary-dark);
+            font-size: 1.1rem;
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            text-align: center;
+            line-height: 30px;
+            border-radius: 50%;
+        }
+
+        /* Today Highlight */
+        .day-cell.today {
+            background: #f0f8ff;
+            border: 1px solid var(--primary-color);
+        }
+        .day-cell.today .day-number {
+            background: var(--primary-color);
             color: white;
-            background-color: #3f51b5; /* Default event color */
-            border-radius: 3px;
-            margin-top: 2px;
-            padding: 1px 0;
-            overflow: hidden;
+            box-shadow: 0 2px 5px rgba(20, 118, 178, 0.4);
+        }
+
+        /* Event Badges */
+        .event {
+            font-size: 0.7rem;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 6px;
+            margin-top: 4px;
             white-space: nowrap;
+            overflow: hidden;
             text-overflow: ellipsis;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
         }
-        /* Optional: Add a CSS rule for the 'exam' type returned by the backend */
-        .event.exam {
-            background-color: #dc3545; 
+        .event::before {
+            content: '';
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            background: rgba(255,255,255,0.8);
+            border-radius: 50%;
+            margin-right: 5px;
         }
-        /* Optional: Add a CSS rule for the 'general_event' type returned by the backend */
-        .event.general_event {
-            background-color: #28a745; 
+
+        /* Event Colors */
+        .event.exam { background: linear-gradient(135deg, #FF6B6B, #EE5253); box-shadow: 0 2px 5px rgba(238, 82, 83, 0.3); }
+        .event.holiday { background: linear-gradient(135deg, #1DD1A1, #10AC84); box-shadow: 0 2px 5px rgba(16, 172, 132, 0.3); }
+        .event.meeting { background: linear-gradient(135deg, #FECA57, #FF9F43); box-shadow: 0 2px 5px rgba(255, 159, 67, 0.3); color: #333; }
+        .event.general { background: linear-gradient(135deg, #54A0FF, #2E86DE); box-shadow: 0 2px 5px rgba(46, 134, 222, 0.3); }
+
+        /* Sidebar Styles */
+        .sidebar-card {
+            background: white;
+            border-radius: 20px;
+            padding: 20px;
+            height: 100%;
+            box-shadow: var(--shadow-soft);
         }
-        /* Add more specific admin/staff event styles here if needed, e.g., for 'meeting' */
-        .event.meeting {
-            background-color: #ff9800; /* Orange for meetings/management events */
+        .event-list-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-bottom: 1px solid #f0f0f0;
+            transition: 0.2s;
         }
+        .event-list-item:hover { background: #f9f9f9; border-radius: 8px; }
+        .event-date-box {
+            background: var(--bg-page);
+            padding: 5px 10px;
+            border-radius: 8px;
+            text-align: center;
+            margin-right: 15px;
+            min-width: 50px;
+        }
+        .event-date-box span { display: block; font-weight: bold; }
+        .month-mini { font-size: 0.65rem; text-transform: uppercase; color: #888; }
+        .date-mini { font-size: 1.1rem; color: var(--primary-dark); }
+
     </style>
 </head>
 <body>
 
-    <div class="calendar-container">
-        <div class="calendar-header">
-            <button id="prevMonth" data-action="prev">&lt; Previous</button>
-            <h2 id="currentMonthYear">School Academic Calendar</h2>
-            <button id="nextMonth" data-action="next">Next &gt;</button>
+<div class="container-fluid" style="max-width: 1500px; padding: 0 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0" style="color: var(--primary-dark);">Academic Schedule</h4>
+            <p class="text-muted small">Manage school events & holidays</p>
         </div>
-        
-        <div class="calendar-grid" id="calendar-grid-container"> 
-            
-            <div class="day-name">Sun</div>
-            <div class="day-name">Mon</div>
-            <div class="day-name">Tue</div>
-            <div class="day-name">Wed</div>
-            <div class="day-name">Thu</div>
-            <div class="day-name">Fri</div>
-            <div class="day-name">Sat</div>
-            
-        </div>
-
-        <div id="event-list" style="margin-top: 30px;">
-            <h3>Events for the Month:</h3>
-            <ul id="monthly-events-ul">
-                </ul>
+        <div class="d-flex gap-2">
+            <button class="btn btn-success rounded-pill px-4 shadow-sm" onclick="openAddEventModal()">
+                <i class="fas fa-plus me-2"></i> Add New Event
+            </button>
+            <a href="/admin-dashboard.html" class="btn btn-dark rounded-pill px-4 shadow-sm">
+                <i class="fas fa-arrow-left me-2"></i> Dashboard
+            </a>
         </div>
     </div>
 
-    <script src="js/global-config.js"></script>
-    <script src="js/calendar-manager-client.js"></script> 
-    
+    <div class="row g-4">
+        <div class="col-lg-9">
+            <div class="calendar-wrapper">
+                <div class="calendar-header">
+                    <button class="nav-btn" id="prevMonth" data-action="prev"><i class="fas fa-chevron-left"></i></button>
+                    <h2 id="currentMonthYear">Loading...</h2>
+                    <button class="nav-btn" id="nextMonth" data-action="next"><i class="fas fa-chevron-right"></i></button>
+                </div>
+
+                <div class="calendar-grid" id="calendar-grid-container">
+                    <div class="day-name">Sun</div>
+                    <div class="day-name">Mon</div>
+                    <div class="day-name">Tue</div>
+                    <div class="day-name">Wed</div>
+                    <div class="day-name">Thu</div>
+                    <div class="day-name">Fri</div>
+                    <div class="day-name">Sat</div>
+                    
+                    </div>
+            </div>
+        </div>
+
+        <div class="col-lg-3">
+            <div class="sidebar-card">
+                <h5 class="fw-bold mb-4" style="color: var(--primary-dark); border-left: 4px solid var(--primary-color); padding-left: 10px;">
+                    Upcoming Events
+                </h5>
+                
+                <div id="event-list" style="max-height: 600px; overflow-y: auto;">
+                    <ul id="monthly-events-ul" class="list-unstyled">
+                        <li class="text-center text-muted py-5">
+                            <i class="fas fa-calendar-day fa-3x mb-3 text-light-gray"></i><br>
+                            Loading events...
+                        </li>
+                    </ul>
+                </div>
+
+                <div class="mt-4 pt-3 border-top">
+                    <small class="text-uppercase text-muted fw-bold mb-2 d-block" style="font-size: 0.7rem;">Event Types</small>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="badge rounded-pill bg-danger"><i class="fas fa-pen-alt me-1"></i> Exam</span>
+                        <span class="badge rounded-pill bg-success"><i class="fas fa-umbrella-beach me-1"></i> Holiday</span>
+                        <span class="badge rounded-pill bg-warning text-dark"><i class="fas fa-users me-1"></i> Meeting</span>
+                        <span class="badge rounded-pill bg-primary"><i class="fas fa-info-circle me-1"></i> General</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addEventModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
+            <div class="modal-header border-0 bg-light" style="border-radius: 15px 15px 0 0;">
+                <h5 class="modal-title fw-bold text-dark">Add Calendar Event</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="add-event-form">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Event Title</label>
+                        <input type="text" class="form-control form-control-lg" placeholder="e.g. Final Exam" required>
+                    </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-6">
+                            <label class="form-label fw-bold small text-muted">Date</label>
+                            <input type="date" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label fw-bold small text-muted">Type</label>
+                            <select class="form-select">
+                                <option value="general">General</option>
+                                <option value="exam">Exam</option>
+                                <option value="holiday">Holiday</option>
+                                <option value="meeting">Meeting</option>
+                            </select>
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 fw-bold shadow-sm">Save to Calendar</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/calendar-manager-client.js"></script> 
+
+<script>
+    // Modal Trigger
+    function openAddEventModal() {
+        const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
+        modal.show();
+    }
+</script>
+
 </body>
 </html>

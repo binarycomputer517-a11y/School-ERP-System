@@ -3,557 +3,501 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Attendance Management (Universal) v3.2</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <title>Attendance Management | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
     <style>
-        /* --- GLOBAL STYLES (CLASSIC DESIGN ADAPTED) --- */
-        body { font-family: Arial, Helvetica, sans-serif; margin: 0; background-color: #eef1f5; color: #333; font-size: 14px; padding: 2em; }
-        .container { max-width: 1200px; margin: 25px auto; padding: 20px; background-color: #ffffff; border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; }
-        h1, h2, h3 { font-family: 'Times New Roman', serif; color: #003366; }
-        h1 { text-align: center; border-bottom: 5px double #000; padding-bottom: 15px; font-size: 28px; margin-bottom: 20px; text-transform: uppercase; font-weight: bold; }
-        h2 { font-size: 22px; border-bottom: 2px solid #555; padding-bottom: 8px; margin-top: 30px; }
-        h3 { font-size: 18px; border-bottom: 1px dotted #ddd; padding-bottom: 5px; margin-top: 25px;}
-        a.dashboard-link { display: inline-block; margin-bottom: 20px; color: #005a9c; text-decoration: none; font-weight: bold; }
-        a.dashboard-link:hover { color: #C0392B; }
+        body {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+            font-family: 'Inter', sans-serif !important;
+            font-size: 0.9rem;
+        }
 
-        /* TABS */
-        .tab-buttons { display: flex; border-bottom: 3px solid #005A9C; margin-bottom: 20px; }
-        .tab-button { padding: 10px 20px; cursor: pointer; background-color: #e9e9e9; border: 1px solid #aaa; border-bottom: none; margin-right: 3px; font-weight: bold; color: #333; position: relative; top: 1px; border-radius: 0; }
-        .tab-button.active { background-color: #fff; border: 1px solid #005A9C; border-bottom: 1px solid #fff; color: #003366; }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+        .glass-card, .card {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+            border-radius: 12px !important;
+            margin-bottom: 20px;
+        }
 
-        /* FILTERS */
-        .filter-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 20px; padding: 20px; background-color: #f8f9fa; border: 1px solid #d0d7de; margin-bottom: 20px; }
-        .filter-section label { font-weight: bold; margin-bottom: 6px; color: #333; display: block; }
-        .filter-section select, .filter-section input[type="date"], .filter-section input[type="number"] { padding: 8px; border: 1px solid #555; background-color: #fff; width: 100%; box-sizing: border-box; border-radius: 0; }
-        .filter-actions { display: flex; align-items: flex-end; gap: 10px; }
+        h2 { color: #1e293b !important; font-weight: 700; }
 
-        /* BUTTONS */
-        button { padding: 9px 15px; color: white; border: 2px solid #000; cursor: pointer; font-weight: bold; transition: all 0.2s ease; box-shadow: 2px 2px 0 #000; border-radius: 0; }
-        button.primary { background: #005A9C; } button.primary:hover { background: #003A7C; }
-        button.secondary { background: #777; border-color: #000; } button.secondary:hover { background: #555; }
-        button.export { background: #28A745; } button.export:hover { background: #218838; }
-        button:disabled { background: #d4d4d4; border-color: #c0c0c0; cursor: not-allowed; color: #888; box-shadow: none; }
+        .nav-pills .nav-link {
+            color: #64748b;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 10px 20px;
+        }
+        .nav-pills .nav-link.active {
+            background-color: #2563eb !important;
+            color: white !important;
+        }
 
-        /* CONTROLS */
-        .roster-controls, .report-controls { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding: 10px; background-color: #f1f1f1; border: 1px solid #ccc; }
-        .roster-controls input[type="search"] { padding: 8px; border: 1px solid #aaa; min-width: 250px; }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            padding: 20px;
+            background: #f8fafc;
+            border-radius: 8px;
+            border: 1px solid #e2e8f0;
+        }
 
-        /* TABLES */
-        .table-wrapper { max-height: 600px; overflow-y: auto; border: 1px solid #aaa; }
-        table { width: 100%; border-collapse: collapse; background-color: #fff; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; }
-        th:last-child, td:last-child { border-right: none; }
-        th { background-color: #005A9C; color: #fff; font-weight: bold; position: sticky; top: 0; z-index: 10; }
-        tr:nth-child(even) { background-color: #f9f9f9; } tr:hover { background-color: #f1f8ff; }
+        .mode-selector {
+            background-color: #eff6ff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: 1px solid #bfdbfe;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
 
-        /* STATUS & UTILS */
-        .status-radios { display: flex; gap: 15px; }
-        .status-radios label { display: flex; align-items: center; cursor: pointer; font-size: 1em; }
-        .status-radios input { margin-right: 5px; }
-        .remarks-btn { font-size: 1.3em; cursor: pointer; background: none; border: none; padding: 5px; color: #555; }
-        .remarks-btn:hover { color: #005a9c; }
-        .mode-selector { grid-column: 1 / -1; display: flex; gap: 20px; align-items: center; background-color: #dfe9f5; padding: 10px 15px; border: 1px solid #b0c4de; margin-bottom: 10px; }
-        .status-badge { padding: 3px 8px; border: 1px solid; font-weight: bold; font-size: 0.9em; color: #333; text-transform: capitalize; }
-        .status-badge.present { background-color: #c8e6c9; border-color: #81c784; }
-        .status-badge.absent { background-color: #ffcdd2; border-color: #e57373; }
-        .status-badge.late { background-color: #fff9c4; border-color: #ffd54f; }
-        .status-badge.half-day { background-color: #e1bee7; border-color: #ba68c8; }
-        .status-badge.unmarked { background-color: #f5f5f5; border-color: #bdbdbd; }
+        .status-btn-group { display: flex; gap: 8px; }
+        .status-radio { display: none; }
+        .status-label {
+            padding: 4px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+            cursor: pointer;
+            border: 1px solid #e2e8f0;
+            font-size: 0.8rem;
+            background: white;
+        }
+        .radio-p:checked + .label-p { background: #dcfce7; color: #166534; border-color: #22c55e; }
+        .radio-a:checked + .label-a { background: #fee2e2; color: #991b1b; border-color: #ef4444; }
+        .radio-l:checked + .label-l { background: #fef9c3; color: #854d0e; border-color: #eab308; }
 
-        /* MODALS */
-        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
-        .modal.active { display: flex; }
-        .modal-content { background-color: #fff; padding: 25px; border: 2px solid #000; width: 90%; max-width: 500px; box-shadow: 6px 6px 0 #AAA; position: relative; }
-        .modal-close { position: absolute; top: 10px; right: 15px; font-size: 24px; font-weight: bold; cursor: pointer; color: #aaa; }
-        #loading-modal .modal-content { background: none; box-shadow: none; border: none; width: auto; }
-        .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #005a9c; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: capitalize;
+        }
+        .status-badge.present { background: #dcfce7; color: #166534; }
+        .status-badge.absent { background: #fee2e2; color: #991b1b; }
+        .status-badge.late { background: #fef9c3; color: #854d0e; }
 
-        /* REPORT TABLE STYLES */
-        #report-viewport { overflow-x: auto; }
-        .report-table { font-size: 12px; white-space: nowrap; }
-        .report-table th, .report-table td { text-align: center; padding: 8px 5px; }
-        .report-table th:nth-child(1), .report-table td:nth-child(1), .report-table th:nth-child(2), .report-table td:nth-child(2) { text-align: left; }
-        .report-table .status-P { background-color: #e8f5e9; }
-        .report-table .status-A { background-color: #ffebee; color: #c62828; font-weight: bold; }
+        .report-table th, .report-table td {
+            text-align: center; font-size: 0.75rem; border: 1px solid #e2e8f0; padding: 8px;
+        }
+        .att-p { background-color: #e8f5e9; color: #2e7d32; font-weight: bold; }
+        .att-a { background-color: #ffebee; color: #c62828; font-weight: bold; }
+
+        .btn-primary-bcsm { background: #2563eb; color: white; border: none; font-weight: 600; border-radius: 50px; padding: 8px 24px; }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <a href="/admin-dashboard.html" class="dashboard-link">← Back to Dashboard</a>
-        <h1>Attendance Management (Universal) v3.2</h1>
-
-        <div class="tab-buttons">
-            <div class="tab-button active" data-tab="mark-attendance-tab" onclick="switchTab(this)">Mark Daily Attendance (Universal)</div>
-            <div class="tab-button" data-tab="reports-tab" onclick="switchTab(this)">Consolidated Reports</div>
+<div class="container-fluid" style="max-width: 1400px; padding: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-0"><i class="fas fa-calendar-check me-2 text-primary"></i>Attendance Management v3.2</h2>
+            <p class="text-muted small mb-0">Universal Marking (Manual, Biometric, Face Recognition)</p>
         </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill px-4 btn-sm fw-bold">Dashboard</a>
+    </div>
 
-        <div id="mark-attendance-tab" class="tab-content active">
-            <h2>Daily Roster Marking (Department/Role)</h2>
-            <div class="filter-section">
-                <div class="mode-selector">
-                    <strong>Attendance Mode:</strong>
-                    <label><input type="radio" name="attendanceMode" value="manual" onchange="handleModeChange()" checked> Manual Entry</label>
-                    <label><input type="radio" name="attendanceMode" value="biometric" onchange="handleModeChange()"> Biometric Monitor</label>
-                    <label><input type="radio" name="attendanceMode" value="face" onchange="handleModeChange()"> Face Rec. Monitor</label>
-                </div>
-                
-                <div>
-                    <label for="markingRoleSelect">User Role:</label>
-                    <select id="markingRoleSelect" onchange="updateMarkingFilters()">
-                        <option value="">Select Role</option>
-                        <option value="Student">Student</option>
-                        <option value="Teacher">Teacher</option>
-                        <option value="Employee">Employee</option>
-                    </select>
-                </div>
-                
-                <div id="markingDynamicFilterWrapper">
-                     <div><label for="markingDynamicFilter">Batch/Department:</label><select id="markingDynamicFilter"><option value="">Select Batch/Dept</option></select></div>
-                </div>
+    <div class="glass-card p-2 mb-4">
+        <ul class="nav nav-pills" id="pills-tab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#mark-attendance-tab">Mark Attendance</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#reports-tab">Consolidated Reports</button>
+            </li>
+        </ul>
+    </div>
 
-                <div>
-                    <label for="subjectSelect">Subject (Optional):</label>
-                    <select id="subjectSelect"><option value="">Select Subject (Optional)</option></select>
-                </div>
-                
-                <div>
-                    <label for="attendanceDate">Date:</label>
-                    <input type="date" id="attendanceDate">
-                </div>
-                <div class="filter-actions">
-                    <button class="secondary" onclick="document.getElementById('attendanceDate').valueAsDate = new Date();" style="flex: 1;">Today</button>
-                    <button class="primary" onclick="loadRoster()" style="flex: 2;">Load Roster</button>
-                </div>
-            </div>
-
-            <div id="roster-controls-wrapper">
-                <div class="roster-controls">
-                    <input type="search" id="studentSearch" onkeyup="filterStudentList()" placeholder="Search by name or ID...">
-                    <div>
-                        <button class="secondary" onclick="markAll('present')">Mark All Present</button>
-                        <button class="secondary" onclick="markAll('absent')">Mark All Absent</button>
+    <div class="tab-content" id="pills-tabContent">
+        
+        <div class="tab-pane fade show active" id="mark-attendance-tab">
+            <div class="glass-card">
+                <div class="mode-selector mx-3 mt-3">
+                    <strong class="text-primary"><i class="fas fa-fingerprint me-1"></i> Attendance Mode:</strong>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="attendanceMode" id="m_manual" value="manual" onchange="handleModeChange()" checked>
+                        <label class="form-check-label fw-bold small" for="m_manual">Manual</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="attendanceMode" id="m_biometric" value="biometric" onchange="handleModeChange()">
+                        <label class="form-check-label fw-bold small" for="m_biometric">Biometric</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="attendanceMode" id="m_face" value="face" onchange="handleModeChange()">
+                        <label class="form-check-label fw-bold small" for="m_face">Face Recognition</label>
                     </div>
                 </div>
-            </div>
 
-            <h3 id="rosterStatus">Please select filters and load a roster to begin.</h3>
-            
-            <div class="table-wrapper">
-                <table id="attendanceTable">
-                    <thead>
-                        <tr>
-                            <th>User Name</th>
-                            <th>ID/Roll No.</th>
-                            <th style="width: 250px;">Status</th>
-                            <th>Remarks</th>
-                            <th>Method</th>
-                        </tr>
-                    </thead>
-                    <tbody id="attendanceTbody"></tbody>
-                </table>
-            </div>
-            <div id="save-button-wrapper" style="text-align: right; margin-top: 20px;">
-                <button class="primary" onclick="saveAttendance()">Save Attendance</button>
+                <div class="filter-grid">
+                    <div>
+                        <label class="form-label text-dark">User Role</label>
+                        <select id="markingRoleSelect" class="form-select" onchange="updateMarkingFilters()">
+                            <option value="">Select Role</option>
+                            <option value="Student">Student</option>
+                            <option value="Teacher">Teacher</option>
+                            <option value="Employee">Employee</option>
+                        </select>
+                    </div>
+                    <div id="markingDynamicFilterWrapper">
+                        <label class="form-label text-dark">Batch/Dept</label>
+                        <select id="markingDynamicFilter" class="form-select"><option value="">Select Role First</option></select>
+                    </div>
+                    <div>
+                        <label class="form-label text-dark">Date</label>
+                        <input type="date" id="attendanceDate" class="form-control">
+                    </div>
+                    <div class="d-flex align-items-end">
+                        <button class="btn btn-primary-bcsm w-100 fw-bold" onclick="loadRoster()">
+                            <i class="fas fa-users-viewfinder me-2"></i>Load Roster
+                        </button>
+                    </div>
+                </div>
+
+                <div class="p-3 border-top d-flex justify-content-between bg-white" id="roster-controls-wrapper">
+                    <div class="input-group w-50">
+                        <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                        <input type="text" id="studentSearch" class="form-control border-start-0 ps-0" placeholder="Search roster..." onkeyup="filterStudentList()">
+                    </div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-success fw-bold" onclick="markAll('present')">All Present</button>
+                        <button class="btn btn-sm btn-outline-danger fw-bold" onclick="markAll('absent')">All Absent</button>
+                    </div>
+                </div>
+
+                <div id="statusIndicator" class="px-4 py-2 small fw-bold text-secondary"></div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Name & Identifier</th>
+                                <th class="text-center">Status</th>
+                                <th class="text-center">Remarks</th>
+                                <th class="text-center">Mark Method</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendanceTbody">
+                            <tr><td colspan="4" class="text-center p-5 text-muted">Please load a roster to mark attendance.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <div class="p-4 border-top bg-light text-end" id="save-button-wrapper">
+                    <button class="btn btn-success rounded-pill px-5 fw-bold shadow-sm" onclick="saveAttendance()">
+                        <i class="fas fa-cloud-upload-alt me-2"></i>Save All Attendance
+                    </button>
+                </div>
             </div>
         </div>
 
-        <div id="reports-tab" class="tab-content">
-            <h2>Consolidated Attendance Report (All Users)</h2>
-           <div class="filter-section">
-                <div>
-                    <label for="reportRoleSelect">User Role:</label>
-                    <select id="reportRoleSelect">
-                        <option value="">Select Role</option>
-                        <option value="Student">Student</option>
-                        <option value="Teacher">Teacher</option>
-                        <option value="Employee">Employee</option>
-                    </select>
+        <div class="tab-pane fade" id="reports-tab">
+            <div class="glass-card p-4">
+                <div class="filter-grid mb-4">
+                    <div>
+                        <label class="form-label">User Role</label>
+                        <select id="reportRoleSelect" class="form-select" onchange="updateConsolidatedFilters()">
+                            <option value="">Select Role</option>
+                            <option value="Student">Student</option>
+                            <option value="Teacher">Teacher</option>
+                            <option value="Employee">Employee</option>
+                        </select>
+                    </div>
+                    <div id="dynamicFilterWrapper"></div>
+                    <div>
+                        <label class="form-label">Month</label>
+                        <select id="reportMonth" class="form-select"></select>
+                    </div>
+                    <div>
+                        <label class="form-label">Year</label>
+                        <input type="number" id="reportYear" class="form-control">
+                    </div>
+                    <div class="d-flex align-items-end">
+                        <button class="btn btn-primary-bcsm w-100 fw-bold" onclick="generateConsolidatedReport()">Generate Report</button>
+                    </div>
                 </div>
-                <div id="dynamicFilterWrapper"></div>
-                <div><label for="reportMonth">Month:</label><select id="reportMonth"></select></div>
-                <div><label for="reportYear">Year:</label><input type="number" id="reportYear"></div>
-                <div class="filter-actions">
-                    <button class="primary" onclick="generateConsolidatedReport()" style="width: 100%;">Generate Consolidated Report</button>
+
+                <div class="d-flex justify-content-between mb-3 align-items-center">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="lowAttendanceFilter" onchange="filterLowAttendance()">
+                        <label class="form-check-label fw-bold text-danger">Alert: Below 75% Only</label>
+                    </div>
+                    <div class="btn-group shadow-sm">
+                        <button class="btn btn-sm btn-dark px-3" onclick="window.print()"><i class="fas fa-print me-2"></i>Print</button>
+                        <button class="btn btn-sm btn-success px-3" onclick="exportCSV()"><i class="fas fa-file-csv me-2"></i>Export</button>
+                    </div>
+                </div>
+
+                <div id="report-viewport" class="table-responsive bg-white p-2 border rounded">
+                    <p class="text-center text-muted p-5">Specify filters above to view Consolidated Reports.</p>
                 </div>
             </div>
-            <div class="report-controls">
-                <div><label><input type="checkbox" id="lowAttendanceFilter" onchange="filterLowAttendance()"> Show users below 75%</label></div>
-                <div><button class="secondary" onclick="printReport()">🖨️ Print Report</button><button class="export" onclick="exportCSV()">Export to CSV</button></div>
-            </div>
-            <h2 id="reportTitle"></h2>
-            <div id="report-viewport"></div>
-            <p id="reportErrorMessage" class="error-message"></p>
         </div>
     </div>
+</div>
 
-    <div id="remarks-modal" class="modal">
-        <div class="modal-content">
-            <span class="modal-close" onclick="closeModal('remarks-modal')">&times;</span>
-            <h3 id="remarks-modal-title">Add Remarks</h3>
-            <textarea id="remarks-text" placeholder="Enter remarks..." style="width: 100%; min-height: 100px; padding: 5px; border: 1px solid #aaa;"></textarea>
-            <input type="hidden" id="remarks-user-id">
-            <button class="primary" style="margin-top: 15px;" onclick="saveRemark()">Save Remark</button>
+<div class="modal fade" id="remarksModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header border-0 bg-light">
+                <h6 class="fw-bold mb-0">Attendance Remark</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <textarea id="remarks-text" class="form-control mb-3" rows="3" placeholder="Enter reason for leave/late..."></textarea>
+                <input type="hidden" id="remarks-user-id">
+                <button class="btn btn-primary w-100 rounded-pill fw-bold" onclick="saveRemark()">Apply Remark</button>
+            </div>
         </div>
     </div>
-    <div id="loading-modal" class="modal"><div class="modal-content"><div class="spinner"></div></div></div>
+</div>
 
-    <script>
-        // ✅ CRITICAL UPDATE: DYNAMIC API URL
-        // Automatically switches between Localhost and Render based on where the browser is running.
-        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const API_BASE_URL = isLocal 
-            ? 'http://localhost:3005/api' 
-            : 'https://school-erp-system-fbkz.onrender.com/api'; 
-            
-        const ATTENDANCE_API_PATH = '/attendance';
-        const token = localStorage.getItem('erp-token');
-        const userRole = localStorage.getItem('user-role'); 
-        let currentRosterData = [];
-        let monthlyReportData = null; 
-        let attendanceMonitorInterval = null;
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
 
-        // Guard Check
-        if (!token) console.warn('No authentication token found.');
+<script>
+    const API_BASE = '/api/attendance';
+    const token = localStorage.getItem('erp-token');
+    let remarksModal;
+    let reportDataGlobal = [];
+    let monitorInterval = null;
 
-        // --- Utility Functions ---
-        function showLoading() { document.getElementById('loading-modal').classList.add('active'); }
-        function hideLoading() { document.getElementById('loading-modal').classList.remove('active'); }
-        function openModal(id) { document.getElementById(id).classList.add('active'); }
-        function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+    document.addEventListener('DOMContentLoaded', () => {
+        remarksModal = new bootstrap.Modal(document.getElementById('remarksModal'));
+        document.getElementById('attendanceDate').valueAsDate = new Date();
+        document.getElementById('reportYear').value = new Date().getFullYear();
+        populateMonths();
+        handleModeChange();
+    });
 
-        function switchTab(button) {
-             document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-             button.classList.add('active');
-             document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
-             const targetTabId = button.dataset.tab;
-             document.getElementById(targetTabId).classList.add('active');
-             if (targetTabId !== 'mark-attendance-tab' && attendanceMonitorInterval) {
-                 clearInterval(attendanceMonitorInterval); attendanceMonitorInterval = null;
-             }
+    function populateMonths() {
+        const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+        const sel = document.getElementById('reportMonth');
+        sel.innerHTML = months.map((m, i) => `<option value="${i+1}" ${i===new Date().getMonth()?'selected':''}>${m}</option>`).join('');
+    }
+
+    async function authApi(url, method = 'GET', body = null) {
+        const options = { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }};
+        if (body) options.body = JSON.stringify(body);
+        const res = await fetch(url, options);
+        if (!res.ok) throw new Error("API Connection Error");
+        return res.status !== 204 ? await res.json() : null;
+    }
+
+    function handleModeChange() {
+        if (monitorInterval) { clearInterval(monitorInterval); monitorInterval = null; }
+        const mode = document.querySelector('input[name="attendanceMode"]:checked').value;
+        const controls = document.getElementById('roster-controls-wrapper');
+        const saveBtn = document.getElementById('save-button-wrapper');
+        const statusInd = document.getElementById('statusIndicator');
+
+        if(mode === 'manual') {
+            controls.style.display = 'flex';
+            saveBtn.style.display = 'block';
+            statusInd.innerHTML = 'Mode: Manual Entry';
+        } else {
+            controls.style.display = 'none';
+            saveBtn.style.display = 'none';
+            statusInd.innerHTML = `Mode: Live Monitor (${mode.toUpperCase()}) <i class="fas fa-spinner fa-spin ms-2"></i>`;
         }
+        document.getElementById('attendanceTbody').innerHTML = '<tr><td colspan="4" class="text-center p-5 text-muted">Load Roster to start.</td></tr>';
+    }
 
-        async function handleApi(endpoint, method = 'GET', body = null) {
-            showLoading();
-            const options = {
-                method,
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }
-            };
-            if (body) options.body = JSON.stringify(body);
+    async function updateMarkingFilters() {
+        const role = document.getElementById('markingRoleSelect').value;
+        const wrapper = document.getElementById('markingDynamicFilterWrapper');
+        if(!role) return;
+        wrapper.innerHTML = `<label class="form-label text-dark">Select ${role==='Student'?'Batch':'Department'}</label><select id="markingDynamicFilter" class="form-select"></select>`;
+        const data = await authApi(role==='Student' ? '/api/attendance/batches' : '/api/attendance/departments');
+        const sel = document.getElementById('markingDynamicFilter');
+        sel.innerHTML = '<option value="">-- Choose --</option>' + data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    }
+
+    async function loadRoster() {
+        if (monitorInterval) clearInterval(monitorInterval);
+        const role = document.getElementById('markingRoleSelect').value;
+        const fid = document.getElementById('markingDynamicFilter').value;
+        const date = document.getElementById('attendanceDate').value;
+        const mode = document.querySelector('input[name="attendanceMode"]:checked').value;
+
+        if(!fid) return alert("Select a specific Batch/Dept");
+
+        const fetchAndShow = async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, options);
-                if (!response.ok) {
-                    const err = await response.json().catch(() => ({ message: response.statusText }));
-                    throw new Error(err.message || `Error ${response.status}`);
-                }
-                if (response.status === 204) return null;
-                return await response.json();
-            } catch (error) {
-                console.error(`API Error (${endpoint}):`, error);
-                alert(`Error: ${error.message}`);
-                throw error; 
-            } finally { hideLoading(); }
-        }
-        
-        // --- Universal Marking Logic ---
-        async function updateMarkingFilters() {
-            const role = document.getElementById('markingRoleSelect').value;
-            const wrapper = document.getElementById('markingDynamicFilterWrapper');
-            const subjectSelect = document.getElementById('subjectSelect');
+                const data = await authApi(`${API_BASE}/report/roster/universal?role=${role.toLowerCase()}&filter_id=${fid}&date=${date}`);
+                renderRoster(data, mode);
+            } catch(e) { console.error(e); }
+        };
 
-            wrapper.innerHTML = '';
-            subjectSelect.innerHTML = '<option value="">Select Subject (Optional)</option>';
-            document.getElementById('attendanceTbody').innerHTML = '';
-            document.getElementById('rosterStatus').textContent = 'Please select filters and load a roster to begin.';
+        await fetchAndShow();
+        if(mode !== 'manual') monitorInterval = setInterval(fetchAndShow, 15000); // 15s Auto refresh for Live modes
+    }
 
-            if (role === 'Student') {
-                wrapper.innerHTML = `<div><label for="markingDynamicFilter">Batch:</label><select id="markingDynamicFilter"><option value="">Loading...</option></select></div>`;
-                 await loadDynamicBatches('markingDynamicFilter'); await loadAllSubjects('subjectSelect'); 
-            } else if (role === 'Employee' || role === 'Teacher') {
-                wrapper.innerHTML = `<div><label for="markingDynamicFilter">Department (Branch):</label><select id="markingDynamicFilter"><option value="">Loading...</option></select></div>`;
-                 await loadDepartments('markingDynamicFilter');
-                 if (role === 'Teacher') await loadAllSubjects('subjectSelect'); 
-            }
-        }
+    function renderRoster(users, mode) {
+        const tbody = document.getElementById('attendanceTbody');
+        if(!users.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4">No users found for this selection.</td></tr>'; return; }
 
-        async function loadAllSubjects(selectId) {
-            const select = document.getElementById(selectId);
-            const subjects = await handleApi(`${ATTENDANCE_API_PATH}/subjects`).catch(() => []);
-            select.innerHTML = '<option value="">Select Subject (Optional)</option>';
-            if (subjects) subjects.forEach(s => select.innerHTML += `<option value="${s.id}">${s.subject_name} (${s.subject_code})</option>`);
-        }
-        
-        // ✅ FIX: Ensure the API path correctly includes ATTENDANCE_API_PATH
-        async function loadDepartments(selectId) {
-            const select = document.getElementById(selectId);
-            // Use the attendance route dedicated for filters, which was fixed in the backend
-            const departments = await handleApi(`${ATTENDANCE_API_PATH}/departments`).catch(() => []); 
-            select.innerHTML = '<option value="">Select Department</option>';
-            if (departments) departments.forEach(d => select.innerHTML += `<option value="${d.id}">${d.name}</option>`);
-        }
-        
-        async function loadDynamicBatches(selectId) {
-            const select = document.getElementById(selectId);
-            const batches = await handleApi(`${ATTENDANCE_API_PATH}/batches`).catch(() => []); 
-            select.innerHTML = '<option value="">Select Batch</option>';
-            if (batches) batches.forEach(b => select.innerHTML += `<option value="${b.id}">${b.name}</option>`);
-        }
-        
-        // --- Daily Attendance Logic ---
-        function handleModeChange() {
-            if (attendanceMonitorInterval) { clearInterval(attendanceMonitorInterval); attendanceMonitorInterval = null; }
-            const mode = document.querySelector('input[name="attendanceMode"]:checked').value;
-            const controls = document.getElementById('roster-controls-wrapper');
-            const saveBtn = document.getElementById('save-button-wrapper');
+        tbody.innerHTML = users.map(u => {
+            const status = u.status || 'unmarked';
+            const methodIcon = u.mark_method === 'manual' ? '✏️' : '🤖';
             
-            if (mode === 'manual') {
-                controls.style.display = 'flex'; saveBtn.style.display = 'block';
-                document.getElementById('rosterStatus').textContent = "Mode: Manual Entry. Please load a roster.";
+            let statusHtml = '';
+            let remarksHtml = '';
+
+            if(mode === 'manual') {
+                statusHtml = `
+                    <div class="status-btn-group justify-content-center">
+                        <input type="radio" name="st-${u.user_id}" id="p-${u.user_id}" value="present" class="status-radio radio-p" ${status==='present'?'checked':''}>
+                        <label for="p-${u.user_id}" class="status-label label-p">P</label>
+                        <input type="radio" name="st-${u.user_id}" id="a-${u.user_id}" value="absent" class="status-radio radio-a" ${status==='absent'?'checked':''}>
+                        <label for="a-${u.user_id}" class="status-label label-a">A</label>
+                        <input type="radio" name="st-${u.user_id}" id="l-${u.user_id}" value="late" class="status-radio radio-l" ${status==='late'?'checked':''}>
+                        <label for="l-${u.user_id}" class="status-label label-l">L</label>
+                    </div>`;
+                remarksHtml = `<button class="btn btn-sm btn-light" onclick="openRemarksModal('${u.user_id}')"><i class="far fa-comment-dots"></i></button>
+                               <div id="rem-text-${u.user_id}" class="small text-muted">${u.remarks || ''}</div>`;
             } else {
-                controls.style.display = 'none'; saveBtn.style.display = 'none';
-                document.getElementById('rosterStatus').textContent = `Mode: Live Monitor (${mode}). Load roster to begin.`;
+                statusHtml = `<span class="status-badge ${status}">${status}</span>`;
+                remarksHtml = `<span class="small text-muted">${u.remarks || '-'}</span>`;
             }
-            document.getElementById('attendanceTbody').innerHTML = '';
-        }
 
-        async function loadRoster() {
-            if (attendanceMonitorInterval) clearInterval(attendanceMonitorInterval);
-            const role = document.getElementById('markingRoleSelect').value;
-            const filterSelect = document.getElementById('markingDynamicFilter');
-            const date = document.getElementById('attendanceDate').value;
-            
-            // --- UPDATED VALIDATION LOGIC ---
-            const filter_id = filterSelect ? filterSelect.value : ''; 
-            const filter_text = filterSelect && filterSelect.selectedIndex !== -1 ? filterSelect.options[filterSelect.selectedIndex].text : '';
+            return `
+            <tr data-user-id="${u.user_id}">
+                <td class="ps-4">
+                    <strong>${u.full_name}</strong><br>
+                    <small class="text-muted">ID: ${u.user_identifier || u.user_id}</small>
+                </td>
+                <td class="text-center">${statusHtml}</td>
+                <td class="text-center">${remarksHtml}</td>
+                <td class="text-center">
+                    <span class="badge bg-light text-dark border">${u.mark_method || 'manual'} ${methodIcon}</span>
+                </td>
+            </tr>`;
+        }).join('');
+    }
 
-            // Check 1: Base fields
-            if (!role || !date) { alert('Please select a Role and Date.'); return; }
-            
-            // Check 2: Dynamic filter MUST be selected and not be the default placeholder/loading state
-            if (!filter_id || filter_text === 'Select Batch/Dept' || filter_text === 'Loading...' || filter_text === 'Select Department' || filter_text === 'Select Batch') {
-                alert(`Please select a valid Batch or Department for the role: ${role}.`); 
-                return; 
+    function markAll(status) { document.querySelectorAll(`.radio-${status.charAt(0)}`).forEach(r => r.checked = true); }
+
+    async function saveAttendance() {
+        const records = [];
+        document.querySelectorAll('#attendanceTbody tr').forEach(tr => {
+            const uid = tr.dataset.userId;
+            if(!uid) return;
+            const checked = tr.querySelector(`input[name="st-${uid}"]:checked`);
+            if(checked) {
+                records.push({ 
+                    user_id: uid, 
+                    status: checked.value, 
+                    remarks: document.getElementById(`rem-text-${uid}`).innerText 
+                });
             }
-            // --- END UPDATED VALIDATION ---
-            
-            const subject_id = document.getElementById('subjectSelect').value;
-            
-            const endpoint = `${ATTENDANCE_API_PATH}/report/roster/universal?role=${role.toLowerCase()}&filter_id=${filter_id}&subject_id=${subject_id}&date=${date}`;
-            
-            const fetchAndRender = async () => {
-                const users = await handleApi(endpoint); 
-                if (!users) return; 
-                currentRosterData = users;
-                renderRosterTable(users);
-                
-                const mode = document.querySelector('input[name="attendanceMode"]:checked').value;
-                if (mode !== 'manual') {
-                     document.getElementById('rosterStatus').innerHTML = `Monitoring <b>${users.length}</b> users... <i class="fa-solid fa-spinner fa-spin"></i>`;
-                } else {
-                     document.getElementById('rosterStatus').textContent = `Showing ${users.length} users for manual marking.`;
-                }
-            };
-            await fetchAndRender();
-            const mode = document.querySelector('input[name="attendanceMode"]:checked').value;
-            if (mode !== 'manual') attendanceMonitorInterval = setInterval(fetchAndRender, 15000);
-        }
-
-        function renderRosterTable(users) {
-            const tbody = document.getElementById('attendanceTbody');
-            tbody.innerHTML = '';
-            const mode = document.querySelector('input[name="attendanceMode"]:checked').value;
-
-            if (users.length === 0) { tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">No users found.</td></tr>'; return; }
-
-            users.forEach(user => {
-                const row = document.createElement('tr');
-                row.dataset.userId = user.user_id; 
-                const status = user.status || 'unmarked';
-                const markMethod = user.mark_method || 'manual';
-                const isDisabled = (markMethod !== 'manual' && status !== 'unmarked');
-                
-                let methodIcon = markMethod === 'manual' ? '✏️' : '🤖';
-                let statusHtml = '', remarksHtml = '';
-
-                if (mode === 'manual') {
-                    statusHtml = `
-                        <div class="status-radios">
-                            <label><input type="radio" name="status-${user.user_id}" value="present" ${status==='present'?'checked':''} ${isDisabled?'disabled':''}> <span style="color:green">P</span></label>
-                            <label><input type="radio" name="status-${user.user_id}" value="absent" ${status==='absent'?'checked':''} ${isDisabled?'disabled':''}> <span style="color:red">A</span></label>
-                            <label><input type="radio" name="status-${user.user_id}" value="late" ${status==='late'?'checked':''} ${isDisabled?'disabled':''}> <span style="color:orange">L</span></label>
-                            <label><input type="radio" name="status-${user.user_id}" value="half-day" ${status==='half-day'?'checked':''} ${isDisabled?'disabled':''}> <span style="color:purple">H</span></label>
-                        </div>`;
-                    remarksHtml = `<button class="remarks-btn" data-remarks="${user.remarks||''}" onclick="openRemarksModal('${user.user_id}', this)" ${isDisabled?'disabled':''}><i class="fa-regular fa-comment-dots"></i></button>`;
-                } else {
-                    statusHtml = `<span class="status-badge ${status}">${status}</span>`;
-                    remarksHtml = `<span>${user.remarks || '-'}</span>`;
-                }
-
-                row.innerHTML = `<td><b>${user.full_name}</b></td><td>${user.user_identifier||user.user_id}</td><td>${statusHtml}</td><td style="text-align:center;">${remarksHtml}</td><td style="text-align:center;">${methodIcon}</td>`;
-                tbody.appendChild(row);
-            });
-            filterStudentList();
-        }
-        
-        function filterStudentList() {
-            const term = document.getElementById('studentSearch').value.toLowerCase();
-            document.querySelectorAll('#attendanceTbody tr').forEach(row => {
-                if(row.cells.length > 1) row.style.display = row.textContent.toLowerCase().includes(term) ? '' : 'none';
-            });
-        }
-        
-        function markAll(status) {
-            document.querySelectorAll(`#attendanceTbody input[value="${status}"]`).forEach(r => { if (!r.disabled) r.checked = true; });
-        }
-
-        async function saveAttendance() {
-            const role = document.getElementById('markingRoleSelect').value;
-            const filter_id = document.getElementById('markingDynamicFilter').value;
-            const subject_id = document.getElementById('subjectSelect').value;
-            const attendance_date = document.getElementById('attendanceDate').value;
-            
-            const records = [];
-            document.querySelectorAll('#attendanceTbody tr').forEach(row => {
-                const user_id = row.dataset.userId;
-                const checked = row.querySelector(`input[name="status-${user_id}"]:checked`);
-                if (checked && !checked.disabled) {
-                    const remarkBtn = row.querySelector('.remarks-btn');
-                    records.push({ user_id: user_id, status: checked.value, remarks: remarkBtn ? remarkBtn.dataset.remarks : '' });
-                }
-            });
-            
-            if (records.length === 0) { alert('No new data to save.'); return; }
-            const batch_id = role === 'Student' ? filter_id : null;
-            const body = { role, filter_id, batch_id, subject_id, attendance_date, records }; 
-            
-            const result = await handleApi(`${ATTENDANCE_API_PATH}/mark`, 'POST', body);
-            if (result) { alert('Saved successfully!'); await loadRoster(); }
-        }
-
-        // --- Remarks & Reports ---
-        function openRemarksModal(userId, btn) {
-            document.getElementById('remarks-modal-title').textContent = `Remarks for User: ${userId}`; 
-            document.getElementById('remarks-text').value = btn.dataset.remarks || '';
-            document.getElementById('remarks-user-id').value = userId; 
-            openModal('remarks-modal');
-        }
-        function saveRemark() {
-            const uid = document.getElementById('remarks-user-id').value;
-            const val = document.getElementById('remarks-text').value;
-            const btn = document.querySelector(`#attendanceTbody tr[data-user-id="${uid}"] .remarks-btn`);
-            if (btn) btn.dataset.remarks = val;
-            closeModal('remarks-modal');
-        }
-
-        function populateReportFilters() {
-            const mSel = document.getElementById('reportMonth');
-            const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-            mSel.innerHTML = ''; months.forEach((m, i) => mSel.innerHTML += `<option value="${i + 1}" ${i === new Date().getMonth()?'selected':''}>${m}</option>`);
-            document.getElementById('reportYear').value = new Date().getFullYear();
-        }
-
-        async function updateConsolidatedFilters() {
-            const role = document.getElementById('reportRoleSelect').value;
-            const wrapper = document.getElementById('dynamicFilterWrapper');
-            if (role === 'Student') {
-                wrapper.innerHTML = `<label>Batch:</label><select id="dynamicFilter"><option value="">All Batches</option></select>`;
-                await loadDynamicBatches('dynamicFilter');
-            } else if (role) {
-                wrapper.innerHTML = `<label>Department:</label><select id="dynamicFilter"><option value="">All Departments</option></select>`;
-                await loadDepartments('dynamicFilter'); 
-            } else { wrapper.innerHTML = ''; }
-        }
-        document.getElementById('reportRoleSelect').addEventListener('change', updateConsolidatedFilters);
-
-        async function generateConsolidatedReport() {
-            const role = document.getElementById('reportRoleSelect').value;
-            const month = document.getElementById('reportMonth').value;
-            const year = document.getElementById('reportYear').value;
-            const filterEl = document.getElementById('dynamicFilter');
-            const filter_id = filterEl ? filterEl.value : '';
-
-            if (!role || !month || !year) return;
-            const endpoint = `${ATTENDANCE_API_PATH}/report/consolidated?role=${role.toLowerCase()}&month=${month}&year=${year}&optional_filter_id=${filter_id}`;
-            const data = await handleApi(endpoint);
-            if (!data) return;
-            monthlyReportData = data;
-            renderReportTable(data, role, month, year);
-        }
-
-        function renderReportTable(data, role, month, year) {
-            const viewport = document.getElementById('report-viewport');
-            const title = document.getElementById('reportTitle');
-            const users = data.users || [];
-            if (users.length === 0) { title.textContent = 'No Data Found'; viewport.innerHTML = '<p align="center">No records.</p>'; return; }
-
-            const monthName = document.getElementById('reportMonth').options[document.getElementById('reportMonth').selectedIndex].text;
-            title.textContent = `Report: ${role} - ${monthName} ${year}`;
-            const daysInMonth = new Date(year, month, 0).getDate();
-            
-            let html = '<table class="report-table"><thead><tr><th>Name</th><th>ID</th>';
-            for (let i = 1; i <= daysInMonth; i++) html += `<th>${i}</th>`;
-            html += '<th>P</th><th>%</th></tr></thead><tbody>';
-
-            users.forEach(u => {
-                let present = 0, total = 0;
-                const attMap = {};
-                if(u.attendance) u.attendance.forEach(a => attMap[new Date(a.attendance_date).getDate()] = a.status);
-
-                html += `<tr><td>${u.full_name}</td><td>${u.user_identifier||u.role}</td>`;
-                for (let i = 1; i <= daysInMonth; i++) {
-                    const stat = attMap[i];
-                    if (stat) {
-                        const code = stat.charAt(0).toUpperCase();
-                        html += `<td class="status-${code}">${code}</td>`;
-                        if(['present','late'].includes(stat)) present++;
-                        if(stat === 'half-day') present += 0.5;
-                        if(stat !== 'unmarked') total++;
-                    } else { html += '<td></td>'; }
-                }
-                const pct = total > 0 ? ((present/total)*100).toFixed(1) : '0.0';
-                html += `<td>${present}</td><td data-pct="${pct}">${pct}%</td></tr>`;
-            });
-            viewport.innerHTML = html + '</tbody></table>';
-        }
-
-        function filterLowAttendance() {
-            const checked = document.getElementById('lowAttendanceFilter').checked;
-            document.querySelectorAll('#report-viewport tbody tr').forEach(r => {
-                const cell = r.querySelector('td[data-pct]');
-                if(cell) {
-                    const val = parseFloat(cell.dataset.pct);
-                    r.style.display = (checked && val >= 75) ? 'none' : '';
-                }
-            });
-        }
-
-        // --- SAFE PRINT ---
-        function printReport() {
-            const content = document.getElementById('report-viewport').innerHTML;
-            const title = document.getElementById('reportTitle').textContent;
-            if(!content || content.includes('No records')) return;
-            const win = window.open('', '', 'height=700,width=900');
-            win.document.write(`<html><head><title>Print</title><style>table{width:100%;border-collapse:collapse;font-size:11px;}th,td{border:1px solid #ccc;padding:4px;text-align:center;}th{background:#eee;}.status-P{background:#cfc}.status-A{background:#fcc}</style></head><body><h2>${title}</h2>${content}</body></html>`);
-            win.document.close();
-            win.print();
-        }
-
-        function exportCSV() {
-            if (!monthlyReportData) return;
-            // Logic identical to previous robust version, condensed for brevity
-            alert('Export CSV Logic Active'); 
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('attendanceDate').valueAsDate = new Date();
-            populateReportFilters();
-            updateMarkingFilters(); 
-            handleModeChange();
         });
-    </script>
-    <script src="js/global-config.js"></script>
+        if(!records.length) return alert("No changes to save.");
+        
+        try {
+            await authApi(`${API_BASE}/mark`, 'POST', { 
+                role: document.getElementById('markingRoleSelect').value,
+                filter_id: document.getElementById('markingDynamicFilter').value,
+                attendance_date: document.getElementById('attendanceDate').value,
+                records 
+            });
+            alert("Attendance Database Updated!"); 
+            loadRoster();
+        } catch(e) { alert("Save Failed."); }
+    }
+
+    window.openRemarksModal = (uid) => {
+        document.getElementById('remarks-user-id').value = uid;
+        document.getElementById('remarks-text').value = document.getElementById(`rem-text-${uid}`).innerText;
+        remarksModal.show();
+    }
+
+    window.saveRemark = () => {
+        const uid = document.getElementById('remarks-user-id').value;
+        document.getElementById(`rem-text-${uid}`).innerText = document.getElementById('remarks-text').value;
+        remarksModal.hide();
+    }
+
+    // --- Report Functions ---
+    async function updateConsolidatedFilters() {
+        const role = document.getElementById('reportRoleSelect').value;
+        const wrapper = document.getElementById('dynamicFilterWrapper');
+        if(!role) return;
+        wrapper.innerHTML = `<label class="form-label">Filter ${role==='Student'?'Batch':'Dept'}</label><select id="dynamicFilter" class="form-select"></select>`;
+        const data = await authApi(role==='Student' ? '/api/attendance/batches' : '/api/attendance/departments');
+        document.getElementById('dynamicFilter').innerHTML = '<option value="">All</option>' + data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+    }
+
+    async function generateConsolidatedReport() {
+        const role = document.getElementById('reportRoleSelect').value;
+        const month = document.getElementById('reportMonth').value;
+        const year = document.getElementById('reportYear').value;
+        const fid = document.getElementById('dynamicFilter')?.value || '';
+        if(!role) return alert("Select User Role");
+
+        const viewport = document.getElementById('report-viewport');
+        viewport.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>';
+        
+        try {
+            const data = await authApi(`${API_BASE}/report/consolidated?role=${role.toLowerCase()}&month=${month}&year=${year}&optional_filter_id=${fid}`);
+            reportDataGlobal = data.users;
+            renderReportTable(data.users, month, year);
+        } catch(e) { viewport.innerHTML = '<p class="text-danger text-center">Error fetching report.</p>'; }
+    }
+
+    function renderReportTable(users, month, year) {
+        const days = new Date(year, month, 0).getDate();
+        let html = `<table class="table report-table table-bordered align-middle"><thead><tr class="table-dark"><th>Full Name</th>`;
+        for(let i=1; i<=days; i++) html += `<th style="width:30px;">${i}</th>`;
+        html += `<th>%</th></tr></thead><tbody>`;
+        
+        users.forEach(u => {
+            let pCount = 0;
+            const att = {}; 
+            u.attendance.forEach(a => att[new Date(a.attendance_date).getDate()] = a.status);
+            
+            html += `<tr><td class="text-start fw-bold" style="min-width:160px;">${u.full_name}</td>`;
+            for(let i=1; i<=days; i++) {
+                const s = att[i];
+                html += `<td class="${s==='present'?'att-p':s==='absent'?'att-a':''}">${s ? s[0].toUpperCase() : '-'}</td>`;
+                if(s==='present'||s==='late') pCount++;
+            }
+            const pct = ((pCount/days)*100).toFixed(1);
+            html += `<td data-pct="${pct}" class="${pct < 75 ? 'text-danger fw-bold' : 'text-success'}">${pct}%</td></tr>`;
+        });
+        document.getElementById('report-viewport').innerHTML = html + `</tbody></table>`;
+    }
+
+    function filterLowAttendance() {
+        const isChecked = document.getElementById('lowAttendanceFilter').checked;
+        document.querySelectorAll('#report-viewport tbody tr').forEach(tr => {
+            const pct = parseFloat(tr.querySelector('td[data-pct]').dataset.pct);
+            tr.style.display = (isChecked && pct >= 75) ? 'none' : '';
+        });
+    }
+
+    function exportCSV() {
+        if(!reportDataGlobal.length) return alert("No data to export");
+        let csv = "Name,Identifier,Attendance_Percentage\n";
+        reportDataGlobal.forEach(u => {
+            const pCount = u.attendance.filter(a => a.status==='present'||a.status==='late').length;
+            csv += `"${u.full_name}","${u.user_identifier}",${((pCount/31)*100).toFixed(1)}%\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `attendance_report_${Date.now()}.csv`; a.click();
+    }
+</script>
 </body>
 </html>

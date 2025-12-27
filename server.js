@@ -392,7 +392,7 @@ app.use('/api/payroll', payrollRouter);
 
 // HR & Operations
 app.use('/api/staffhr', staffhrRouter);
-app.use('/api/hr/departments', hrDepartmentsRouter);
+app.use('/api/hr', hrDepartmentsRouter);
 app.use('/api/transport', transportRouter);
 app.use('/api/hostel', hostelRouter);
 app.use('/api/cafeteria', cafeteriaRouter); 

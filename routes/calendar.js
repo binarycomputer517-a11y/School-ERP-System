@@ -1,11 +1,11 @@
-// routes/calendar.js (FINALIZED VERSION - Solves: column "academic_session_id" does not exist)
+// routes/calendar.js (FINALIZED & UPDATED VERSION)
 
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware'); 
 
-// --- Constants (Using confirmed table names) ---
+// --- Constants ---
 const ACADEMIC_SESSIONS_TABLE = 'academic_sessions';
 const EVENTS_TABLE = 'events'; 
 const EXAMS_TABLE = 'exams'; 
@@ -13,6 +13,7 @@ const SCHEDULES_TABLE = 'exam_schedules';
 const SUBJECTS_TABLE = 'subjects'; 
 
 const CALENDAR_VIEWER_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student']; 
+const CALENDAR_EDITOR_ROLES = ['Super Admin', 'Admin']; // Only Admins can add events
 
 /**
  * @route   GET /api/calendar/events
@@ -23,40 +24,34 @@ router.get('/events', authenticateToken, authorize(CALENDAR_VIEWER_ROLES), async
     let currentSessionId = req.sessionId; 
 
     try {
-        // 1. FALLBACK: Find the active session ID (still needed for the Exams query)
+        // 1. FALLBACK: Find the active session ID
         if (!currentSessionId) {
-            console.warn("req.sessionId missing. Falling back to query active session from DB.");
-            
             const activeSessionResult = await pool.query(
                 `SELECT id FROM ${ACADEMIC_SESSIONS_TABLE} WHERE is_active = TRUE LIMIT 1`
             );
-
-            if (activeSessionResult.rows.length === 0) {
-                 return res.status(404).json({ message: 'No active academic session found in the database.' });
+            if (activeSessionResult.rows.length > 0) {
+                currentSessionId = activeSessionResult.rows[0].id; 
             }
-            currentSessionId = activeSessionResult.rows[0].id; 
         }
 
-        // --- Use currentSessionId (academic_sessions.id) for all filters ---
-
-        // 2. Fetch General Events (Holidays, Meetings, etc.) from the 'events' table
+        // 2. Fetch General Events
+        // 🔥 FIX: Aliased 'event_date' as 'start_date' to match frontend JS
         const generalEventsQuery = `
             SELECT 
-                event_date AS date,  
+                id,
+                event_date AS start_date,  
                 title,               
-                'general_event' AS type
+                type
             FROM ${EVENTS_TABLE}
-            -- 🔥 FIX: Removed the WHERE academic_session_id = $1::uuid clause 
-            -- because the column does not exist in the 'events' table.
             ORDER BY event_date; 
         `;
-        const generalEvents = await pool.query(generalEventsQuery); // Removed [currentSessionId]
-        
+        const generalEvents = await pool.query(generalEventsQuery);
 
-        // 3. Fetch Exam Schedules (This query CAN use the session ID, as 'exams' FKs to 'academic_sessions')
+        // 3. Fetch Exam Schedules (Using session ID)
+        // 🔥 FIX: Aliased 'exam_date' as 'start_date' and set type as 'exam'
         const examsQuery = `
             SELECT 
-                es.exam_date AS date,
+                es.exam_date AS start_date,
                 e.exam_name || ' (' || s.subject_code || ')' AS title,
                 'exam' AS type
             FROM ${SCHEDULES_TABLE} es
@@ -65,23 +60,56 @@ router.get('/events', authenticateToken, authorize(CALENDAR_VIEWER_ROLES), async
             WHERE e.academic_session_id = $1::uuid
             ORDER BY es.exam_date;
         `;
-        const exams = await pool.query(examsQuery, [currentSessionId]);
+        
+        let exams = [];
+        if (currentSessionId) {
+            const examsResult = await pool.query(examsQuery, [currentSessionId]);
+            exams = examsResult.rows;
+        }
 
         // 4. Combine and return all events
         const allEvents = [
             ...generalEvents.rows, 
-            ...exams.rows
+            ...exams
         ];
 
-        console.log(`Calendar data retrieved for session ${currentSessionId}: ${allEvents.length} events found.`);
         res.status(200).json(allEvents);
 
     } catch (error) {
-        // Log the error but indicate that the data is the issue, not the route
-        console.error('Database Error fetching calendar events:', error.message, error.stack);
-        res.status(500).json({ message: 'Failed to fetch calendar data due to a database error.' });
+        console.error('Database Error fetching calendar events:', error.message);
+        res.status(500).json({ message: 'Failed to fetch calendar data.' });
     }
 });
 
+/**
+ * @route   POST /api/calendar/events
+ * @desc    Add a new manual event (Holiday, Meeting, General)
+ * @access  Private (Admins Only)
+ */
+router.post('/events', authenticateToken, authorize(CALENDAR_EDITOR_ROLES), async (req, res) => {
+    const { title, start_date, type } = req.body;
+
+    if (!title || !start_date || !type) {
+        return res.status(400).json({ message: "Title, Date, and Type are required." });
+    }
+
+    try {
+        // Insert into events table
+        // Note: Assuming table columns are (title, event_date, type). Adjust if different.
+        const insertQuery = `
+            INSERT INTO ${EVENTS_TABLE} (title, event_date, type)
+            VALUES ($1, $2, $3)
+            RETURNING id, title, event_date AS start_date, type;
+        `;
+        
+        const newEvent = await pool.query(insertQuery, [title, start_date, type]);
+        
+        res.status(201).json(newEvent.rows[0]);
+
+    } catch (error) {
+        console.error('Error adding event:', error.message);
+        res.status(500).json({ message: 'Failed to add event.' });
+    }
+});
 
 module.exports = router;

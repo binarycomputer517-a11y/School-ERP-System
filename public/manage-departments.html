@@ -2,676 +2,425 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Manage Departments</title>
-    <link href="https://fonts.googleapis.com/css2?family=Times+New+Roman&display=swap" rel="stylesheet">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Departments | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
     <style>
-        /* --- CLASSIC STYLES --- */
-        body { 
-            font-family: 'Times New Roman', serif; 
-            margin: 0; 
-            padding: 2em; 
-            background-color: #f8f8f8; 
-            color: #333; 
-        }
-        .container { 
-            max-width: 900px; 
-            margin: auto; 
-            padding: 40px; 
-            background-color: #ffffff; 
-            border: 2px solid #333; 
-            box-shadow: 4px 4px 0 #AAA; 
-            border-radius: 0; 
-        }
-        h1 { 
-            color: #000; 
-            font-weight: bold; 
-            text-transform: uppercase;
-            border-bottom: 4px double #000; 
-            padding-bottom: 10px; 
-            margin-bottom: 30px; 
-            font-size: 2em;
-        }
-        
-        /* Form & Input Styles */
-        input[type="text"], textarea, input[type="number"], select { 
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #555;
-            border-radius: 0;
-            box-sizing: border-box;
-            margin-bottom: 15px;
-        }
-        
-        /* Button Styles */
-        button, a.btn { 
-            padding: 10px 15px; 
-            border: 1px solid #000; 
-            border-radius: 0; 
-            cursor: pointer; 
-            box-shadow: 2px 2px 0 #000; 
-            transition: none;
-            text-decoration: none;
-            display: inline-block;
-            margin-right: 10px;
-            margin-bottom: 5px; 
-        }
-        button.btn-primary, a.btn-primary { 
-            background-color: #005A9C; 
-            color: white; 
-        }
-        button.btn-secondary, a.btn-secondary {
-            background-color: #777;
-            color: white;
-        }
-        button:hover, a.btn:hover { 
-            opacity: 0.9;
-            transform: translate(1px, 1px); 
-            box-shadow: 1px 1px 0 #000;
+        body {
+            background-color: #f1f5f9 !important;
+            color: #0f172a !important;
+            font-family: 'Inter', sans-serif !important;
+            font-size: 0.9rem;
         }
 
-        /* NEW: Icon Button Styles */
-        .actions-cell {
-            text-align: center;
-            white-space: nowrap;
-        }
-        .icon-btn {
-            background: none;
-            border: none;
-            cursor: pointer;
-            padding: 5px 8px;
-            font-size: 1.4em;
-            border-radius: 4px;
-            margin: 0 2px;
-            transition: background-color 0.2s;
-        }
-        .icon-btn:hover:not(:disabled) {
-            background-color: #e0e0e0;
-        }
-        .icon-btn.delete:hover:not(:disabled) {
-            background-color: #ffdddd;
-            color: #C0392B;
-        }
-        .icon-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        /* Table Styles */
-        .dept-table { 
-            width: 100%; 
-            border-collapse: collapse; 
-            margin-top: 20px;
-        }
-        .dept-table th, .dept-table td { 
-            border: 1px solid #ccc; 
-            padding: 12px; 
-            text-align: left; 
-            vertical-align: top; 
-        }
-        .dept-table th { 
-            background-color: #333; 
-            color: #FFFFFF; 
-            font-weight: bold; 
-            cursor: pointer; 
-        }
-        .dept-table th.sort-asc::after { content: ' ▲'; }
-        .dept-table th.sort-desc::after { content: ' ▼'; }
-
-        /* Description Styles (For inputs in modals/forms) */
-        .description-main {
-            display: block;
-            margin-bottom: 4px;
-            white-space: normal; 
-        }
-        .description-meta {
-            display: block;
-            font-size: 0.9em;
-            color: #555;
-            font-style: italic;
-            white-space: normal; 
+        .glass-card, .modal-content {
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+            border-radius: 12px !important;
         }
 
-        /* Modal Styles (Simple) */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            overflow: auto;
-            background-color: rgba(0,0,0,0.4);
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: 10% auto;
-            padding: 30px;
-            border: 2px solid #000;
-            width: 80%;
-            max-width: 500px;
-            border-radius: 0;
-            box-shadow: 4px 4px 0 #AAA; 
-        }
-        .close-btn {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .close-btn:hover, .close-btn:focus {
-            color: #000;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        /* STYLES FOR PAYROLL STRUCTURE FORMS/VIEWS */
-        .payroll-form, .payroll-view { 
-            display: grid; 
-            grid-template-columns: 1fr 1fr; 
-            gap: 20px; 
-        }
-        .payroll-form .section-header, .payroll-view .section-header { 
-            grid-column: 1 / -1; 
-            color: #005A9C; 
-            font-weight: bold; 
-            margin-top: 20px; 
-            border-bottom: 2px solid #005A9C; 
-            padding-bottom: 5px; 
-        }
-        .payroll-form .form-group {
-            margin-bottom: 0; 
-        }
-        .payroll-form label {
-            text-decoration: none;
-        }
-        .payroll-form .full-width { /* Added for full-width inputs in payroll form */
-            grid-column: 1 / -1;
-        }
-        .payroll-view dl {
-            grid-column: 1 / -1;
+        .payroll-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 10px 20px;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
         }
-        .payroll-view dt {
-            font-weight: bold;
-            color: #555;
+        
+        .payroll-section-title {
+            grid-column: 1 / -1;
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #2563eb;
+            background-color: #eff6ff;
+            padding: 8px 12px;
+            border-radius: 6px;
+            margin-top: 15px;
+            text-transform: uppercase;
+            border-left: 4px solid #2563eb;
         }
-        .payroll-view dd {
-            margin: 0;
-            padding: 5px;
-            background-color: #f0f0f0;
-            border-left: 3px solid #005A9C;
+        
+        .full-width { grid-column: 1 / -1; }
+        
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 4px 10px;
+            border-radius: 9999px;
+            font-weight: 600;
         }
+        .status-active { background: #dcfce7; color: #166534; }
+        .status-missing { background: #fee2e2; color: #991b1b; }
+
+        .btn-verify {
+            background-color: #f59e0b;
+            color: #fff;
+            font-weight: 600;
+            border: none;
+        }
+        .btn-verify:hover { background-color: #d97706; color: #fff; }
+
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px dashed #eee;
+        }
+        .detail-label { font-weight: 600; color: #64748b; }
+        .detail-value { font-weight: 700; color: #0f172a; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>Department Management</h1>
-        <div class="nav-links" style="margin-bottom: 30px;">
-            <a href="/view-teachers.html" class="btn btn-secondary">← Back to Staff List</a>
-        </div>
 
-        <h2>➕ Create New Department</h2>
-        <form id="create-dept-form" style="margin-bottom: 40px;">
-            <input type="text" id="dept-name" placeholder="Department Name (e.g., Science)" required>
-            <textarea id="dept-description" placeholder="Brief Description (Optional)"></textarea> 
-            <button type="submit" class="btn-primary">Create Department</button>
-            <p id="create-error-msg" style="color: red; margin-top: 10px;"></p>
-        </form>
-
-        <hr style="border-top: 2px dashed #ccc;">
-
-        <h2>🏢 Existing Departments</h2>
-        <div class="table-responsive">
-            <table class="dept-table" id="department-table">
-                <thead>
-                    <tr>
-                        <th data-sort-key="name">Name</th>
-                        <th data-sort-key="staff_count">Staff Count</th>
-                        <th data-sort-key="created_at">Created Date</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody id="departments-list">
-                    <tr><td colspan="4" style="text-align: center;">Loading departments...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <div id="edit-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-btn">&times;</span>
-            <h2>Edit Department</h2>
-            <form id="edit-dept-form">
-                <input type="hidden" id="edit-id" name="id">
-                <label>Department Name:</label>
-                <input type="text" id="edit-name" name="name" required>
-                <label>Description (Basic):</label>
-                <textarea id="edit-description" name="description"></textarea>
-                <button type="submit" class="btn-primary" style="margin-top: 10px;">Save Changes</button>
-                <p id="edit-error-msg" style="color: red; margin-top: 10px;"></p>
-            </form>
-        </div>
-    </div>
+<div class="container-fluid" style="max-width: 1600px; padding: 30px;">
     
-    <div id="payroll-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
-            <span class="close-btn" id="payroll-modal-close">&times;</span>
-            <h2>Define Payroll Structure for <span id="payroll-dept-name" style="color: #005A9C;"></span></h2>
-            <form class="payroll-form" id="edit-payroll-form">
-                <input type="hidden" id="edit-payroll-dept-id" name="id">
-                
-                <h4 class="section-header">Salary & Payment Details</h4>
-                <div class="form-group">
-                    <label for="edit_p_base_salary">Base Salary</label>
-                    <input type="number" id="edit_p_base_salary" name="base_salary" step="0.01" required>
-                </div>
-                <div class="form-group">
-                    <label for="edit_p_pay_frequency">Pay Frequency</label>
-                    <select id="edit_p_pay_frequency" name="pay_frequency">
-                        <option value="Monthly">Monthly</option>
-                        <option value="Bi-Weekly">Bi-Weekly</option>
-                        <option value="Weekly">Weekly</option>
-                        <option value="Fortnightly">Fortnightly</option>
-                    </select>
-                </div>
-
-                <h4 class="section-header">Fixed Allowances</h4>
-                <div class="form-group">
-                    <label for="edit_p_allowance_hra">HRA (House Rent Allowance)</label>
-                    <input type="number" id="edit_p_allowance_hra" name="allowance_hra" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label for="edit_p_allowance_da">DA (Dearness Allowance)</label>
-                    <input type="number" id="edit_p_allowance_da" name="allowance_da" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label for="edit_p_allowance_other">Other Fixed Allowance</label>
-                    <input type="number" id="edit_p_allowance_other" name="allowance_other" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label for="edit_p_bonus_target">Annual Bonus Target</label>
-                    <input type="number" id="edit_p_bonus_target" name="bonus_target" step="0.01">
-                </div>
-                
-                <h4 class="section-header">Deductions & Taxes</h4>
-                <div class="form-group">
-                    <label for="edit_p_fixed_deductions">Fixed Deductions (e.g., Insurance)</label>
-                    <input type="number" id="edit_p_fixed_deductions" name="fixed_deductions" step="0.01">
-                </div>
-                <div class="form-group">
-                    <label for="edit_p_deduction_percentage">Percentage Deduction (PF/EPF %)</label>
-                    <input type="number" id="edit_p_deduction_percentage" name="deduction_percentage" min="0" max="100" step="0.01">
-                </div>
-                <div class="form-group full-width">
-                    <label for="edit_p_tax_deduction_rate">Tax Deduction Rate (%)</label>
-                    <input type="number" id="edit_p_tax_deduction_rate" name="tax_deduction_rate" min="0" max="100" step="0.01">
-                </div>
-                
-                <h4 class="section-header">Banking Information</h4>
-                <div class="form-group">
-                    <label for="edit_p_bank_account_number">Bank Account Number</label>
-                    <input type="text" id="edit_p_bank_account_number" name="bank_account_number">
-                </div>
-                <div class="form-group">
-                    <label for="edit_p_bank_ifsc_code">Bank IFSC/SWIFT Code</label>
-                    <input type="text" id="edit_p_bank_ifsc_code" name="bank_ifsc_code">
-                </div>
-                
-                <button type="submit" class="btn-primary full-width" style="margin-top: 30px;">Save Payroll Structure</button>
-                <p id="edit-payroll-error-msg" style="color: red; margin-top: 10px; grid-column: 1 / -1;"></p>
-            </form>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="fw-bold mb-0 text-dark"><i class="fas fa-sitemap me-2"></i>Department & Payroll Manager</h4>
+            <p class="text-muted mb-0 small">Manage organizational structure and complete salary breakdown</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="/view-teachers.html" class="btn btn-outline-dark rounded-pill px-4 btn-sm fw-bold">Staff Directory</a>
+            <a href="/admin-dashboard.html" class="btn btn-dark rounded-pill px-4 btn-sm fw-bold">Dashboard</a>
         </div>
     </div>
 
-    <div id="view-payroll-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
-            <span class="close-btn" id="view-payroll-modal-close">&times;</span>
-            <h2>Viewing Payroll Structure for <span id="view-payroll-dept-name" style="color: #005A9C;"></span></h2>
-            <div class="payroll-view">
-                <h4 class="section-header">Salary & Payment Details</h4>
-                <dl>
-                    <div><dt>Base Salary</dt><dd id="view_p_base_salary"></dd></div>
-                    <div><dt>Pay Frequency</dt><dd id="view_p_pay_frequency"></dd></div>
-                </dl>
-                
-                <h4 class="section-header">Fixed Allowances</h4>
-                <dl>
-                    <div><dt>HRA (House Rent Allowance)</dt><dd id="view_p_allowance_hra"></dd></div>
-                    <div><dt>DA (Dearness Allowance)</dt><dd id="view_p_allowance_da"></dd></div>
-                    <div><dt>Other Fixed Allowance</dt><dd id="view_p_allowance_other"></dd></div>
-                    <div><dt>Annual Bonus Target</dt><dd id="view_p_bonus_target"></dd></div>
-                </dl>
+    <div class="row g-4">
+        <div class="col-lg-4">
+            <div class="glass-card">
+                <div class="p-3 border-bottom bg-light rounded-top">
+                    <h6 class="fw-bold text-primary mb-0"><i class="fas fa-plus-circle me-2"></i>Create Department</h6>
+                </div>
+                <div class="p-4">
+                    <form id="create-dept-form">
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Department Name</label>
+                            <input type="text" id="dept-name" class="form-control" placeholder="e.g. Science" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-bold">Description</label>
+                            <textarea id="dept-description" class="form-control" rows="3" placeholder="Enter department details..."></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 rounded-pill fw-bold shadow-sm">Create Department</button>
+                    </form>
+                </div>
+            </div>
+        </div>
 
-                <h4 class="section-header">Deductions & Taxes</h4>
-                <dl>
-                    <div><dt>Fixed Deductions</dt><dd id="view_p_fixed_deductions"></dd></div>
-                    <div><dt>Percentage Deduction (PF/EPF)</dt><dd id="view_p_deduction_percentage"></dd></div>
-                    <div><dt>Tax Deduction Rate</dt><dd id="view_p_tax_deduction_rate"></dd></div>
-                </dl>
-
-                <h4 class="section-header">Banking Information</h4>
-                <dl>
-                    <div><dt>Bank Account Number</dt><dd id="view_p_bank_account_number"></dd></div>
-                    <div><dt>Bank IFSC/SWIFT Code</dt><dd id="view_p_bank_ifsc_code"></dd></div>
-                </dl>
-
-                <button type="button" class="btn-secondary" onclick="document.getElementById('view-payroll-modal').style.display='none'" style="margin-top: 20px; grid-column: 1 / -1;">Close</button>
+        <div class="col-lg-8">
+            <div class="glass-card h-100 p-0 overflow-hidden">
+                <div class="p-3 border-bottom bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0 text-dark">Existing Departments</h6>
+                    <span class="badge bg-secondary rounded-pill" id="dept-count">0</span>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Department Info</th>
+                                <th class="text-center">Staff Count</th>
+                                <th>Payroll Status</th>
+                                <th class="text-end pe-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="departments-list">
+                            <tr><td colspan="4" class="text-center p-5">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
+</div>
 
-  <script>
-        const API_URL = '/api/hr/departments';
-        const TOKEN = localStorage.getItem('erp-token');
-        let allDepartments = [];
-        let currentSortKey = 'name';
-        let isAscending = true;
-        
-        // --- Helper function for fetching data with auth and error handling ---
-        async function handleApi(url, options = {}) {
-            options.headers = { 
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${TOKEN}`,
-                ...options.headers 
-            };
-            const response = await fetch(url, options);
-            if (response.status === 401 || response.status === 403) {
-                alert('Session expired or unauthorized. Please log in again.');
-                localStorage.clear();
-                window.location.href = '/login';
-                throw new Error('Unauthorized');
-            }
-            if (!response.ok) {
-                const error = await response.json().catch(() => ({ message: response.statusText }));
-                throw new Error(error.message || `API Endpoint not found. (Status: ${response.status})`);
-            }
-            return response;
-        }
+<div class="modal fade" id="viewPayrollModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-header border-0 bg-primary text-white">
+                <h5 class="fw-bold mb-0"><i class="fas fa-eye me-2"></i>Salary Structure Details</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="view-payroll-content">
+                </div>
+        </div>
+    </div>
+</div>
 
-        async function fetchDepartments() {
-            const tbody = document.getElementById('departments-list');
-            try {
-                const response = await handleApi(API_URL, { method: 'GET' });
-                allDepartments = await response.json();
-                
-                // New logic: Safely parse description JSON and store payroll data within the department object
-                allDepartments = allDepartments.map(d => {
-                    let payload = {};
-                    try {
-                        // Check if description is a JSON string containing the payroll structure
-                        payload = typeof d.description === 'string' && d.description ? JSON.parse(d.description) : (d.description || {});
-                    } catch (e) {
-                        console.warn("Error parsing description for department:", d.id, e);
-                    }
-                    // The backend should return data with these nested keys if it follows the standard
-                    d.payroll_template = payload.payroll_template || null;
-                    d.basic_description = payload.basic_description || '';
-                    return d;
-                });
-                
-                if (!Array.isArray(allDepartments)) allDepartments = []; 
-                sortAndRender(allDepartments, currentSortKey, isAscending);
-            } catch(e) { 
-                console.error('Error fetching departments:', e);
-                tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: red;">Error fetching departments: ${e.message}</td></tr>`;
-            }
-        }
-        
-        function renderDepartmentsTable(departments) {
-            const tbody = document.getElementById('departments-list');
-            if (!departments || departments.length === 0) {
-                 tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">No departments found.</td></tr>';
-                 return;
-            }
-            
-            tbody.innerHTML = departments.map(d => {
-                const deptName = d.name.replace(/'/g, "\\'");
-                // Check if payroll structure is defined and base salary is set
-                const isPayrollDefined = d.payroll_template && parseFloat(d.payroll_template.base_salary) > 0;
-                
-                return `
-                    <tr>
-                        <td>${d.name}</td>
-                        <td>${d.staff_count || 0}</td>
-                        <td>${d.created_at ? new Date(d.created_at).toLocaleDateString() : 'N/A'}</td>
-                        <td class="actions-cell">
-                            <button class="icon-btn" title="Define/Edit Salary Structure" onclick="openPayrollModal('${d.id}')">💵</button>
-                            <button class="icon-btn" title="View Salary Structure" onclick="openViewPayrollModal('${d.id}')" ${!isPayrollDefined ? 'disabled' : ''}>👁️</button>
-                            <button class="icon-btn" title="Edit Department Info" onclick="openEditModal('${d.id}')">✏️</button>
-                            <button class="icon-btn delete" title="Delete Department" onclick="deleteDepartment('${d.id}', '${deptName}')">🗑️</button>
-                        </td>
-                    </tr>
-                `;
-            }).join('');
-        }
+<div class="modal fade" id="payrollModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content border-0">
+            <div class="modal-header border-0 bg-light rounded-top">
+                <h5 class="fw-bold text-primary mb-0"><i class="fas fa-money-check-alt me-2"></i>Full Payroll Breakdown</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <form id="edit-payroll-form">
+                    <input type="hidden" id="edit-payroll-dept-id" name="id">
+                    
+                    <div class="payroll-grid">
+                        <div class="payroll-section-title">1. Base Earnings</div>
+                        <div>
+                            <label class="form-label fw-bold">Base Salary (₹)</label>
+                            <input type="number" name="base_salary" class="form-control" step="0.01" required>
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">Pay Frequency</label>
+                            <select name="pay_frequency" class="form-select">
+                                <option value="Monthly">Monthly</option>
+                                <option value="Weekly">Weekly</option>
+                            </select>
+                        </div>
 
-        function getSortValue(dept, key) {
-            const value = dept[key];
-            if (key === 'created_at' && value) return new Date(value).getTime();
-            if (key === 'staff_count') return Number(value) || 0;
-            return String(value || '').toLowerCase();
-        }
+                        <div class="payroll-section-title">2. Fixed Allowances (Earnings)</div>
+                        <div>
+                            <label class="form-label fw-bold">HRA (House Rent)</label>
+                            <input type="number" name="allowance_hra" class="form-control" step="0.01">
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">DA (Dearness)</label>
+                            <input type="number" name="allowance_da" class="form-control" step="0.01">
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">Medical Allowance</label>
+                            <input type="number" name="allowance_medical" class="form-control" step="0.01">
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">Other Allowances</label>
+                            <input type="number" name="allowance_other" class="form-control" step="0.01">
+                        </div>
 
-        function sortAndRender(departments, key, asc) {
-            departments.sort((a, b) => {
-                const valA = getSortValue(a, key);
-                const valB = getSortValue(b, key);
-                if (valA < valB) return asc ? -1 : 1;
-                if (valA > valB) return asc ? 1 : -1;
-                return 0;
+                        <div class="payroll-section-title">3. Statutory Deductions</div>
+                        <div>
+                            <label class="form-label fw-bold">PF / EPF (%)</label>
+                            <input type="number" name="deduction_percentage" class="form-control" step="0.01">
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">Income Tax Rate (%)</label>
+                            <input type="number" name="tax_deduction_rate" class="form-control" step="0.01">
+                        </div>
+                        <div class="full-width">
+                            <label class="form-label fw-bold">Professional Tax (Fixed)</label>
+                            <input type="number" name="fixed_deductions" class="form-control" step="0.01">
+                        </div>
+
+                        <div class="payroll-section-title">4. Banking & Verification</div>
+                        <div class="full-width mb-2">
+                            <label class="form-label fw-bold">Account Holder Name</label>
+                            <input type="text" id="p_bank_account_holder" name="bank_account_holder" class="form-control bg-light" readonly>
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">Account Number</label>
+                            <input type="text" id="p_bank_account_number" name="bank_account_number" class="form-control">
+                        </div>
+                        <div>
+                            <label class="form-label fw-bold">IFSC Code</label>
+                            <div class="input-group">
+                                <input type="text" id="p_bank_ifsc_code" name="bank_ifsc_code" class="form-control" style="text-transform:uppercase">
+                                <button type="button" class="btn btn-verify" onclick="verifyBankAccount()">Verify</button>
+                            </div>
+                        </div>
+                        <div class="full-width" id="verification-result"></div>
+                    </div>
+
+                    <div class="mt-4 pt-3 border-top text-end">
+                        <button type="button" class="btn btn-light rounded-pill px-4 me-2 fw-bold" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success rounded-pill px-4 fw-bold shadow-sm">Save Complete Structure</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+    const API_URL = '/api/hr/departments';
+    let allDepartments = [];
+    let payrollModal, viewModal;
+
+    document.addEventListener('DOMContentLoaded', () => {
+        payrollModal = new bootstrap.Modal(document.getElementById('payrollModal'));
+        viewModal = new bootstrap.Modal(document.getElementById('viewPayrollModal'));
+        fetchDepartments();
+    });
+
+    async function fetchDepartments() {
+        try {
+            const res = await window.authFetch(API_URL);
+            const data = await res.json();
+            allDepartments = data.map(d => {
+                let payload = {};
+                try { 
+                    payload = JSON.parse(d.description); 
+                } catch(e) { 
+                    payload = { basic_description: d.description, payroll_template: {} }; 
+                }
+                d.payroll_template = payload.payroll_template || {};
+                d.basic_description = payload.basic_description || '';
+                return d;
             });
-            document.querySelectorAll('.dept-table th').forEach(th => th.classList.remove('sort-asc', 'sort-desc'));
-            const header = document.querySelector(`th[data-sort-key="${key}"]`);
-            if (header) header.classList.add(asc ? 'sort-asc' : 'sort-desc');
-            renderDepartmentsTable(departments);
-        }
+            renderTable();
+        } catch(e) { console.error("Fetch Error", e); }
+    }
 
-        document.getElementById('department-table').addEventListener('click', (e) => {
-            const th = e.target.closest('th');
-            if (th && th.dataset.sortKey) {
-                const newKey = th.dataset.sortKey;
-                isAscending = (newKey === currentSortKey) ? !isAscending : true;
-                currentSortKey = newKey;
-                sortAndRender(allDepartments, currentSortKey, isAscending);
-            }
-        });
+    function renderTable() {
+        document.getElementById('dept-count').innerText = allDepartments.length;
+        document.getElementById('departments-list').innerHTML = allDepartments.map(d => {
+            const hasPayroll = parseFloat(d.payroll_template?.base_salary) > 0;
+            return `
+                <tr>
+                    <td class="ps-4">
+                        <div class="fw-bold text-dark">${d.name}</div>
+                        <small class="text-muted">${d.basic_description || 'No description available'}</small>
+                    </td>
+                    <td class="text-center"><span class="badge bg-white text-dark border">${d.staff_count || 0}</span></td>
+                    <td><span class="status-badge ${hasPayroll ? 'status-active' : 'status-missing'}">${hasPayroll ? 'Full Structure' : 'Incomplete'}</span></td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group">
+                            <button class="btn btn-sm btn-outline-info" onclick="viewPayroll('${d.id}')" title="View Details"><i class="fas fa-eye"></i></button>
+                            <button class="btn btn-sm btn-outline-primary" onclick="openPayrollModal('${d.id}')" title="Edit Payroll"><i class="fas fa-pen"></i></button>
+                            <button class="btn btn-sm btn-outline-danger" onclick="deleteDepartment('${d.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    }
 
-        document.getElementById('create-dept-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const name = document.getElementById('dept-name').value.trim();
-            const description = document.getElementById('dept-description').value.trim();
-            const errorMsg = document.getElementById('create-error-msg');
-            errorMsg.textContent = '';
-            
-            // Default Payroll Template Structure (for initial creation POST)
-            const payroll_template = {
-                base_salary: 0.00, pay_frequency: "Monthly", allowance_hra: 0.00,
-                allowance_da: 0.00, allowance_other: 0.00, bonus_target: 0.00,
-                fixed_deductions: 0.00, deduction_percentage: 0.00, tax_deduction_rate: 0.00,
-                bank_account_number: "", bank_ifsc_code: ""
-            };
-            
-            // The backend is expected to receive basic description and payroll fields separately for creation.
-            const data = { 
-                name, 
-                description: description, // basic description text
-                ...payroll_template // initial payroll data
-            };
-            
-            try {
-                await handleApi(API_URL, { method: 'POST', body: JSON.stringify(data) });
-                alert(`Department "${name}" created successfully.`);
-                event.target.reset(); 
-                fetchDepartments(); 
-            } catch (e) {
-                errorMsg.textContent = 'Creation failed: ' + e.message;
-            }
-        });
-
-        async function deleteDepartment(id, name) {
-            if (!confirm(`WARNING: Are you sure you want to delete the department: ${name}?`)) return;
-            try {
-                await handleApi(`${API_URL}/${id}`, { method: 'DELETE' });
-                alert(`Department "${name}" deleted successfully.`);
-                fetchDepartments(); 
-            } catch (e) {
-                alert(`Deletion failed: ${e.message}`);
-            }
-        }
-        window.deleteDepartment = deleteDepartment;
-
-        const editModal = document.getElementById('edit-modal');
-        const payrollModal = document.getElementById('payroll-modal');
-        const viewPayrollModal = document.getElementById('view-payroll-modal');
-
-        document.querySelector('#edit-modal .close-btn').onclick = () => editModal.style.display = 'none';
-        document.getElementById('payroll-modal-close').onclick = () => payrollModal.style.display = 'none';
-        document.getElementById('view-payroll-modal-close').onclick = () => viewPayrollModal.style.display = 'none';
+    // 1. VIEW FUNCTION
+    window.viewPayroll = (id) => {
+        const d = allDepartments.find(item => item.id === id);
+        const p = d.payroll_template || {};
         
-        window.onclick = (event) => {
-            if (event.target === editModal) editModal.style.display = 'none';
-            if (event.target === payrollModal) payrollModal.style.display = 'none';
-            if (event.target === viewPayrollModal) viewPayrollModal.style.display = 'none';
+        const content = `
+            <h6 class="fw-bold text-primary border-bottom pb-2 mb-3">${d.name} Structure</h6>
+            <div class="detail-row"><span class="detail-label">Base Salary:</span> <span class="detail-value">₹${p.base_salary || 0}</span></div>
+            <div class="detail-row"><span class="detail-label">Frequency:</span> <span class="detail-value">${p.pay_frequency || 'Monthly'}</span></div>
+            <div class="payroll-section-title mt-3" style="font-size: 0.7rem;">Earnings</div>
+            <div class="detail-row"><span class="detail-label">HRA:</span> <span class="detail-value">₹${p.allowance_hra || 0}</span></div>
+            <div class="detail-row"><span class="detail-label">DA:</span> <span class="detail-value">₹${p.allowance_da || 0}</span></div>
+            <div class="detail-row"><span class="detail-label">Medical:</span> <span class="detail-value">₹${p.allowance_medical || 0}</span></div>
+            <div class="payroll-section-title mt-3" style="font-size: 0.7rem;">Statutory</div>
+            <div class="detail-row"><span class="detail-label">PF (%):</span> <span class="detail-value">${p.deduction_percentage || 0}%</span></div>
+            <div class="detail-row"><span class="detail-label">Tax (%):</span> <span class="detail-value">${p.tax_deduction_rate || 0}%</span></div>
+            <div class="payroll-section-title mt-3" style="font-size: 0.7rem;">Bank Account</div>
+            <div class="detail-row"><span class="detail-label">Holder:</span> <span class="detail-value">${p.bank_account_holder || 'N/A'}</span></div>
+            <div class="detail-row" style="border:none;"><span class="detail-label">Account No:</span> <span class="detail-value">${p.bank_account_number || 'N/A'}</span></div>
+        `;
+        document.getElementById('view-payroll-content').innerHTML = content;
+        viewModal.show();
+    };
+
+    // 2. EDIT MODAL PRE-FILL
+    window.openPayrollModal = (id) => {
+        const dept = allDepartments.find(d => d.id === id);
+        document.getElementById('edit-payroll-dept-id').value = id;
+        document.getElementById('verification-result').innerHTML = '';
+        
+        const form = document.getElementById('edit-payroll-form');
+        const p = dept.payroll_template || {};
+        
+        Array.from(form.elements).forEach(el => {
+            if(el.name && el.name !== 'id') {
+                el.value = p[el.name] !== undefined ? p[el.name] : '';
+            }
+        });
+        payrollModal.show();
+    };
+
+    // 3. BANK VERIFICATION
+    async function verifyBankAccount() {
+        const accNo = document.getElementById('p_bank_account_number').value.trim();
+        const ifsc = document.getElementById('p_bank_ifsc_code').value.trim();
+        const resDiv = document.getElementById('verification-result');
+        const holderInput = document.getElementById('p_bank_account_holder');
+
+        if(!accNo || !ifsc) return alert("Account Number and IFSC are required.");
+
+        resDiv.innerHTML = '<div class="alert alert-info py-2 mt-2"><i class="fas fa-sync fa-spin me-2"></i>Verifying Details...</div>';
+
+        try {
+            const response = await window.authFetch('/api/hr/verify-bank-account', {
+                method: 'POST',
+                body: JSON.stringify({ accountNumber: accNo, ifsc: ifsc })
+            });
+            const data = await response.json();
+            
+            if(data.success) {
+                resDiv.innerHTML = `<div class="alert alert-success py-2 mt-2">✅ Verification Successful</div>`;
+                holderInput.value = data.verified_name;
+            } else {
+                resDiv.innerHTML = `<div class="alert alert-danger py-2 mt-2">❌ ${data.message}</div>`;
+                holderInput.value = '';
+            }
+        } catch(e) {
+            resDiv.innerHTML = `<div class="alert alert-danger py-2 mt-2">❌ Error: Connection Failed</div>`;
+        }
+    }
+
+    // 4. SUBMIT UPDATE
+    document.getElementById('edit-payroll-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('edit-payroll-dept-id').value;
+        const dept = allDepartments.find(d => d.id === id);
+        
+        const formData = new FormData(e.target);
+        const newPayroll = Object.fromEntries(formData.entries());
+
+        // Numeric Parsing
+        ['base_salary', 'allowance_hra', 'allowance_da', 'allowance_medical', 'allowance_other', 'deduction_percentage', 'tax_deduction_rate', 'fixed_deductions'].forEach(field => {
+            if(newPayroll[field]) newPayroll[field] = parseFloat(newPayroll[field]);
+        });
+
+        const data = {
+            name: dept.name,
+            description: dept.basic_description,
+            ...newPayroll
         };
 
-        function openEditModal(id) { 
-            const dept = allDepartments.find(d => String(d.id) === String(id));
-            if (!dept) return alert('Department not found.');
-            
-            // Basic description is now easily available from the mapped object
-            const basicDescription = dept.basic_description || '';
-            
-            document.getElementById('edit-id').value = dept.id;
-            document.getElementById('edit-name').value = dept.name;
-            document.getElementById('edit-description').value = basicDescription; 
-            
-            editModal.style.display = 'block';
-        }
-        window.openEditModal = openEditModal;
-
-        document.getElementById('edit-dept-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const id = document.getElementById('edit-id').value;
-            const name = document.getElementById('edit-name').value.trim();
-            const description = document.getElementById('edit-description').value.trim();
-            const errorMsg = document.getElementById('edit-error-msg');
-            errorMsg.textContent = '';
-            
-            const originalDept = allDepartments.find(d => String(d.id) === String(id));
-            
-            // To update basic info, send the new name/description along with the existing payroll template.
-            const data = {
-                name,
-                description, // Basic description text
-                ...(originalDept.payroll_template || {}) // Include existing payroll template fields
-            };
-
-            try {
-                await handleApi(`${API_URL}/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-                alert(`Department "${name}" updated successfully!`);
-                editModal.style.display = 'none';
-                fetchDepartments(); 
-            } catch (e) {
-                errorMsg.textContent = 'Update failed: ' + e.message;
-            }
-        });
-
-        function openPayrollModal(id) {
-            const dept = allDepartments.find(d => String(d.id) === String(id));
-            if (!dept) return alert('Department not found.');
-            
-            const payrollData = dept.payroll_template || {};
-            
-            document.getElementById('payroll-dept-name').textContent = dept.name;
-            document.getElementById('edit-payroll-dept-id').value = dept.id;
-
-            const form = document.getElementById('edit-payroll-form');
-            Array.from(form.elements).forEach(el => {
-                if (el.name && el.name !== 'id') {
-                    const value = payrollData[el.name];
-                    if (el.type === 'number') {
-                        // Coerce null/undefined to 0.00 for display
-                        el.value = (value !== undefined && value !== null && !isNaN(parseFloat(value))) ? parseFloat(value).toFixed(2) : '0.00';
-                    } else {
-                        el.value = value || (el.tagName === 'SELECT' ? el.options[0].value : '');
-                    }
-                }
-            });
-            payrollModal.style.display = 'block';
-        }
-        window.openPayrollModal = openPayrollModal;
-        
-        document.getElementById('edit-payroll-form').addEventListener('submit', async function(event) {
-            event.preventDefault();
-            const id = document.getElementById('edit-payroll-dept-id').value;
-            const errorMsg = document.getElementById('edit-payroll-error-msg');
-            errorMsg.textContent = '';
-            
-            const originalDept = allDepartments.find(d => String(d.id) === String(id));
-
-            const newPayrollData = {};
-            Array.from(event.target.elements).forEach(input => {
-                if (input.name && input.name !== 'id') {
-                    // Collect all new payroll data, converting numbers
-                    newPayrollData[input.name] = (input.type === 'number') ? (parseFloat(input.value) || 0.00) : input.value.trim();
-                }
-            });
-            
-            // To update payroll, send new payroll data along with the original name and basic description.
-            const data = {
-                name: originalDept.name,
-                description: originalDept.basic_description || '', // Original basic description text
-                ...newPayrollData // All new payroll template fields
-            };
-            
-            try {
-                await handleApi(`${API_URL}/${id}`, { method: 'PUT', body: JSON.stringify(data) });
-                alert(`Payroll structure for "${originalDept.name}" updated successfully!`);
-                payrollModal.style.display = 'none';
+        try {
+            const res = await window.authFetch(`${API_URL}/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+            if(res.ok) {
+                payrollModal.hide();
                 fetchDepartments();
-            } catch(e) {
-                errorMsg.textContent = 'Payroll Update failed: ' + e.message;
+                alert("Success: Changes saved.");
             }
-        });
-        
-        function openViewPayrollModal(id) {
-            const dept = allDepartments.find(d => String(d.id) === String(id));
-            if (!dept) return alert('Department not found.');
-            
-            const payrollData = dept.payroll_template || {};
-            
-            document.getElementById('view-payroll-dept-name').textContent = dept.name;
+        } catch(e) { alert("Error saving changes."); }
+    };
 
-            // Use the global formatCurrency function if available, otherwise use a local fallback.
-            const formatCurrency = window.formatCurrency || ((val) => `₹ ${Number(val).toFixed(2).toLocaleString()}`);
-            const formatPercentage = val => `${parseFloat(val) || 0}%`;
-            const safeData = (key, def = 'N/A') => payrollData[key] !== undefined ? payrollData[key] : def;
+    // 5. CREATE DEPT
+    document.getElementById('create-dept-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('dept-name').value;
+        const desc = document.getElementById('dept-description').value;
 
-            document.getElementById('view_p_base_salary').textContent = formatCurrency(safeData('base_salary', 0));
-            document.getElementById('view_p_pay_frequency').textContent = safeData('pay_frequency');
-            document.getElementById('view_p_allowance_hra').textContent = formatCurrency(safeData('allowance_hra', 0));
-            document.getElementById('view_p_allowance_da').textContent = formatCurrency(safeData('allowance_da', 0));
-            document.getElementById('view_p_allowance_other').textContent = formatCurrency(safeData('allowance_other', 0));
-            document.getElementById('view_p_bonus_target').textContent = formatCurrency(safeData('bonus_target', 0));
-            document.getElementById('view_p_fixed_deductions').textContent = formatCurrency(safeData('fixed_deductions', 0));
-            
-            // Percentage fields remain local, using formatPercentage
-            document.getElementById('view_p_deduction_percentage').textContent = formatPercentage(safeData('deduction_percentage', 0));
-            document.getElementById('view_p_tax_deduction_rate').textContent = formatPercentage(safeData('tax_deduction_rate', 0));
-            
-            document.getElementById('view_p_bank_account_number').textContent = safeData('bank_account_number');
-            document.getElementById('view_p_bank_ifsc_code').textContent = safeData('bank_ifsc_code');
+        try {
+            const res = await window.authFetch(API_URL, { 
+                method: 'POST', 
+                body: JSON.stringify({ name, description: desc, base_salary: 0 }) 
+            });
+            if(res.ok) {
+                e.target.reset();
+                fetchDepartments();
+                alert("Department created successfully.");
+            }
+        } catch(e) { alert("Error creating department."); }
+    };
 
-            viewPayrollModal.style.display = 'block';
-        }
-        window.openViewPayrollModal = openViewPayrollModal;
-
-        document.addEventListener('DOMContentLoaded', fetchDepartments);
-  </script>
-  <script src="js/global-config.js"></script>
+    // 6. DELETE DEPT
+    window.deleteDepartment = async (id) => {
+        if(!confirm("Delete this department? All payroll settings for this dept will be lost.")) return;
+        try {
+            const res = await window.authFetch(`${API_URL}/${id}`, { method: 'DELETE' });
+            if(res.ok) fetchDepartments();
+        } catch(e) { alert("Error deleting department."); }
+    };
+</script>
 </body>
 </html>

@@ -1,168 +1,178 @@
-// public/js/feedback-admin.js (UPDATED to use window.erpSettings)
+/**
+ * BCSM ERP - Advanced Feedback Admin Logic
+ * Version: 4.1 (Fix for Null Priority Constraint)
+ */
 
-document.addEventListener('DOMContentLoaded', async () => {
+let masterFeedbackData = [];
 
-    // --- UTILITY: Function to safely wait for erpSettings to load ---
-    async function getSettings() {
-        let attempts = 0;
-        // Wait up to 500ms (5 attempts * 100ms) for settings to load
-        while (!window.erpSettings && attempts < 5) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-        return window.erpSettings;
+// 1. GLOBAL SCOPE: Load Feedback
+async function loadFeedback() {
+    const feedbackList = document.getElementById('allFeedbackList');
+    const spinner = document.getElementById('loading-spinner');
+    
+    if (!feedbackList) return;
+    if (spinner) spinner.classList.remove('d-none');
+
+    try {
+        const response = await fetch('/api/feedback/all', {
+            headers: { 
+                'Authorization': `Bearer ${localStorage.getItem('erp-token')}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        if (!response.ok) throw new Error("Server communication failed.");
+
+        masterFeedbackData = await response.json();
+        
+        updateDashboardStats();
+        applyFilters();
+
+    } catch (error) {
+        console.error('Feedback Engine Error:', error);
+        feedbackList.innerHTML = `<div class="alert alert-danger border-0 shadow-sm">Sync Error: ${error.message}</div>`;
+    } finally {
+        if (spinner) spinner.classList.add('d-none');
     }
+}
 
-    const settings = await getSettings();
+// 2. Client-side Filtering & Search
+function applyFilters() {
+    const statusVal = document.getElementById('feedbackStatusFilter')?.value || 'all';
+    const catVal = document.getElementById('feedbackCategoryFilter')?.value || 'all';
+    const searchVal = document.getElementById('feedbackSearch')?.value.toLowerCase() || '';
 
-    // Check for essential settings and user session
-    if (!settings || !localStorage.getItem('erp-token')) {
-        console.error('Feedback Admin: Global configuration (erpSettings) or user session not found.');
-        const container = document.querySelector('.feedback-container');
-        if(container) container.innerHTML = '<p style="color: red;">Cannot load feedback management system. Please check permissions.</p>';
+    const filtered = masterFeedbackData.filter(item => {
+        const matchesStatus = statusVal === 'all' || item.status === statusVal;
+        const matchesCategory = catVal === 'all' || item.category === catVal;
+        const matchesSearch = item.subject.toLowerCase().includes(searchVal) || 
+                              (item.user_name && item.user_name.toLowerCase().includes(searchVal));
+        return matchesStatus && matchesCategory && matchesSearch;
+    });
+
+    renderFeedbackUI(filtered);
+}
+
+// 3. UI Rendering
+function renderFeedbackUI(items) {
+    const feedbackList = document.getElementById('allFeedbackList');
+    if (!feedbackList) return;
+
+    const settings = window.erpSettings || {};
+    const colors = settings.FEEDBACK_STATUS_COLORS || { 'Pending': '#f1c40f', 'Reviewed': '#3498db', 'Resolved': '#2ecc71' };
+    const statuses = settings.FEEDBACK_STATUSES || ['Pending', 'Reviewed', 'Resolved'];
+
+    if (items.length === 0) {
+        feedbackList.innerHTML = '<div class="text-center p-5 text-muted">No records found.</div>';
         return;
     }
-    
-    // --- DOM Elements ---
-    const allFeedbackList = document.getElementById('allFeedbackList');
-    // Use settings properties directly
-    const feedbackStatusColors = settings.FEEDBACK_STATUS_COLORS || {};
-    const feedbackStatusFilter = document.getElementById('feedbackStatusFilter');
 
-    // --- Utility Function (Ensure fetchWithAuth is accessible) ---
-    async function fetchWithAuth(url, options = {}) {
-        const token = localStorage.getItem('erp-token');
-        const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json', ...options.headers };
-        const response = await fetch(url, { ...options, headers });
-        if (!response.ok) {
-            const errorBody = await response.json().catch(() => ({ message: 'Server error.' }));
-            throw new Error(errorBody.message || `API request failed: ${response.status}`);
-        }
-        return response.json();
-    }
+    feedbackList.innerHTML = items.map(item => {
+        const status = item.status || 'Pending';
+        const priority = item.priority || 'Medium';
 
-    // =========================================================
-    // A. LOAD ALL FEEDBACK
-    // =========================================================
-
-    // Populate Status Filter Dropdown using settings
-    if (feedbackStatusFilter) {
-        // Use settings property for statuses
-        const availableStatuses = settings.FEEDBACK_STATUSES || ['New', 'In Progress', 'Resolved', 'Closed'];
-
-        ['All', ...availableStatuses].forEach(status => {
-            const option = document.createElement('option');
-            option.value = status;
-            option.textContent = status;
-            feedbackStatusFilter.appendChild(option);
-        });
-        feedbackStatusFilter.addEventListener('change', loadAllFeedback);
-    }
-    
-
-    async function loadAllFeedback() {
-        if (!allFeedbackList) return;
-
-        allFeedbackList.innerHTML = '<li>Loading all system feedback...</li>';
-        const selectedStatus = feedbackStatusFilter ? feedbackStatusFilter.value : 'All';
-        
-        // Use settings property for API endpoint
-        const baseEndpoint = settings.API_ENDPOINTS.ALL_FEEDBACK || '/api/feedback/all';
-        const apiUrl = selectedStatus === 'All' 
-                       ? baseEndpoint
-                       : `${baseEndpoint}?status=${selectedStatus}`;
-
-
-        try {
-            const feedbackEntries = await fetchWithAuth(apiUrl);
-            
-            allFeedbackList.innerHTML = ''; 
-            
-            if (feedbackEntries.length === 0) {
-                allFeedbackList.innerHTML = `<li>No ${selectedStatus.toLowerCase()} feedback found.</li>`;
-                return;
-            }
-
-            // Use settings property for statuses
-            const availableStatuses = settings.FEEDBACK_STATUSES || ['New', 'In Progress', 'Resolved', 'Closed'];
-
-
-            feedbackEntries.forEach(entry => {
-                const listItem = document.createElement('li');
-                listItem.classList.add('feedback-admin-item');
-                listItem.setAttribute('data-id', entry.id);
-                
-                const statusColor = feedbackStatusColors[entry.status] || '#888';
-
-                listItem.innerHTML = `
-                    <div class="feedback-header">
-                        <span class="feedback-subject">${entry.subject} (From: ${entry.sender_username} / ${entry.user_role})</span>
-                        <span class="feedback-status" style="background-color: ${statusColor};">${entry.status}</span>
-                    </div>
-                    <div class="feedback-body">
-                        <p><strong>Content:</strong> ${entry.content}</p>
-                        <p><strong>Priority:</strong> ${entry.priority}</p>
-                        <p><strong>Submitted:</strong> ${new Date(entry.created_at).toLocaleString()}</p>
-                        ${entry.admin_notes ? `<p class="admin-note">Note: ${entry.admin_notes}</p>` : ''}
-                        
-                        <div class="admin-actions" data-id="${entry.id}">
-                            <select class="status-selector">
-                                ${availableStatuses.map(s => 
-                                    `<option value="${s}" ${s === entry.status ? 'selected' : ''}>${s}</option>`
-                                ).join('')}
-                            </select>
-                            <textarea placeholder="Admin Notes/Resolution (Optional)" class="admin-notes-input">${entry.admin_notes || ''}</textarea>
-                            <button class="update-btn">Update Status</button>
+        return `
+            <li class="feedback-admin-item priority-${priority.toLowerCase()}" id="item-${item.id}">
+                <div class="action-btns">
+                    <button class="btn btn-light btn-sm text-danger border" onclick="deleteFeedback('${item.id}')"><i class="fas fa-trash"></i></button>
+                </div>
+                <div class="feedback-header pe-5">
+                    <div>
+                        <span class="badge bg-secondary mb-2" style="font-size:0.6rem;">${item.category?.toUpperCase() || 'OTHER'}</span>
+                        <h5 class="fw-bold mb-1">${item.subject}</h5>
+                        <div class="small text-muted">
+                            <i class="fas fa-user-circle"></i> ${item.user_name || 'Anonymous'} | 
+                            <i class="fas fa-calendar-alt"></i> ${new Date(item.created_at).toLocaleDateString()}
                         </div>
                     </div>
-                `;
-                allFeedbackList.appendChild(listItem);
-            });
+                    <span class="badge status-badge" style="background-color: ${colors[status] || '#888'}">${status}</span>
+                </div>
+                <div class="mt-3 p-3 bg-light rounded-3 border-start border-3 border-primary">
+                    <p class="mb-0 text-dark">${item.content || item.message}</p>
+                </div>
+                <div class="admin-note-area mt-4">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                             <label class="form-label small fw-bold">Update Status</label>
+                             <select class="form-select form-select-sm" id="status-${item.id}">
+                                ${statuses.map(s => `<option value="${s}" ${s === status ? 'selected' : ''}>${s}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold">Resolution Note</label>
+                            <textarea class="form-control form-control-sm" id="note-${item.id}" rows="1">${item.admin_notes || ''}</textarea>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-primary btn-sm w-100 fw-bold" onclick="updateFeedbackRecord('${item.id}')">Update</button>
+                        </div>
+                    </div>
+                </div>
+            </li>`;
+    }).join('');
+}
 
-        } catch (error) {
-            console.error('Failed to load all feedback:', error);
-            allFeedbackList.innerHTML = `<li style="color: red;">Failed to load system feedback. ${error.message}</li>`;
-        }
-    }
-
-    // =========================================================
-    // B. HANDLE STATUS UPDATE
-    // =========================================================
-
-    allFeedbackList.addEventListener('click', async (event) => {
-        if (!event.target.classList.contains('update-btn')) return;
-
-        const container = event.target.closest('.admin-actions');
-        const feedbackId = container.getAttribute('data-id');
-        const status = container.querySelector('.status-selector').value;
-        const adminNotes = container.querySelector('.admin-notes-input').value.trim();
-        const updateBtn = event.target;
-
-        if (!confirm(`Are you sure you want to change status to ${status}?`)) return;
-
-        updateBtn.disabled = true;
-        updateBtn.textContent = 'Updating...';
-
-        try {
-            // Use settings property for API endpoint
-            const endpoint = settings.API_ENDPOINTS.UPDATE_STATUS(feedbackId) || `/api/feedback/${feedbackId}/status`;
-
-            await fetchWithAuth(endpoint, {
-                method: 'PUT',
-                body: JSON.stringify({ status, adminNotes })
-            });
-
-            alert('Status updated successfully!');
-            await loadAllFeedback(); // Reload the list
-
-        } catch (error) {
-            alert(`Failed to update status: ${error.message}`);
-        } finally {
-            updateBtn.disabled = false;
-            updateBtn.textContent = 'Update Status';
-        }
-    });
+// 4. Update Function (FIXED: Capturing existing priority)
+window.updateFeedbackRecord = async (id) => {
+    const status = document.getElementById(`status-${id}`).value;
+    const admin_note = document.getElementById(`note-${id}`).value;
     
-    // Initial Load
-    loadAllFeedback();
+    // Find existing data to get priority
+    const existingItem = masterFeedbackData.find(item => item.id === id);
+    const priority = existingItem ? existingItem.priority : 'Medium';
+
+    try {
+        const res = await fetch(`/api/feedback/update/${id}`, {
+            method: 'PUT',
+            headers: { 
+                'Content-Type': 'application/json', 
+                'Authorization': `Bearer ${localStorage.getItem('erp-token')}` 
+            },
+            body: JSON.stringify({ status, admin_note, priority }) // Now sending priority
+        });
+        
+        if (res.ok) {
+            alert('Updated successfully.');
+            loadFeedback();
+        } else {
+            const err = await res.json();
+            alert('Error: ' + err.message);
+        }
+    } catch (e) {
+        alert('Update failed: ' + e.message);
+    }
+};
+
+window.deleteFeedback = async (id) => {
+    if (!confirm("Delete this record?")) return;
+    try {
+        const res = await fetch(`/api/feedback/delete/${id}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('erp-token')}` }
+        });
+        if (res.ok) loadFeedback();
+    } catch (e) { alert('Delete failed.'); }
+};
+
+function updateDashboardStats() {
+    const stats = {
+        total: masterFeedbackData.length,
+        high: masterFeedbackData.filter(i => i.priority === 'High').length,
+        pending: masterFeedbackData.filter(i => i.status === 'Pending').length,
+        resolved: masterFeedbackData.filter(i => i.status === 'Resolved').length
+    };
+    Object.keys(stats).forEach(key => {
+        const el = document.getElementById(`count-${key}`);
+        if(el) el.innerText = stats[key];
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadFeedback();
+    document.getElementById('feedbackStatusFilter')?.addEventListener('change', applyFilters);
+    document.getElementById('feedbackCategoryFilter')?.addEventListener('change', applyFilters);
+    let timeout = null;
+    document.getElementById('feedbackSearch')?.addEventListener('input', () => {
+        clearTimeout(timeout);
+        timeout = setTimeout(applyFilters, 300);
+    });
 });

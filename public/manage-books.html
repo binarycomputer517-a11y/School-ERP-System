@@ -3,555 +3,461 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Library Management System</title>
+    <title>Library Management | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
     <style>
-        /* Classic Styles */
-        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #EFEFEF; color: #111; }
-        .container { 
-            max-width: 1200px; margin: auto; padding: 40px; background-color: #FFFFFF; 
-            border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; border-radius: 0; 
+        .nav-pills .nav-link {
+            color: var(--primary-dark);
+            font-weight: 600;
+            border-radius: 50px;
+            padding: 10px 25px;
+            margin-right: 10px;
+            transition: all 0.3s ease;
         }
-        h1 { 
-            color: #000; font-weight: bold; text-transform: uppercase; text-align: center; 
-            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
-            font-size: 2.2em;
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }
-        h2, h3 { 
-            color: #005A9C; font-weight: bold; text-transform: uppercase; border-bottom: 2px solid #555;
-            padding-bottom: 8px; margin-top: 20px; font-size: 1.5em;
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 600;
         }
-        
-        /* Tabs */
-        .tabs { display: flex; border-bottom: 3px solid #005A9C; margin-bottom: 30px; }
-        .tab-button { 
-            padding: 10px 15px; cursor: pointer; border: none; background-color: #DDD; 
-            border-radius: 0; margin-right: 5px; font-weight: bold; color: #333;
-            border-left: 1px solid #AAA; border-top: 1px solid #AAA;
-        }
-        .tab-button.active { background-color: #005A9C; color: white; border-color: #005A9C; border-bottom: none; }
-        .tab-content { padding: 15px 0; }
-        /* Adjusted grid to accommodate the new card */
-        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 25px; } 
-        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 25px; } 
-
-        /* Forms & Inputs */
-        .card { padding: 20px; border: 1px solid #333; border-radius: 0; margin-bottom: 20px; background-color: #f8f8f8; }
-        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; color: #333; }
-        input, select, textarea { width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #555; border-radius: 0; }
-        button { 
-            background-color: #C0392B; color: white; padding: 10px 15px; border: 2px solid #000; border-radius: 0; 
-            cursor: pointer; margin-top: 15px; box-shadow: 2px 2px 0 #000; font-weight: bold;
-        }
-        .btn-red { background-color: #777; }
-        .btn-red:hover { background-color: #555; }
-        .error-message { color: #C0392B; margin-top: 10px; font-weight: bold; }
-
-        /* Tables */
-        table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #333; }
-        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
-        th { background-color: #333; color: #FFFFFF; }
-        .status-available { color: green; font-weight: bold; }
-        .status-issued { color: #005A9C; font-weight: bold; }
-        .status-overdue { color: red; font-weight: bold; }
-        .fine { color: #C0392B; }
-        
-        /* History Specifics */
-        #history-search-form { display: flex; gap: 15px; align-items: flex-end; margin-bottom: 20px; }
-        #history-search-form > div { flex: 1; }
+        .status-available { background: #d4edda; color: #155724; }
+        .status-issued { background: #fff3cd; color: #856404; }
+        .status-overdue { background: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div style="margin-bottom: 15px;">
-            <a href="/admin-dashboard.html" style="text-decoration: none; font-weight: bold; color: #005A9C;">← Back to Admin Dashboard</a>
+
+<div class="container-fluid" style="max-width: 1600px; padding: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-book-reader me-2"></i>Library Management</h2>
+            <p class="text-muted mb-0 small">Manage books, circulation, and library assets</p>
+        </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="glass-card mb-4 p-2">
+        <ul class="nav nav-pills" id="pills-tab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pills-catalog" onclick="fetchCatalog()">
+                    <i class="fas fa-list me-2"></i>Catalog
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-circulation">
+                    <i class="fas fa-exchange-alt me-2"></i>Circulation
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-history" onclick="fetchCirculationHistory(null, null, true)">
+                    <i class="fas fa-history me-2"></i>History
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-config" onclick="fetchConfig()">
+                    <i class="fas fa-cog me-2"></i>Configuration
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="tab-content" id="pills-tabContent">
+        
+        <div class="tab-pane fade show active" id="pills-catalog">
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="glass-card h-100">
+                        <h6 class="fw-bold text-primary mb-3"><i class="fas fa-plus-circle me-2"></i>Add New Book</h6>
+                        <form id="add-catalog-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">ISBN *</label>
+                                <input type="text" name="isbn" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Title *</label>
+                                <input type="text" name="title" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Author *</label>
+                                <input type="text" name="author" class="form-control" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Publisher</label>
+                                    <input type="text" name="publisher" class="form-control">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Subject</label>
+                                    <input type="text" name="subject_area" class="form-control">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill shadow-sm">Save Book</button>
+                            <div id="catalog-message" class="mt-2 small text-center"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="glass-card h-100 p-0 overflow-hidden">
+                        <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0">Master Catalog</h6>
+                            <div class="input-group w-50">
+                                <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                                <input type="text" id="catalog-search" class="form-control border-start-0 ps-0" placeholder="Search title, author, ISBN..." onkeyup="filterCatalog()">
+                            </div>
+                        </div>
+                        <div class="table-responsive" style="max-height: 500px;">
+                            <table class="table table-glass table-hover mb-0 align-middle">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Book Details</th>
+                                        <th class="text-center">Availability</th>
+                                        <th class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="catalog-tbody">
+                                    <tr><td colspan="3" class="text-center p-4 text-muted">Loading catalog...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <h1>Library Management System</h1>
+        <div class="tab-pane fade" id="pills-circulation">
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-success">
+                        <h6 class="fw-bold text-success mb-3"><i class="fas fa-hand-holding-medical me-2"></i>Issue Book</h6>
+                        <form id="issue-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Student ID (UUID)</label>
+                                <input type="text" name="student_id" class="form-control" required placeholder="Paste UUID">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" required placeholder="Scan Barcode">
+                            </div>
+                            <button type="submit" class="btn btn-success w-100 rounded-pill">Issue Book</button>
+                            <div id="issue-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
 
-        <div class="tabs">
-            <button class="tab-button active" onclick="showTab('catalog')">Book Catalog</button>
-            <button class="tab-button" onclick="showTab('issue-return')">Circulation</button>
-            <button class="tab-button" onclick="showTab('history')">History</button>
-            <button class="tab-button" onclick="window.location.href='/library-fines.html'">Fines Management</button> 
-            <button class="tab-button" onclick="showTab('config')">Configuration</button>
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-danger">
+                        <h6 class="fw-bold text-danger mb-3"><i class="fas fa-undo me-2"></i>Return Book</h6>
+                        <form id="return-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" required placeholder="Scan Barcode">
+                            </div>
+                            <button type="submit" class="btn btn-danger w-100 rounded-pill">Process Return</button>
+                            <div id="return-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-primary">
+                        <h6 class="fw-bold text-primary mb-3"><i class="fas fa-boxes me-2"></i>Add Inventory</h6>
+                        <form id="add-copy-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Book ID (Catalog)</label>
+                                <input type="text" id="book_id_copy" name="book_id" class="form-control" required placeholder="Catalog ID">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">New Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" required placeholder="e.g. 2025-001">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill">Add Copy</button>
+                            <div id="copy-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-warning">
+                        <h6 class="fw-bold text-warning mb-3"><i class="fas fa-sync-alt me-2"></i>Renewal</h6>
+                        <form id="renewal-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" placeholder="Scan Barcode">
+                            </div>
+                            <button type="submit" class="btn btn-warning w-100 rounded-pill text-white">Renew Book</button>
+                            <div id="renewal-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <div id="catalog" class="tab-content">
-            <div class="grid-3">
-                <div class="card">
-                    <h2>Add/Edit Book</h2>
-                    <form id="add-catalog-form">
-                        <input type="hidden" id="book-id" name="id">
-                        <label for="isbn">ISBN *</label>
-                        <input type="text" id="isbn" name="isbn" required>
-                        <label for="title">Title *</label>
-                        <input type="text" id="title" name="title" required>
-                        <label for="author">Author *</label>
-                        <input type="text" id="author" name="author" required>
-                        <label for="publisher">Publisher</label>
-                        <input type="text" id="publisher" name="publisher">
-                        <label for="subject_area">Subject Area</label>
-                        <input type="text" id="subject_area" name="subject_area">
-                        <button type="submit" id="catalog-submit-btn">Save Book</button>
+        <div class="tab-pane fade" id="pills-history">
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="p-3 border-bottom bg-light">
+                    <form id="history-search-form" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Student ID</label>
+                            <input type="text" id="history-student-id" class="form-control" placeholder="UUID...">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Accession No.</label>
+                            <input type="text" id="history-accession-no" class="form-control" placeholder="Copy ID...">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill"><i class="fas fa-search me-2"></i>Search History</button>
+                        </div>
                     </form>
                 </div>
-                <div class="card" style="grid-column: 2 / span 2;">
-                    <h2>Master Catalog List</h2>
-                    <input type="text" id="catalog-search" placeholder="Search catalog by title, author or ISBN..." onkeyup="filterCatalog()" style="margin-bottom: 10px;">
-                    <table id="catalog-table">
-                        <thead>
+                <div class="table-responsive">
+                    <table class="table table-glass table-hover mb-0">
+                        <thead class="table-light">
                             <tr>
-                                <th>Title / Author</th>
-                                <th>ISBN</th>
-                                <th>Total Copies</th>
-                                <th>Available</th>
-                                <th>Actions</th>
+                                <th>Book Info</th>
+                                <th>Student ID</th>
+                                <th>Issued</th>
+                                <th>Due Date</th>
+                                <th>Returned</th>
+                                <th>Fine</th>
                             </tr>
                         </thead>
-                        <tbody id="catalog-tbody">
-                            <tr><td colspan="5">Loading catalog...</td></tr>
+                        <tbody id="history-tbody">
+                            <tr><td colspan="6" class="text-center p-4 text-muted">Enter search criteria...</td></tr>
                         </tbody>
                     </table>
                 </div>
+                <div id="history-error-message" class="p-2 text-center text-danger small fw-bold"></div>
             </div>
         </div>
 
-        <div id="issue-return" class="tab-content" style="display: none;">
-            <div class="grid-4"> 
-                <div class="card">
-                    <h3>Issue Book</h3>
-                    <form id="issue-form">
-                        <label for="student_id_issue">Student ID (UUID) *</label>
-                        <input type="text" id="student_id_issue" name="student_id" required placeholder="e.g., student-uuid">
-                        <label for="accession_number_issue">Accession Number *</label>
-                        <input type="text" id="accession_number_issue" name="accession_number" required placeholder="Scan or Type Copy ID">
-                        <button type="submit">Issue Book</button>
-                        <p id="issue-error-message" class="error-message"></p>
-                    </form>
-                </div>
-                <div class="card">
-                    <h3>Return Book</h3>
-                    <form id="return-form">
-                        <label for="accession_number_return">Accession Number *</label>
-                        <input type="text" id="accession_number_return" name="accession_number" required placeholder="Scan or Type Copy ID">
-                        <button type="submit" class="btn-red">Process Return</button>
-                        <p id="return-error-message" class="error-message"></p>
-                    </form>
-                </div>
-                
-                <div class="card">
-                    <h3>Quick Actions</h3>
-                    <p style="font-size: 0.9em; margin-top: 5px;">Use Accession Number to manage status.</p>
-                    <form id="renewal-form">
-                        <label for="accession_number_renew">Accession No. (Renewal)</label>
-                        <input type="text" id="accession_number_renew" name="accession_number" placeholder="Enter Copy ID">
-                        <button type="submit" style="background-color: #28a745;">Renew Book</button>
-                        <p id="renewal-error-message" class="error-message"></p>
-                    </form>
-                    <button onclick="handleReservationSearch()" style="background-color: #ffc107; color: #111;">View Reservations</button>
-                    <p id="reservation-message" class="error-message"></p>
-                </div>
-                
-                <div class="card">
-                    <h3>Inventory Management</h3>
-                    <form id="add-copy-form">
-                        <label for="book_id_copy">Book ID (Catalog) *</label>
-                        <input type="text" id="book_id_copy" name="book_id" required placeholder="Paste Book Catalog ID">
-                        <label for="accession_number_copy">New Accession Number *</label>
-                        <input type="text" id="accession_number_copy" name="accession_number" required placeholder="e.g., 2025-001-A">
-                        <button type="submit">Add Copy</button>
-                        <p id="copy-error-message" class="error-message"></p>
+        <div class="tab-pane fade" id="pills-config">
+            <div class="col-lg-6 mx-auto">
+                <div class="glass-card">
+                    <h6 class="fw-bold text-dark mb-4 border-bottom pb-2">Library Rules & Fines</h6>
+                    <form id="config-form">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Max Books / Student</label>
+                                <input type="number" id="max_books_student" name="max_books_student" class="form-control" min="1" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Max Issue Days</label>
+                                <input type="number" id="max_issue_days" name="max_issue_days" class="form-control" min="1" required>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">Daily Fine Rate (₹)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">₹</span>
+                                <input type="number" step="0.01" id="daily_fine_rate" name="daily_fine_rate" class="form-control" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-dark w-100 rounded-pill">Save Configuration</button>
+                        <div id="config-error-message" class="mt-2 small text-center fw-bold"></div>
                     </form>
                 </div>
             </div>
         </div>
 
-        <div id="history" class="tab-content" style="display: none;">
-            <h2>Circulation History</h2>
-            <form id="history-search-form">
-                <div>
-                    <label for="history-student-id">Search by Student ID (UUID):</label>
-                    <input type="text" id="history-student-id" placeholder="Student UUID">
-                </div>
-                <div>
-                    <label for="history-accession-no">Search by Accession Number:</label>
-                    <input type="text" id="history-accession-no" placeholder="Book Copy ID">
-                </div>
-                <div>
-                    <button type="submit" id="history-search-btn">Search History</button>
-                </div>
-            </form>
-            
-            <table id="history-table">
-                <thead>
-                    <tr>
-                        <th>Book Title (Accession No.)</th>
-                        <th>Student ID</th>
-                        <th>Issued</th>
-                        <th>Due Date</th>
-                        <th>Returned</th>
-                        <th>Fine</th>
-                    </tr>
-                </thead>
-                <tbody id="history-tbody">
-                    <tr><td colspan="6">Enter criteria above or click Search History for recent records.</td></tr>
-                </tbody>
-            </table>
-            <p id="history-error-message" class="error-message"></p>
-        </div>
-
-
-        <div id="config" class="tab-content" style="display: none;">
-            <h2>Library Configuration</h2>
-            <form id="config-form">
-                <label for="max_books_student">Max Books per Student</label>
-                <input type="number" id="max_books_student" name="max_books_student" min="1" required>
-                
-                <label for="max_issue_days">Max Issue Days</label>
-                <input type="number" id="max_issue_days" name="max_issue_days" min="7" required>
-                
-                <label for="daily_fine_rate">Daily Fine Rate (₹)</label>
-                <input type="number" step="0.01" id="daily_fine_rate" name="daily_fine_rate" required>
-
-                <button type="submit">Save Configuration</button>
-                <p id="config-error-message" class="error-message"></p>
-            </form>
-            <p style="margin-top: 20px;">*Changes apply globally to circulation rules.</p>
-        </div>
     </div>
+</div>
 
-    <script>
-        const API_BASE = '/api/library';
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+    const API_BASE = '/api/library';
+    
+    document.addEventListener('DOMContentLoaded', () => {
         const token = localStorage.getItem('erp-token');
-        const userRole = localStorage.getItem('user-role');
+        if (!token) window.location.href = '/login.html';
         
-        // Client-Side Role Guard Check (Manager Roles)
-        if (!token || !['Super Admin', 'Admin', 'Teacher', 'Librarian'].includes(userRole)) { 
-            window.location.href = '/login'; 
-        }
+        // Initial Load
+        fetchCatalog();
+    });
 
-        // --- Helper Functions ---
-        async function handleApi(url, options = {}) {
-            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
-            const response = await fetch(url, { ...options, headers: authHeaders });
-            
-            if (response.status === 401 || response.status === 403) {
-                localStorage.clear();
-                window.location.href = '/login';
-                throw new Error('Unauthorized or session expired.');
-            }
-            if (!response.ok) {
-                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
-                throw new Error(errorBody.message);
-            }
-            return response.json();
-        }
-
-        function showTab(tabId) {
-            document.querySelectorAll('.tab-content').forEach(div => div.style.display = 'none');
-            document.getElementById(tabId).style.display = 'block';
-            document.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-            document.querySelector(`.tab-button[onclick*='${tabId}']`).classList.add('active');
-            
-            // Clear all error messages when switching tabs
-            document.querySelectorAll('.error-message').forEach(el => el.textContent = '');
-
-            if (tabId === 'catalog') fetchCatalog();
-            if (tabId === 'config') fetchConfig();
-            if (tabId === 'history') { 
-                document.getElementById('history-student-id').value = '';
-                document.getElementById('history-accession-no').value = '';
-                fetchCirculationHistory(null, null, true); // Load default recent history
-            }
-            if (tabId === 'issue-return') {
-                document.getElementById('issue-form').reset();
-                document.getElementById('return-form').reset();
-            }
-        }
-
-        function formatDate(dateString) {
-            if (!dateString) return 'N/A';
-            return new Date(dateString).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
-        }
-
-
-        // ===================================
-        // 1. CATALOG FUNCTIONS
-        // ===================================
-
-        async function fetchCatalog() {
-            const tbody = document.getElementById('catalog-tbody');
-            tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
-            try {
-                const data = await handleApi(`${API_BASE}/catalog`);
-                window.masterCatalogData = data; // Store data globally for filtering
-                filterCatalog(data);
-
-            } catch (error) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Failed to load catalog.</td></tr>';
-            }
-        }
+    // --- 1. Catalog Logic ---
+    async function fetchCatalog() {
+        const tbody = document.getElementById('catalog-tbody');
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4">Loading...</td></tr>';
         
-        function filterCatalog(data = window.masterCatalogData) {
-            const tbody = document.getElementById('catalog-tbody');
-            const searchValue = document.getElementById('catalog-search').value.toLowerCase();
+        try {
+            const res = await window.authFetch(`${API_BASE}/catalog`);
+            const data = await res.json();
+            window.masterCatalogData = data; 
+            filterCatalog(data);
+        } catch(e) { 
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger p-4">Error loading catalog</td></tr>'; 
+        }
+    }
+
+    function filterCatalog(data = window.masterCatalogData) {
+        const tbody = document.getElementById('catalog-tbody');
+        const term = document.getElementById('catalog-search').value.toLowerCase();
+        
+        if(!data) return;
+
+        const filtered = data.filter(b => 
+            (b.title && b.title.toLowerCase().includes(term)) ||
+            (b.author && b.author.toLowerCase().includes(term)) ||
+            (b.isbn && b.isbn.includes(term))
+        );
+
+        if(filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-muted">No books found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(b => `
+            <tr>
+                <td>
+                    <div class="fw-bold text-dark">${b.title}</div>
+                    <small class="text-muted d-block">${b.author}</small>
+                    <small class="text-secondary" style="font-size:0.7rem">ISBN: ${b.isbn}</small>
+                </td>
+                <td class="text-center">
+                    <span class="status-badge ${b.available_copies > 0 ? 'status-available' : 'status-issued'}">
+                        ${b.available_copies} / ${b.total_copies}
+                    </span>
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="copyToClipboard('${b.id}')" title="Copy ID"><i class="fas fa-copy"></i></button>
+                    <button class="btn btn-sm btn-outline-dark" onclick="manageInventory('${b.id}')" title="Add Copy"><i class="fas fa-plus"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function copyToClipboard(text) {
+        await navigator.clipboard.writeText(text);
+        alert("ID Copied: " + text);
+    }
+
+    function manageInventory(bookId) {
+        document.getElementById('book_id_copy').value = bookId;
+        // Switch tab
+        const tabTrigger = new bootstrap.Tab(document.querySelector('#pills-tab button[data-bs-target="#pills-circulation"]'));
+        tabTrigger.show();
+    }
+
+    // --- 2. Forms Logic (Using generic handler) ---
+    async function handleFormSubmit(e, url, resultDivId, successMsg) {
+        e.preventDefault();
+        const form = e.target;
+        const msgDiv = document.getElementById(resultDivId);
+        msgDiv.className = 'mt-2 small text-center fw-bold text-primary';
+        msgDiv.innerText = 'Processing...';
+        
+        try {
+            const fd = new FormData(form);
+            const data = Object.fromEntries(fd.entries());
             
-            if (!data) return;
+            const res = await window.authFetch(url, {
+                method: 'POST', // Default to POST, override if needed
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
 
-            const filtered = data.filter(book => 
-                (book.title && book.title.toLowerCase().includes(searchValue)) ||
-                (book.author && book.author.toLowerCase().includes(searchValue)) ||
-                (book.isbn && book.isbn.includes(searchValue))
-            );
+            if(res.ok) {
+                msgDiv.className = 'mt-2 small text-center fw-bold text-success';
+                msgDiv.innerText = `✅ ${successMsg}`;
+                form.reset();
+                if(url.includes('catalog') || url.includes('inventory')) fetchCatalog(); 
+            } else {
+                throw new Error(result.message);
+            }
+        } catch(err) {
+            msgDiv.className = 'mt-2 small text-center fw-bold text-danger';
+            msgDiv.innerText = `❌ ${err.message}`;
+        }
+    }
 
-            tbody.innerHTML = filtered.map(book => `
+    // Bind Forms
+    document.getElementById('add-catalog-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/catalog`, 'catalog-message', 'Book Added!'));
+    document.getElementById('add-copy-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/inventory`, 'copy-error-message', 'Copy Added!'));
+    document.getElementById('issue-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/issue`, 'issue-error-message', 'Issued Successfully!'));
+    document.getElementById('return-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/return`, 'return-error-message', 'Returned Successfully!'));
+    document.getElementById('renewal-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/renew`, 'renewal-error-message', 'Renewed Successfully!'));
+
+    // --- 3. Configuration (PUT request) ---
+    document.getElementById('config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgDiv = document.getElementById('config-error-message');
+        try {
+            const data = Object.fromEntries(new FormData(e.target).entries());
+            await window.authFetch(`${API_BASE}/config`, { method: 'PUT', body: JSON.stringify(data) });
+            msgDiv.className = 'mt-2 small text-center fw-bold text-success';
+            msgDiv.innerText = 'Configuration Saved!';
+        } catch(err) {
+            msgDiv.className = 'mt-2 small text-center fw-bold text-danger';
+            msgDiv.innerText = 'Save Failed';
+        }
+    });
+
+    async function fetchConfig() {
+        try {
+            const res = await window.authFetch(`${API_BASE}/config`);
+            const data = await res.json();
+            document.getElementById('max_books_student').value = data.max_books_student || 3;
+            document.getElementById('max_issue_days').value = data.max_issue_days || 14;
+            document.getElementById('daily_fine_rate').value = data.daily_fine_rate || 5;
+        } catch(e) {}
+    }
+
+    // --- 4. History ---
+    document.getElementById('history-search-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const sid = document.getElementById('history-student-id').value;
+        const acc = document.getElementById('history-accession-no').value;
+        fetchCirculationHistory(sid, acc);
+    });
+
+    async function fetchCirculationHistory(sid, acc, isDefault = false) {
+        const tbody = document.getElementById('history-tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">Searching...</td></tr>';
+        
+        let query = '';
+        if(sid) query += `studentId=${sid}&`;
+        if(acc) query += `accessionNo=${acc}`;
+        
+        try {
+            const res = await window.authFetch(`${API_BASE}/history?${query}`);
+            const data = await res.json();
+            
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-muted">No records found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(r => `
                 <tr>
-                    <td><strong>${book.title}</strong><br><small>ISBN: ${book.isbn}</small></td>
-                    <td>${book.total_copies || 0} / <span class="${book.available_copies > 0 ? 'status-available' : 'status-issued'}">${book.available_copies || 0}</span></td>
-                    <td>
-                        <button class="btn btn-sm" style="background-color: #005A9C; color: white;" onclick="copyToClipboard('${book.id}')">Copy ID</button>
-                        <button class="btn btn-sm" style="background-color: #777; color: white;" onclick="manageInventory('${book.id}')">Add Copy</button>
-                    </td>
+                    <td><strong>${r.title}</strong><br><small class="text-muted">${r.accession_number}</small></td>
+                    <td class="small font-monospace">${r.student_id ? r.student_id.slice(0,8)+'...' : '-'}</td>
+                    <td>${new Date(r.issue_date).toLocaleDateString()}</td>
+                    <td>${new Date(r.due_date).toLocaleDateString()}</td>
+                    <td>${r.return_date ? new Date(r.return_date).toLocaleDateString() : '<span class="badge bg-warning text-dark">Active</span>'}</td>
+                    <td class="${r.fine_amount > 0 ? 'text-danger fw-bold' : 'text-muted'}">₹${r.fine_amount || 0}</td>
                 </tr>
-            `).join('') || '<tr><td colspan="5" class="text-center">No books found matching criteria.</td></tr>';
-        }
+            `).join('');
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger p-4">Error fetching history</td></tr>'; }
+    }
 
-        async function copyToClipboard(bookId) {
-             await navigator.clipboard.writeText(bookId);
-             alert(`Book ID copied to clipboard: ${bookId}`);
-        }
+</script>
 
-        function manageInventory(bookId) {
-            document.getElementById('book_id_copy').value = bookId;
-            showTab('issue-return'); // Switch to circulation tab (inventory management form)
-        }
-
-        // Catalog Form Submission
-        document.getElementById('add-catalog-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
-            const msgDiv = document.getElementById('catalog-message');
-            msgDiv.textContent = '';
-
-            try {
-                const result = await handleApi(`${API_BASE}/catalog`, { method: 'POST', body: JSON.stringify(data) });
-                msgDiv.className = 'mt-2 text-success';
-                msgDiv.textContent = `✅ Book added successfully. (ID: ${result.book_id.substring(0, 8)}...).`;
-                form.reset();
-                fetchCatalog();
-            } catch (error) {
-                msgDiv.className = 'mt-2 text-danger';
-                msgDiv.textContent = `❌ Failed to save book: ${error.message}`;
-            }
-        });
-
-
-        // ===================================
-        // 2. INVENTORY FUNCTIONS
-        // ===================================
-
-        document.getElementById('add-copy-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
-            const msgDiv = document.getElementById('copy-error-message');
-            msgDiv.textContent = '';
-            
-            try {
-                const result = await handleApi(`${API_BASE}/inventory`, { method: 'POST', body: JSON.stringify(data) });
-                msgDiv.className = 'mt-2 text-success';
-                msgDiv.textContent = `✅ ${result.message}`;
-                form.reset();
-                fetchCatalog(); // Refresh catalog counts
-            } catch (error) {
-                msgDiv.className = 'mt-2 text-danger';
-                msgDiv.textContent = `❌ Failed to add copy: ${error.message}`;
-            }
-        });
-
-
-        // ===================================
-        // 3. CIRCULATION FUNCTIONS
-        // ===================================
-
-        document.getElementById('issue-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
-            const msgDiv = document.getElementById('issue-error-message');
-            msgDiv.textContent = '';
-
-
-            try {
-                const result = await handleApi(`${API_BASE}/issue`, { method: 'POST', body: JSON.stringify(data) });
-                msgDiv.className = 'mt-2 text-success';
-                msgDiv.textContent = `✅ Issued to ${data.student_id.substring(0, 8)}.... Due: ${new Date(result.due_date).toLocaleDateString()}.`;
-                form.reset();
-                fetchCatalog();
-            } catch (error) {
-                msgDiv.className = 'mt-2 text-danger';
-                msgDiv.textContent = `❌ Issue Failed: ${error.message}`;
-            }
-        });
-
-        document.getElementById('return-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
-            const msgDiv = document.getElementById('return-error-message');
-            msgDiv.textContent = '';
-
-            try {
-                const result = await handleApi(`${API_BASE}/return`, { method: 'POST', body: JSON.stringify(data) });
-                msgDiv.className = 'mt-2 text-success';
-                msgDiv.textContent = `✅ Return Processed. Fine: ₹${parseFloat(result.fine_calculated).toFixed(2)}. Status: ${result.status}`;
-                form.reset();
-                fetchCatalog();
-            } catch (error) {
-                msgDiv.className = 'mt-2 text-danger';
-                msgDiv.textContent = `❌ Return Failed: ${error.message}`;
-            }
-        });
-        
-        // NEW: Renewal Submission
-        document.getElementById('renewal-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
-            const msgDiv = document.getElementById('renewal-error-message');
-            msgDiv.textContent = '';
-
-            try {
-                // Assuming POST /api/library/renew route exists for renewal
-                const result = await handleApi(`${API_BASE}/renew`, { method: 'POST', body: JSON.stringify(data) });
-                msgDiv.className = 'mt-2 text-success';
-                msgDiv.textContent = `✅ Renewal Successful. New Due Date: ${new Date(result.new_due_date).toLocaleDateString()}.`;
-                form.reset();
-                fetchCatalog();
-            } catch (error) {
-                msgDiv.className = 'mt-2 text-danger';
-                msgDiv.textContent = `❌ Renewal Failed: ${error.message}`;
-            }
-        });
-
-        // NEW: Reservation Search Action
-        function handleReservationSearch() {
-            // Placeholder for viewing pending reservations (Requires GET /api/library/reservations route)
-            alert("Viewing Reservations: This requires fetching a list of pending reservation requests from the backend.");
-            // You would typically navigate to a dedicated page or load a modal here.
-            // window.location.href = '/reservation-queue.html';
-        }
-
-
-        // ===================================
-        // 4. HISTORY FUNCTIONS
-        // ===================================
-        
-        // History Search Submission
-        document.getElementById('history-search-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const studentId = document.getElementById('history-student-id').value.trim();
-            const accessionNo = document.getElementById('history-accession-no').value.trim();
-            
-            fetchCirculationHistory(studentId, accessionNo, false);
-        });
-
-
-        async function fetchCirculationHistory(studentId = null, accessionNo = null, isDefault = false) {
-            const tbody = document.getElementById('history-tbody');
-            const errorDiv = document.getElementById('history-error-message');
-            errorDiv.textContent = '';
-            
-            if (!studentId && !accessionNo && !isDefault) {
-                 errorDiv.textContent = 'Please enter a Student ID or Accession Number to search.';
-                 tbody.innerHTML = '<tr><td colspan="6">Enter criteria above or click Search History for recent records.</td></tr>';
-                 return;
-            }
-
-            tbody.innerHTML = '<tr><td colspan="6">Searching...</td></tr>';
-            
-            let url = `${API_BASE}/history`;
-            const params = new URLSearchParams();
-            if (studentId) params.append('studentId', studentId);
-            if (accessionNo) params.append('accessionNo', accessionNo);
-            
-            if (params.toString()) {
-                url += `?${params.toString()}`;
-            }
-
-            try {
-                const data = await handleApi(url); 
-                
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6">No history records found matching your criteria.</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.map(record => `
-                    <tr>
-                        <td><strong>${record.title}</strong> (${record.accession_number})</td>
-                        <td>${record.student_id ? record.student_id.substring(0, 8) + '...' : 'N/A'}</td>
-                        <td>${formatDate(record.issue_date)}</td>
-                        <td>${formatDate(record.due_date)}</td>
-                        <td>${record.return_date ? formatDate(record.return_date) : '— Active —'}</td>
-                        <td class="${record.fine_amount > 0 ? 'fine' : ''}">
-                            ₹${parseFloat(record.fine_amount || 0).toFixed(2)}
-                        </td>
-                    </tr>
-                `).join('');
-
-            } catch (error) {
-                errorDiv.textContent = `❌ History Search Failed: ${error.message}`;
-                tbody.innerHTML = '<tr><td colspan="6" style="color:red;">Error fetching history.</td></tr>';
-            }
-        }
-
-
-        // ===================================
-        // 5. CONFIGURATION FUNCTIONS
-        // ===================================
-
-        async function fetchConfig() {
-            try {
-                const config = await handleApi(`${API_BASE}/config`);
-                document.getElementById('max_books_student').value = config.max_books_student || 3;
-                document.getElementById('max_issue_days').value = config.max_issue_days || 14;
-                document.getElementById('daily_fine_rate').value = config.daily_fine_rate || 5.00;
-            } catch (error) {
-                alert(`Error loading config: ${error.message}`);
-            }
-        }
-        
-        document.getElementById('config-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const form = e.target;
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
-            const errorDiv = document.getElementById('config-error-message');
-            errorDiv.textContent = '';
-            
-            try {
-                await handleApi(`${API_BASE}/config`, { method: 'PUT', body: JSON.stringify(data) });
-                alert('Configuration saved successfully!');
-                fetchConfig(); 
-            } catch (error) {
-                errorDiv.textContent = `❌ Failed to save config: ${error.message}`;
-            }
-        });
-
-
-        // --- Initial Load ---
-        document.addEventListener('DOMContentLoaded', () => {
-            // Default load on page start
-            showTab('catalog'); 
-        });
-    </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>

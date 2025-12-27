@@ -3,218 +3,327 @@
  * -----------------------------
  * Manages the logic for the School Academic Calendar page.
  * Fetches academic events, dynamically builds the calendar grid,
- * handles month navigation, and implements ROLE-BASED FILTERING.
+ * handles month navigation, and implements CLIENT-SIDE FILTERING.
  */
-
-// --- Global Constants ---
-const CALENDAR_API_URL = '/api/calendar/events';
-
-// --- DOM Elements ---
-const currentMonthYear = document.getElementById('currentMonthYear');
-const calendarGridContainer = document.getElementById('calendar-grid-container'); 
-const prevMonthButton = document.getElementById('prevMonth');
-const nextMonthButton = document.getElementById('nextMonth');
-const monthlyEventsUl = document.getElementById('monthly-events-ul');
 
 // --- Global State ---
-let currentDate = new Date(); // Start with the current date
+let currentDate = new Date();
+let currentMonth = currentDate.getMonth();
+let currentYear = currentDate.getFullYear();
+let allEventsCache = []; // Stores all fetched events + generated holidays
+let activeFilters = {
+    exam: true,
+    holiday: true,
+    meeting: true,
+    general: true
+};
 
-// =========================================================
-// 1. HELPER FUNCTIONS (Authentication and Fetch)
-// =========================================================
+// --- DOM Elements ---
+const dom = {
+    grid: document.getElementById('calendar-grid-container'),
+    monthTitle: document.getElementById('currentMonthYear'),
+    prevBtn: document.getElementById('prevMonth'),
+    nextBtn: document.getElementById('nextMonth'),
+    upcomingList: document.getElementById('monthly-events-ul'),
+    addEventForm: document.getElementById('add-event-form'),
+    filterCheckboxes: document.querySelectorAll('.filter-checkbox')
+};
 
-/**
- * A wrapper for the fetch API that includes the authentication token and session ID.
- * (This is the finalized, working version from previous debugging sessions.)
- */
-async function fetchWithAuth(url, options = {}) {
-    const token = localStorage.getItem('erp-token');
-    if (!token) {
-        // Redirect to login if token is missing
-        // window.location.href = '/login.html'; 
-        throw new Error('Authentication token not found.');
-    }
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Initial Load
+    initCalendar();
     
-    // CRITICAL: Ensure sessionId is retrieved and sent
-    const sessionId = localStorage.getItem('active_session_id');
-    const authHeaders = { 
-        'Authorization': `Bearer ${token}`,
-        'X-Session-ID': sessionId || '', // Send empty string if not found to avoid null header
-        'Content-Type': 'application/json'
-    };
+    // 2. Setup Sidebar Filters
+    setupFilters();
 
-    const headers = { ...authHeaders, ...options.headers };
-    const response = await fetch(url, { ...options, headers });
+    // 3. Setup Navigation
+    setupNavigation();
 
-    if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ message: 'Server error.' }));
-        console.error(`Fetch error from ${url}:`, errorBody);
-        throw new Error(`Failed to fetch: ${errorBody.message}`);
-    }
+    // 4. Setup Form
+    setupAddEventForm();
+});
 
-    return response.json();
+// =========================================================
+// 1. CORE LOGIC
+// =========================================================
+
+async function initCalendar() {
+    renderGridStructure(); // Render empty grid first
+    await fetchAndMergeEvents(); // Fetch data
+    renderEvents(); // Populate data
+    renderUpcomingSidebar(); // Populate sidebar
 }
 
-/**
- * Fetches all relevant events (holidays, exams, meetings) from the backend API.
- */
-async function fetchCalendarEvents() {
-    try {
-        // The API now handles the session ID fallback, so this call should succeed (200 OK)
-        const events = await fetchWithAuth(CALENDAR_API_URL);
-        console.log('Fetched Events:', events);
-        return events;
-    } catch (error) {
-        console.error('Failed to fetch calendar events:', error);
-        return [];
-    }
-}
+function renderGridStructure() {
+    if (!dom.grid || !dom.monthTitle) return;
 
-// =========================================================
-// 2. RENDERING LOGIC (With Role Filtering)
-// =========================================================
+    dom.grid.innerHTML = '';
 
-/**
- * Renders the calendar grid and the event list for the current month.
- */
-async function renderCalendar() {
-    // 1. Get User Role for Filtering (CRITICAL FOR my-school-calendar.html vs school-calendar.html)
-    const userRole = localStorage.getItem('erp-user-role'); 
-    
-    // Define which event types correspond to which user view
-    // The backend now returns 'exam' and 'general_event' types.
-    const studentEventTypes = ['exam', 'general_event']; // Student typically sees exams and academic/public holidays
-    
-    // 2. Clear existing content
-    const daysContainer = calendarGridContainer;
-    // Check if container is found (Should be fixed after HTML updates)
-    if (!daysContainer || !monthlyEventsUl) {
-        console.error("DOM elements for calendar rendering not found.");
-        return; 
-    }
-    
-    // Clear dynamically inserted day cells
-    const existingCells = daysContainer.querySelectorAll('.day-cell');
-    // Only remove cells *after* the 7 day-name headers (which are the first 7 children)
-    Array.from(daysContainer.children).slice(7).forEach(cell => cell.remove());
+    // Update Header
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    dom.monthTitle.innerText = `${monthNames[currentMonth]} ${currentYear}`;
 
-    monthlyEventsUl.innerHTML = '';
-
-    // 3. Determine Month Parameters
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth(); 
-    const monthName = currentDate.toLocaleString('default', { month: 'long' });
+    // Calendar Math
+    const firstDay = new Date(currentYear, currentMonth, 1).getDay();
+    const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
     const today = new Date();
 
-    // Set header
-    currentMonthYear.textContent = `${monthName} ${year}`;
-
-    const daysInMonth = new Date(year, month + 1, 0).getDate(); 
-    const firstDayIndex = new Date(year, month, 1).getDay(); 
-
-    // 4. Fetch All Events
-    const allEvents = await fetchCalendarEvents(); 
-
-    // 5. Filter Events Based on Role
-    let visibleEvents;
-    
-    if (userRole === 'Student') {
-        // Apply filter for students
-        visibleEvents = allEvents.filter(event => studentEventTypes.includes(event.type));
-    } else {
-        // Admin, Super Admin, Teacher, Coordinator, etc., see all events
-        visibleEvents = allEvents; 
+    // Render Empty Leading Cells
+    for (let i = 0; i < firstDay; i++) {
+        const empty = document.createElement('div');
+        empty.classList.add('day-cell', 'empty');
+        empty.style.backgroundColor = 'transparent'; // Visual cleanup
+        empty.style.border = 'none';
+        dom.grid.appendChild(empty);
     }
 
-    // 6. Map Events to a simple date key for quick lookup
-    const eventsByDate = {};
-    visibleEvents.forEach(event => { 
-        // NOTE: Uses new Date(event.date) to handle potential timestamp/string date formats
-        const dateKey = new Date(event.date).toISOString().split('T')[0];
-        if (!eventsByDate[dateKey]) {
-            eventsByDate[dateKey] = [];
-        }
-        eventsByDate[dateKey].push(event);
-    });
-
-    // 7. Create Empty Leading Cells
-    for (let i = 0; i < firstDayIndex; i++) {
-        const emptyCell = document.createElement('div');
-        emptyCell.classList.add('day-cell', 'empty');
-        daysContainer.appendChild(emptyCell);
-    }
-    
-    // 8. Create Day Cells and Inject Events
-    let totalEventsForMonth = 0;
+    // Render Actual Days
     for (let day = 1; day <= daysInMonth; day++) {
         const cell = document.createElement('div');
         cell.classList.add('day-cell');
         
-        const dateNumber = document.createElement('span');
-        dateNumber.textContent = day;
-        cell.appendChild(dateNumber);
-        
-        // Check if this day is today (only compare date, month, year)
-        const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
-        if (isToday) {
-            cell.classList.add('today-highlight'); // Use CSS class for complex styling
-            dateNumber.style.color = '#ff9800';
-            dateNumber.style.fontWeight = 'bold';
+        // Highlight Today
+        if (day === today.getDate() && currentMonth === today.getMonth() && currentYear === today.getFullYear()) {
+            cell.classList.add('today');
         }
-        
-        const dateKey = new Date(year, month, day).toISOString().split('T')[0];
-        
-        // Inject events for the current day
-        if (eventsByDate[dateKey]) {
-            eventsByDate[dateKey].forEach(event => {
-                const eventElement = document.createElement('div');
-                eventElement.classList.add('event', event.type); 
-                eventElement.title = event.title;
-                eventElement.textContent = event.title;
-                cell.appendChild(eventElement);
 
-                // Add to monthly summary list
-                const listItem = document.createElement('li');
-                listItem.textContent = `${day} ${monthName}: ${eventElement.title} (${event.type.replace('_', ' ')})`;
-                monthlyEventsUl.appendChild(listItem);
-                totalEventsForMonth++;
-            });
-        }
-        
-        daysContainer.appendChild(cell);
+        const numSpan = document.createElement('span');
+        numSpan.classList.add('day-number');
+        numSpan.innerText = day;
+        cell.appendChild(numSpan);
+
+        // Container for events
+        const eventContainer = document.createElement('div');
+        eventContainer.id = `day-${currentYear}-${currentMonth}-${day}`; // Unique ID for injection
+        cell.appendChild(eventContainer);
+
+        dom.grid.appendChild(cell);
     }
+}
+
+// =========================================================
+// 2. DATA FETCHING & MERGING
+// =========================================================
+
+function getOfficialHolidays(year) {
+    return [
+        { title: "New Year's Day", start_date: `${year}-01-01`, type: "holiday" },
+        { title: "Republic Day", start_date: `${year}-01-26`, type: "holiday" },
+        { title: "Netaji's Birthday", start_date: `${year}-01-23`, type: "holiday" },
+        { title: "May Day", start_date: `${year}-05-01`, type: "holiday" },
+        { title: "Independence Day", start_date: `${year}-08-15`, type: "holiday" },
+        { title: "Gandhi Jayanti", start_date: `${year}-10-02`, type: "holiday" },
+        { title: "Christmas", start_date: `${year}-12-25`, type: "holiday" }
+    ];
+}
+
+async function fetchAndMergeEvents() {
+    let dbEvents = [];
+    try {
+        const response = await window.authFetch('/api/calendar/events');
+        if (response.ok) {
+            dbEvents = await response.json();
+        }
+    } catch (e) {
+        console.warn("Using offline/local mode for events.");
+    }
+
+    const officialHolidays = getOfficialHolidays(currentYear);
     
-    if (totalEventsForMonth === 0) {
-        monthlyEventsUl.innerHTML = '<li>No major events scheduled this month.</li>';
-    }
+    // Merge and normalize dates
+    allEventsCache = [...officialHolidays, ...dbEvents].map(e => ({
+        ...e,
+        // Ensure date is treated locally (fix timezone issues)
+        start_date: e.start_date.split('T')[0] 
+    }));
 }
 
 // =========================================================
-// 3. EVENT HANDLERS
+// 3. RENDERING EVENTS
 // =========================================================
 
-/**
- * Changes the current month and re-renders the calendar.
- * @param {number} delta - +1 for next month, -1 for previous month.
- */
-function changeMonth(delta) {
-    currentDate.setMonth(currentDate.getMonth() + delta);
-    renderCalendar();
+function renderEvents() {
+    // Clear previously rendered pills
+    document.querySelectorAll('.event-pill').forEach(el => el.remove());
+
+    allEventsCache.forEach(event => {
+        // Filter Check
+        let typeKey = event.type.toLowerCase();
+        if(typeKey === 'general_event') typeKey = 'general'; // Normalize
+        
+        if (!activeFilters[typeKey]) return; // Skip if filter unchecked
+
+        const [eYear, eMonth, eDay] = event.start_date.split('-').map(Number);
+
+        // Check if event belongs to current view (Month is 0-indexed in JS, 1-indexed in Date string usually)
+        // Adjusting: eMonth is 1-12, currentMonth is 0-11
+        if (eYear === currentYear && (eMonth - 1) === currentMonth) {
+            const container = document.getElementById(`day-${currentYear}-${currentMonth}-${eDay}`);
+            
+            if (container) {
+                const pill = document.createElement('span');
+                
+                // Map types to CSS classes
+                let cssClass = 'event-general';
+                if(typeKey === 'exam') cssClass = 'event-exam';
+                if(typeKey === 'holiday') cssClass = 'event-holiday';
+                if(typeKey === 'meeting') cssClass = 'event-meeting';
+
+                pill.className = `event-pill ${cssClass}`;
+                pill.innerText = event.title;
+                pill.title = event.title;
+                
+                container.appendChild(pill);
+            }
+        }
+    });
+}
+
+function renderUpcomingSidebar() {
+    if (!dom.upcomingList) return;
+    dom.upcomingList.innerHTML = ''; // Clear
+
+    // Filter logic: Only future events
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    const upcoming = allEventsCache
+        .filter(e => e.start_date >= todayStr)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date))
+        .slice(0, 6); // Top 6
+
+    if (upcoming.length === 0) {
+        dom.upcomingList.innerHTML = '<li class="text-center text-muted py-4 small">No upcoming events found</li>';
+        return;
+    }
+
+    upcoming.forEach(e => {
+        const dateObj = new Date(e.start_date);
+        const day = dateObj.getDate();
+        const monthShort = dateObj.toLocaleString('default', { month: 'short' });
+        
+        // Colors
+        let color = '#0A84FF'; // Blue
+        if(e.type === 'exam') color = '#FF453A';
+        if(e.type === 'holiday') color = '#BF5AF2';
+        if(e.type === 'meeting') color = '#FF9F0A';
+
+        const li = document.createElement('li');
+        li.className = "event-list-item";
+        li.style.cursor = 'default';
+        li.innerHTML = `
+            <div class="event-date-box" style="border-left: 3px solid ${color}">
+                <span class="month-mini">${monthShort}</span>
+                <span class="date-mini">${day}</span>
+            </div>
+            <div style="flex:1; min-width:0;">
+                <div class="fw-bold text-truncate" style="font-size:0.9rem; color:var(--text-primary)">${e.title}</div>
+                <div class="small text-secondary" style="text-transform:capitalize;">${e.type.replace('_', ' ')}</div>
+            </div>
+        `;
+        dom.upcomingList.appendChild(li);
+    });
 }
 
 // =========================================================
-// 4. INITIALIZATION
+// 4. EVENT LISTENERS
 // =========================================================
 
-document.addEventListener('DOMContentLoaded', () => {
-    // 1. Initial Render
-    renderCalendar(); 
+function setupNavigation() {
+    if(dom.prevBtn) {
+        dom.prevBtn.addEventListener('click', () => {
+            currentMonth--;
+            if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+            reRender();
+        });
+    }
 
-    // 2. Set up Navigation Listeners
-    if (prevMonthButton) {
-        prevMonthButton.addEventListener('click', () => changeMonth(-1));
+    if(dom.nextBtn) {
+        dom.nextBtn.addEventListener('click', () => {
+            currentMonth++;
+            if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+            reRender();
+        });
     }
-    if (nextMonthButton) {
-        nextMonthButton.addEventListener('click', () => changeMonth(1));
-    }
-});
+}
+
+function setupFilters() {
+    // Map sidebar text to filter keys manually since structure is custom
+    const filterItems = document.querySelectorAll('.filter-item');
+    
+    // Order matches HTML: Exam, Holiday, Meeting, General
+    const keys = ['exam', 'holiday', 'meeting', 'general'];
+
+    filterItems.forEach((item, index) => {
+        const checkbox = item.querySelector('.filter-checkbox');
+        const key = keys[index];
+
+        item.addEventListener('click', () => {
+            // Toggle State
+            activeFilters[key] = !activeFilters[key];
+            
+            // Visual Toggle
+            if (activeFilters[key]) {
+                checkbox.style.backgroundColor = checkbox.style.borderColor; // Fill
+            } else {
+                checkbox.style.backgroundColor = 'transparent'; // Outline
+            }
+            
+            // Re-render Events only (no fetch needed)
+            renderEvents();
+        });
+    });
+}
+
+async function reRender() {
+    renderGridStructure();
+    // Re-fetch only if year changed (to get dynamic holidays)
+    await fetchAndMergeEvents(); 
+    renderEvents();
+}
+
+function setupAddEventForm() {
+    if (!dom.addEventForm) return;
+
+    dom.addEventForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = dom.addEventForm.querySelector('button[type="submit"]');
+        const originalText = btn.innerText;
+        btn.innerText = 'Saving...';
+        btn.disabled = true;
+
+        const inputs = dom.addEventForm.elements;
+        const payload = {
+            title: inputs[0].value, // Title input
+            start_date: inputs[1].value, // Date input
+            type: inputs[2].value // Select input
+        };
+
+        try {
+            const res = await window.authFetch('/api/calendar/events', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                // Hide Modal
+                const modalEl = document.getElementById('addEventModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+                
+                dom.addEventForm.reset();
+                await fetchAndMergeEvents(); // Reload data
+                renderEvents();
+                renderUpcomingSidebar();
+            } else {
+                alert("Failed to save event.");
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Error connecting to server.");
+        } finally {
+            btn.innerText = originalText;
+            btn.disabled = false;
+        }
+    });
+}
