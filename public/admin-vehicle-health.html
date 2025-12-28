@@ -2,43 +2,197 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Vehicle Health Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleet Health | ERP Portal</title>
+    <link rel="stylesheet" href="css/style.css">
     <style>
-        body { font-family: 'Poppins', sans-serif; background: #f1f5f9; padding: 30px; }
-        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; }
-        .health-card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #005A9C; }
-        .metric { font-size: 2em; font-weight: bold; color: #1e293b; margin: 10px 0; }
-        .label { color: #64748b; font-size: 0.9em; text-transform: uppercase; }
-        .status-alert { color: #dc2626; font-weight: bold; animation: blink 1s infinite; }
-        @keyframes blink { 50% { opacity: 0; } }
+        .health-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 25px;
+            margin-top: 20px;
+        }
+
+        /* Glass Health Card */
+        .health-card {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 24px;
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            overflow: hidden;
+        }
+
+        .health-card:hover {
+            transform: translateY(-10px);
+            background: rgba(255, 255, 255, 0.7);
+            box-shadow: var(--shadow-lg);
+        }
+
+        /* Accent bar matching Indian Flag Blue */
+        .health-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 6px; height: 100%;
+            background: var(--primary-dark);
+        }
+
+        .metric-value {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--primary-dark);
+            margin: 5px 0;
+            display: flex;
+            align-items: baseline;
+            gap: 5px;
+        }
+
+        .metric-unit {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .health-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1.2px;
+            color: var(--secondary-orange);
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        /* SOS Alert Style */
+        .sos-container {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(231, 76, 60, 0.1);
+            border: 1px dashed #e74c3c;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #c0392b;
+            font-weight: bold;
+            font-size: 0.8rem;
+            animation: pulse-red 2s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+
+        .efficiency-bar {
+            height: 6px;
+            background: rgba(0,0,0,0.05);
+            border-radius: 10px;
+            margin-top: 10px;
+            overflow: hidden;
+        }
+
+        .efficiency-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--secondary-orange), var(--secondary-green));
+            border-radius: 10px;
+        }
     </style>
 </head>
-<body>
-    <h2>🛠 Fleet Health & Efficiency</h2>
-    <div class="grid" id="health-grid">
+<body class="container-fluid">
+
+    <nav class="glass-nav mb-4">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="" class="global-school-logo" height="40" alt="Logo">
+            <div>
+                <h2 class="global-school-name" style="margin:0; font-size: 1.1rem; color: var(--primary-dark);">ERP System</h2>
+                <div class="badge badge-success" style="font-size: 0.6rem;">MAINTENANCE ENGINE v3.0</div>
+            </div>
+        </div>
+        <div class="nav-links">
+            <a href="manage-transport.html" class="btn btn-outline-primary">← Dashboard</a>
+        </div>
+    </nav>
+
+    <div class="container" style="max-width: 1300px;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+            <h2 style="color: var(--primary-dark); font-weight: 800; margin-bottom: 25px;">
+                <i class="fas fa-microchip" style="color: var(--secondary-orange); margin-right: 10px;"></i>
+                Vehicle Diagnostics
+            </h2>
+            <div class="text-muted" style="font-size: 0.8rem;">
+                <i class="fas fa-sync-alt fa-spin"></i> Real-time Telematics Active
+            </div>
         </div>
 
+        <div class="health-grid" id="health-grid">
+            <div class="skeleton" style="height: 250px; border-radius: 20px;"></div>
+            <div class="skeleton" style="height: 250px; border-radius: 20px;"></div>
+            <div class="skeleton" style="height: 250px; border-radius: 20px;"></div>
+        </div>
+    </div>
+
+    <div id="bg-text-pattern" style="position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1; pointer-events:none;"></div>
+
+    <script src="js/global-config.js"></script>
     <script>
         async function loadHealth() {
-            const token = localStorage.getItem('erp-token');
-            const res = await fetch('/api/transport/admin/vehicle-health', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            
-            const grid = document.getElementById('health-grid');
-            grid.innerHTML = data.map(v => `
-                <div class="health-card">
-                    <div class="label">${v.model}</div>
-                    <h3 style="margin:5px 0;">${v.vehicle_number}</h3>
-                    <div class="label">Average Mileage</div>
-                    <div class="metric">${v.avg_kmpl || 'N/A'} <span style="font-size:0.5em;">KM/L</span></div>
-                    <div class="label">Current Odometer</div>
-                    <p>${v.current_km || 0} KM</p>
-                    ${v.last_sos_status === 'Active' ? '<div class="status-alert">⚠️ EMERGENCY ACTIVE</div>' : ''}
-                </div>
-            `).join('');
+            try {
+                // Using window.authFetch for unified security
+                const res = await window.authFetch('/api/transport/admin/vehicle-health');
+                const data = await res.json();
+                
+                const grid = document.getElementById('health-grid');
+                
+                grid.innerHTML = data.map(v => {
+                    // Logic to calculate efficiency width (assuming 20 KM/L is max for a bus)
+                    const efficiency = Math.min((parseFloat(v.avg_kmpl) / 20) * 100, 100) || 0;
+
+                    return `
+                        <div class="health-card">
+                            <div style="display:flex; justify-content:space-between; align-items:start;">
+                                <div>
+                                    <div class="health-label">${v.model || 'Commercial Vehicle'}</div>
+                                    <h3 style="margin:0; color: var(--primary-dark); font-weight:800;">${v.vehicle_number}</h3>
+                                </div>
+                                <i class="fas fa-bus-alt" style="font-size: 1.5rem; opacity: 0.1;"></i>
+                            </div>
+
+                            <div style="margin-top: 25px;">
+                                <div class="health-label" style="color: var(--text-muted); font-size: 0.65rem;">Efficiency Rating</div>
+                                <div class="metric-value">
+                                    ${v.avg_kmpl || '0.0'} <span class="metric-unit">KM/L</span>
+                                </div>
+                                <div class="efficiency-bar">
+                                    <div class="efficiency-fill" style="width: ${efficiency}%"></div>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <div class="health-label" style="font-size:0.6rem; color:var(--text-muted);">Current Odometer</div>
+                                    <div style="font-weight:700; color: var(--primary-dark);">${parseFloat(v.current_km).toLocaleString()} KM</div>
+                                </div>
+                                <button class="btn btn-sm" style="background: rgba(0,0,0,0.05); font-size:0.6rem;">Service History</button>
+                            </div>
+
+                            ${v.last_sos_status === 'Active' ? `
+                                <div class="sos-container">
+                                    <i class="fas fa-exclamation-triangle"></i>
+                                    CRITICAL SOS ALERT: ENGINE FAULT DETECTED
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch (err) {
+                console.error("Health Sync Error:", err);
+                document.getElementById('health-grid').innerHTML = '<div class="glass-card text-center w-100 py-5">⚠️ Unable to connect to Vehicle Telematics.</div>';
+            }
         }
+
         window.onload = loadHealth;
     </script>
 </body>

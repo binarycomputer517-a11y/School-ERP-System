@@ -2,187 +2,147 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Assign Student to Transport</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Student | Transport ERP</title>
+    <link rel="stylesheet" href="css/style.css"> 
     <style>
-        /* --- CLASSIC DESIGN STYLES --- */
-        body { 
-            font-family: 'Times New Roman', serif; 
-            margin: 0; padding: 2em; 
-            background-color: #F8F8F8; 
-            color: #333; 
+        /* Essential overrides for this specific page layout */
+        .page-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 100px);
+            padding: 20px;
         }
-        .container { 
-            max-width: 800px; margin: auto; padding: 30px; 
-            background-color: #FFFFFF; 
-            border: 2px solid #333; 
-            box-shadow: 6px 6px 0 #AAA; 
-            border-radius: 0; 
-        }
-        h1 { 
-            color: #C0392B; font-weight: bold; text-transform: uppercase; text-align: center; 
-            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; 
-            font-size: 2.2em;
-        }
-        .nav-links {
-            margin-bottom: 20px;
-            text-align: center;
-        }
-        .nav-links a {
-            color: #005A9C;
-            text-decoration: none;
-            font-weight: bold;
-        }
-        
-        /* Form Styles */
-        #assign-form {
+        .form-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 20px;
-            padding: 20px;
-            border: 1px solid #CCC;
-            background-color: #F8F8F8;
         }
-        #assign-form label {
-            display: block;
-            font-weight: bold;
-            margin-bottom: 5px;
-            grid-column: span 2;
+        @media (max-width: 600px) {
+            .form-grid { grid-template-columns: 1fr; }
         }
-        #assign-form select, #assign-form input[type="text"] {
-            padding: 10px;
-            border: 1px solid #555;
-            box-sizing: border-box;
-            width: 100%;
-            border-radius: 0;
+        .fee-display {
             grid-column: span 2;
-        }
-        
-        /* Helper class for feedback messages */
-        .status-message {
-            grid-column: span 2;
-            padding: 10px;
+            background: rgba(0, 90, 156, 0.05);
+            border-radius: 12px;
+            padding: 15px;
             text-align: center;
-            font-weight: bold;
-            display: none;
-        }
-        .error { color: #D32F2F; border: 1px solid #D32F2F; background: #FFEBEE; }
-        .success { color: #388E3C; border: 1px solid #388E3C; background: #E8F5E9; }
-
-        button[type="submit"] {
-            grid-column: 1 / 3;
-            background-color: #005A9C; 
-            color: white; 
-            padding: 12px 15px; 
-            border: 2px solid #000; 
-            border-radius: 0; 
-            cursor: pointer; 
-            margin-top: 15px; 
-            box-shadow: 2px 2px 0 #000;
-            font-weight: bold;
-            font-size: 1.1em;
-        }
-        button[type="submit"]:hover {
-            background-color: #003366;
-            box-shadow: 1px 1px 0 #000;
+            border: 1px dashed var(--primary-dark);
+            margin: 10px 0;
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h1>Assign Student to a Route</h1>
-    <div class="nav-links"><a href="manage-transport.html">← Back to Transport Management</a></div>
-    
-    <div id="status-box" class="status-message"></div>
+<nav class="glass-nav">
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <img src="" class="global-school-logo" height="40" alt="Logo">
+        <h2 class="global-school-name" style="margin:0; font-size: 1.2rem; color: var(--primary-dark);">ERP System</h2>
+    </div>
+    <div class="nav-links">
+        <a href="manage-transport.html" class="btn btn-primary" style="padding: 8px 20px;">
+            <span>←</span> Back
+        </a>
+    </div>
+</nav>
 
-    <form id="assign-form">
-        <label for="student-select">Select Student:</label>
-        <select id="student-select" name="student_id" required>
-            <option value="">Loading students...</option>
-        </select>
+<div class="page-wrapper">
+    <div class="container" style="max-width: 700px; width: 100%;">
         
-        <label for="route-select">Select Route:</label>
-        <select id="route-select" name="route_id" required>
-            <option value="">Loading routes...</option>
-        </select>
-        
-        <label for="boarding_stop">Boarding Stop Name:</label>
-        <input type="text" id="boarding_stop" name="boarding_stop" placeholder="e.g., Main Gate" required>
-        
-        <label for="dropping_stop">Dropping Stop Name:</label>
-        <input type="text" id="dropping_stop" name="dropping_stop" placeholder="e.g., City Center Stop" required>
-        
-        <input type="hidden" id="monthly_fee" name="monthly_fee" value="0">
+        <div class="glass-card">
+            <h1 style="text-align: center; color: var(--primary-dark); margin-bottom: 30px; font-size: 1.8rem;">
+                Transport Enrollment
+            </h1>
+            
+            <div id="status-box" class="status-message mb-3"></div>
 
-        <button type="submit">Assign to Route</button>
-    </form>
+            <form id="assign-form" class="form-grid">
+                
+                <div style="grid-column: span 2;">
+                    <label for="student-select">Select Student</label>
+                    <select id="student-select" class="form-control" name="student_id" required>
+                        <option value="">Loading students...</option>
+                    </select>
+                </div>
+                
+                <div style="grid-column: span 2;">
+                    <label for="route-select">Assigned Route</label>
+                    <select id="route-select" class="form-control" name="route_id" required>
+                        <option value="">Loading routes...</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label for="boarding_stop">Boarding Point</label>
+                    <input type="text" id="boarding_stop" class="form-control" name="boarding_stop" placeholder="Pick-up location" required>
+                </div>
+                
+                <div>
+                    <label for="dropping_stop">Dropping Point</label>
+                    <input type="text" id="dropping_stop" class="form-control" name="dropping_stop" placeholder="Drop-off location" required>
+                </div>
+
+                <div class="fee-display">
+                    <span class="stat-label">Monthly Transport Fee</span>
+                    <div class="stat-value" id="fee-visual">₹0.00</div>
+                    <input type="hidden" id="monthly_fee" name="monthly_fee" value="0">
+                </div>
+
+                <button type="submit" class="btn btn-primary" style="grid-column: span 2; justify-content: center; width: 100%;">
+                    Assign to Route
+                </button>
+            </form>
+        </div>
+    </div>
 </div>
 
+<div id="bg-text-pattern" style="position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1;"></div>
+
+<script src="js/global-config.js"></script>
 <script>
-    // FIX 1: Use 'erp-token' instead of 'token' to match your dashboard
-    const token = localStorage.getItem('erp-token'); 
+    /** * NOTE: We are now using window.authFetch (from global-config.js) 
+     * to handle tokens and base URLs automatically.
+     */
     
-    // Redirect if no token
-    if (!token) { 
-        console.error("No token found. Redirecting to login.");
-        window.location.href = 'index.html'; 
-    }
-
-    const authHeaders = { 
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-    };
-
-    // --- 1. Populate Dropdowns ---
     async function populateDropdowns() {
         const studentSelect = document.getElementById('student-select');
         const routeSelect = document.getElementById('route-select');
         
         try {
-            const [students, routes] = await Promise.all([
-                fetch('/api/transport/candidates', { headers: authHeaders }).then(res => {
-                    if(!res.ok) throw new Error("Failed to fetch students");
-                    return res.json();
-                }),
-                fetch('/api/transport/routes', { headers: authHeaders }).then(res => {
-                    if(!res.ok) throw new Error("Failed to fetch routes");
-                    return res.json();
-                })
+            // Using your new global fetch helper
+            const [studentRes, routeRes] = await Promise.all([
+                window.authFetch('/api/transport/candidates'),
+                window.authFetch('/api/transport/routes')
             ]);
             
-            // Populate Students
-            if (students.length === 0) {
-                studentSelect.innerHTML = '<option value="">No students found</option>';
-            } else {
-                studentSelect.innerHTML = '<option value="">-- Select a Student --</option>' + 
-                students.map(s => {
-                    return `<option value="${s.student_id}">${s.first_name} ${s.last_name} (Roll: ${s.roll_number || 'N/A'})</option>`;
-                }).join('');
-            }
+            const students = await studentRes.json();
+            const routes = await routeRes.json();
+            
+            studentSelect.innerHTML = '<option value="">-- Search Student --</option>' + 
+                students.map(s => `<option value="${s.student_id}">${s.first_name} ${s.last_name} (Roll: ${s.roll_number || 'N/A'})</option>`).join('');
 
-            // Populate Routes
-            routeSelect.innerHTML = '<option value="">-- Select a Route --</option>' + 
-                routes.map(r => `<option value="${r.id}" data-fee="${r.monthly_fee}">${r.route_name} (Fee: ₹${r.monthly_fee || 0})</option>`).join('');
+            routeSelect.innerHTML = '<option value="">-- Choose Route --</option>' + 
+                routes.map(r => `<option value="${r.id}" data-fee="${r.monthly_fee}">${r.route_name}</option>`).join('');
             
         } catch(err) {
-            console.error(err);
-            showStatus('Failed to load data. Ensure server is running and you are logged in.', 'error');
+            showStatus('Failed to sync with server.', 'error');
         }
     }
 
-    // --- 2. Handle Route Fee Logic ---
+    // Update Fee Display using the global window.formatCurrency helper
     document.getElementById('route-select').addEventListener('change', function() {
-        const selectedOption = this.options[this.selectedIndex];
-        const fee = selectedOption.getAttribute('data-fee') || 0;
+        const selected = this.options[this.selectedIndex];
+        const fee = selected.getAttribute('data-fee') || 0;
         document.getElementById('monthly_fee').value = fee;
+        
+        const display = document.getElementById('fee-visual');
+        display.innerText = window.formatCurrency ? window.formatCurrency(fee) : `₹${fee}`;
     });
 
-    // --- 3. Handle Form Submit ---
     document.getElementById('assign-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-        const statusBox = document.getElementById('status-box');
-        statusBox.style.display = 'none';
-
+        
         const formData = {
             student_id: document.getElementById('student-select').value,
             route_id: document.getElementById('route-select').value,
@@ -192,21 +152,17 @@
         };
 
         try {
-            const response = await fetch('/api/transport/assign', {
+            const response = await window.authFetch('/api/transport/assign', {
                 method: 'POST',
-                headers: authHeaders,
                 body: JSON.stringify(formData)
             });
 
-            const result = await response.json();
-
             if (response.ok) {
                 showStatus('Assignment Successful!', 'success');
-                setTimeout(() => {
-                    window.location.href = 'manage-transport.html'; // FIX: Redirect to manage-transport
-                }, 1500);
+                setTimeout(() => window.location.href = 'manage-transport.html', 1500);
             } else {
-                throw new Error(result.message || 'Assignment failed');
+                const res = await response.json();
+                throw new Error(res.message || 'Error processing request');
             }
         } catch (err) {
              showStatus(err.message, 'error');
@@ -216,13 +172,12 @@
     function showStatus(msg, type) {
         const el = document.getElementById('status-box');
         el.textContent = msg;
-        el.className = `status-message ${type}`;
+        // Map types to your new badge classes
+        el.className = `status-message badge ${type === 'success' ? 'badge-success' : 'badge-danger'}`;
         el.style.display = 'block';
     }
 
-    // Initialize
     window.onload = populateDropdowns;
 </script>
-<script src="js/global-config.js"></script>
 </body>
 </html>

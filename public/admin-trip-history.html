@@ -2,71 +2,207 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Trip & Fuel History | Admin Console</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fuel Analytics | ERP Portal</title>
+    <link rel="stylesheet" href="css/style.css">
     <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #f8fafc; padding: 30px; }
-        .container { max-width: 1100px; margin: auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-        h2 { color: #1e293b; border-bottom: 2px solid #f1f5f9; padding-bottom: 15px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { text-align: left; padding: 12px; border-bottom: 1px solid #edf2f7; }
-        th { background: #f8fafc; color: #64748b; font-size: 0.85em; text-transform: uppercase; }
-        .badge { padding: 4px 8px; border-radius: 4px; font-size: 0.8em; font-weight: bold; }
-        .badge-fuel { background: #dcfce7; color: #166534; }
-        .location-link { color: #005A9C; text-decoration: none; font-size: 0.9em; }
+        .history-card {
+            margin-top: 20px;
+            overflow: hidden;
+        }
+
+        /* Glass Table Styling */
+        .glass-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0 8px; /* Creates the "floating row" look */
+        }
+
+        .glass-table th {
+            padding: 15px;
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border: none;
+        }
+
+        .glass-table tbody tr {
+            background: rgba(255, 255, 255, 0.5);
+            transition: all 0.3s ease;
+        }
+
+        .glass-table tbody tr:hover {
+            background: white;
+            transform: scale(1.005);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .glass-table td {
+            padding: 18px 15px;
+            border-top: 1px solid var(--glass-border);
+            border-bottom: 1px solid var(--glass-border);
+            color: var(--primary-dark);
+            font-size: 0.9rem;
+        }
+
+        .glass-table td:first-child { border-left: 1px solid var(--glass-border); border-radius: 12px 0 0 12px; }
+        .glass-table td:last-child { border-right: 1px solid var(--glass-border); border-radius: 0 12px 12px 0; }
+
+        /* Icon Badges */
+        .fuel-icon {
+            color: var(--secondary-green);
+            background: rgba(19, 136, 8, 0.1);
+            padding: 8px;
+            border-radius: 8px;
+            margin-right: 8px;
+        }
+
+        .map-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            padding: 6px 12px;
+            background: var(--primary-dark);
+            color: white !important;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            text-decoration: none;
+            transition: 0.3s;
+        }
+
+        .map-btn:hover {
+            background: var(--secondary-orange);
+            box-shadow: 0 4px 10px rgba(255, 153, 51, 0.3);
+        }
+
+        .search-bar {
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--glass-border);
+            padding: 10px 20px;
+            border-radius: 50px;
+            width: 300px;
+        }
     </style>
 </head>
-<body>
+<body class="container-fluid">
 
-<div class="container">
-    <h2>🚚 Trip & Fuel Consumption Log</h2>
-    <table>
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Vehicle</th>
-                <th>Driver</th>
-                <th>Odometer (KM)</th>
-                <th>Fuel (L)</th>
-                <th>Cost (₹)</th>
-                <th>Last Location</th>
-            </tr>
-        </thead>
-        <tbody id="history-table">
-            </tbody>
-    </table>
-</div>
+    <nav class="glass-nav mb-4">
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <img src="" class="global-school-logo" height="40" alt="Logo">
+            <div>
+                <h2 class="global-school-name" style="margin:0; font-size: 1.1rem; color: var(--primary-dark);">ERP System</h2>
+                <div class="badge badge-warning" style="font-size: 0.6rem;">ADMIN CONSOLE: LOGS</div>
+            </div>
+        </div>
+        <div class="nav-links">
+            <a href="manage-transport.html" class="btn btn-primary">← Dashboard</a>
+        </div>
+    </nav>
 
-<script>
-    async function loadHistory() {
-        const token = localStorage.getItem('erp-token');
-        try {
-            const res = await fetch('/api/transport/admin/trip-history', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const data = await res.json();
-            
-            const tbody = document.getElementById('history-table');
-            tbody.innerHTML = data.map(log => `
-                <tr>
-                    <td>${new Date(log.log_date).toLocaleDateString()}</td>
-                    <td><strong>${log.vehicle_number}</strong></td>
-                    <td>${log.driver_name}</td>
-                    <td>${log.odometer}</td>
-                    <td><span class="badge badge-fuel">${log.quantity} L</span></td>
-                    <td>₹${log.total_cost}</td>
-                    <td>
-                        <a class="location-link" target="_blank" 
-                           href="https://www.google.com/maps?q=${log.last_lat},${log.last_lon}">
-                           View Map
-                        </a>
-                    </td>
-                </tr>
-            `).join('');
-        } catch (err) {
-            console.error("Load Error:", err);
+    <div class="container" style="max-width: 1200px;">
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+            <h2 style="color: var(--primary-dark); font-weight: 800; margin: 0;">
+                <i class="fas fa-gas-pump" style="color: var(--secondary-orange);"></i> Trip & Fuel Log
+            </h2>
+            <input type="text" id="logSearch" class="search-bar" placeholder="Filter by vehicle or driver...">
+        </div>
+
+        <div class="glass-card history-card">
+            <div style="overflow-x: auto;">
+                <table class="glass-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Vehicle Details</th>
+                            <th>Driver</th>
+                            <th>Odometer</th>
+                            <th>Fuel Consumption</th>
+                            <th>Expenditure</th>
+                            <th>Location Tracking</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-table">
+                        <tr><td colspan="7"><div class="skeleton" style="height: 60px;"></div></td></tr>
+                        <tr><td colspan="7"><div class="skeleton" style="height: 60px;"></div></td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="bg-text-pattern" style="position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1; pointer-events:none;"></div>
+
+    <script src="js/global-config.js"></script>
+    <script>
+        async function loadHistory() {
+            try {
+                // Using authFetch for token management
+                const res = await window.authFetch('/api/transport/admin/trip-history');
+                const data = await res.json();
+                
+                const tbody = document.getElementById('history-table');
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center py-5">No history logs found.</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(log => `
+                    <tr>
+                        <td>
+                            <div style="font-weight:700;">${new Date(log.log_date).toLocaleDateString('en-IN', {day: '2-digit', month: 'short'})}</div>
+                            <small class="text-muted">${new Date(log.log_date).getFullYear()}</small>
+                        </td>
+                        <td>
+                            <div style="color: var(--primary-dark); font-weight: 800;">${log.vehicle_number}</div>
+                            <small style="color: var(--secondary-orange); font-weight:600;">BUS-ID: ${log.id}</small>
+                        </td>
+                        <td>
+                            <div style="display:flex; align-items:center; gap:8px;">
+                                <i class="fas fa-user-circle" style="opacity:0.3;"></i>
+                                ${log.driver_name}
+                            </div>
+                        </td>
+                        <td>
+                            <span style="font-family: monospace; font-weight: bold;">${log.odometer.toLocaleString()} <small>KM</small></span>
+                        </td>
+                        <td>
+                            <div style="display:flex; align-items:center;">
+                                <i class="fas fa-tint fuel-icon"></i>
+                                <strong>${log.quantity} <small>Ltr</small></strong>
+                            </div>
+                        </td>
+                        <td>
+                            <span class="badge" style="background: rgba(0,0,0,0.05); color: var(--primary-dark); font-size: 0.9rem;">
+                                ₹${parseFloat(log.total_cost).toLocaleString('en-IN')}
+                            </span>
+                        </td>
+                        <td>
+                            <a class="map-btn" target="_blank" 
+                               href="https://www.google.com/maps?q=${log.last_lat},${log.last_lon}">
+                               <i class="fas fa-map-marker-alt"></i> Trace
+                            </a>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Load Error:", err);
+                document.getElementById('history-table').innerHTML = '<tr><td colspan="7" class="text-center text-danger">Failed to sync history data.</td></tr>';
+            }
         }
-    }
-    window.onload = loadHistory;
-</script>
+
+        // Search Filter Logic
+        document.getElementById('logSearch').addEventListener('input', function(e) {
+            const term = e.target.value.toLowerCase();
+            const rows = document.querySelectorAll('#history-table tr');
+            rows.forEach(row => {
+                const text = row.innerText.toLowerCase();
+                row.style.display = text.includes(term) ? '' : 'none';
+            });
+        });
+
+        window.onload = loadHistory;
+    </script>
 </body>
 </html>

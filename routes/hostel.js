@@ -144,10 +144,16 @@ router.delete('/rooms/:id', authenticateToken, authorize(HOSTEL_ADMIN_ROLES), as
 // 2. Student Allocation 
 // =================================================================
 
+/**
+ * POST /api/hostel/allocate
+ * Handles assigning a student to a room and managing occupancy logic
+ */
 router.post('/allocate', authenticateToken, authorize(HOSTEL_ADMIN_ROLES), async (req, res) => {
     const { student_id, room_id } = req.body;
     
-    if (!student_id || student_id === 'undefined' || student_id === '' || !room_id || room_id === 'undefined' || room_id === '') {
+    // 1. Data Validation (Check for empty values or 'undefined' strings)
+    if (!student_id || student_id === 'undefined' || student_id === '' || 
+        !room_id || room_id === 'undefined' || room_id === '') {
         return res.status(400).json({ message: 'Valid Student ID and Room ID are required for allocation.' });
     }
 
@@ -155,71 +161,102 @@ router.post('/allocate', authenticateToken, authorize(HOSTEL_ADMIN_ROLES), async
     try {
         await client.query('BEGIN');
         
-        // Fetch existing allocation
-        const oldAllocationResult = await client.query(`SELECT room_id FROM ${ALLOCATION_TABLE} WHERE student_id = $1`, [student_id]);
+        // 2. Check if student is already allocated elsewhere
+        const oldAllocationResult = await client.query(
+            `SELECT room_id FROM hostel_allocations WHERE student_id = $1`, 
+            [student_id]
+        );
         const old_room_id = oldAllocationResult.rows.length > 0 ? oldAllocationResult.rows[0].room_id : null;
         
-        if (old_room_id && old_room_id.toString() === room_id.toString()) {
+        // Prevent re-allocation to the same room
+        if (old_room_id && old_room_id === room_id) {
             await client.query('ROLLBACK');
             return res.status(400).json({ message: 'Student is already allocated to this room.' });
         }
 
-        // Check new room capacity
-        const newRoomResult = await client.query(`SELECT capacity, current_occupancy FROM ${ROOMS_TABLE} WHERE id = $1 FOR UPDATE`, [room_id]);
+        // 3. Verify new room capacity and existence
+        const newRoomResult = await client.query(
+            `SELECT capacity, current_occupancy FROM rooms WHERE id = $1 FOR UPDATE`, 
+            [room_id]
+        );
+
         if (newRoomResult.rows.length === 0) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Room not found.' });
-        }
-        if (newRoomResult.rows[0].current_occupancy >= newRoomResult.rows[0].capacity) {
-            await client.query('ROLLBACK');
-            return res.status(400).json({ message: 'New room is full.' });
+            return res.status(404).json({ message: 'Selected room not found.' });
         }
 
-        // 1. If student was previously allocated, decrement old room's occupancy
+        const { capacity, current_occupancy } = newRoomResult.rows[0];
+        if (current_occupancy >= capacity) {
+            await client.query('ROLLBACK');
+            return res.status(400).json({ message: 'The selected room is already at full capacity.' });
+        }
+
+        // 4. If student is moving rooms, decrement the old room's occupancy
         if (old_room_id) {
-            await client.query(`UPDATE ${ROOMS_TABLE} SET current_occupancy = current_occupancy - 1 WHERE id = $1 AND current_occupancy > 0`, [old_room_id]);
+            await client.query(
+                `UPDATE rooms SET current_occupancy = current_occupancy - 1 
+                 WHERE id = $1 AND current_occupancy > 0`, 
+                [old_room_id]
+            );
         }
         
-        // 2. Insert or Update the allocation record
-        await client.query(`INSERT INTO ${ALLOCATION_TABLE} (student_id, room_id) VALUES ($1, $2) ON CONFLICT (student_id) DO UPDATE SET room_id = EXCLUDED.room_id`, [student_id, room_id]);
+        // 5. Upsert Allocation (Insert new or update existing student record)
+        await client.query(
+            `INSERT INTO hostel_allocations (student_id, room_id, allocation_date) 
+             VALUES ($1, $2, CURRENT_DATE) 
+             ON CONFLICT (student_id) 
+             DO UPDATE SET room_id = EXCLUDED.room_id, allocation_date = CURRENT_DATE`, 
+            [student_id, room_id]
+        );
         
-        // 3. Increment the new room's occupancy
-        await client.query(`UPDATE ${ROOMS_TABLE} SET current_occupancy = current_occupancy + 1 WHERE id = $1`, [room_id]);
+        // 6. Increment new room occupancy
+        await client.query(
+            `UPDATE rooms SET current_occupancy = current_occupancy + 1 WHERE id = $1`, 
+            [room_id]
+        );
         
         await client.query('COMMIT');
         res.status(200).json({ message: 'Student allocation updated successfully' });
+
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Allocation Error:', err);
         
-        if (err.code === '23503') { 
-            return res.status(400).json({ message: 'Invalid Student ID or Room ID.' });
+        if (err.code === '23503') { // Database Foreign Key Violation
+            return res.status(400).json({ message: 'Database Error: Invalid Student or Room reference.' });
         }
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error during allocation processing.' });
     } finally {
         client.release();
     }
 });
 
+// Get all current allocations with student and room details
 router.get('/allocations', authenticateToken, authorize(HOSTEL_ADMIN_ROLES), async (req, res) => {
     try {
         const query = `
-            SELECT (s.first_name || ' ' || s.last_name) as student_name, s.id as student_id,
-                   h.hostel_name, r.room_number, r.id as room_id
-            FROM ${ALLOCATION_TABLE} ha
-            JOIN ${STUDENTS_TABLE} s ON ha.student_id = s.id
-            JOIN ${ROOMS_TABLE} r ON ha.room_id = r.id
-            JOIN ${HOSTELS_TABLE} h ON r.hostel_id = h.id
-            ORDER BY h.hostel_name, r.room_number, student_name;
+            SELECT 
+                u.full_name AS student_name, 
+                u.username AS student_reg_no,
+                u.id AS student_id,
+                h.hostel_name, 
+                r.room_number, 
+                r.id AS room_id,
+                ha.allocation_date
+            FROM hostel_allocations ha
+            JOIN users u ON ha.student_id = u.id
+            JOIN rooms r ON ha.room_id = r.id
+            JOIN hostels h ON r.hostel_id = h.id
+            WHERE u.deleted_at IS NULL
+            ORDER BY h.hostel_name, r.room_number, u.full_name;
         `;
         const result = await pool.query(query);
         res.status(200).json(result.rows);
     } catch (err) {
         console.error("Error fetching hostel allocations:", err);
-        res.status(500).json({ message: 'Server error' });
+        res.status(500).json({ message: 'Server error while fetching allocations' });
     }
 });
-
 // =================================================================
 // 3. Gate Pass Management 
 // =================================================================
