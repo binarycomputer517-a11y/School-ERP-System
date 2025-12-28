@@ -1,5 +1,3 @@
-// routes/timetable.js
-
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
@@ -7,298 +5,230 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 
 const TIMETABLE_TABLE = 'class_timetable';
 
-// --- Day Mapping for Database Insertion/Sorting ---
-const daysMap = {
-    'Monday': 1, 'Tuesday': 2, 'Wednesday': 3, 'Thursday': 4,
-    'Friday': 5, 'Saturday': 6, 'Sunday': 7
-};
-
-// --- Role Definitions ---
-const MANAGER_ROLES = ['Super Admin', 'Admin', 'Teacher'];
-const VIEW_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Student', 'Parent'];
-
-
 // =========================================================
-// Helpers
+// 1. Teacher's Personal View
 // =========================================================
-
-function getDayAsNumber(dayStringOrNumber) {
-    if (typeof dayStringOrNumber === 'number' && dayStringOrNumber >= 1 && dayStringOrNumber <= 7) {
-        return dayStringOrNumber;
-    }
-    return daysMap[dayStringOrNumber] || null;
-}
-
-// Basic UUID/ID Validation
-function isValidId(id) {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    // Allowing numeric IDs as well, as per previous assumption, though UUID is preferred
-    return uuidRegex.test(id) || (!isNaN(parseInt(id)) && isFinite(id)); 
-}
-
-
-// =========================================================
-// 2. Student View Endpoint
-// =========================================================
-
-/**
- * @route   GET /api/timetable/student/me
- * @desc    Get the timetable for the logged-in student.
- * @access  Private (Student, Admin, Parent)
- */
-router.get('/student/me', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
-    const studentUserId = req.user.id; // User's UUID from the JWT
+router.get('/teacher/me', authenticateToken, authorize(['Teacher', 'Admin', 'Super Admin']), async (req, res) => {
+    const userId = req.user.id; 
 
     try {
-        const studentInfoQuery = `
-            SELECT course_id, batch_id 
-            FROM students 
-            WHERE user_id = $1
-            LIMIT 1
-        `;
-        const studentInfoResult = await pool.query(studentInfoQuery, [studentUserId]);
+        const teacherProfile = await pool.query(
+            'SELECT id FROM teachers WHERE user_id = $1 LIMIT 1', 
+            [userId]
+        );
         
-        if (studentInfoResult.rowCount === 0) {
-            return res.status(404).json({ message: 'Student profile not found or user association is missing.' });
+        if (teacherProfile.rowCount === 0) {
+            return res.status(404).json({ message: 'Teacher profile not linked to this user account.' });
         }
-        const { course_id, batch_id } = studentInfoResult.rows[0];
-        
-        const detailedQuery = `
-            SELECT 
-                ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
-                s.subject_name, s.subject_code,
-                COALESCE(t.full_name, u.username) AS teacher_name,
-                t.id AS teacher_reference_id
+
+        const teacherId = teacherProfile.rows[0].id;
+
+        const result = await pool.query(`
+            SELECT ct.*, s.subject_name, c.course_name, b.batch_name
             FROM ${TIMETABLE_TABLE} ct
             JOIN subjects s ON ct.subject_id = s.id
-            LEFT JOIN teachers t ON ct.teacher_id = t.id
-            LEFT JOIN users u ON t.user_id = u.id
-            WHERE ct.course_id = $1 AND ct.batch_id = $2 AND ct.is_active = TRUE
-            ORDER BY ct.day_of_week, ct.start_time ASC;
-        `;
-        const result = await pool.query(detailedQuery, [course_id, batch_id]);
-        
-        res.status(200).json(result.rows);
-
-    } catch (error) {
-        console.error('Student Timetable Fetch Error:', error);
-        res.status(500).json({ message: 'Internal Server Error: Failed to retrieve student timetable.' });
-    }
-});
-
-
-// =========================================================
-// 3. Teacher View Endpoint (MOVED UP FOR SAFE ROUTING)
-// =========================================================
-
-/**
- * @route   GET /api/timetable/teacher/me
- * @desc    Get the assigned weekly timetable for the logged-in teacher.
- * @access  Private (Teacher)
- */
-router.get('/teacher/me', authenticateToken, authorize(['Teacher']), async (req, res) => {
-    const teacherUserId = req.user.id; // User's UUID from the JWT
-
-    try {
-        // Step 1: Find the teacher's internal ID (t.id) using the User ID (u.id)
-        const teacherIdQuery = `
-            SELECT t.id 
-            FROM teachers t
-            WHERE t.user_id = $1
-            LIMIT 1;
-        `;
-        const teacherIdResult = await pool.query(teacherIdQuery, [teacherUserId]);
-        
-        if (teacherIdResult.rowCount === 0) {
-            // Returning 404 here, which is expected if the teacher has no profile
-            return res.status(404).json({ message: 'Teacher profile not found or user association is missing.' });
-        }
-        
-        const teacherReferenceId = teacherIdResult.rows[0].id;
-        
-        // Step 2: Fetch timetable slots assigned to this teacher reference ID
-        const timetableQuery = `
-            SELECT 
-                ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
-                s.subject_name, s.subject_code,
-                c.course_name, b.batch_name
-            FROM ${TIMETABLE_TABLE} ct
-            JOIN subjects s ON ct.subject_id = s.id
-            LEFT JOIN courses c ON ct.course_id = c.id
-            LEFT JOIN batches b ON ct.batch_id = b.id
-            
+            JOIN courses c ON ct.course_id = c.id
+            JOIN batches b ON ct.batch_id = b.id
             WHERE ct.teacher_id = $1 AND ct.is_active = TRUE
             ORDER BY 
-                ct.day_of_week, 
-                ct.start_time ASC;
-        `;
-        
-        const result = await pool.query(timetableQuery, [teacherReferenceId]);
+                CASE day_of_week 
+                    WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 
+                    WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 
+                END, ct.start_time ASC;
+        `, [teacherId]);
         
         res.status(200).json(result.rows);
 
     } catch (error) {
         console.error('Teacher Timetable Fetch Error:', error);
-        // Logging database error detail (added in previous step)
-        console.error('Database Error Detail:', error.detail); 
-        res.status(500).json({ message: 'Internal Server Error: Failed to retrieve teacher timetable.' });
+        res.status(500).json({ message: 'Internal Server Error' });
     }
 });
 
-
 // =========================================================
-// 1. CRUD Routes (Admin/Teacher) - PARAMETER ROUTES LAST
+// 2. Student's Personal View
 // =========================================================
-
-/**
- * @route   POST /api/timetable
- * @desc    Create a new timetable entry (class slot).
- * @access  Private (Super Admin, Admin, Teacher)
- */
-router.post('/', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
-    const { 
-        course_id, batch_id, subject_id, teacher_id, day_of_week, 
-        start_time, end_time, room_number
-    } = req.body;
-
-    if (!course_id || !batch_id || !subject_id || !day_of_week || !start_time || !end_time) {
-        return res.status(400).json({ message: 'Missing required schedule fields.' });
-    }
-    
-    // Validate IDs and Day
-    if (!isValidId(course_id) || !isValidId(batch_id) || !isValidId(subject_id)) {
-        return res.status(400).json({ message: 'Invalid ID format provided for Course, Batch, or Subject.' });
-    }
-
-    const dayAsNumber = getDayAsNumber(day_of_week);
-    if (dayAsNumber === null) {
-        return res.status(400).json({ message: 'Invalid day_of_week value.' });
-    }
-
+router.get('/student/me', authenticateToken, async (req, res) => {
     try {
-        const query = `
-            INSERT INTO ${TIMETABLE_TABLE} (
-                course_id, batch_id, subject_id, teacher_id, day_of_week, 
-                start_time, end_time, room_number
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            RETURNING id;
-        `;
-        const values = [
-            course_id, batch_id, subject_id, teacher_id || null, dayAsNumber,
-            start_time, end_time, room_number || null
-        ];
+        const student = await pool.query(
+            'SELECT course_id, batch_id FROM students WHERE user_id = $1 LIMIT 1', 
+            [req.user.id]
+        );
         
-        const result = await pool.query(query, values);
-        res.status(201).json({ message: 'Timetable slot created successfully', id: result.rows[0].id });
-
-    } catch (error) {
-        console.error('Timetable Creation Error:', error);
-        
-        if (error.code === '23505') { 
-            return res.status(409).json({ message: 'Schedule conflict: An entry for this batch, day, and time already exists.' });
+        if (student.rowCount === 0) {
+            return res.status(404).json({ message: 'Student profile not linked to this account.' });
         }
-        res.status(500).json({ message: 'Failed to create timetable slot due to server error.' });
+
+        const { course_id, batch_id } = student.rows[0];
+
+        const result = await pool.query(`
+            SELECT ct.*, s.subject_name, t.full_name AS teacher_name
+            FROM ${TIMETABLE_TABLE} ct
+            JOIN subjects s ON ct.subject_id = s.id
+            LEFT JOIN teachers t ON ct.teacher_id = t.id
+            WHERE ct.course_id = $1 AND ct.batch_id = $2 AND ct.is_active = TRUE
+            ORDER BY 
+                CASE day_of_week 
+                    WHEN 'Monday' THEN 1 WHEN 'Tuesday' THEN 2 WHEN 'Wednesday' THEN 3 
+                    WHEN 'Thursday' THEN 4 WHEN 'Friday' THEN 5 WHEN 'Saturday' THEN 6 
+                END, ct.start_time ASC;
+        `, [course_id, batch_id]);
+        
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Student Timetable Error:', error);
+        res.status(500).json({ message: 'Internal server error.' });
     }
 });
 
-
-/**
- * @route   GET /api/timetable/:courseId/:batchId
- * @desc    Get the full weekly timetable for a specific Course and Batch.
- * @access  Private (Super Admin, Admin, Teacher, Student)
- */
-router.get('/:courseId/:batchId', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
-    const { courseId, batchId } = req.params;
-
-    // SECURITY FIX: Input validation for URL parameters
-    // This is the validation that was causing the error if the fixed route was hit instead
-    if (!isValidId(courseId) || !isValidId(batchId)) {
-        return res.status(400).json({ message: 'Invalid Course or Batch ID format.' });
-    }
-
+// =========================================================
+// 3. Admin View (Batch-wise)
+// =========================================================
+router.get('/:courseId/:batchId', authenticateToken, async (req, res) => {
     try {
-        const query = `
-            SELECT 
-                ct.id, ct.day_of_week, ct.start_time, ct.end_time, ct.room_number,
-                s.subject_name, s.subject_code,
-                COALESCE(t.full_name, u.username) AS teacher_name,
-                t.id AS teacher_reference_id
+        const result = await pool.query(`
+            SELECT ct.*, s.subject_name, COALESCE(t.full_name, u.username) AS teacher_name
             FROM ${TIMETABLE_TABLE} ct
             JOIN subjects s ON ct.subject_id = s.id
             LEFT JOIN teachers t ON ct.teacher_id = t.id
             LEFT JOIN users u ON t.user_id = u.id
             WHERE ct.course_id = $1 AND ct.batch_id = $2 AND ct.is_active = TRUE
-            ORDER BY ct.day_of_week, ct.start_time ASC;
-        `;
-        const result = await pool.query(query, [courseId, batchId]);
+            ORDER BY ct.start_time ASC;
+        `, [req.params.courseId, req.params.batchId]);
         
-        // Group the results by day
-        const timetable = result.rows.reduce((acc, slot) => {
-            const day = slot.day_of_week;
-            if (!acc[day]) {
-                acc[day] = [];
-            }
-            acc[day].push(slot);
+        const grouped = result.rows.reduce((acc, slot) => {
+            if (!acc[slot.day_of_week]) acc[slot.day_of_week] = [];
+            acc[slot.day_of_week].push(slot);
             return acc;
         }, {});
-
-        res.status(200).json(timetable);
-
+        res.status(200).json(grouped);
     } catch (error) {
-        console.error('Timetable Fetch Error:', error);
-        res.status(500).json({ message: 'Failed to retrieve timetable.' });
+        res.status(500).json({ message: 'Error retrieving batch timetable.' });
     }
 });
 
+// =========================================================
+// 4. Create/Save New Timetable Slot (Admin Only) - FIXED
+// =========================================================
+router.post('/', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    const { 
+        course_id, batch_id, subject_id, teacher_id, 
+        day_of_week, start_time, end_time, room_number 
+    } = req.body;
 
-/**
- * @route   DELETE /api/timetable/:id
- * @desc    Delete a timetable slot.
- * @access  Private (Super Admin, Admin, Teacher)
- */
-router.delete('/:id', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
-    const { id } = req.params;
-    const currentUserId = req.user.id;
-    const currentUserRole = req.user.role;
+    // ১. সার্ভার লগের এরর (UUID: "undefined") প্রতিরোধ করার জন্য কড়া ভ্যালিডেশন
+    const idsToCheck = { course_id, batch_id, subject_id, teacher_id };
+    for (const [key, value] of Object.entries(idsToCheck)) {
+        if (!value || value === "undefined" || value === "") {
+            return res.status(400).json({ message: `ত্রুটি: ${key} নির্বাচন করা হয়নি বা সঠিক নয়।` });
+        }
+    }
 
-    // SECURITY FIX: Input validation for ID format
-     if (!isValidId(id)) {
-        return res.status(400).json({ message: 'Invalid Timetable ID format.' });
+    if (!day_of_week || !start_time || !end_time) {
+        return res.status(400).json({ message: 'দিন এবং সময় সম্পর্কিত তথ্যগুলো পূরণ করুন।' });
     }
 
     try {
-        // SECURITY FIX: Enhanced check for Teachers to prevent IDOR
-        if (currentUserRole === 'Teacher') {
-            const checkQuery = `
-                SELECT ct.teacher_id 
-                FROM ${TIMETABLE_TABLE} ct
-                -- Join uses t.id, assuming it's the FK linked to ct.teacher_id
-                JOIN teachers t ON ct.teacher_id = t.id 
-                WHERE ct.id = $1 AND t.user_id = $2; 
-            `;
-            // Check if the slot exists AND belongs to the authenticated teacher (by user_id)
-            const checkResult = await pool.query(checkQuery, [id, currentUserId]);
+        const query = `
+            INSERT INTO ${TIMETABLE_TABLE} 
+            (course_id, batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room_number, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
+            RETURNING *;
+        `;
+        const values = [course_id, batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room_number || null];
+        const result = await pool.query(query, values);
 
-            if (checkResult.rowCount === 0) {
-                // Return 403 if the slot doesn't exist OR the teacher doesn't own it
-                return res.status(403).json({ message: 'Forbidden: You can only delete your own scheduled slots, or the slot was not found.' });
-            }
-        }
-
-        // Proceed with deletion (Admin, Super Admin, or authorized Teacher)
-        const deleteQuery = `DELETE FROM ${TIMETABLE_TABLE} WHERE id = $1 RETURNING id;`;
-        const result = await pool.query(deleteQuery, [id]);
-
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Timetable slot not found.' });
-        }
-        res.status(200).json({ message: 'Timetable slot deleted successfully.' });
+        res.status(201).json({ 
+            message: 'টাইমটেবিল সফলভাবে সেভ করা হয়েছে।', 
+            slot: result.rows[0] 
+        });
     } catch (error) {
-        console.error('Timetable Delete Error:', error);
-        res.status(500).json({ message: 'Failed to delete timetable slot.' });
+        console.error('Insert Timetable Error:', error.message);
+        // ডাটাবেস লেভেলের সিনট্যাক্স এরর হ্যান্ডলিং
+        if (error.code === '22P02') {
+            return res.status(400).json({ message: 'ভুল ডাটা ফরম্যাট: নিশ্চিত করুন সব ড্রপডাউন সিলেক্ট করা হয়েছে।' });
+        }
+        res.status(500).json({ message: 'ডাটাবেসে টাইমটেবিল সেভ করতে ব্যর্থ হয়েছে।' });
     }
 });
 
+// =========================================================
+// 5. Delete Timetable Slot (Admin Only)
+// =========================================================
+router.delete('/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    const slotId = req.params.id;
+
+    try {
+        const result = await pool.query(
+            `DELETE FROM ${TIMETABLE_TABLE} WHERE id = $1 RETURNING *`, 
+            [slotId]
+        );
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: 'এই ক্লাস স্লটটি খুঁজে পাওয়া যায়নি।' });
+        }
+
+        res.status(200).json({ message: 'ক্লাস স্লটটি সফলভাবে মুছে ফেলা হয়েছে।' });
+    } catch (error) {
+        console.error('Delete Timetable Error:', error);
+        res.status(500).json({ message: 'সার্ভার ত্রুটি: স্লট মুছতে ব্যর্থ হয়েছে।' });
+    }
+});
+
+// =========================================================
+// 4. Create New Timetable Slot with Conflict Alert
+// =========================================================
+router.post('/', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    const { 
+        course_id, batch_id, subject_id, teacher_id, 
+        day_of_week, start_time, end_time, room_number 
+    } = req.body;
+
+    // Basic Validation
+    if (!course_id || !batch_id || !subject_id || !teacher_id || !day_of_week || !start_time || !end_time) {
+        return res.status(400).json({ message: 'All required fields must be filled.' });
+    }
+
+    try {
+        // --- CONFLICT CHECK LOGIC ---
+        // Check if the teacher is already assigned to ANY room during this time on this day
+        const conflictCheck = await pool.query(`
+            SELECT ct.*, s.subject_name, b.batch_name 
+            FROM class_timetable ct
+            JOIN subjects s ON ct.subject_id = s.id
+            JOIN batches b ON ct.batch_id = b.id
+            WHERE ct.teacher_id = $1 
+            AND ct.day_of_week = $2 
+            AND ct.is_active = TRUE
+            AND (
+                (ct.start_time, ct.end_time) OVERLAPS ($3::time, $4::time)
+            )
+        `, [teacher_id, day_of_week, start_time, end_time]);
+
+        if (conflictCheck.rowCount > 0) {
+            const conflict = conflictCheck.rows[0];
+            return res.status(409).json({ 
+                message: `Teacher Conflict! This faculty is already taking ${conflict.subject_name} for ${conflict.batch_name} from ${conflict.start_time} to ${conflict.end_time}.`,
+                conflictDetails: conflict
+            });
+        }
+
+        // No conflict found, proceed with insertion
+        const query = `
+            INSERT INTO class_timetable 
+            (course_id, batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room_number, is_active)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE)
+            RETURNING *;
+        `;
+        const values = [course_id, batch_id, subject_id, teacher_id, day_of_week, start_time, end_time, room_number];
+        const result = await pool.query(query, values);
+
+        res.status(201).json({ message: 'Slot saved successfully!', slot: result.rows[0] });
+
+    } catch (error) {
+        console.error('Insert Timetable Error:', error);
+        res.status(500).json({ message: 'Database error while saving slot.' });
+    }
+});
 
 module.exports = router;

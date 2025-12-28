@@ -3,446 +3,241 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Timetable Management | BCSM</title>
+    <title>Academic Timetable Manager | BCSM ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
-    
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-
-    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
 
     <style>
-        /* --- HIGH CONTRAST & COMPACT STYLES --- */
-        body {
-            background-color: #f4f6f8 !important; /* Softer Gray */
-            color: #1e293b !important; /* Dark Slate for better contrast */
-            font-family: 'Inter', sans-serif !important; /* Applied New Font */
-            font-size: 0.9rem;
-        }
-
-        .glass-card, .card {
-            background: #ffffff !important;
-            border: 1px solid #e2e8f0 !important;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
-            border-radius: 8px !important;
-            padding: 15px;
-        }
-
-        h2, h4, h5, h6 {
-            color: #0f172a !important; /* Very Dark Blue-Gray */
-            font-weight: 700;
-            letter-spacing: -0.025em; /* Tighter letter spacing for headlines */
-        }
-
-        /* --- COMPACT TIMETABLE GRID --- */
-        .timetable-container {
-            overflow-x: auto;
-            background: #ffffff;
-            border-radius: 8px;
-            border: 1px solid #e2e8f0;
-            padding: 5px;
-        }
-        
-        .schedule-grid {
-            display: grid;
-            grid-template-columns: 80px repeat(6, minmax(130px, 1fr));
-            gap: 4px;
-            min-width: 900px;
-        }
-
-        /* Compact Headers */
-        .day-header {
-            background: #1e293b !important; /* Slate 800 */
-            color: #ffffff !important;
-            font-weight: 600;
-            padding: 8px 4px;
-            text-align: center;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        
-        .time-header {
-            background: #3b82f6 !important; /* Blue 500 */
-            color: #ffffff !important;
-            font-weight: 600;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            padding: 5px;
-            line-height: 1.2;
-        }
-
-        /* Compact Cells */
-        .day-cell {
-            background: #f8fafc !important; /* Slate 50 */
-            border: 1px solid #e2e8f0;
-            border-radius: 4px;
-            min-height: 80px;
-            padding: 4px;
-        }
-        
-        /* Compact Slot Card */
-        .slot-card {
-            background: #ffffff !important;
-            border-left: 4px solid #3b82f6;
-            border-top: 1px solid #e2e8f0;
-            border-right: 1px solid #e2e8f0;
-            border-bottom: 1px solid #e2e8f0;
-            padding: 8px 6px;
-            border-radius: 4px;
-            margin-bottom: 4px;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
-            position: relative;
-        }
-        
-        .slot-subject { 
-            font-weight: 700; 
-            color: #0f172a !important; 
-            font-size: 0.85rem; 
-            line-height: 1.3;
-            margin-bottom: 2px;
-        }
-        .slot-teacher { 
-            font-size: 0.75rem; 
-            color: #64748b !important; /* Slate 500 */
-            display: block; 
-            font-weight: 500;
-        }
-        .slot-room { 
-            font-size: 0.75rem; 
-            font-weight: 700; 
-            color: #ef4444 !important; /* Red 500 */
-        }
-        
-        /* Delete Button */
-        .btn-delete-slot {
-            position: absolute;
-            top: 4px;
-            right: 4px;
-            font-size: 0.7rem;
-            color: #ef4444;
-            background: #fee2e2;
-            border: none;
-            border-radius: 4px;
-            width: 20px;
-            height: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-delete-slot:hover { background: #ef4444; color: white; }
-
-        /* Form Controls */
-        .form-label { margin-bottom: 3px; font-size: 0.8rem; font-weight: 600; color: #475569; }
-        .form-control, .form-select { 
-            font-size: 0.85rem; 
-            padding: 6px 10px;
-            border-color: #cbd5e1;
-        }
-        .form-control:focus, .form-select:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
+        :root { --primary-cobalt: #003366; --accent-orange: #FF9933; --border-color: #e2e8f0; }
+        body { background-color: #f8fafc; font-family: 'Inter', sans-serif; font-size: 0.85rem; }
+        .admin-card { background: white; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); padding: 20px; margin-bottom: 20px; }
+        .grid-header { background: var(--primary-cobalt); color: white; padding: 12px; text-align: center; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; }
+        .schedule-grid { display: grid; grid-template-columns: 100px repeat(6, 1fr); min-width: 1000px; border: 1px solid var(--border-color); }
+        .time-col { background: #f1f5f9; border-right: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; font-weight: 700; color: var(--primary-cobalt); text-align: center; }
+        .grid-cell { min-height: 100px; border-bottom: 1px solid var(--border-color); border-right: 1px solid var(--border-color); padding: 5px; }
+        .slot-pill { background: #fff; border-left: 4px solid var(--accent-orange); box-shadow: 0 2px 4px rgba(0,0,0,0.05); padding: 8px; border-radius: 4px; border: 1px solid #edf2f7; position: relative; }
+        .slot-subject { font-weight: 700; color: #1e293b; display: block; font-size: 0.8rem; }
+        .slot-meta { font-size: 0.7rem; color: #64748b; display: block; }
+        .btn-delete { position: absolute; top: 2px; right: 5px; color: #dc3545; border: none; background: transparent; cursor: pointer; font-size: 0.8rem; opacity: 0.3; transition: 0.2s; }
+        .btn-delete:hover { opacity: 1; transform: scale(1.1); }
     </style>
 </head>
-<body>
+<body class="p-3">
 
-<div class="container-fluid" style="max-width: 1600px; padding: 20px;">
-    
-    <div class="d-flex justify-content-between align-items-center mb-3">
-        <div>
-            <h4 class="fw-bold mb-0 text-dark"><i class="fas fa-calendar-alt me-2"></i>Timetable</h4>
-            <p class="text-muted mb-0 small">Manage schedules efficiently</p>
-        </div>
-        <a href="/admin-dashboard.html" class="btn btn-sm btn-dark rounded-pill px-3">
-            <i class="fas fa-arrow-left me-2"></i> Dashboard
-        </a>
-    </div>
+<div class="container-fluid">
+    <header class="d-flex justify-content-between align-items-center mb-4">
+        <h4 class="fw-bold m-0"><i class="fas fa-calendar-alt me-2 text-primary-cobalt"></i>Academic Timetable Manager</h4>
+        <a href="/admin-dashboard.html" class="btn btn-primary btn-sm rounded-pill px-4">Dashboard</a>
+    </header>
 
     <div class="row g-3">
-        
         <div class="col-lg-3">
-            <div class="glass-card mb-3">
-                <h6 class="fw-bold text-primary mb-2"><i class="fas fa-eye me-2"></i>Select View</h6>
-                <div class="mb-2">
-                    <label class="form-label">Course</label>
-                    <select id="view-course-select" class="form-select form-select-sm">
-                        <option value="">Loading...</option>
+            <div class="admin-card">
+                <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">1. Select Batch</h6>
+                <div class="mb-3">
+                    <label class="form-label small fw-bold">Course Name</label>
+                    <select id="course-select" class="form-select form-select-sm" onchange="loadBatches(this.value)">
+                        <option value="">-- Choose Course --</option>
                     </select>
                 </div>
-                <div class="mb-2">
-                    <label class="form-label">Batch</label>
-                    <select id="view-batch-select" class="form-select form-select-sm" disabled>
+                <div>
+                    <label class="form-label small fw-bold">Active Batch</label>
+                    <select id="batch-select" class="form-select form-select-sm" disabled onchange="fetchCurrentSchedule()">
                         <option value="">Select Course First</option>
                     </select>
                 </div>
-                <div id="view-status" class="small fw-bold text-secondary" style="font-size: 0.75rem;"></div>
             </div>
 
-            <div class="glass-card">
-                <h6 class="fw-bold text-success mb-2"><i class="fas fa-plus-circle me-2"></i>Add Slot</h6>
+            <div class="admin-card">
+                <h6 class="fw-bold mb-3 border-bottom pb-2 text-success">2. Add New Slot</h6>
                 <form id="slot-form">
-                    <input type="hidden" id="form-course-id">
-                    <input type="hidden" id="form-batch-id">
-
                     <div class="mb-2">
-                        <label class="form-label">Subject</label>
-                        <select id="form-subject-select" name="subject_id" class="form-select form-select-sm" required>
-                            <option value="">Loading...</option>
+                        <label class="small fw-bold">Subject</label>
+                        <select id="subject-select" class="form-select form-select-sm" required>
+                            <option value="">-- Choose Subject --</option>
                         </select>
                     </div>
-                    
                     <div class="mb-2">
-                        <label class="form-label">Teacher</label>
-                        <select id="teacher-select" name="teacher_id" class="form-select form-select-sm">
-                            <option value="">(Optional)</option>
+                        <label class="small fw-bold">Faculty</label>
+                        <select id="teacher-select" class="form-select form-select-sm" required>
+                            <option value="">-- Choose Teacher --</option>
                         </select>
                     </div>
-
-                    <div class="mb-2">
-                        <label class="form-label">Day</label>
-                        <select name="day_of_week" class="form-select form-select-sm" required>
-                            <option value="Monday">Monday</option>
-                            <option value="Tuesday">Tuesday</option>
-                            <option value="Wednesday">Wednesday</option>
-                            <option value="Thursday">Thursday</option>
-                            <option value="Friday">Friday</option>
-                            <option value="Saturday">Saturday</option>
-                        </select>
-                    </div>
-
-                    <div class="row g-1 mb-2">
-                        <div class="col-6">
-                            <label class="form-label">Start</label>
-                            <input type="time" name="start_time" class="form-control form-control-sm" required>
+                    <div class="row g-2 mb-2">
+                        <div class="col-7">
+                            <label class="small fw-bold">Day</label>
+                            <select id="day-select" class="form-select form-select-sm">
+                                <option value="Monday">Monday</option><option value="Tuesday">Tuesday</option>
+                                <option value="Wednesday">Wednesday</option><option value="Thursday">Thursday</option>
+                                <option value="Friday">Friday</option><option value="Saturday">Saturday</option>
+                            </select>
                         </div>
-                        <div class="col-6">
-                            <label class="form-label">End</label>
-                            <input type="time" name="end_time" class="form-control form-control-sm" required>
+                        <div class="col-5">
+                            <label class="small fw-bold">Room</label>
+                            <input type="text" id="room-input" class="form-control form-control-sm" placeholder="e.g. 101">
                         </div>
                     </div>
-
-                    <div class="mb-3">
-                        <label class="form-label">Room</label>
-                        <input type="text" name="room_number" class="form-control form-control-sm" placeholder="e.g. 101">
+                    <div class="row g-2 mb-3">
+                        <div class="col-6"><label class="small fw-bold">Starts</label><input type="time" id="start-input" class="form-control form-control-sm" required></div>
+                        <div class="col-6"><label class="small fw-bold">Ends</label><input type="time" id="end-input" class="form-control form-control-sm" required></div>
                     </div>
-
-                    <button type="submit" id="submit-btn" class="btn btn-sm btn-primary w-100 rounded-pill shadow-sm fw-bold">
-                        Add to Timetable
-                    </button>
-                    <div id="form-error" class="text-danger small mt-2 text-center fw-bold"></div>
+                    <button type="submit" class="btn btn-success w-100 btn-sm fw-bold rounded-pill">Confirm Slot</button>
                 </form>
             </div>
         </div>
 
         <div class="col-lg-9">
-            <div class="glass-card h-100 p-0 overflow-hidden">
-                <div class="timetable-container">
-                    <div id="schedule-display">
-                        <div class="text-center p-5 text-muted">
-                            <i class="fas fa-calendar-times fa-2x mb-2 opacity-25"></i>
-                            <h6 class="text-dark">Select Course & Batch</h6>
-                        </div>
-                    </div>
+            <div class="admin-card p-0 overflow-hidden">
+                <div class="p-3 bg-light border-bottom d-flex justify-content-between align-items-center">
+                    <span class="fw-bold small"><i class="fas fa-th me-2"></i>Live Schedule Preview</span>
+                    <span id="sync-status" class="badge bg-secondary rounded-pill">Standby</span>
+                </div>
+                <div class="p-2 overflow-auto" id="schedule-container" style="min-height: 450px;">
+                    <p class="text-center text-muted mt-5">Select a batch to load data.</p>
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/global-config.js?v=2.3.1"></script>
-
 <script>
-    const API_BASE = '/api/timetable';
+    const TOKEN = localStorage.getItem('erp-token');
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const token = localStorage.getItem('erp-token');
-        if (!token) window.location.href = '/login.html';
-
-        loadDependencies();
-        setupEventListeners();
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!TOKEN) window.location.href = '/login.html';
+        try {
+            const [courses, subjects, teachers] = await Promise.all([
+                fetch('/api/academicswithfees/courses', { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json()),
+                fetch('/api/academicswithfees/subjects', { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json()),
+                fetch('/api/teachers/list', { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json())
+            ]);
+            
+            // Data Population - Mapping 'id' or 'course_id' based on DB columns
+            populateDropdown('course-select', courses, 'course_id', 'course_name');
+            populateDropdown('subject-select', subjects, 'id', 'subject_name'); // 'id' ensures UUID is used
+            populateDropdown('teacher-select', teachers, 'id', 'full_name');
+        } catch (e) { console.error("Initial Sync Failed", e); }
     });
 
-    // 1. Initial Data Load
-    async function loadDependencies() {
-        try {
-            const [coursesRes, subjectsRes, teachersRes] = await Promise.all([
-                window.authFetch('/api/academicswithfees/courses'),
-                window.authFetch('/api/academicswithfees/subjects'),
-                window.authFetch('/api/teachers/list')
-            ]);
-
-            const courses = await coursesRes.json();
-            const subjects = await subjectsRes.json();
-            const teachers = await teachersRes.json();
-
-            populateSelect('view-course-select', courses, 'course_id', 'course_name');
-            populateSelect('form-subject-select', subjects, 'subject_id', 'subject_name');
-            
-            const tSelect = document.getElementById('teacher-select');
-            tSelect.innerHTML = '<option value="">(Optional) Select Teacher</option>';
-            teachers.forEach(t => {
-                const name = t.full_name || t.name || `ID: ${t.id}`;
-                tSelect.innerHTML += `<option value="${t.id}">${name}</option>`;
-            });
-
-        } catch (e) { console.error("Load Error:", e); }
-    }
-
-    function populateSelect(id, data, valKey, textKey) {
-        const select = document.getElementById(id);
-        select.innerHTML = '<option value="">Select</option>';
+    function populateDropdown(id, data, valKey, labelKey) {
+        const el = document.getElementById(id);
+        el.innerHTML = `<option value="">-- Choose --</option>`;
         data.forEach(item => {
-            select.innerHTML += `<option value="${item[valKey]}">${item[textKey]}</option>`;
+            const opt = document.createElement('option');
+            // Checking multiple keys to prevent 'undefined' or incorrect IDs
+            opt.value = item[valKey] || item.id || item.subject_id || item.teacher_id || ""; 
+            opt.textContent = item[labelKey] || item['username'] || 'N/A';
+            el.appendChild(opt);
         });
     }
 
-    // 2. Event Listeners
-    function setupEventListeners() {
-        document.getElementById('view-course-select').addEventListener('change', async function() {
-            const id = this.value;
-            const bSelect = document.getElementById('view-batch-select');
-            
-            bSelect.innerHTML = '<option>Loading...</option>';
-            bSelect.disabled = true;
-            
-            if(!id) return;
-
-            try {
-                const res = await window.authFetch(`/api/academicswithfees/courses/${id}/batches`);
-                const batches = await res.json();
-                bSelect.innerHTML = '<option value="">Select Batch</option>';
-                batches.forEach(b => {
-                    bSelect.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`;
-                });
-                bSelect.disabled = false;
-            } catch(e) {}
-        });
-
-        document.getElementById('view-batch-select').addEventListener('change', async function() {
-            const courseId = document.getElementById('view-course-select').value;
-            const batchId = this.value;
-            
-            if(!courseId || !batchId) return;
-
-            document.getElementById('form-course-id').value = courseId;
-            document.getElementById('form-batch-id').value = batchId;
-
-            document.getElementById('view-status').innerText = 'Loading...';
-            
-            try {
-                const res = await window.authFetch(`${API_BASE}/${courseId}/${batchId}`);
-                const data = await res.json();
-                renderTimetable(data);
-                document.getElementById('view-status').innerText = 'Timetable Loaded';
-            } catch(e) {
-                document.getElementById('view-status').innerText = 'Error loading data';
-            }
-        });
-
-        document.getElementById('slot-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('submit-btn');
-            btn.disabled = true;
-            
-            const fd = new FormData(e.target);
-            const data = Object.fromEntries(fd.entries());
-            data.course_id = document.getElementById('form-course-id').value;
-            data.batch_id = document.getElementById('form-batch-id').value;
-
-            if(!data.course_id || !data.batch_id) {
-                alert("Please select a Course & Batch from the View menu first.");
-                btn.disabled = false;
-                return;
-            }
-
-            try {
-                const res = await window.authFetch(API_BASE, {
-                    method: 'POST',
-                    body: JSON.stringify(data)
-                });
-                
-                if(res.ok) {
-                    document.getElementById('view-batch-select').dispatchEvent(new Event('change'));
-                    e.target.reset();
-                } else {
-                    const err = await res.json();
-                    document.getElementById('form-error').innerText = err.message || "Failed to add";
-                }
-            } catch(e) { alert("Network Error"); }
-            finally { btn.disabled = false; }
-        });
+    async function loadBatches(courseId) {
+        if (!courseId) return;
+        const res = await fetch(`/api/academicswithfees/courses/${courseId}/batches`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+        const data = await res.json();
+        const sel = document.getElementById('batch-select');
+        sel.innerHTML = '<option value="">-- Choose Batch --</option>';
+        data.forEach(b => sel.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`);
+        sel.disabled = false;
     }
 
-    // 3. Render Logic (Compact)
-    function renderTimetable(data) {
-        const container = document.getElementById('schedule-display');
+    async function fetchCurrentSchedule() {
+        const cId = document.getElementById('course-select').value;
+        const bId = document.getElementById('batch-select').value;
+        if (!cId || !bId) return;
+        
+        document.getElementById('sync-status').innerText = 'Syncing...';
+        try {
+            const res = await fetch(`/api/timetable/${cId}/${bId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+            const data = await res.json();
+            renderGrid(data);
+            document.getElementById('sync-status').className = 'badge bg-success rounded-pill';
+            document.getElementById('sync-status').innerText = 'Synced';
+        } catch (e) { document.getElementById('sync-status').innerText = 'Sync Error'; }
+    }
+
+    function renderGrid(data) {
+        const container = document.getElementById('schedule-container');
         container.innerHTML = '';
+        const all = Object.values(data).flat();
+        const times = [...new Set(all.map(s => `${s.start_time}-${s.end_time}`))].sort();
 
-        let times = new Set();
-        Object.values(data).flat().forEach(s => times.add(`${s.start_time}-${s.end_time}`));
-        const sortedTimes = Array.from(times).sort();
-
-        if(sortedTimes.length === 0) {
-            container.innerHTML = '<div class="text-center p-5 text-dark"><strong>No classes scheduled yet.</strong></div>';
-            return;
-        }
+        if (!times.length) { container.innerHTML = '<p class="text-center py-5">No slots assigned yet.</p>'; return; }
 
         const grid = document.createElement('div');
         grid.className = 'schedule-grid';
+        grid.innerHTML = '<div class="grid-header">Timeline</div>' + DAYS.map(d => `<div class="grid-header">${d}</div>`).join('');
 
-        grid.innerHTML = '<div class="time-header">Time</div>';
-        DAYS.forEach(day => grid.innerHTML += `<div class="day-header">${day}</div>`);
-
-        sortedTimes.forEach(timeKey => {
-            const [start, end] = timeKey.split('-');
-            
-            grid.innerHTML += `<div class="time-header">${start.slice(0,5)}<br>-<br>${end.slice(0,5)}</div>`;
-
-            for(let i=1; i<=6; i++) {
-                const cell = document.createElement('div');
-                cell.className = 'day-cell';
-                
-                const daySlots = data[i] || [];
-                const slot = daySlots.find(s => s.start_time === start && s.end_time === end);
-
-                if(slot) {
-                    cell.innerHTML = `
-                        <div class="slot-card">
-                            <button class="btn-delete-slot" onclick="deleteSlot('${slot.id}')"><i class="fas fa-times"></i></button>
-                            <div class="slot-subject">${slot.subject_name}</div>
-                            <span class="slot-room">${slot.room_number || 'N/A'}</span>
-                            <span class="slot-teacher">${slot.teacher_name || 'No Teacher'}</span>
-                        </div>
-                    `;
-                }
-                grid.appendChild(cell);
-            }
+        times.forEach(t => {
+            const [s, e] = t.split('-');
+            grid.innerHTML += `<div class="time-col border-bottom small">${s.slice(0,5)}<br>${e.slice(0,5)}</div>`;
+            DAYS.forEach(day => {
+                const item = (data[day] || []).find(x => x.start_time === s);
+                grid.innerHTML += `<div class="grid-cell">${item ? `
+                    <div class="slot-pill shadow-sm">
+                        <button class="btn-delete" title="Delete" onclick="deleteSlot('${item.id}')"><i class="fas fa-times-circle"></i></button>
+                        <span class="slot-subject">${item.subject_name}</span>
+                        <span class="slot-meta">${item.teacher_name || 'Staff'}</span>
+                        <span class="slot-meta text-primary fw-bold">RM: ${item.room_number || 'N/A'}</span>
+                    </div>` : ''}</div>`;
+            });
         });
-
         container.appendChild(grid);
     }
 
-    window.deleteSlot = async (id) => {
-        if(!confirm("Delete?")) return;
+    document.getElementById('slot-form').onsubmit = async (e) => {
+        e.preventDefault();
+        
+        const payload = {
+            course_id: document.getElementById('course-select').value,
+            batch_id: document.getElementById('batch-select').value,
+            subject_id: document.getElementById('subject-select').value,
+            teacher_id: document.getElementById('teacher-select').value,
+            day_of_week: document.getElementById('day-select').value,
+            start_time: document.getElementById('start-input').value,
+            end_time: document.getElementById('end-input').value,
+            room_number: document.getElementById('room-input').value
+        };
+
+        // Dropdown Validation Check - 'undefined' must not be passed
+        if (!payload.subject_id || payload.subject_id === "" || payload.subject_id === "undefined") {
+            alert("Error: Subject not properly selected. Please refresh the dropdown.");
+            return;
+        }
+
         try {
-            await window.authFetch(`${API_BASE}/${id}`, { method: 'DELETE' });
-            document.getElementById('view-batch-select').dispatchEvent(new Event('change'));
-        } catch(e) { alert("Error deleting"); }
+            const res = await fetch('/api/timetable', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify(payload)
+            });
+
+            const result = await res.json();
+            if (res.ok) { 
+                alert("Success: Timetable slot saved successfully!"); 
+                fetchCurrentSchedule(); 
+                e.target.reset();
+            } else {
+                alert("Failure: " + (result.message || "Unknown error"));
+            }
+        } catch (err) { alert("Server Error: Unable to save data."); }
     };
 
+    window.deleteSlot = async (id) => {
+        if (!confirm("Are you sure you want to delete this class slot?")) return;
+        try {
+            const res = await fetch(`/api/timetable/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            if (res.ok) fetchCurrentSchedule();
+            else alert("Delete failed.");
+        } catch (e) { alert("Server error."); }
+    };
 </script>
-
 </body>
 </html>

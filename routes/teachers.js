@@ -403,4 +403,49 @@ router.get('/me/batches', authenticateToken, authorize(['Teacher']), async (req,
     }
 });
 
+// =========================================================
+// GET: Logged-in Teacher's Full Weekly Timetable
+// =========================================================
+router.get('/me/timetable', authenticateToken, authorize(['Teacher']), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                ct.id, 
+                ct.day_of_week, 
+                ct.start_time, 
+                ct.end_time, 
+                ct.room_number,
+                s.subject_name, 
+                c.course_name, 
+                b.batch_name
+            FROM class_timetable ct
+            JOIN subjects s ON ct.subject_id = s.id
+            JOIN courses c ON ct.course_id = c.id
+            JOIN batches b ON ct.batch_id = b.id
+            JOIN teachers t ON ct.teacher_id = t.id
+            WHERE t.user_id = $1 AND ct.is_active = TRUE
+            ORDER BY 
+                CASE 
+                    WHEN day_of_week = 'Monday' THEN 1
+                    WHEN day_of_week = 'Tuesday' THEN 2
+                    WHEN day_of_week = 'Wednesday' THEN 3
+                    WHEN day_of_week = 'Thursday' THEN 4
+                    WHEN day_of_week = 'Friday' THEN 5
+                    WHEN day_of_week = 'Saturday' THEN 6
+                    WHEN day_of_week = 'Sunday' THEN 7
+                END, 
+                ct.start_time ASC;
+        `;
+        const result = await pool.query(query, [req.user.id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(200).json([]); // কোনো ক্লাস না থাকলে খালি অ্যারে পাঠাবে
+        }
+        
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Error fetching teacher timetable:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
 module.exports = router;
