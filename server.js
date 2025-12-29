@@ -94,6 +94,7 @@ const examMarksRouter = require('./routes/exam_marks');
 const quizzesRouter = require('./routes/quizzes'); 
 const transcriptRoutes = require('./routes/transcript'); 
 const calendarRoutes = require('./routes/calendar'); 
+const notificationsRouter = require('./routes/notifications');
 
 
 // --- App Initialization ---
@@ -367,7 +368,7 @@ app.use('/api/attendance', attendanceRouter);
 app.use('/api/leave', leaveRouter);
 app.use('/api/ptm', ptmRouter);
 app.use('/api/placements', placementsRouter);
-
+app.use('/api/notifications', notificationsRouter);
 // Exam Modules
 app.use('/api/exams', examsRouter); 
 app.use('/api/online-exam', onlineExamRouter);

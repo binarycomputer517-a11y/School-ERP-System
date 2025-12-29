@@ -3,146 +3,229 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Pickup List | Driver Console</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <title>Pickup Roster | Driver Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        :root { --primary: #005A9C; --success: #059669; --bg: #f1f5f9; --card-border: #e2e8f0; }
-        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; padding: 15px; }
-        
-        .header { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.05); margin-bottom: 15px; position: sticky; top: 10px; z-index: 100; }
-        .header h2 { margin: 0; color: var(--primary); font-size: 1.3em; display: flex; justify-content: space-between; align-items: center; }
-        
-        .progress-container { margin-top: 15px; background: #eee; border-radius: 10px; height: 8px; overflow: hidden; }
-        #progress-bar { height: 100%; background: var(--success); width: 0%; transition: 0.4s; }
-        
-        .search-box { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; margin-top: 15px; font-family: inherit; box-sizing: border-box; }
-        
-        .student-card { 
-            background: white; padding: 16px; border-radius: 12px; margin-bottom: 10px;
-            display: flex; justify-content: space-between; align-items: center;
-            border-left: 6px solid #cbd5e1; transition: 0.3s;
+        :root {
+            --primary: #005A9C;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --bg: #f1f5f9;
+            --card-shadow: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
         }
-        .student-card.is-boarded { border-left-color: var(--success); background: #f0fdf4; }
-        
-        .info h4 { margin: 0; color: #1e293b; font-size: 1.05em; }
-        .info span { font-size: 0.85em; color: #64748b; display: block; margin-top: 2px; }
-        
-        .actions { display: flex; gap: 12px; align-items: center; }
-        .btn-call { background: #f8fafc; border: 1px solid #e2e8f0; padding: 10px; border-radius: 10px; text-decoration: none; font-size: 1.2em; }
-        
-        .switch { position: relative; width: 50px; height: 26px; }
-        .switch input { opacity: 0; width: 0; height: 0; }
-        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
-        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
-        input:checked + .slider { background-color: var(--success); }
-        input:checked + .slider:before { transform: translateX(24px); }
 
-        .back-link { display: block; text-align: center; margin-top: 20px; color: #64748b; text-decoration: none; font-size: 0.9em; font-weight: 600; }
-        #loading { text-align: center; padding: 40px; color: #64748b; }
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; padding: 0; color: #1e293b; }
+        
+        .header {
+            position: sticky; top: 0; background: white; z-index: 1000;
+            padding: 15px 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+        }
+
+        .header-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .back-btn { text-decoration: none; font-size: 1.5rem; color: var(--primary); }
+        .stats { font-weight: 600; font-size: 0.9rem; background: #e0f2fe; padding: 4px 12px; border-radius: 20px; color: var(--primary); }
+
+        .progress-container { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 15px; }
+        .progress-bar { height: 100%; background: var(--success); width: 0%; transition: width 0.5s ease; }
+
+        .search-bar {
+            display: flex; align-items: center; gap: 10px; background: #f8fafc;
+            padding: 12px 15px; border-radius: 12px; border: 1px solid #e2e8f0;
+        }
+        .search-bar input { border: none; background: transparent; width: 100%; outline: none; font-size: 1rem; }
+
+        .roster { padding: 15px; padding-bottom: 100px; }
+        
+        .student-card {
+            background: white; border-radius: 16px; padding: 16px;
+            margin-bottom: 12px; display: flex; align-items: center;
+            justify-content: space-between; border-left: 6px solid #cbd5e1;
+            box-shadow: var(--card-shadow); transition: all 0.3s ease;
+        }
+
+        .student-card.is-waiting {
+            border-left-color: var(--success);
+            background: #f0fdf4;
+            animation: pulse-border 2s infinite;
+        }
+
+        @keyframes pulse-border {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .student-card.boarded {
+            filter: grayscale(100%);
+            opacity: 0.6;
+            border-left-color: var(--primary);
+        }
+
+        .student-card.missed {
+            border-left-color: var(--danger);
+            background: #fef2f2;
+        }
+
+        .info h4 { margin: 0; font-size: 1rem; }
+        .info p { margin: 4px 0 0; font-size: 0.8rem; color: #64748b; }
+
+        .tag {
+            font-size: 0.65rem; font-weight: 700; padding: 3px 8px;
+            border-radius: 4px; display: inline-block; margin-top: 8px;
+        }
+        .tag-waiting { background: var(--success); color: white; }
+        .tag-missed { background: var(--danger); color: white; }
+
+        .actions { display: flex; gap: 8px; }
+        .btn-icon {
+            width: 45px; height: 45px; border-radius: 12px; border: none;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.2rem; cursor: pointer; transition: 0.2s;
+        }
+        .btn-call { background: #e0f2fe; color: var(--primary); }
+        .btn-board { background: var(--primary); color: white; font-size: 0.9rem; font-weight: 600; width: auto; padding: 0 15px; }
+        .btn-miss { background: #fee2e2; color: var(--danger); }
+
+        .empty-state { text-align: center; margin-top: 50px; color: #94a3b8; }
+
+        .finish-trip {
+            position: fixed; bottom: 20px; left: 20px; right: 20px;
+            background: var(--primary); color: white; border: none;
+            padding: 15px; border-radius: 15px; font-weight: 600;
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.2);
+            cursor: pointer; z-index: 1001;
+        }
     </style>
 </head>
 <body>
 
-<div class="container" style="max-width: 600px; margin: auto;">
     <div class="header">
-        <h2>
-            <span>🚍 Student List</span>
-            <span id="boarded-count" style="font-size: 0.7em; opacity: 0.8;">0/0 Boarded</span>
-        </h2>
-        <div class="progress-container"><div id="progress-bar"></div></div>
-        <input type="text" id="search" class="search-box" placeholder="Search student name or enrollment..." onkeyup="filterStudents()">
+        <div class="header-top">
+            <a href="/driver-dashboard.html" class="back-btn">←</a>
+            <div class="stats" id="boardedCount">0/0 Boarded</div>
+        </div>
+        <div class="progress-container">
+            <div id="progressBar" class="progress-bar"></div>
+        </div>
+        <div class="search-bar">
+            <span>🔍</span>
+            <input type="text" id="searchInput" placeholder="Search student or stop..." onkeyup="filterRoster()">
+        </div>
     </div>
 
-    <div id="loading">⏳ Syncing route data...</div>
-    <div id="student-list"></div>
+    <div class="roster" id="rosterContainer">
+        <div class="empty-state">Loading route data...</div>
+    </div>
 
-    <a href="/driver-dashboard.html" class="back-link">← Back to Dashboard</a>
-</div>
+    <button class="finish-trip" onclick="finishTrip()">COMPLETE TRIP</button>
 
-<script>
-    const token = localStorage.getItem('erp-token');
-    let students = [];
-    let currentRouteId = null;
+    <script>
+        const token = localStorage.getItem('erp-token');
+        let students = [];
+        let vehicleId = null;
 
-    async function init() {
-        try {
-            const statusRes = await fetch('/api/transport/driver/status', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const statusData = await statusRes.json();
-            currentRouteId = statusData.route_id;
+        async function init() {
+            try {
+                // 1. Get Driver Info
+                const profile = await fetch('/api/transport/driver/status', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                }).then(res => res.json());
 
-            const res = await fetch(`/api/transport/route/${currentRouteId}/students`, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            students = await res.json();
+                vehicleId = profile.vehicle_id;
 
-            renderList(students);
-            document.getElementById('loading').style.display = 'none';
-        } catch (err) {
-            document.getElementById('loading').innerHTML = "❌ Connection failed.";
+                // 2. Get Students & Waiting List
+                const [rosterData, waitingData] = await Promise.all([
+                    fetch(`/api/transport/assignments/${vehicleId}`, { headers: { 'Authorization': `Bearer ${token}` }}).then(r => r.json()),
+                    fetch('/api/transport/driver/waiting-list', { headers: { 'Authorization': `Bearer ${token}` }}).then(r => r.json())
+                ]);
+
+                students = rosterData;
+                render(waitingData.students || []);
+            } catch (err) {
+                console.error(err);
+                document.getElementById('rosterContainer').innerHTML = '<div class="empty-state">Error loading roster. Check connection.</div>';
+            }
         }
-    }
 
-    function renderList(list) {
-        const container = document.getElementById('student-list');
-        container.innerHTML = list.map(s => `
-            <div class="student-card" id="card-${s.student_id}">
-                <div class="info">
-                    <h4>${s.full_name}</h4>
-                    <span>Enrollment: ${s.enrollment_no || 'N/A'}</span>
-                    <span>📍 Stop: <strong>${s.stop_name}</strong></span>
-                </div>
-                <div class="actions">
-                    <a href="tel:${s.phone_number}" class="btn-call">📞</a>
-                    <label class="switch">
-                        <input type="checkbox" onchange="markBoarded('${s.student_id}', this.checked)">
-                        <span class="slider"></span>
-                    </label>
-                </div>
-            </div>
-        `).join('');
-        updateCounters();
-    }
+        function render(waitingList) {
+            const container = document.getElementById('rosterContainer');
+            let boardedNum = 0;
 
-    async function markBoarded(studentId, isChecked) {
-        if (!studentId || studentId === 'undefined') return;
-
-        const card = document.getElementById(`card-${studentId}`);
-        const status = isChecked ? 'Boarded' : 'Absent';
-        
-        card.classList.toggle('is-boarded', isChecked);
-        updateCounters();
-
-        try {
-            await fetch('/api/transport/attendance', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                body: JSON.stringify({ student_id: studentId, route_id: currentRouteId, status: status })
+            // Sort: Waiting students first -> Unboarded -> Boarded
+            const sorted = [...students].sort((a, b) => {
+                const aWait = waitingList.some(w => w.student_id === a.student_id);
+                const bWait = waitingList.some(w => w.student_id === b.student_id);
+                if (aWait && !bWait) return -1;
+                if (!aWait && bWait) return 1;
+                return (a.is_boarded === b.is_boarded) ? 0 : a.is_boarded ? 1 : -1;
             });
-        } catch (err) {
-            console.error("Sync Error");
+
+            container.innerHTML = sorted.map(s => {
+                const isWaiting = waitingList.some(w => w.student_id === s.student_id);
+                if (s.is_boarded) boardedNum++;
+
+                return `
+                    <div class="student-card ${isWaiting ? 'is-waiting' : ''} ${s.is_boarded ? 'boarded' : ''} ${s.is_missed ? 'missed' : ''}" id="card-${s.student_id}">
+                        <div class="info">
+                            <h4>${s.full_name}</h4>
+                            <p>📍 ${s.pickup_time || 'Scheduled Stop'}</p>
+                            ${isWaiting ? '<span class="tag tag-waiting">🙋 AT STOP</span>' : ''}
+                            ${s.is_missed ? '<span class="tag tag-missed">❌ MISSED</span>' : ''}
+                        </div>
+                        <div class="actions">
+                            <a href="tel:${s.parent_phone || ''}" class="btn-icon btn-call">📞</a>
+                            ${!s.is_boarded ? `
+                                <button class="btn-icon btn-board" onclick="updateStatus('${s.student_id}', 'boarded')">BOARD</button>
+                                <button class="btn-icon btn-miss" onclick="updateStatus('${s.student_id}', 'missed')">✕</button>
+                            ` : `<span style="color:var(--success); font-weight:600; padding-right:10px;">IN BUS</span>`}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            const progress = (boardedNum / (students.length || 1)) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+            document.getElementById('boardedCount').innerText = `${boardedNum}/${students.length} Boarded`;
         }
-    }
 
-    function filterStudents() {
-        const query = document.getElementById('search').value.toLowerCase();
-        const filtered = students.filter(s => 
-            s.full_name.toLowerCase().includes(query) || 
-            (s.enrollment_no && s.enrollment_no.toLowerCase().includes(query))
-        );
-        renderList(filtered);
-    }
+        async function updateStatus(id, type) {
+            const endpoint = type === 'boarded' ? '/api/transport/driver/mark-boarded' : '/api/transport/driver/mark-missed';
+            try {
+                const res = await fetch(endpoint, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ student_id: id })
+                });
+                if (res.ok) init();
+            } catch (e) { console.error("Update failed"); }
+        }
 
-    function updateCounters() {
-        const total = students.length;
-        const checked = document.querySelectorAll('input[type="checkbox"]:checked').length;
-        const percent = total > 0 ? (checked / total) * 100 : 0;
-        document.getElementById('progress-bar').style.width = percent + '%';
-        document.getElementById('boarded-count').innerText = `${checked}/${total} Boarded`;
-    }
+        function filterRoster() {
+            const term = document.getElementById('searchInput').value.toLowerCase();
+            document.querySelectorAll('.student-card').forEach(card => {
+                const name = card.querySelector('h4').innerText.toLowerCase();
+                card.style.display = name.includes(term) ? 'flex' : 'none';
+            });
+        }
 
-    window.onload = init;
-</script>
+        async function finishTrip() {
+            if (!confirm("Complete trip and reset boarding data for the next run?")) return;
+            
+            try {
+                const res = await fetch('/api/transport/driver/finish-trip', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ vehicle_id: vehicleId })
+                });
+                if (res.ok) window.location.href = '/driver-dashboard.html';
+            } catch (err) {
+                alert("Could not complete trip. Try again.");
+            }
+        }
+
+        init();
+        setInterval(init, 10000); // Refreshes every 10 seconds for real-time signals
+    </script>
 </body>
 </html>

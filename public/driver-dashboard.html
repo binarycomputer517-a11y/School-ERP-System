@@ -21,6 +21,7 @@
             background-color: var(--bg-light);
             margin: 0;
             color: var(--text-dark);
+            overflow-x: hidden;
         }
 
         /* Top Alert for Service */
@@ -35,6 +36,33 @@
             position: sticky;
             top: 0;
             z-index: 1000;
+        }
+
+        /* Real-time Notification Container */
+        #notification-zone {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            width: 320px;
+        }
+
+        .driver-toast {
+            background: white;
+            border-left: 5px solid var(--success);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            animation: slideIn 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(110%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
         }
 
         .header {
@@ -55,7 +83,6 @@
             padding: 0 20px;
         }
 
-        /* --- Profile Bar --- */
         .info-bar {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -74,7 +101,6 @@
         .info-card h3 { margin: 0; font-size: 0.75em; color: #64748b; text-transform: uppercase; }
         .info-card p { margin: 5px 0 0; font-size: 1.15em; font-weight: 700; color: var(--primary); }
 
-        /* --- Action Grid --- */
         .card-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -94,11 +120,31 @@
             flex-direction: column;
             align-items: center;
             border: 1px solid transparent;
+            position: relative;
         }
 
         .menu-card:hover {
             transform: translateY(-8px);
             border-color: var(--primary);
+        }
+
+        /* Waiting Badge */
+        .badge-count {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: var(--danger);
+            color: white;
+            font-size: 0.75em;
+            font-weight: 700;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+            display: none; /* Hidden by default */
         }
 
         .menu-card.trip-active {
@@ -135,6 +181,7 @@
 <body>
 
     <div id="maintenance-alert"></div>
+    <div id="notification-zone"></div>
 
     <div class="header">
         <div>
@@ -164,9 +211,12 @@
             <a href="/start-trip.html" id="trip-card" class="menu-card">
                 <span class="icon">🏁</span><span id="trip-label">Start Trip</span>
             </a>
+            
             <a href="/route-students.html" class="menu-card">
+                <div id="waiting-badge" class="badge-count">0</div>
                 <span class="icon">🧑‍🎓</span><span>Pickup List</span>
             </a>
+
             <a href="/fuel-logs.html" class="menu-card">
                 <span class="icon">⛽</span><span>Fuel Log</span>
             </a>
@@ -185,17 +235,16 @@
     <script>
         const token = localStorage.getItem('erp-token');
         const role = localStorage.getItem('user-role');
+        let lastWaitingCount = 0;
 
         if (!token || (role && role.toLowerCase() !== 'driver')) {
             window.location.href = '/login.html';
         }
 
         async function initDashboard() {
-            // Display Formatted Date
             const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
             document.getElementById('current-date').innerText = new Date().toLocaleDateString(undefined, options);
 
-            // Check if a trip is currently active in localStorage
             if (localStorage.getItem('active_trip_route')) {
                 const tripCard = document.getElementById('trip-card');
                 tripCard.classList.add('trip-active');
@@ -208,7 +257,6 @@
                 });
                 
                 if (response.status === 401) logout();
-                
                 const data = await response.json();
 
                 if (response.ok) {
@@ -217,10 +265,63 @@
                     document.getElementById('route-name').innerText = data.route_name || 'Standby';
                     
                     checkMaintenance();
+                    // Start checking for students immediately after loading profile
+                    syncWaitingStudents(); 
+                    setInterval(syncWaitingStudents, 15000); // Sync every 15 seconds
                 }
             } catch (err) {
                 console.error("Dashboard data load failed.");
             }
+        }
+
+        // --- NEW: Presence Notification Logic ---
+        async function syncWaitingStudents() {
+            try {
+                const res = await fetch('/api/transport/driver/waiting-list', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+
+                const data = await res.json(); 
+                // data format expected: { count: 3, latest_name: "John Doe" }
+                
+                const badge = document.getElementById('waiting-badge');
+                
+                if (data.count > 0) {
+                    badge.innerText = data.count;
+                    badge.style.display = 'flex';
+
+                    // If a new student joined the waiting list, notify the driver
+                    if (data.count > lastWaitingCount) {
+                        notifyDriver(`🙋 ${data.latest_name} is waiting at the stop!`);
+                    }
+                    lastWaitingCount = data.count;
+                } else {
+                    badge.style.display = 'none';
+                    lastWaitingCount = 0;
+                }
+            } catch (e) { console.warn("Waiting list sync failed"); }
+        }
+
+        function notifyDriver(message) {
+            const zone = document.getElementById('notification-zone');
+            const toast = document.createElement('div');
+            toast.className = 'driver-toast';
+            toast.innerHTML = `<span>${message}</span>`;
+            
+            zone.appendChild(toast);
+
+            // Optional: Play a short notification sound
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.volume = 0.5;
+            audio.play().catch(() => {}); 
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = '0.5s';
+                setTimeout(() => toast.remove(), 500);
+            }, 5000);
         }
 
         async function checkMaintenance() {

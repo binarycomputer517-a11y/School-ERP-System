@@ -3,214 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Tracking | ERP Portal</title>
-    <link rel="stylesheet" href="css/style.css">
+    <title>Live Fleet Tracking | Transport ERP</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        /* 1. Map & Sidebar Layout */
-        #map { 
-            height: 650px; 
-            border-radius: 15px; 
-            z-index: 1; 
-            border: 1px solid var(--glass-border);
-        }
+        :root { --primary: #2563eb; --success: #22c55e; --warning: #f59e0b; --danger: #ef4444; }
+        body { background: #f8fafc; margin: 0; font-family: 'Inter', sans-serif; overflow: hidden; }
         
-        .tracking-layout {
-            display: grid;
-            grid-template-columns: 350px 1fr;
-            gap: 20px;
+        .tracking-grid { display: grid; grid-template-columns: 1fr 380px; height: calc(100vh - 70px); }
+        #map { height: 100%; width: 100%; }
+
+        .sidebar { background: white; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #f1f5f9; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; }
+
+        /* --- UPDATED BUS MARKER STYLES --- */
+        .bus-marker-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
-        .vehicle-sidebar {
-            background: rgba(255, 255, 255, 0.4);
-            border-radius: 15px;
-            padding: 15px;
-            height: 650px;
-            overflow-y: auto;
-            border: 1px solid var(--glass-border);
+        .bus-floating-label {
+            background: rgba(30, 41, 59, 0.9);
+            color: white;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            white-space: nowrap;
+            margin-bottom: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            border: 1px solid rgba(255,255,255,0.1);
+            pointer-events: none;
         }
 
-        /* 2. Vehicle Cards */
-        .vehicle-item {
+        .bus-floating-label span {
+            display: block;
+            font-size: 9px;
+            color: #94a3b8;
+            font-weight: 400;
+        }
+
+        .bus-icon-wrapper {
             background: white;
-            border-radius: 12px;
-            padding: 15px;
-            margin-bottom: 12px;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border-left: 5px solid var(--primary-dark);
-            box-shadow: var(--shadow-sm);
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--primary);
+            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
+            position: relative;
         }
 
-        .vehicle-item:hover, .vehicle-item.active {
-            transform: translateX(8px);
-            background: var(--primary-dark);
-            color: white !important;
+        .bus-icon-wrapper i {
+            color: var(--primary);
+            font-size: 18px;
         }
 
-        .vehicle-item:hover small, .vehicle-item.active small {
-            color: rgba(255, 255, 255, 0.8) !important;
+        /* Movement Pulse for Bus */
+        .bus-icon-wrapper::after {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: var(--primary);
+            opacity: 0.2;
+            animation: bus-pulse 2s infinite;
         }
 
-        /* 3. Glassmorphism Map Controls */
-        .leaflet-bar { border: none !important; box-shadow: var(--shadow-sm) !important; }
-        .leaflet-bar a {
-            background: rgba(255, 255, 255, 0.8) !important;
-            backdrop-filter: blur(5px);
-            color: var(--primary-dark) !important;
-            border-bottom: 1px solid var(--glass-border) !important;
-        }
-        .leaflet-bar a:hover { background: var(--primary-dark) !important; color: white !important; }
-
-        .leaflet-popup-content-wrapper {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            font-family: inherit;
+        @keyframes bus-pulse {
+            0% { transform: scale(1); opacity: 0.4; }
+            100% { transform: scale(2); opacity: 0; }
         }
 
-        @media (max-width: 992px) {
-            .tracking-layout { grid-template-columns: 1fr; }
-            .vehicle-sidebar { height: 300px; }
+        /* Existing Styles */
+        .status-card { background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 12px; }
+        .status-card.arriving { border-left: 4px solid var(--success); background: #f0fdf4; }
+        .pulse-home { animation: shadow-pulse 2s infinite; border-radius: 50%; }
+        @keyframes shadow-pulse {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
         }
     </style>
 </head>
-<body class="container-fluid">
+<body>
 
-    <nav class="glass-nav mb-4">
-        <div style="display: flex; align-items: center; gap: 15px;">
-            <img src="" class="global-school-logo" height="40" alt="Logo">
-            <div>
-                <h2 class="global-school-name" style="margin:0; font-size: 1.1rem; color: var(--primary-dark);">ERP System</h2>
-                <div class="badge badge-success" style="font-size: 0.6rem; letter-spacing: 1px;">LIVE FLEET MONITOR</div>
-            </div>
-        </div>
-        <div class="nav-links">
-            <a href="manage-transport.html" class="btn btn-primary">
-                <i class="fas fa-chevron-left"></i> Exit Tracking
-            </a>
+    <nav style="height:70px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:white; border-bottom:1px solid #e2e8f0;">
+        <h2 style="margin:0; font-size: 20px;"><i class="fas fa-route" style="color:var(--primary)"></i> FLEET <span style="color:var(--primary)">LIVE</span></h2>
+        <div style="display:flex; gap:20px; align-items:center;">
+            <div id="connectionStatus" style="font-size: 13px; color: var(--success); font-weight: 600;">● Live Feed Active</div>
+            <span id="lastUpdate" style="font-size: 12px; color: #64748b;"></span>
+            <button onclick="location.reload()" style="padding:8px 15px; border-radius:6px; border:1px solid #ddd; cursor:pointer; background:white;"><i class="fas fa-sync"></i></button>
         </div>
     </nav>
 
-    <div class="container" style="max-width: 1400px;">
-        <div class="glass-card" style="padding: 15px;">
-            <div class="tracking-layout">
-                <div class="vehicle-sidebar">
-                    <h3 style="font-size: 1rem; color: var(--primary-dark); margin-bottom: 20px; padding-left: 5px;">
-                        <i class="fas fa-satellite-dish" style="margin-right: 8px;"></i> Active Vehicles
-                    </h3>
-                    <div id="vehicle-list-container">
-                        <div class="skeleton" style="height: 85px; margin-bottom: 12px; border-radius:12px;"></div>
-                        <div class="skeleton" style="height: 85px; margin-bottom: 12px; border-radius:12px;"></div>
-                        <div class="skeleton" style="height: 85px; margin-bottom: 12px; border-radius:12px;"></div>
-                    </div>
-                </div>
-
-                <div id="map"></div>
+    <div class="tracking-grid">
+        <div id="map"></div>
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h3 style="margin:0;"><i class="fas fa-bullhorn" style="color:var(--warning)"></i> Proximity Alerts</h3>
+                <p style="margin:5px 0 0; font-size: 12px; color:#64748b;">Scanning students within 500m of buses</p>
+            </div>
+            <div class="sidebar-content" id="proximityList">
+                <p style="text-align:center; padding-top:50px; color:#94a3b8;">Scanning for active trips...</p>
             </div>
         </div>
     </div>
 
-    <div id="bg-text-pattern" style="position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1; pointer-events:none;"></div>
-
-    <script src="js/global-config.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map').setView([26.72, 88.43], 13);
-        const vehicleMarkers = {};
-        let currentRouteLayer = null;
+        const map = L.map('map', { zoomControl: false }).setView([22.5726, 88.3639], 14);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
 
-        // Clean Voyager Map Tiles
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+        let busMarkers = {};
+        let studentMarkers = {};
+        const AUTH_HEADER = { 'Authorization': `Bearer ${localStorage.getItem('erp-token')?.replace(/"/g, '')}` };
 
-        function createBusIcon(isActive = false) {
-            const color = isActive ? '#FF9933' : '#005A9C'; // Saffron for active, Blue for idle
-            return L.divIcon({
-                html: `<div style="filter: drop-shadow(0 3px 5px rgba(0,0,0,0.2))">
-                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="color: ${color};">
-                            <path d="M18.922 17.552C18.43 18.342 17.518 19 16.5 19H7.5C6.482 19 5.57 18.342 5.078 17.552L3 14V8C3 6.896 3.896 6 5 6H19C20.104 6 21 6.896 21 8V14L18.922 17.552Z" fill="white" stroke="currentColor" stroke-width="2"/>
-                            <circle cx="7.5" cy="17.5" r="1.5" fill="currentColor"/>
-                            <circle cx="16.5" cy="17.5" r="1.5" fill="currentColor"/>
-                        </svg>
-                       </div>`,
-                className: 'bg-transparent',
-                iconSize: [36, 36],
-                iconAnchor: [18, 36]
-            });
+        function getDistMeters(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const p1 = lat1 * Math.PI/180, p2 = lat2 * Math.PI/180;
+            const dp = (lat2-lat1) * Math.PI/180, dl = (lon2-lon1) * Math.PI/180;
+            const a = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2) * Math.sin(dl/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
         }
 
-        async function displayRouteOnMap(routeId) {
-            if (currentRouteLayer) map.removeLayer(currentRouteLayer);
-
+        async function updateDashboard() {
             try {
-                const response = await window.authFetch(`/api/transport/routes/${routeId}/details`);
-                const routeDetails = await response.json();
+                // Fetch Bus Driver details & Live Locations
+                const res = await fetch('/api/transport/live-locations', { headers: AUTH_HEADER });
+                const buses = await res.json();
                 
-                // Route Polyline (Indian Blue)
-                const routePolyline = L.polyline(routeDetails.path, { 
-                    color: '#005A9C', weight: 5, opacity: 0.5, lineJoin: 'round' 
-                });
-                
-                // Terminals (Saffron Start, Green End)
-                const startMarker = L.circleMarker(routeDetails.start, { radius: 6, color: '#FF9933', fillOpacity: 1 });
-                const endMarker = L.circleMarker(routeDetails.end, { radius: 6, color: '#138808', fillOpacity: 1 });
-                
-                currentRouteLayer = L.layerGroup([routePolyline, startMarker, endMarker]).addTo(map);
-                map.fitBounds(routePolyline.getBounds(), { padding: [40, 40] });
-            } catch (err) { console.error("Route Path Error:", err); }
-        }
+                const sidebar = document.getElementById('proximityList');
+                let alertHtml = "";
 
-        async function fetchVehicleLocations() {
-            try {
-                const response = await window.authFetch('/api/transport/vehicles/locations');
-                const vehicles = await response.json();
-                const container = document.getElementById('vehicle-list-container');
-                container.innerHTML = '';
+                for (const bus of buses) {
+                    if (!bus.current_coords) continue;
+                    const [bLat, bLng] = bus.current_coords.split(',').map(Number);
 
-                vehicles.forEach(v => {
-                    const latLng = [parseFloat(v.last_lat), parseFloat(v.last_lng)];
-                    
-                    // Sync Markers
-                    if (vehicleMarkers[v.id]) {
-                        vehicleMarkers[v.id].setLatLng(latLng);
+                    // --- UPDATED BUS ICON LOGIC ---
+                    const busHtml = `
+                        <div class="bus-marker-container">
+                            <div class="bus-floating-label">
+                                ${bus.vehicle_no}
+                                <span>Driver: ${bus.driver_name || 'Assigned'}</span>
+                            </div>
+                            <div class="bus-icon-wrapper">
+                                <i class="fas fa-bus"></i>
+                            </div>
+                        </div>`;
+
+                    if (busMarkers[bus.id]) {
+                        busMarkers[bus.id].setLatLng([bLat, bLng]);
                     } else {
-                        vehicleMarkers[v.id] = L.marker(latLng, { icon: createBusIcon() }).addTo(map);
-                        vehicleMarkers[v.id].bindPopup(`<b>${v.vehicle_number}</b><br>${v.driver_name || 'No Driver'}`);
+                        busMarkers[bus.id] = L.marker([bLat, bLng], {
+                            icon: L.divIcon({ 
+                                html: busHtml, 
+                                className: 'dummy', 
+                                iconSize: [100, 80], 
+                                iconAnchor: [50, 75] 
+                            })
+                        }).addTo(map);
                     }
 
-                    // Sync Sidebar
-                    const div = document.createElement('div');
-                    div.className = 'vehicle-item';
-                    div.innerHTML = `
-                        <div style="display:flex; justify-content:space-between; align-items:start;">
-                            <strong>${v.vehicle_number}</strong>
-                            <span class="badge badge-success" style="font-size:0.5rem">ONLINE</span>
-                        </div>
-                        <small style="display:block; margin-top:8px; opacity:0.8;">
-                            <i class="fas fa-user-circle"></i> ${v.driver_name || 'Unknown Driver'}
-                        </small>
-                    `;
-                    
-                    div.onclick = () => {
-                        document.querySelectorAll('.vehicle-item').forEach(el => el.classList.remove('active'));
-                        div.classList.add('active');
-                        map.setView(latLng, 16);
-                        vehicleMarkers[v.id].openPopup();
-                        if (v.route_id) displayRouteOnMap(v.route_id);
-                    };
-                    
-                    container.appendChild(div);
-                });
-            } catch (err) { console.error("Location Sync Error:", err); }
+                    // Fetch assignments to calculate proximity
+                    const sRes = await fetch(`/api/transport/assignments/${bus.id}`, { headers: AUTH_HEADER });
+                    const students = await sRes.json();
+
+                    students.forEach(s => {
+                        if (!s.location_coords) return;
+                        const [sLat, sLng] = s.location_coords.split(',').map(Number);
+                        const dist = getDistMeters(bLat, bLng, sLat, sLng);
+
+                        if (!studentMarkers[s.student_id]) {
+                            studentMarkers[s.student_id] = L.marker([sLat, sLng], {
+                                icon: L.divIcon({ 
+                                    html: `<i class="fas fa-home" style="color:#94a3b8; font-size:16px;"></i>`, 
+                                    className: 'dummy' 
+                                })
+                            }).addTo(map).bindPopup(`<b>Student:</b> ${s.full_name}`);
+                        }
+
+                        if (dist < 500) {
+                            alertHtml += `
+                                <div class="status-card arriving">
+                                    <div style="display:flex; justify-content:space-between; font-weight:bold;">
+                                        <span>${s.full_name}</span>
+                                        <span style="color:var(--success)">${Math.round(dist)}m</span>
+                                    </div>
+                                    <div style="font-size:11px; margin-top:5px; color:#64748b;">
+                                        <i class="fas fa-bus"></i> Bus ${bus.vehicle_no} is arriving
+                                    </div>
+                                </div>`;
+                            studentMarkers[s.student_id].getElement()?.classList.add('pulse-home');
+                        } else {
+                            studentMarkers[s.student_id].getElement()?.classList.remove('pulse-home');
+                        }
+                    });
+                }
+                
+                sidebar.innerHTML = alertHtml || `<p style="text-align:center; padding-top:50px; color:#94a3b8;">No proximity alerts...</p>`;
+                document.getElementById('lastUpdate').innerText = `Sync: ${new Date().toLocaleTimeString()}`;
+
+            } catch (err) { console.error(err); }
         }
 
-        window.onload = () => {
-            fetchVehicleLocations();
-            setInterval(fetchVehicleLocations, 10000); 
-        };
+        setInterval(updateDashboard, 5000);
+        updateDashboard();
     </script>
 </body>
 </html>

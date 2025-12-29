@@ -3,168 +3,223 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track My Bus (Live)</title>
+    <title>Live Bus Tracker | Student Pro</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <link rel="stylesheet" href="/css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
-        /* Container and Map Styles */
-        .container { max-width: 1000px; margin: 40px auto; padding: 20px; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; background-color: #FFFFFF; }
-        #map { height: 500px; border-radius: 4px; margin-top: 15px; border: 1px solid #555; }
+        :root {
+            --primary: #005A9C;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+        }
+
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; padding: 0; color: #1e293b; overflow-x: hidden; }
         
-        /* Detail Box and Error */
-        .bus-details { padding: 15px; background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px; }
-        .error-message { color: white; background-color: #dc3545; padding: 15px; border-radius: 4px; text-align: center; font-weight: bold; }
-        .last-updated { font-size: 0.8em; color: #6c757d; margin-top: 10px; }
-        .nav-links a { color: #005A9C; text-decoration: none; font-weight: bold; }
+        /* Fixed CSS Error: position: sticky */
+        .header { 
+            background: white; 
+            padding: 15px 20px; 
+            display: flex; 
+            align-items: center; 
+            gap: 15px; 
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05); 
+            position: sticky; 
+            top: 0; 
+            z-index: 1000; 
+        }
+        .header a { text-decoration: none; color: var(--primary); font-size: 1.2rem; }
+        .header h1 { font-size: 1.1rem; margin: 0; flex-grow: 1; }
+
+        .live-dot { height: 8px; width: 8px; background-color: var(--danger); border-radius: 50%; display: inline-block; animation: blink 1s infinite; margin-right: 5px; }
+        @keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        .container { max-width: 600px; margin: 0 auto; padding: 15px; }
+
+        .live-card { background: white; border-radius: 20px; padding: 20px; box-shadow: 0 4px 25px rgba(0,0,0,0.05); margin-bottom: 20px; border: 1px solid #e2e8f0; position: relative; overflow: hidden; }
+        
+        .eta-container { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .eta-value { font-size: 1.8rem; font-weight: 700; color: var(--primary); }
+        .eta-label { font-size: 0.75rem; color: #64748b; text-transform: uppercase; font-weight: 600; }
+
+        .bus-info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; font-size: 0.85rem; margin-bottom: 10px; }
+        .info-item span { color: #64748b; display: block; font-size: 0.7rem; }
+
+        /* Map UI */
+        .map-wrapper { position: relative; border-radius: 20px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .map-container { height: 350px; width: 100%; border: 4px solid white; border-radius: 20px; }
+        #map { height: 100%; width: 100%; }
+
+        /* Map Controls Overlay */
+        .map-overlay-btn { position: absolute; bottom: 20px; right: 20px; z-index: 999; background: white; border: none; width: 45px; height: 45px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; color: var(--primary); font-size: 1.2rem; }
+
+        .btn-ready { 
+            width: 100%; background: var(--success); color: white; border: none; padding: 16px; 
+            border-radius: 14px; font-weight: 600; font-size: 1rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+            transition: 0.3s; margin-top: 15px;
+        }
+        .btn-ready:disabled { background: #94a3b8; cursor: not-allowed; }
+
+        /* Live Bus Marker Animation */
+        .bus-marker-pulse {
+            width: 20px; height: 20px; background: var(--primary);
+            border: 3px solid white; border-radius: 50%;
+            position: relative;
+        }
+        .bus-marker-pulse::after {
+            content: ''; position: absolute; width: 100%; height: 100%;
+            top: -3px; left: -3px; border: 3px solid var(--primary);
+            border-radius: 50%; animation: pulse-ring 1.5s infinite;
+        }
+        @keyframes pulse-ring { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.5); opacity: 0; } }
+
+        .error-overlay { background: #fee2e2; color: var(--danger); padding: 30px; border-radius: 20px; text-align: center; }
     </style>
 </head>
 <body>
-<script>
-    const token = localStorage.getItem('erp-token');
-    if (!token) window.location.href = '/login';
-</script>
+
+<div class="header">
+    <a href="/student-dashboard.html"><i class="fas fa-chevron-left"></i></a>
+    <h1>Live Trip Tracking</h1>
+    <div style="font-size: 0.8rem; font-weight: 600; color: var(--danger);"><span class="live-dot"></span>LIVE</div>
+</div>
 
 <div class="container">
-    <h1>Track My Bus (Live)</h1>
-    <div class="nav-links"><a href="/student-dashboard.html">← Back to Dashboard</a></div> 
-    
-    <div id="error-box" style="display: none;"></div>
+    <div id="tracking-ui">
+        <div class="live-card">
+            <div class="eta-container">
+                <div class="eta-box">
+                    <div class="eta-label">Arrival Estimation</div>
+                    <div class="eta-value" id="eta-time">Calculating...</div>
+                </div>
+                <div class="eta-box" style="text-align: right;">
+                    <div class="eta-label">Distance</div>
+                    <div class="eta-value" id="distance-km" style="color: #334155;">-- km</div>
+                </div>
+            </div>
 
-    <div id="tracking-info">
-        <div class="bus-details" id="bus-details-box">
-            <p><strong>Route Name:</strong> <span id="route-name">...</span></p>
-            <p><strong>Schedule:</strong> <span id="route-schedule">...</span></p>
-            <p><strong>Vehicle Number:</strong> <span id="vehicle-number">...</span></p>
-            <p><strong>Driver Name:</strong> <span id="driver-name">...</span></p>
-            <p><strong>Status:</strong> <span id="status" class="badge bg-warning">Initializing...</span></p>
-            <div class="last-updated">Last Updated: <span id="last-updated-time">...</span></div>
+            <div class="bus-info-grid">
+                <div class="info-item"><span>Vehicle Number</span><b id="vehicle-num">...</b></div>
+                <div class="info-item"><span>Driver</span><b id="driver-name">...</b></div>
+                <div class="info-item"><span>Trip Status</span><b id="trip-status">...</b></div>
+                <div class="info-item"><span>Last Sync</span><b id="update-tick">...</b></div>
+            </div>
+
+            <button id="signalBtn" class="btn-ready" onclick="sendSignal()">
+                <i class="fas fa-street-view"></i> I'M AT THE STOP
+            </button>
         </div>
-        <div id="map"></div>
+
+        <div class="map-wrapper">
+            <div class="map-container">
+                <div id="map"></div>
+            </div>
+            <button class="map-overlay-btn" onclick="focusBus()" title="Recenter on Bus">
+                <i class="fas fa-crosshairs"></i>
+            </button>
+        </div>
     </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
-    // Default location (e.g., Kolkata or a central school location)
-    const DEFAULT_LOCATION = [22.57, 88.36]; 
+    const token = localStorage.getItem('erp-token');
+    const authHeaders = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     
-    // Initialize map on the default location (will be updated by bus data)
-    const map = L.map('map').setView(DEFAULT_LOCATION, 13); 
-    let busMarker = null;
-    let initialLoadComplete = false;
+    let map, busMarker, currentBusPos = null;
+    let isFirstLoad = true;
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
-
-    // Custom icon for the bus (using SVG for better styling)
-    function createBusIcon() {
-        return L.divIcon({
-            html: `
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="#005A9C" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 0 2px #000);">
-                    <path d="M18.922 17.552C18.43 18.342 17.518 19 16.5 19H7.5C6.482 19 5.57 18.342 5.078 17.552L3 14V8C3 6.896 3.896 6 5 6H19C20.104 6 21 6.896 21 8V14L18.922 17.552Z" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#005A9C"/>
-                    <circle cx="7.5" cy="17.5" r="1.5" fill="#FFF" stroke="#000" stroke-width="1"/>
-                    <circle cx="16.5" cy="17.5" r="1.5" fill="#FFF" stroke="#000" stroke-width="1"/>
-                    <path d="M3 12H21" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            `,
-            className: 'bg-transparent',
-            iconSize: [30, 30], 
-            iconAnchor: [15, 30] // Bottom center of the icon
-        });
+    function initMap() {
+        map = L.map('map', { zoomControl: false }).setView([22.57, 88.36], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© CartoDB'
+        }).addTo(map);
     }
 
-    async function loadMyBusDetails() {
-        const errorBox = document.getElementById('error-box');
-        const trackingInfo = document.getElementById('tracking-info');
-        
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+        const R = 6371;
+        const dLat = (lat2 - lat1) * Math.PI / 180;
+        const dLon = (lon2 - lon1) * Math.PI / 180;
+        const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function focusBus() {
+        if (currentBusPos) map.flyTo(currentBusPos, 16);
+    }
+
+    async function sendSignal() {
+        const btn = document.getElementById('signalBtn');
+        try {
+            const res = await fetch('/api/transport/student/signal-ready', { 
+                method: 'POST', 
+                headers: authHeaders 
+            });
+            if (res.ok) {
+                btn.innerHTML = '<i class="fas fa-check-circle"></i> SIGNAL SENT';
+                btn.style.background = '#64748b';
+                btn.disabled = true;
+            }
+        } catch (e) { alert("Network error. Try again."); }
+    }
+
+    async function updateLiveFeed() {
         try {
             const res = await fetch('/api/transport/my-bus', { headers: authHeaders });
-
-            if (!res.ok) {
-                const errorBody = await res.json().catch(() => ({ message: res.statusText || 'No assignment or server error.' }));
-                
-                trackingInfo.style.display = 'none';
-                errorBox.style.display = 'block';
-                
-                let errorMessage;
-                if (res.status === 404) {
-                    errorMessage = 'No active bus assignment found for your profile.';
-                } else {
-                    errorMessage = `Server Error (${res.status}): ${errorBody.details || errorBody.message || 'Could not retrieve data.'}`;
-                }
-                
-                errorBox.innerHTML = `<p class="error-message"><i class="fas fa-exclamation-triangle"></i> ${errorMessage}</p>`;
-                return;
-            }
+            if (!res.ok) throw new Error("Offline");
 
             const data = await res.json();
-            
-            // If successful, ensure error box is hidden and info is visible
-            trackingInfo.style.display = 'block';
-            errorBox.style.display = 'none';
+            currentBusPos = [data.liveLocation.lat, data.liveLocation.lng];
 
-            // --- Update Text Details ---
-            document.getElementById('route-name').textContent = data.route_name || 'N/A';
-            document.getElementById('route-schedule').textContent = data.route_schedule || 'N/A';
-            document.getElementById('vehicle-number').textContent = data.vehicle_number || 'N/A';
-            document.getElementById('driver-name').textContent = data.driver_name || 'N/A';
-            
-            const statusElement = document.getElementById('status');
-            const statusText = data.status || 'Active';
-            statusElement.textContent = statusText;
-            statusElement.className = `badge ${statusText === 'In Transit' ? 'bg-primary' : statusText === 'Stopped' ? 'bg-warning' : 'bg-success'}`;
-            
-            document.getElementById('last-updated-time').textContent = new Date().toLocaleTimeString();
+            // Update UI
+            document.getElementById('vehicle-num').textContent = data.vehicle_number;
+            document.getElementById('driver-name').textContent = data.driver_name;
+            document.getElementById('trip-status').textContent = data.status;
+            document.getElementById('update-tick').textContent = new Date().toLocaleTimeString();
 
-            // --- Update Map Location ---
-            // Data is expected to be { liveLocation: { lat: X, lng: Y } }
-            const lat = parseFloat(data.liveLocation.lat);
-            const lng = parseFloat(data.liveLocation.lng);
-            const latLng = [lat, lng];
-
-            if (isNaN(lat) || isNaN(lng)) {
-                console.warn('Invalid coordinates received from API. Using default map location.');
-                if (!initialLoadComplete) map.setView(DEFAULT_LOCATION, 13);
-                return; 
-            }
-
+            // Handle Marker
             if (!busMarker) {
-                // Initial marker creation
-                busMarker = L.marker(latLng, { icon: createBusIcon() }).addTo(map);
-                busMarker.bindPopup(`<b>${data.vehicle_number}</b><br>Status: ${statusText}`).openPopup();
+                const busIcon = L.divIcon({
+                    className: 'custom-div-icon',
+                    html: `<div class="bus-marker-pulse"></div>`,
+                    iconSize: [20, 20], iconAnchor: [10, 10]
+                });
+                busMarker = L.marker(currentBusPos, { icon: busIcon }).addTo(map);
             } else {
-                // Update marker position
-                busMarker.setLatLng(latLng);
-                busMarker.getPopup().setContent(`<b>${data.vehicle_number}</b><br>Status: ${statusText}<br>Last updated: ${new Date().toLocaleTimeString()}`);
-            }
-            
-            // --- Map Centering Logic ---
-            if (!initialLoadComplete) {
-                map.setView(latLng, 15); // Zoom in on bus if no route to fit to
-                initialLoadComplete = true; 
-            } else {
-                // On subsequent updates, pan smoothly to the bus location
-                map.panTo(latLng);
+                busMarker.setLatLng(currentBusPos);
             }
 
-        } catch (error) {
-            console.error('Failed to load bus details:', error);
-            if (!errorBox.style.display || errorBox.style.display === 'none') {
-                 trackingInfo.style.display = 'none';
-                 errorBox.style.display = 'block';
-                 errorBox.innerHTML = `<p class="error-message">Connection Error: Could not reach the service.</p>`;
+            // ETA Calculations
+            navigator.geolocation.getCurrentPosition(uPos => {
+                const dist = calculateDistance(currentBusPos[0], currentBusPos[1], uPos.coords.latitude, uPos.coords.longitude);
+                document.getElementById('distance-km').textContent = dist.toFixed(2) + ' km';
+                const minutes = Math.round((dist / 20) * 60);
+                document.getElementById('eta-time').textContent = minutes <= 1 ? "Arriving Now" : minutes + " mins";
+            });
+
+            if (isFirstLoad) {
+                focusBus();
+                isFirstLoad = false;
             }
+
+        } catch (err) {
+            document.getElementById('tracking-ui').innerHTML = `
+                <div class="error-overlay">
+                    <i class="fas fa-bus-slash fa-3x" style="margin-bottom:15px; opacity:0.5;"></i>
+                    <h3>No Active Trip</h3>
+                    <p>Driver hasn't started the session yet. Auto-refreshing...</p>
+                </div>`;
+            setTimeout(() => location.reload(), 30000);
         }
     }
 
-    window.onload = () => {
-        loadMyBusDetails(); // Load once immediately
-        setInterval(loadMyBusDetails, 15000); // Refresh every 15 seconds
-    };
+    initMap();
+    updateLiveFeed();
+    setInterval(updateLiveFeed, 10000);
 </script>
-<script src="js/global-config.js"></script>
 </body>
 </html>

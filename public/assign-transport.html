@@ -4,180 +4,275 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Assign Student | Transport ERP</title>
-    <link rel="stylesheet" href="css/style.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
     <style>
-        /* Essential overrides for this specific page layout */
-        .page-wrapper {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: calc(100vh - 100px);
-            padding: 20px;
+        .assign-grid { display: grid; grid-template-columns: 400px 1fr; gap: 20px; padding: 20px; }
+        .search-results { 
+            border: 1px solid #e2e8f0; border-radius: 8px; 
+            max-height: 300px; overflow-y: auto; margin-top: 5px; 
+            display: none; background: white; position: absolute; width: 100%; z-index: 100;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
         }
-        .form-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
+        .student-item { 
+            padding: 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s;
         }
-        @media (max-width: 600px) {
-            .form-grid { grid-template-columns: 1fr; }
+        .student-item:hover { background: #f0f9ff; color: #0284c7; }
+        .selected-student-box {
+            background: #f0fdf4; border: 1px dashed #22c55e; padding: 15px;
+            border-radius: 8px; margin-bottom: 15px; display: none;
         }
-        .fee-display {
-            grid-column: span 2;
-            background: rgba(0, 90, 156, 0.05);
-            border-radius: 12px;
-            padding: 15px;
-            text-align: center;
-            border: 1px dashed var(--primary-dark);
-            margin: 10px 0;
+        .roster-card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; }
+        .badge-active { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+        .no-data { text-align: center; padding: 40px; color: #94a3b8; font-style: italic; }
+        
+        /* New GPS Styles */
+        .location-btn {
+            color: #0ea5e9; border: none; background: #f0f9ff; 
+            padding: 5px 10px; border-radius: 6px; cursor: pointer; 
+            font-size: 11px; transition: 0.2s; display: flex; align-items: center; gap: 5px;
         }
+        .location-btn:hover { background: #e0f2fe; color: #0284c7; }
+        .coords-text { font-family: monospace; font-size: 10px; color: #64748b; display: block; margin-top: 2px; }
+        .action-cell { display: flex; gap: 10px; justify-content: center; align-items: center; }
     </style>
 </head>
 <body>
 
-<nav class="glass-nav">
-    <div style="display: flex; align-items: center; gap: 15px;">
-        <img src="" class="global-school-logo" height="40" alt="Logo">
-        <h2 class="global-school-name" style="margin:0; font-size: 1.2rem; color: var(--primary-dark);">ERP System</h2>
-    </div>
-    <div class="nav-links">
-        <a href="manage-transport.html" class="btn btn-primary" style="padding: 8px 20px;">
-            <span>←</span> Back
-        </a>
-    </div>
-</nav>
+    <nav class="glass-nav">
+        <div class="brand"><h2>TRANSPORT <span style="color:var(--info)">MAPPING</span></h2></div>
+        <div class="nav-actions">
+            <a href="manage-transport.html" class="btn btn-sm" style="background:#64748b; color:white;">
+                <i class="fas fa-arrow-left"></i> Back to Fleet
+            </a>
+        </div>
+    </nav>
 
-<div class="page-wrapper">
-    <div class="container" style="max-width: 700px; width: 100%;">
-        
+    <div class="assign-grid">
         <div class="glass-card">
-            <h1 style="text-align: center; color: var(--primary-dark); margin-bottom: 30px; font-size: 1.8rem;">
-                Transport Enrollment
-            </h1>
+            <h3>Assign New Student</h3>
+            <p style="font-size: 12px; color: #64748b;">Link a student from the <b>users</b> table to a vehicle.</p>
+            <hr>
             
-            <div id="status-box" class="status-message mb-3"></div>
+            <div class="form-group" style="position:relative;">
+                <label>Search Student (Name, ID or Roll)</label>
+                <div style="position:relative;">
+                    <input type="text" id="studentSearch" class="form-control" placeholder="Search name or admission ID..." onkeyup="handleSearch(this.value)" autocomplete="off">
+                    <div id="results" class="search-results"></div>
+                </div>
+                <small id="searchStatus" style="color: #94a3b8; font-size: 11px;"></small>
+            </div>
 
-            <form id="assign-form" class="form-grid">
+            <div id="selectedBox" class="selected-student-box">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong id="dispName" style="color: #166534;"></strong><br>
+                        <small id="dispRoll" style="color: #15803d;"></small>
+                    </div>
+                    <button onclick="clearSelection()" style="background:none; border:none; color:#dc2626; cursor:pointer; font-size: 18px;">&times;</button>
+                </div>
+            </div>
+
+            <form id="assignForm">
+                <input type="hidden" id="student_id_val">
                 
-                <div style="grid-column: span 2;">
-                    <label for="student-select">Select Student</label>
-                    <select id="student-select" class="form-control" name="student_id" required>
-                        <option value="">Loading students...</option>
+                <div class="form-group">
+                    <label>Select Vehicle</label>
+                    <select id="vehicle_id" class="form-control" required onchange="loadRoster(this.value)">
+                        <option value="">-- Select Bus --</option>
                     </select>
                 </div>
-                
-                <div style="grid-column: span 2;">
-                    <label for="route-select">Assigned Route</label>
-                    <select id="route-select" class="form-control" name="route_id" required>
-                        <option value="">Loading routes...</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label for="boarding_stop">Boarding Point</label>
-                    <input type="text" id="boarding_stop" class="form-control" name="boarding_stop" placeholder="Pick-up location" required>
-                </div>
-                
-                <div>
-                    <label for="dropping_stop">Dropping Point</label>
-                    <input type="text" id="dropping_stop" class="form-control" name="dropping_stop" placeholder="Drop-off location" required>
+
+                <div class="form-group">
+                    <label>Pickup Time</label>
+                    <input type="time" id="pickup_time" class="form-control" required>
                 </div>
 
-                <div class="fee-display">
-                    <span class="stat-label">Monthly Transport Fee</span>
-                    <div class="stat-value" id="fee-visual">₹0.00</div>
-                    <input type="hidden" id="monthly_fee" name="monthly_fee" value="0">
-                </div>
-
-                <button type="submit" class="btn btn-primary" style="grid-column: span 2; justify-content: center; width: 100%;">
-                    Assign to Route
+                <button type="submit" class="btn btn-primary w-100" style="margin-top:10px; font-weight: 600;">
+                    <i class="fas fa-link"></i> Confirm Assignment
                 </button>
             </form>
         </div>
+
+        <div class="roster-card">
+            <div style="padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+                <h3 id="rosterTitle" style="margin:0;">Vehicle Roster</h3>
+                <span class="badge-active" id="countBadge">0 Students</span>
+            </div>
+            <div style="max-height: 600px; overflow-y: auto;">
+                <table style="width:100%; border-collapse: collapse;">
+                    <thead style="background: #f8fafc; position: sticky; top: 0;">
+                        <tr>
+                            <th style="padding:12px; text-align:left; font-size:12px; border-bottom: 2px solid #e2e8f0;">Student Name & Location</th>
+                            <th style="padding:12px; text-align:left; font-size:12px; border-bottom: 2px solid #e2e8f0;">Roll No</th>
+                            <th style="padding:12px; text-align:left; font-size:12px; border-bottom: 2px solid #e2e8f0;">Pickup</th>
+                            <th style="padding:12px; text-align:center; font-size:12px; border-bottom: 2px solid #e2e8f0;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rosterBody">
+                        <tr><td colspan="4" class="no-data">Select a vehicle to view assigned students</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
     </div>
-</div>
 
-<div id="bg-text-pattern" style="position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1;"></div>
-
-<script src="js/global-config.js"></script>
-<script>
-    /** * NOTE: We are now using window.authFetch (from global-config.js) 
-     * to handle tokens and base URLs automatically.
-     */
-    
-    async function populateDropdowns() {
-        const studentSelect = document.getElementById('student-select');
-        const routeSelect = document.getElementById('route-select');
-        
-        try {
-            // Using your new global fetch helper
-            const [studentRes, routeRes] = await Promise.all([
-                window.authFetch('/api/transport/candidates'),
-                window.authFetch('/api/transport/routes')
-            ]);
-            
-            const students = await studentRes.json();
-            const routes = await routeRes.json();
-            
-            studentSelect.innerHTML = '<option value="">-- Search Student --</option>' + 
-                students.map(s => `<option value="${s.student_id}">${s.first_name} ${s.last_name} (Roll: ${s.roll_number || 'N/A'})</option>`).join('');
-
-            routeSelect.innerHTML = '<option value="">-- Choose Route --</option>' + 
-                routes.map(r => `<option value="${r.id}" data-fee="${r.monthly_fee}">${r.route_name}</option>`).join('');
-            
-        } catch(err) {
-            showStatus('Failed to sync with server.', 'error');
-        }
-    }
-
-    // Update Fee Display using the global window.formatCurrency helper
-    document.getElementById('route-select').addEventListener('change', function() {
-        const selected = this.options[this.selectedIndex];
-        const fee = selected.getAttribute('data-fee') || 0;
-        document.getElementById('monthly_fee').value = fee;
-        
-        const display = document.getElementById('fee-visual');
-        display.innerText = window.formatCurrency ? window.formatCurrency(fee) : `₹${fee}`;
-    });
-
-    document.getElementById('assign-form').addEventListener('submit', async function(e) {
-        e.preventDefault();
-        
-        const formData = {
-            student_id: document.getElementById('student-select').value,
-            route_id: document.getElementById('route-select').value,
-            boarding_stop: document.getElementById('boarding_stop').value,
-            dropping_stop: document.getElementById('dropping_stop').value,
-            monthly_fee: document.getElementById('monthly_fee').value
+    <script>
+        const rawToken = localStorage.getItem('erp-token');
+        const AUTH_HEADER = { 
+            'Authorization': `Bearer ${rawToken ? rawToken.replace(/"/g, '') : ''}`,
+            'Content-Type': 'application/json'
         };
 
-        try {
-            const response = await window.authFetch('/api/transport/assign', {
+        async function init() {
+            try {
+                const res = await fetch('/api/transport/vehicles', { headers: AUTH_HEADER });
+                const vehicles = await res.json();
+                const select = document.getElementById('vehicle_id');
+                vehicles.forEach(v => {
+                    select.innerHTML += `<option value="${v.id}">${v.vehicle_no} (${v.model})</option>`;
+                });
+            } catch (err) { console.error("Init Error:", err); }
+        }
+
+        async function handleSearch(term) {
+            const resultsDiv = document.getElementById('results');
+            const statusLabel = document.getElementById('searchStatus');
+
+            if (term.length < 2) { 
+                resultsDiv.style.display = 'none'; 
+                statusLabel.innerText = '';
+                return; 
+            }
+            
+            try {
+                statusLabel.innerText = 'Searching...';
+                const res = await fetch(`/api/transport/search-students?term=${encodeURIComponent(term)}`, { headers: AUTH_HEADER });
+                const students = await res.json();
+
+                if (students.length === 0) {
+                    resultsDiv.innerHTML = '<div class="student-item" style="color:#94a3b8">No active students found</div>';
+                } else {
+                    resultsDiv.innerHTML = students.map(s => `
+                        <div class="student-item" onclick="selectStudent('${s.student_id}', '${s.full_name}', '${s.roll_number || s.admission_no}')">
+                            <i class="fas fa-user-graduate" style="margin-right:8px; color:#64748b;"></i>
+                            <strong>${s.full_name}</strong> 
+                            <span style="float:right; font-size:11px; color:#64748b;">ID: ${s.admission_no || 'N/A'}</span>
+                        </div>
+                    `).join('');
+                }
+                resultsDiv.style.display = 'block';
+                statusLabel.innerText = `${students.length} found`;
+            } catch (err) { statusLabel.innerText = 'Error searching'; }
+        }
+
+        function selectStudent(id, name, roll) {
+            document.getElementById('student_id_val').value = id;
+            document.getElementById('dispName').innerText = name;
+            document.getElementById('dispRoll').innerText = "ID/Roll: " + roll;
+            document.getElementById('selectedBox').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('studentSearch').value = '';
+            document.getElementById('searchStatus').innerText = '';
+        }
+
+        function clearSelection() {
+            document.getElementById('student_id_val').value = '';
+            document.getElementById('selectedBox').style.display = 'none';
+        }
+
+        async function loadRoster(vId) {
+            if (!vId) return;
+            try {
+                const res = await fetch(`/api/transport/assignments/${vId}`, { headers: AUTH_HEADER });
+                const roster = await res.json();
+                document.getElementById('countBadge').innerText = `${roster.length} Students`;
+                
+                const body = document.getElementById('rosterBody');
+                if (roster.length === 0) {
+                    body.innerHTML = '<tr><td colspan="4" class="no-data">No students assigned.</td></tr>';
+                } else {
+                    body.innerHTML = roster.map(item => `
+                        <tr>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">
+                                <strong>${item.full_name}</strong>
+                                <span class="coords-text">
+                                    <i class="fas fa-location-dot"></i> ${item.location_coords || 'Not Set'}
+                                </span>
+                            </td>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">${item.roll_number || 'N/A'}</td>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">${item.pickup_time || '--:--'}</td>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">
+                                <div class="action-cell">
+                                    <button class="location-btn" onclick="setStudentLocation('${item.student_id}')" title="Capture GPS">
+                                        <i class="fas fa-crosshairs"></i> Set
+                                    </button>
+                                    <button onclick="removeAssignment('${item.id}', '${vId}')" style="color:#ef4444; border:none; background:none; cursor:pointer;">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        // New function to capture current location
+        async function setStudentLocation(studentId) {
+            if (!navigator.geolocation) {
+                return alert("Browser doesn't support geolocation.");
+            }
+
+            if (!confirm("Are you at the student's pickup location?")) return;
+
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const coords = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+                try {
+                    const res = await fetch(`/api/transport/student-location/${studentId}`, {
+                        method: 'PUT',
+                        headers: AUTH_HEADER,
+                        body: JSON.stringify({ coords })
+                    });
+                    if (res.ok) {
+                        alert("Location saved!");
+                        loadRoster(document.getElementById('vehicle_id').value);
+                    }
+                } catch (err) { alert("Error saving location"); }
+            }, (err) => alert("GPS Error: " + err.message));
+        }
+
+        document.getElementById('assignForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const vId = document.getElementById('vehicle_id').value;
+            const payload = {
+                student_id: document.getElementById('student_id_val').value,
+                vehicle_id: vId,
+                pickup_time: document.getElementById('pickup_time').value
+            };
+
+            if (!payload.student_id) return alert("Select a student!");
+
+            const res = await fetch('/api/transport/assign', {
                 method: 'POST',
-                body: JSON.stringify(formData)
+                headers: AUTH_HEADER,
+                body: JSON.stringify(payload)
             });
 
-            if (response.ok) {
-                showStatus('Assignment Successful!', 'success');
-                setTimeout(() => window.location.href = 'manage-transport.html', 1500);
-            } else {
-                const res = await response.json();
-                throw new Error(res.message || 'Error processing request');
+            if (res.ok) {
+                alert("Assigned!");
+                clearSelection();
+                loadRoster(vId);
             }
-        } catch (err) {
-             showStatus(err.message, 'error');
+        };
+
+        async function removeAssignment(id, vId) {
+            if (!confirm("Remove student?")) return;
+            const res = await fetch(`/api/transport/assignments/${id}`, { method: 'DELETE', headers: AUTH_HEADER });
+            if (res.ok) loadRoster(vId);
         }
-    });
 
-    function showStatus(msg, type) {
-        const el = document.getElementById('status-box');
-        el.textContent = msg;
-        // Map types to your new badge classes
-        el.className = `status-message badge ${type === 'success' ? 'badge-success' : 'badge-danger'}`;
-        el.style.display = 'block';
-    }
-
-    window.onload = populateDropdowns;
-</script>
+        window.onload = init;
+    </script>
 </body>
 </html>

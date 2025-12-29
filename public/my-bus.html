@@ -3,159 +3,276 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Track My Child's Bus</title>
-    <link rel="stylesheet" href="/css/style.css">
+    <title>Smart Tracking Pro | Student Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
     <style>
-        /* Container and Map Styles */
-        .container { max-width: 1000px; margin: 40px auto; padding: 20px; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; background-color: #FFFFFF; }
-        #map { height: 500px; border-radius: 4px; margin-top: 15px; border: 1px solid #555; }
+        :root { --primary: #8e24aa; --accent: #00c853; --warning: #ff9800; --danger: #ef4444; }
+        body { font-family: 'Inter', sans-serif; background-color: #f1f5f9; overflow-x: hidden; }
         
-        /* Detail Box and Error */
-        .bus-details { padding: 15px; background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 15px; }
-        .error-message { color: white; background-color: #dc3545; padding: 15px; border-radius: 4px; text-align: center; font-weight: bold; }
-        .last-updated { font-size: 0.8em; color: #6c757d; margin-top: 10px; }
-        .nav-links a { color: #005A9C; text-decoration: none; font-weight: bold; }
+        .main-wrapper { max-width: 1400px; margin: 20px auto; padding: 0 15px; }
+        .glass-card { background: white; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.1); border: none; overflow: hidden; display: flex; flex-direction: row; min-height: 750px; }
+        
+        /* Sidebar Layout */
+        .sidebar { width: 380px; padding: 30px; background: #ffffff; display: flex; flex-direction: column; border-right: 1px solid #f1f5f9; z-index: 10; }
+        #map { flex-grow: 1; z-index: 1; height: 100%; }
+
+        .brand-section { padding-bottom: 20px; margin-bottom: 20px; border-bottom: 2px solid #f8fafc; }
+        
+        /* Intelligence Cards */
+        .stat-card { background: #f8fafc; padding: 18px; border-radius: 18px; margin-bottom: 12px; border: 1px solid #e2e8f0; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        .stat-card label { font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.8px; }
+        .stat-card p { margin: 0; font-weight: 700; color: #1e293b; font-size: 1.1rem; }
+        
+        .zone-safe { border-left: 6px solid var(--accent); background: #f0fff4; transform: translateX(5px); }
+        .zone-near { border-left: 6px solid var(--warning); background: #fffaf0; }
+
+        /* Path Animation */
+        .route-line { stroke-dasharray: 10, 15; animation: dashMove 30s linear infinite; stroke-linecap: round; }
+        @keyframes dashMove { to { stroke-dashoffset: -1000; } }
+
+        /* Floating Controls */
+        .control-panel { position: absolute; bottom: 30px; right: 25px; z-index: 1000; display: flex; flex-direction: column; gap: 12px; }
+        .fab-btn { width: 55px; height: 55px; border-radius: 18px; background: white; border: none; box-shadow: 0 10px 25px rgba(0,0,0,0.15); transition: 0.3s; display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+        .fab-btn:hover { background: var(--primary); color: white; transform: scale(1.1); }
+
+        #arrival-toast { position: fixed; top: 25px; left: 50%; transform: translateX(-50%); z-index: 9999; display: none; padding: 18px 40px; border-radius: 60px; background: var(--accent); color: white; font-weight: 800; box-shadow: 0 15px 35px rgba(0,200,83,0.4); animation: slideDown 0.6s cubic-bezier(0.23, 1, 0.32, 1); }
+        @keyframes slideDown { from { top: -120px; opacity: 0; } to { top: 25px; opacity: 1; } }
+
+        @media (max-width: 992px) { 
+            .glass-card { flex-direction: column; } 
+            .sidebar { width: 100%; order: 2; border-right: none; border-top: 1px solid #f1f5f9; } 
+            #map { height: 400px; order: 1; }
+        }
     </style>
 </head>
 <body>
-<script>
-    const token = localStorage.getItem('erp-token');
-    if (!token) window.location.href = '/login';
-</script>
 
-<div class="container">
-    <h1>Track My Child's Bus</h1>
-    <div class="nav-links"><a href="/student-dashboard.html">← Back to Dashboard</a></div> 
-    
-    <div id="error-box" style="display: none;"></div>
+<div id="arrival-toast">⚡ BUS ENTERING PICKUP ZONE - STAND BY!</div>
 
-    <div id="tracking-info">
-        <div class="bus-details" id="bus-details-box">
-            <p><strong>Route Name:</strong> <span id="route-name">...</span></p>
-            <p><strong>Schedule:</strong> <span id="route-schedule">...</span></p>
-            <p><strong>Vehicle Number:</strong> <span id="vehicle-number">...</span></p>
-            <p><strong>Driver Name:</strong> <span id="driver-name">...</span></p>
-            <div class="last-updated">Last Updated: <span id="last-updated-time">...</span></div>
+<div class="main-wrapper">
+    <div class="glass-card">
+        <div class="sidebar">
+            <div class="brand-section">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="badge rounded-pill bg-primary bg-opacity-10 text-primary px-3 fw-bold">ENCRYPTED LIVE FEED</span>
+                    <div class="spinner-grow spinner-grow-sm text-success" id="pulse"></div>
+                </div>
+                <h4 class="fw-bold mb-0" id="route-name">Searching Route...</h4>
+                <small class="text-muted" id="last-update">Establishing GPS link...</small>
+            </div>
+
+            <div class="stat-card" id="eta-card">
+                <label>Dynamic ETA</label>
+                <p id="eta-text">Analyzing traffic...</p>
+            </div>
+
+            <div class="stat-card" id="presence-card">
+                <label>Arrival Verification</label>
+                <button id="btn-confirm" class="btn btn-primary btn-sm w-100 mt-2 fw-bold py-2" onclick="confirmPresence()">
+                    🙋 Notify Driver: I'm Here
+                </button>
+            </div>
+
+            <div class="stat-card">
+                <label>Bus Telemetry</label>
+                <p><span id="bus-speed">0</span> km/h • <span id="distance-value">---</span></p>
+            </div>
+
+            <div class="stat-card">
+                <label>Captain / Driver Info</label>
+                <p id="driver-info">Connecting...</p>
+            </div>
+
+            <div class="mt-auto pt-4">
+                <button class="btn btn-danger w-100 mb-2 fw-bold py-2" onclick="emergencyCall()">🚨 SOS - Emergency</button>
+                <button class="btn btn-light w-100 text-muted fw-bold py-2" onclick="location.href='/student-dashboard.html'">Return to Dashboard</button>
+            </div>
         </div>
-        <div id="map"></div>
+
+        <div class="position-relative flex-grow-1">
+            <div id="map"></div>
+            
+            <div class="control-panel">
+                <button class="fab-btn" title="Toggle Dark/Light" onclick="toggleMapMode()">🌗</button>
+                <button class="fab-btn" title="Focus Bus" onclick="focusBus()">🚍</button>
+                <button class="fab-btn" title="My Position" onclick="locateStudent()">📍</button>
+            </div>
+        </div>
     </div>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-    const authHeaders = { 'Authorization': `Bearer ${token}` };
-    const DEFAULT_LOCATION = [26.72, 88.43]; // Darjeeling area, if no data is available
+    const token = (localStorage.getItem('erp-token') || '').replace(/"/g, '');
+    const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     
-    const map = L.map('map').setView(DEFAULT_LOCATION, 13); 
-    let busMarker = null;
-    let initialLoadComplete = false;
+    // Map Engine Config
+    const map = L.map('map', { zoomControl: false, attributionControl: false }).setView([26.7271, 88.3953], 15);
+    const lightLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png').addTo(map);
+    const darkLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png');
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
+    let busMarker, studentMarker, routeLine, proximityCircle;
+    let busCoords = null, historyDots = [], isConfirmed = false, mapMode = 'light';
+    let vibrationTriggered = false;
 
-    // Custom icon for the bus
-    function createBusIcon() {
-        return L.divIcon({
-            html: `
-                <svg width="30" height="30" viewBox="0 0 24 24" fill="#005A9C" xmlns="http://www.w3.org/2000/svg" style="filter: drop-shadow(0 0 2px #000);">
-                    <path d="M18.922 17.552C18.43 18.342 17.518 19 16.5 19H7.5C6.482 19 5.57 18.342 5.078 17.552L3 14V8C3 6.896 3.896 6 5 6H19C20.104 6 21 6.896 21 8V14L18.922 17.552Z" stroke="#000" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="#005A9C"/>
-                    <circle cx="7.5" cy="17.5" r="1.5" fill="#FFF" stroke="#000" stroke-width="1"/>
-                    <circle cx="16.5" cy="17.5" r="1.5" fill="#FFF" stroke="#000" stroke-width="1"/>
-                    <path d="M3 12H21" stroke="#FFF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-            `,
-            className: 'bg-transparent',
-            iconSize: [30, 30], 
-            iconAnchor: [15, 30] // Bottom center of the icon
-        });
+    // 1. Data Processing
+    async function syncTracking() {
+        try {
+            const res = await fetch('http://localhost:3005/api/transport/my-bus', { headers });
+            const data = await res.json();
+
+            document.getElementById('route-name').textContent = data.route_name || "Active Route";
+            document.getElementById('driver-info').textContent = data.driver_name || "Assigned Driver";
+            document.getElementById('last-update').textContent = `Feed Active: ${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}`;
+
+            if (data.liveLocation) {
+                const newPos = [parseFloat(data.liveLocation.lat), parseFloat(data.liveLocation.lng)];
+                
+                if (busCoords) {
+                    // Calculate Real-time Velocity
+                    const distMoved = map.distance(busCoords, newPos);
+                    const speed = Math.round((distMoved / 10) * 3.6);
+                    document.getElementById('bus-speed').textContent = speed > 2 ? speed : 0;
+                    
+                    // Drop directional breadcrumbs
+                    dropBreadcrumb(busCoords);
+                }
+
+                busCoords = newPos;
+                updateMapMarkers();
+            }
+        } catch (e) { console.error("Synchronization link interrupted."); }
     }
 
-    async function loadMyBusDetails() {
-        const errorBox = document.getElementById('error-box');
-        const trackingInfo = document.getElementById('tracking-info');
+    // 2. Visual Rendering
+    function updateMapMarkers() {
+        const busIcon = L.divIcon({
+            html: `<div style="background:var(--primary); width:46px; height:46px; border-radius:16px; border:4px solid white; display:flex; align-items:center; justify-content:center; box-shadow:0 10px 25px rgba(0,0,0,0.3);"><span style="font-size:22px;">🚍</span></div>`,
+            className: '', iconSize: [46, 46], iconAnchor: [23, 23]
+        });
+
+        if (!busMarker) {
+            busMarker = L.marker(busCoords, { icon: busIcon }).addTo(map);
+            map.flyTo(busCoords, 15);
+        } else {
+            busMarker.setLatLng(busCoords);
+        }
+        computeIntelligence();
+    }
+
+    function dropBreadcrumb(coords) {
+        const dot = L.circleMarker(coords, { radius: 4, color: 'var(--primary)', fillOpacity: 0.3, weight: 0 }).addTo(map);
+        historyDots.push(dot);
+        if (historyDots.length > 5) map.removeLayer(historyDots.shift());
+    }
+
+    // 3. Geofence & Proximity Logic
+    function locateStudent() {
+        navigator.geolocation.getCurrentPosition(pos => {
+            const stuPos = [pos.coords.latitude, pos.coords.longitude];
+            
+            const stuIcon = L.divIcon({
+                html: `<div style="background:#3b82f6; width:16px; height:16px; border-radius:50%; border:3px solid white; box-shadow:0 0 15px rgba(59,130,246,0.6);"></div>`,
+                className: '', iconSize: [16, 16], iconAnchor: [8, 8]
+            });
+
+            if (!studentMarker) {
+                studentMarker = L.marker(stuPos, { icon: stuIcon, zIndexOffset: 1000 }).addTo(map);
+            } else {
+                studentMarker.setLatLng(stuPos);
+            }
+            
+            if (!proximityCircle) {
+                proximityCircle = L.circle(stuPos, { radius: 800, color: 'var(--accent)', weight: 1, fillOpacity: 0.04, dashArray: '8, 8' }).addTo(map);
+            } else {
+                proximityCircle.setLatLng(stuPos);
+            }
+            map.flyTo(stuPos, 15);
+            computeIntelligence();
+        }, () => alert("Please enable GPS for proximity tracking."));
+    }
+
+    function confirmPresence() {
+        isConfirmed = true;
+        const btn = document.getElementById('btn-confirm');
+        btn.disabled = true;
+        btn.className = "btn btn-success btn-sm w-100 mt-2 fw-bold py-2";
+        btn.innerHTML = "✓ Notification Received by Bus";
         
-        try {
-            const res = await fetch('/api/transport/my-bus', { headers: authHeaders });
-
-            if (!res.ok) {
-                // Handle 404 (No assignment) or 403/500 errors gracefully
-                const errorBody = await res.json().catch(() => ({ message: 'No assignment or server error.' }));
-                
-                trackingInfo.style.display = 'none';
-                errorBox.style.display = 'block';
-                
-                let errorMessage;
-                if (res.status === 404) {
-                    errorMessage = 'No active bus assignment found for your profile.';
-                } else if (res.status === 500) {
-                    errorMessage = `Server Error: ${errorBody.details || errorBody.message || 'Check your database configuration.'}`;
-                } else {
-                    errorMessage = `Access Denied: ${errorBody.message || 'Please log in again.'}`;
-                }
-                
-                errorBox.innerHTML = `<p class="error-message">${errorMessage}</p>`;
-                return;
-            }
-
-            const data = await res.json();
-            
-            // If successful, ensure error box is hidden and info is visible
-            trackingInfo.style.display = 'block';
-            errorBox.style.display = 'none';
-
-            // --- Update Text Details ---
-            document.getElementById('route-name').textContent = data.route_name || 'N/A';
-            document.getElementById('route-schedule').textContent = data.route_schedule || 'N/A'; // FIX: Display route schedule
-            document.getElementById('vehicle-number').textContent = data.vehicle_number || 'N/A';
-            document.getElementById('driver-name').textContent = data.driver_name || 'N/A';
-            document.getElementById('last-updated-time').textContent = new Date().toLocaleTimeString();
-
-            // --- Update Map Location ---
-            // Data is expected to be { liveLocation: { lat: X, lng: Y } }
-            const lat = parseFloat(data.liveLocation.lat);
-            const lng = parseFloat(data.liveLocation.lng);
-            const latLng = [lat, lng];
-
-            if (isNaN(lat) || isNaN(lng)) {
-                console.warn('Invalid coordinates received from API.');
-                if (!initialLoadComplete) map.setView(DEFAULT_LOCATION, 13);
-                return; 
-            }
-
-            if (!busMarker) {
-                // Initial marker creation
-                busMarker = L.marker(latLng, { icon: createBusIcon() }).addTo(map);
-                busMarker.bindPopup(`<b>${data.vehicle_number}</b><br>Status: ${data.status || 'Active'}`).openPopup();
-            } else {
-                // Update marker position
-                busMarker.setLatLng(latLng);
-                busMarker.getPopup().setContent(`<b>${data.vehicle_number}</b><br>Status: ${data.status || 'Active'}<br>Last updated: ${new Date().toLocaleTimeString()}`);
-            }
-            
-            // --- Map Centering Logic ---
-            if (!initialLoadComplete) {
-                map.setView(latLng, 15); // Zoom in on bus if no route to fit to
-                initialLoadComplete = true; 
-            } else {
-                // On subsequent updates, pan smoothly to the bus location
-                map.panTo(latLng);
-            }
-
-        } catch (error) {
-            console.error('Failed to load bus details:', error);
-            trackingInfo.style.display = 'none';
-            errorBox.style.display = 'block';
-            errorBox.innerHTML = `<p class="error-message">Connection Error: Could not reach the service.</p>`;
+        if (studentMarker) {
+            studentMarker.setIcon(L.divIcon({
+                html: `<div style="background:var(--accent); width:20px; height:20px; border-radius:50%; border:4px solid white; box-shadow:0 0 25px var(--accent);"></div>`,
+                className: '', iconSize: [20, 20], iconAnchor: [10, 10]
+            }));
         }
     }
 
+    function computeIntelligence() {
+        if (!busMarker || !studentMarker) return;
+
+        const busPos = busMarker.getLatLng();
+        const stuPos = studentMarker.getLatLng();
+        const distance = map.distance(busPos, stuPos);
+        const toast = document.getElementById('arrival-toast');
+        const card = document.getElementById('eta-card');
+
+        // Distance-based Intelligence
+        if (distance < 800) {
+            card.className = "stat-card zone-safe";
+            toast.style.display = "block";
+            if (!vibrationTriggered && navigator.vibrate) {
+                navigator.vibrate([200, 100, 200]);
+                vibrationTriggered = true; 
+            }
+        } else if (distance < 2000) {
+            card.className = "stat-card zone-near";
+            toast.style.display = "none";
+            vibrationTriggered = false;
+        } else {
+            card.className = "stat-card";
+            toast.style.display = "none";
+        }
+
+        // Draw Dynamic Vector
+        if (routeLine) map.removeLayer(routeLine);
+        routeLine = L.polyline([busPos, stuPos], {
+            color: isConfirmed ? 'var(--accent)' : 'var(--primary)',
+            weight: 3,
+            className: 'route-line',
+            opacity: 0.7
+        }).addTo(map);
+
+        document.getElementById('distance-value').textContent = `${(distance/1000).toFixed(1)} km`;
+        // ETA assuming 25km/h avg speed
+        const etaMins = Math.max(1, Math.round(distance / 416)); 
+        document.getElementById('eta-text').textContent = `Est. ${etaMins} Minute${etaMins > 1 ? 's' : ''}`;
+    }
+
+    // 4. Interface Utilities
+    function toggleMapMode() {
+        if (mapMode === 'light') {
+            map.removeLayer(lightLayer);
+            map.addLayer(darkLayer);
+            mapMode = 'dark';
+        } else {
+            map.removeLayer(darkLayer);
+            map.addLayer(lightLayer);
+            mapMode = 'light';
+        }
+    }
+
+    function focusBus() { if (busCoords) map.flyTo(busCoords, 17); }
+    function emergencyCall() { 
+        const phone = "DRIVER_PHONE_PLACEHOLDER"; 
+        window.location.href = `tel:${phone}`;
+    }
+
     window.onload = () => {
-        loadMyBusDetails(); // Load once immediately
-        setInterval(loadMyBusDetails, 15000); // Refresh every 15 seconds
+        syncTracking();
+        setInterval(syncTracking, 10000); // 10s Telemetry Sync
     };
 </script>
-<script src="js/global-config.js"></script>
 </body>
 </html>

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Driver | School ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root { --primary: #005A9C; --bg: #f1f5f9; }
+        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
+        .container { max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
+        h2 { color: var(--primary); text-align: center; margin-bottom: 25px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 8px; font-weight: 500; color: #475569; }
+        select, button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 16px; }
+        button { background: var(--primary); color: white; font-weight: 600; border: none; cursor: pointer; transition: 0.3s; margin-top: 10px; }
+        button:hover { background: #004578; }
+        .status-msg { margin-top: 15px; text-align: center; padding: 10px; border-radius: 8px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>🚚 Driver Assignment</h2>
+    
+    <div class="form-group">
+        <label>Select Driver (Staff Type: Driver)</label>
+        <select id="driverSelect">
+            <option value="">-- Loading Drivers --</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label>Select Vehicle</label>
+        <select id="vehicleSelect">
+            <option value="">-- Loading Vehicles --</option>
+        </select>
+    </div>
+
+    <button onclick="assignDriver()">Assign Driver to Vehicle</button>
+    <div id="msg" class="status-msg"></div>
+</div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+
+    // ডাটা লোড করা (Drivers and Vehicles)
+    async function loadData() {
+        try {
+            // ড্রাইভারদের লিস্ট আনা (যাদের staff_type = 'driver')
+            const dRes = await fetch('/api/transport/staff/drivers', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const drivers = await dRes.json();
+            const dSelect = document.getElementById('driverSelect');
+            dSelect.innerHTML = '<option value="">-- Select Driver --</option>';
+            drivers.forEach(d => {
+                dSelect.innerHTML += `<option value="${d.user_id}">${d.full_name} (${d.license_no})</option>`;
+            });
+
+            // বাসের লিস্ট আনা
+            const vRes = await fetch('/api/transport/vehicles', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const vehicles = await vRes.json();
+            const vSelect = document.getElementById('vehicleSelect');
+            vSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
+            vehicles.forEach(v => {
+                vSelect.innerHTML += `<option value="${v.id}">${v.vehicle_no} - ${v.model}</option>`;
+            });
+        } catch (err) { console.error("Load failed", err); }
+    }
+
+    async function assignDriver() {
+        const userId = document.getElementById('driverSelect').value;
+        const vehicleId = document.getElementById('vehicleSelect').value;
+        const msgDiv = document.getElementById('msg');
+
+        if(!userId || !vehicleId) return alert("Please select both!");
+
+        try {
+            const res = await fetch('/api/transport/assign-driver', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ userId, vehicleId })
+            });
+            
+            if(res.ok) {
+                msgDiv.style.display = 'block';
+                msgDiv.style.background = '#dcfce7';
+                msgDiv.style.color = '#15803d';
+                msgDiv.innerText = "Driver assigned successfully!";
+            }
+        } catch (err) { alert("Assignment failed!"); }
+    }
+
+    window.onload = loadData;
+</script>
+</body>
+</html>
