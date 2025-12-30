@@ -26,7 +26,6 @@
         .badge-active { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
         .no-data { text-align: center; padding: 40px; color: #94a3b8; font-style: italic; }
         
-        /* New GPS Styles */
         .location-btn {
             color: #0ea5e9; border: none; background: #f0f9ff; 
             padding: 5px 10px; border-radius: 6px; cursor: pointer; 
@@ -35,6 +34,9 @@
         .location-btn:hover { background: #e0f2fe; color: #0284c7; }
         .coords-text { font-family: monospace; font-size: 10px; color: #64748b; display: block; margin-top: 2px; }
         .action-cell { display: flex; gap: 10px; justify-content: center; align-items: center; }
+        
+        /* Loading overlay */
+        .loading-spinner { display: none; margin-left: 10px; color: var(--info); }
     </style>
 </head>
 <body>
@@ -50,14 +52,15 @@
 
     <div class="assign-grid">
         <div class="glass-card">
-            <h3>Assign New Student</h3>
-            <p style="font-size: 12px; color: #64748b;">Link a student from the <b>users</b> table to a vehicle.</p>
+            <h3>Assign/Update Student Bus</h3>
+            <p style="font-size: 12px; color: #64748b;">Note: Assigning a student to a new bus will automatically remove them from their previous one.</p>
             <hr>
             
             <div class="form-group" style="position:relative;">
-                <label>Search Student (Name, ID or Roll)</label>
-                <div style="position:relative;">
-                    <input type="text" id="studentSearch" class="form-control" placeholder="Search name or admission ID..." onkeyup="handleSearch(this.value)" autocomplete="off">
+                <label>Search Student</label>
+                <div style="position:relative; display: flex; align-items: center;">
+                    <input type="text" id="studentSearch" class="form-control" placeholder="Type Name or Roll..." onkeyup="handleSearch(this.value)" autocomplete="off">
+                    <i class="fas fa-circle-notch fa-spin loading-spinner" id="searchLoader"></i>
                     <div id="results" class="search-results"></div>
                 </div>
                 <small id="searchStatus" style="color: #94a3b8; font-size: 11px;"></small>
@@ -77,7 +80,7 @@
                 <input type="hidden" id="student_id_val">
                 
                 <div class="form-group">
-                    <label>Select Vehicle</label>
+                    <label>Select Target Vehicle</label>
                     <select id="vehicle_id" class="form-control" required onchange="loadRoster(this.value)">
                         <option value="">-- Select Bus --</option>
                     </select>
@@ -88,7 +91,7 @@
                     <input type="time" id="pickup_time" class="form-control" required>
                 </div>
 
-                <button type="submit" class="btn btn-primary w-100" style="margin-top:10px; font-weight: 600;">
+                <button type="submit" id="submitBtn" class="btn btn-primary w-100" style="margin-top:10px; font-weight: 600;">
                     <i class="fas fa-link"></i> Confirm Assignment
                 </button>
             </form>
@@ -110,7 +113,7 @@
                         </tr>
                     </thead>
                     <tbody id="rosterBody">
-                        <tr><td colspan="4" class="no-data">Select a vehicle to view assigned students</td></tr>
+                        <tr><td colspan="4" class="no-data">Select a vehicle to view its current roster</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -124,20 +127,25 @@
             'Content-Type': 'application/json'
         };
 
+        // Initialize vehicles dropdown
         async function init() {
             try {
                 const res = await fetch('/api/transport/vehicles', { headers: AUTH_HEADER });
                 const vehicles = await res.json();
                 const select = document.getElementById('vehicle_id');
+                select.innerHTML = '<option value="">-- Select Bus --</option>'; // Reset
                 vehicles.forEach(v => {
                     select.innerHTML += `<option value="${v.id}">${v.vehicle_no} (${v.model})</option>`;
                 });
             } catch (err) { console.error("Init Error:", err); }
         }
 
+        let searchTimeout;
         async function handleSearch(term) {
+            clearTimeout(searchTimeout);
             const resultsDiv = document.getElementById('results');
             const statusLabel = document.getElementById('searchStatus');
+            const loader = document.getElementById('searchLoader');
 
             if (term.length < 2) { 
                 resultsDiv.style.display = 'none'; 
@@ -145,25 +153,31 @@
                 return; 
             }
             
-            try {
-                statusLabel.innerText = 'Searching...';
-                const res = await fetch(`/api/transport/search-students?term=${encodeURIComponent(term)}`, { headers: AUTH_HEADER });
-                const students = await res.json();
+            searchTimeout = setTimeout(async () => {
+                try {
+                    loader.style.display = 'block';
+                    const res = await fetch(`/api/transport/search-students?term=${encodeURIComponent(term)}`, { headers: AUTH_HEADER });
+                    const students = await res.json();
 
-                if (students.length === 0) {
-                    resultsDiv.innerHTML = '<div class="student-item" style="color:#94a3b8">No active students found</div>';
-                } else {
-                    resultsDiv.innerHTML = students.map(s => `
-                        <div class="student-item" onclick="selectStudent('${s.student_id}', '${s.full_name}', '${s.roll_number || s.admission_no}')">
-                            <i class="fas fa-user-graduate" style="margin-right:8px; color:#64748b;"></i>
-                            <strong>${s.full_name}</strong> 
-                            <span style="float:right; font-size:11px; color:#64748b;">ID: ${s.admission_no || 'N/A'}</span>
-                        </div>
-                    `).join('');
+                    if (students.length === 0) {
+                        resultsDiv.innerHTML = '<div class="student-item" style="color:#94a3b8">No matching students found</div>';
+                    } else {
+                        resultsDiv.innerHTML = students.map(s => `
+                            <div class="student-item" onclick="selectStudent('${s.student_id}', '${s.full_name}', '${s.roll_number || s.admission_no}')">
+                                <i class="fas fa-user-graduate" style="margin-right:8px; color:#64748b;"></i>
+                                <strong>${s.full_name}</strong> 
+                                <span style="float:right; font-size:11px; color:#64748b;">ID: ${s.admission_no || 'N/A'}</span>
+                            </div>
+                        `).join('');
+                    }
+                    resultsDiv.style.display = 'block';
+                    statusLabel.innerText = `${students.length} results found`;
+                } catch (err) { 
+                    statusLabel.innerText = 'Search failed'; 
+                } finally {
+                    loader.style.display = 'none';
                 }
-                resultsDiv.style.display = 'block';
-                statusLabel.innerText = `${students.length} found`;
-            } catch (err) { statusLabel.innerText = 'Error searching'; }
+            }, 300);
         }
 
         function selectStudent(id, name, roll) {
@@ -182,7 +196,11 @@
         }
 
         async function loadRoster(vId) {
-            if (!vId) return;
+            if (!vId) {
+                document.getElementById('rosterBody').innerHTML = '<tr><td colspan="4" class="no-data">Select a vehicle to view its current roster</td></tr>';
+                document.getElementById('countBadge').innerText = '0 Students';
+                return;
+            }
             try {
                 const res = await fetch(`/api/transport/assignments/${vId}`, { headers: AUTH_HEADER });
                 const roster = await res.json();
@@ -190,25 +208,25 @@
                 
                 const body = document.getElementById('rosterBody');
                 if (roster.length === 0) {
-                    body.innerHTML = '<tr><td colspan="4" class="no-data">No students assigned.</td></tr>';
+                    body.innerHTML = '<tr><td colspan="4" class="no-data">This bus has no assigned students.</td></tr>';
                 } else {
                     body.innerHTML = roster.map(item => `
                         <tr>
                             <td style="padding:12px; border-bottom:1px solid #f1f5f9;">
                                 <strong>${item.full_name}</strong>
                                 <span class="coords-text">
-                                    <i class="fas fa-location-dot"></i> ${item.location_coords || 'Not Set'}
+                                    <i class="fas fa-location-dot"></i> ${item.location_coords || 'Location Not Set'}
                                 </span>
                             </td>
                             <td style="padding:12px; border-bottom:1px solid #f1f5f9;">${item.roll_number || 'N/A'}</td>
                             <td style="padding:12px; border-bottom:1px solid #f1f5f9;">${item.pickup_time || '--:--'}</td>
                             <td style="padding:12px; border-bottom:1px solid #f1f5f9;">
                                 <div class="action-cell">
-                                    <button class="location-btn" onclick="setStudentLocation('${item.student_id}')" title="Capture GPS">
-                                        <i class="fas fa-crosshairs"></i> Set
+                                    <button class="location-btn" onclick="setStudentLocation('${item.student_id}')" title="Set Current GPS">
+                                        <i class="fas fa-crosshairs"></i> GPS
                                     </button>
-                                    <button onclick="removeAssignment('${item.id}', '${vId}')" style="color:#ef4444; border:none; background:none; cursor:pointer;">
-                                        <i class="fas fa-trash-alt"></i>
+                                    <button onclick="removeAssignment('${item.id}', '${vId}')" style="color:#ef4444; border:none; background:none; cursor:pointer;" title="Remove Assignment">
+                                        <i class="fas fa-user-minus"></i>
                                     </button>
                                 </div>
                             </td>
@@ -218,13 +236,9 @@
             } catch (err) { console.error(err); }
         }
 
-        // New function to capture current location
         async function setStudentLocation(studentId) {
-            if (!navigator.geolocation) {
-                return alert("Browser doesn't support geolocation.");
-            }
-
-            if (!confirm("Are you at the student's pickup location?")) return;
+            if (!navigator.geolocation) return alert("Geolocation not supported.");
+            if (!confirm("Are you standing at this student's exact pickup point?")) return;
 
             navigator.geolocation.getCurrentPosition(async (pos) => {
                 const coords = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
@@ -235,41 +249,59 @@
                         body: JSON.stringify({ coords })
                     });
                     if (res.ok) {
-                        alert("Location saved!");
+                        alert("Pickup coordinates updated successfully!");
                         loadRoster(document.getElementById('vehicle_id').value);
                     }
-                } catch (err) { alert("Error saving location"); }
+                } catch (err) { alert("Server error saving location."); }
             }, (err) => alert("GPS Error: " + err.message));
         }
 
         document.getElementById('assignForm').onsubmit = async (e) => {
             e.preventDefault();
+            const btn = document.getElementById('submitBtn');
             const vId = document.getElementById('vehicle_id').value;
-            const payload = {
-                student_id: document.getElementById('student_id_val').value,
-                vehicle_id: vId,
-                pickup_time: document.getElementById('pickup_time').value
-            };
+            const studentId = document.getElementById('student_id_val').value;
 
-            if (!payload.student_id) return alert("Select a student!");
+            if (!studentId) return alert("Please search and select a student first.");
+            if (!vId) return alert("Please select a vehicle.");
 
-            const res = await fetch('/api/transport/assign', {
-                method: 'POST',
-                headers: AUTH_HEADER,
-                body: JSON.stringify(payload)
-            });
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
-            if (res.ok) {
-                alert("Assigned!");
-                clearSelection();
-                loadRoster(vId);
+            try {
+                const res = await fetch('/api/transport/assign', {
+                    method: 'POST',
+                    headers: AUTH_HEADER,
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        vehicle_id: vId,
+                        pickup_time: document.getElementById('pickup_time').value
+                    })
+                });
+
+                if (res.ok) {
+                    alert("Student successfully assigned/moved to this vehicle.");
+                    clearSelection();
+                    loadRoster(vId);
+                } else {
+                    const data = await res.json();
+                    alert("Error: " + (data.error || "Failed to assign."));
+                }
+            } catch (err) {
+                alert("Network error occurred.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-link"></i> Confirm Assignment';
             }
         };
 
         async function removeAssignment(id, vId) {
-            if (!confirm("Remove student?")) return;
-            const res = await fetch(`/api/transport/assignments/${id}`, { method: 'DELETE', headers: AUTH_HEADER });
-            if (res.ok) loadRoster(vId);
+            if (!confirm("Are you sure you want to remove this student from the transport service?")) return;
+            try {
+                const res = await fetch(`/api/transport/assignments/${id}`, { method: 'DELETE', headers: AUTH_HEADER });
+                if (res.ok) loadRoster(vId);
+                else alert("Failed to remove student.");
+            } catch (err) { console.error(err); }
         }
 
         window.onload = init;

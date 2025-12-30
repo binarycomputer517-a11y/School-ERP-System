@@ -5,6 +5,7 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const bcrypt = require('bcrypt');
 
 const ALLOWED_STAFF = ['Admin', 'Super Admin'];
 
@@ -489,7 +490,7 @@ router.get('/my-vehicle-health', authenticateToken, async (req, res) => {
 // =================================================================
 router.post('/update-location', authenticateToken, async (req, res) => {
     let { vehicle_id, latitude, longitude, coords, speed } = req.body;
-    const userId = req.user.id; // JWT টোকেন থেকে পাওয়া ড্রাইভার আইডি
+    const userId = req.user.id; // JWT টোকেন থেকে পাওয়া ড্রাইভার আইডি
 
     try {
         // ১. যদি ফ্রন্টএন্ড থেকে vehicle_id না আসে, তবে ডাটাবেস থেকে ড্রাইভারের বাস খুঁজে বের করা
@@ -542,14 +543,10 @@ router.post('/update-location', authenticateToken, async (req, res) => {
     }
 });
 
-// =================================================================
-// 13. GET: SPECIFIC BUS FOR LOGGED-IN STUDENT (FINAL UUID VERSION)
-// =================================================================
+// 13. GET: SPECIFIC BUS FOR STUDENT (Fixed Table Name: transport_routes)
 router.get('/my-bus', authenticateToken, async (req, res) => {
     try {
         const userUuid = req.user.id; 
-
-        // 1. Cleaned query: Direct UUID comparison and removed r.route_schedule
         const query = `
             SELECT 
                 v.vehicle_no, 
@@ -561,29 +558,22 @@ router.get('/my-bus', authenticateToken, async (req, res) => {
             FROM student_transport_assignments sta
             JOIN students s ON sta.student_id = s.student_id
             JOIN transport_vehicles v ON sta.vehicle_id = v.id
-            LEFT JOIN routes r ON sta.bus_route_id = r.id
+            LEFT JOIN transport_routes r ON sta.bus_route_id = r.id
             WHERE s.user_id = $1::uuid AND sta.is_active = true`;
 
         const { rows } = await pool.query(query, [userUuid]);
-
-        if (rows.length === 0) {
-            return res.status(404).json({ message: "No active bus assignment found." });
-        }
+        if (rows.length === 0) return res.status(404).json({ message: "No active bus assignment found." });
 
         const data = rows[0];
-        
-        // 2. Safe coordinate parsing for the Map
-        let lat = 26.7271, lng = 88.3953; 
-        if (data.live_coords && typeof data.live_coords === 'string' && data.live_coords.includes(',')) {
+        let lat = 22.5726, lng = 88.3639; 
+        if (data.live_coords && data.live_coords.includes(',')) {
             const split = data.live_coords.split(',');
-            lat = parseFloat(split[0]);
-            lng = parseFloat(split[1]);
+            lat = parseFloat(split[0]); lng = parseFloat(split[1]);
         }
 
-        // 3. Formatted JSON response
         res.json({
             route_name: data.route_name || `Bus ${data.vehicle_no}`,
-            route_schedule: data.pickup_time || "Not Scheduled", // Using pickup_time since schedule column is gone
+            route_schedule: data.pickup_time || "Not Scheduled",
             vehicle_number: data.vehicle_no,
             driver_name: `Driver (Ph: ${data.driver_phone || 'N/A'})`,
             liveLocation: { lat, lng },
@@ -846,4 +836,214 @@ router.get('/admin/fuel-stats', authenticateToken, authorize(ALLOWED_STAFF), asy
         res.status(500).json({ error: 'Failed to fetch fuel stats' });
     }
 });
+
+// =================================================================
+// 21. POST: ADD NEW DRIVER (Creates User + Staff Profile)
+// =================================================================
+router.post('/staff/add-driver', authenticateToken, authorize(ALLOWED_STAFF), async (req, res) => {
+    const { username, password, full_name, email, phone_number, license_no, license_expiry } = req.body;
+    
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // ১. পাসওয়ার্ড হ্যাস করা (Security-র জন্য বাধ্যতামূলক)
+        // যদি আপনার সিস্টেমে অলরেডি হ্যাস করা থাকে তবে এই অংশটি এড়িয়ে যেতে পারেন
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
+
+        // ২. Create User Account 
+        // আপনার ডাটাবেস অনুযায়ী কলামের নাম password_hash এবং branch_id (যদি দরকার হয়)
+        const userRes = await client.query(
+            `INSERT INTO users (username, password_hash, full_name, email, phone_number, role, is_active) 
+             VALUES ($1, $2, $3, $4, $5, 'Driver', true) RETURNING id`,
+            [username, hashedPassword, full_name, email, phone_number]
+        );
+        const userId = userRes.rows[0].id;
+
+        // ৩. Create Transport Staff Profile
+        await client.query(
+            `INSERT INTO transport_staff (user_id, license_no, license_expiry, staff_type, is_active) 
+             VALUES ($1, $2, $3, 'driver', true)`,
+            [userId, license_no, license_expiry || null] // তারিখ না থাকলে null যাবে
+        );
+
+        await client.query('COMMIT');
+        res.status(201).json({ success: true, message: "Driver created successfully" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error("DB Error:", err.message);
+        
+        // ডুপ্লিকেট ইউজার বা ইমেইল চেক করার জন্য
+        if (err.code === '23505') {
+            return res.status(400).json({ error: "Username, Email, or License Number already exists." });
+        }
+        res.status(500).json({ error: "Failed to create driver.", detail: err.message });
+    } finally {
+        client.release();
+    }
+});
+
+// =================================================================
+// 22. GET: FETCH ALL DRIVERS (Detailed List for Management)
+// =================================================================
+router.get('/staff/drivers-list', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                u.id, u.full_name, u.username, u.email, u.phone_number, 
+                ts.license_no, ts.license_expiry, ts.is_active
+            FROM users u
+            JOIN transport_staff ts ON u.id = ts.user_id
+            WHERE ts.staff_type = 'driver'
+            ORDER BY u.full_name ASC;
+        `;
+        const { rows } = await pool.query(query);
+        res.json(rows);
+    } catch (err) {
+        console.error(err.message);
+        res.status(500).json({ error: "Failed to fetch driver list" });
+    }
+});
+
+// =================================================================
+// 23. PUT: UPDATE DRIVER DETAILS
+// =================================================================
+router.put('/staff/update/:id', authenticateToken, authorize(ALLOWED_STAFF), async (req, res) => {
+    const { id } = req.params;
+    const { full_name, phone_number, license_expiry, is_active } = req.body;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // Users টেবিল আপডেট
+        await client.query(
+            'UPDATE users SET full_name = $1, phone_number = $2 WHERE id = $3',
+            [full_name, phone_number, id]
+        );
+
+        // Transport Staff টেবিল আপডেট
+        await client.query(
+            'UPDATE transport_staff SET license_expiry = $1, is_active = $2 WHERE user_id = $3',
+            [license_expiry, is_active, id]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Driver updated successfully" });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error(err.message);
+        res.status(500).json({ error: "Update failed" });
+    } finally {
+        client.release();
+    }
+});
+
+// ... আগের সব কোড এখানে থাকবে (Multer, Register Vehicle, Add Driver ইত্যাদি)
+
+// =================================================================
+// 24. DRIVER: FINISH TRIP (New Route to fix 404)
+// =================================================================
+router.post('/driver/finish-trip', authenticateToken, async (req, res) => {
+    const userId = req.user.id;
+
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+
+        // ১. ড্রাইভারের সাথে যুক্ত বাসের আইডি খুঁজে বের করা
+        const driverInfo = await client.query(
+            'SELECT vehicle_id FROM transport_staff WHERE user_id = $1 AND staff_type = $2',
+            [userId, 'driver']
+        );
+        const vehicleId = driverInfo.rows[0]?.vehicle_id;
+
+        if (!vehicleId) {
+            return res.status(404).json({ error: "No vehicle assigned to this driver." });
+        }
+
+        // ২. বাসের স্ট্যাটাস 'available' করা এবং কোঅর্ডিনেট রিসেট করা
+        await client.query(
+            `UPDATE transport_vehicles 
+             SET status = 'available', current_coords = NULL, last_updated = CURRENT_TIMESTAMP 
+             WHERE id = $1`,
+            [vehicleId]
+        );
+
+        // ৩. এই বাসের সব স্টুডেন্টের ট্রিপ স্ট্যাটাস রিসেট করা (পরবর্তী ট্রিপের জন্য)
+        await client.query(
+            `UPDATE student_transport_assignments 
+             SET is_boarded = false, is_waiting = false, is_missed = false, 
+                 boarded_at = NULL, waiting_since = NULL 
+             WHERE vehicle_id = $1`,
+            [vehicleId]
+        );
+
+        await client.query('COMMIT');
+        res.json({ success: true, message: "Trip finished. Bus is now available." });
+
+    } catch (err) {
+        await client.query('ROLLBACK');
+        console.error('Finish Trip Error:', err.message);
+        res.status(500).json({ error: 'Failed to finish trip' });
+    } finally {
+        client.release();
+    }
+});
+
+// =================================================================
+// 25. FUEL: UPDATED ADD LOG (With Total Cost Auto-Calculation)
+// =================================================================
+router.post('/fuel/add', authenticateToken, async (req, res) => {
+    const { vehicle_id, fuel_quantity, fuel_price, odometer_reading, fuel_station_name } = req.body;
+
+    if (!vehicle_id || !fuel_quantity || !fuel_price || !odometer_reading) {
+        return res.status(400).json({ error: "Required fields missing" });
+    }
+
+    try {
+        // টোটাল কস্ট ক্যালকুলেশন
+        const total_cost = parseFloat(fuel_quantity) * parseFloat(fuel_price);
+
+        const query = `
+            INSERT INTO transport_fuel_logs 
+            (vehicle_id, driver_id, fuel_quantity, fuel_price, total_cost, odometer_reading, fuel_station_name)
+            VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, $7)
+            RETURNING *;
+        `;
+        const { rows } = await pool.query(query, [
+            vehicle_id, req.user.id, fuel_quantity, fuel_price, total_cost, odometer_reading, fuel_station_name || 'N/A'
+        ]);
+
+        res.status(201).json({ success: true, message: "Fuel log saved!", data: rows[0] });
+    } catch (err) {
+        console.error('Fuel Add Error:', err.message);
+        res.status(500).json({ error: 'Database update failed' });
+    }
+});
+
+// =================================================================
+// 26. ADMIN: GET ALL DRIVERS (Quick Summary for UI)
+// =================================================================
+router.get('/staff/drivers-summary', authenticateToken, authorize(ALLOWED_STAFF), async (req, res) => {
+    try {
+        const query = `
+            SELECT 
+                u.full_name, 
+                v.vehicle_no, 
+                ts.is_active,
+                v.status as bus_status
+            FROM transport_staff ts
+            JOIN users u ON ts.user_id = u.id
+            LEFT JOIN transport_vehicles v ON ts.vehicle_id = v.id
+            WHERE ts.staff_type = 'driver';
+        `;
+        const { rows } = await pool.query(query);
+        res.json(rows);
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch drivers" });
+    }
+});
+
 module.exports = router;

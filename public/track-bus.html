@@ -3,103 +3,76 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Live Fleet Tracking | Transport ERP</title>
+    <title>Fleet Command Center | Live Tracking</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --primary: #2563eb; --success: #22c55e; --warning: #f59e0b; --danger: #ef4444; }
+        :root { 
+            --primary: #2563eb; --success: #22c55e; --warning: #f59e0b; 
+            --danger: #ef4444; --slate-900: #0f172a; --slate-700: #334155;
+        }
         body { background: #f8fafc; margin: 0; font-family: 'Inter', sans-serif; overflow: hidden; }
         
-        .tracking-grid { display: grid; grid-template-columns: 1fr 380px; height: calc(100vh - 70px); }
-        #map { height: 100%; width: 100%; }
+        .tracking-grid { display: grid; grid-template-columns: 1fr 400px; height: calc(100vh - 70px); }
+        #map { height: 100%; width: 100%; background: #f1f5f9; }
 
-        .sidebar { background: white; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; }
-        .sidebar-header { padding: 20px; border-bottom: 1px solid #f1f5f9; }
-        .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; }
+        .sidebar { background: white; border-left: 1px solid #e2e8f0; display: flex; flex-direction: column; box-shadow: -4px 0 15px rgba(0,0,0,0.05); }
+        .sidebar-header { padding: 20px; border-bottom: 1px solid #f1f5f9; background: #fff; z-index: 10; }
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 15px; background: #f8fafc; }
 
-        /* --- UPDATED BUS MARKER STYLES --- */
-        .bus-marker-container {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-
+        .bus-marker-container { display: flex; flex-direction: column; align-items: center; }
         .bus-floating-label {
-            background: rgba(30, 41, 59, 0.9);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            white-space: nowrap;
-            margin-bottom: 6px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            border: 1px solid rgba(255,255,255,0.1);
-            pointer-events: none;
+            background: var(--slate-900); color: white; padding: 5px 10px; border-radius: 6px;
+            font-size: 11px; font-weight: 600; white-space: nowrap; margin-bottom: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.1);
         }
-
-        .bus-floating-label span {
-            display: block;
-            font-size: 9px;
-            color: #94a3b8;
-            font-weight: 400;
-        }
+        .bus-floating-label span { display: block; font-size: 9px; color: #94a3b8; font-weight: 400; }
 
         .bus-icon-wrapper {
-            background: white;
-            width: 34px;
-            height: 34px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            border: 2px solid var(--primary);
-            box-shadow: 0 2px 8px rgba(37, 99, 235, 0.3);
-            position: relative;
+            background: white; width: 38px; height: 38px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            border: 2px solid var(--primary); box-shadow: 0 0 15px rgba(37, 99, 235, 0.4);
+            position: relative; transition: all 0.8s linear;
         }
-
-        .bus-icon-wrapper i {
-            color: var(--primary);
-            font-size: 18px;
-        }
-
-        /* Movement Pulse for Bus */
+        .bus-icon-wrapper i { color: var(--primary); font-size: 18px; }
+        
         .bus-icon-wrapper::after {
-            content: '';
-            position: absolute;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            background: var(--primary);
-            opacity: 0.2;
-            animation: bus-pulse 2s infinite;
+            content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%;
+            background: var(--primary); opacity: 0.2; animation: bus-pulse 2s infinite;
         }
+        @keyframes bus-pulse { 0% { transform: scale(1); opacity: 0.4; } 100% { transform: scale(2.5); opacity: 0; } }
 
-        @keyframes bus-pulse {
-            0% { transform: scale(1); opacity: 0.4; }
-            100% { transform: scale(2); opacity: 0; }
+        .status-card { 
+            background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; 
+            margin-bottom: 12px; cursor: pointer; transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         }
-
-        /* Existing Styles */
-        .status-card { background: white; border: 1px solid #e2e8f0; padding: 15px; border-radius: 12px; margin-bottom: 12px; }
-        .status-card.arriving { border-left: 4px solid var(--success); background: #f0fdf4; }
+        .status-card:hover { transform: translateX(-5px); border-color: var(--primary); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .status-card.arriving { border-left: 5px solid var(--success); background: #f0fdf4; }
+        
         .pulse-home { animation: shadow-pulse 2s infinite; border-radius: 50%; }
         @keyframes shadow-pulse {
-            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
             70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
             100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
         }
+
+        nav { height: 70px; display: flex; align-items: center; justify-content: space-between; padding: 0 25px; background: white; border-bottom: 1px solid #e2e8f0; position: relative; z-index: 1000; }
     </style>
 </head>
 <body>
 
-    <nav style="height:70px; display:flex; align-items:center; justify-content:space-between; padding:0 20px; background:white; border-bottom:1px solid #e2e8f0;">
-        <h2 style="margin:0; font-size: 20px;"><i class="fas fa-route" style="color:var(--primary)"></i> FLEET <span style="color:var(--primary)">LIVE</span></h2>
+    <nav>
+        <div style="display:flex; align-items:center; gap:12px;">
+            <div style="background:var(--primary); color:white; width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center;">
+                <i class="fas fa-bus-alt"></i>
+            </div>
+            <h2 style="margin:0; font-size: 22px; color:var(--slate-900);">Fleet<span style="color:var(--primary)">Live</span></h2>
+        </div>
         <div style="display:flex; gap:20px; align-items:center;">
-            <div id="connectionStatus" style="font-size: 13px; color: var(--success); font-weight: 600;">● Live Feed Active</div>
-            <span id="lastUpdate" style="font-size: 12px; color: #64748b;"></span>
-            <button onclick="location.reload()" style="padding:8px 15px; border-radius:6px; border:1px solid #ddd; cursor:pointer; background:white;"><i class="fas fa-sync"></i></button>
+            <div id="connectionStatus" style="font-size: 13px; color: var(--success); font-weight: 700;">
+                <i class="fas fa-wifi"></i> CONNECTED
+            </div>
+            <span id="lastUpdate" style="font-size: 12px; color: #64748b; font-family: monospace;"></span>
         </div>
     </nav>
 
@@ -107,22 +80,31 @@
         <div id="map"></div>
         <div class="sidebar">
             <div class="sidebar-header">
-                <h3 style="margin:0;"><i class="fas fa-bullhorn" style="color:var(--warning)"></i> Proximity Alerts</h3>
-                <p style="margin:5px 0 0; font-size: 12px; color:#64748b;">Scanning students within 500m of buses</p>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <h3 style="margin:0; font-size:18px;">Live Arrivals</h3>
+                    <span id="alertCount" style="background:var(--danger); color:white; font-size:11px; padding:3px 10px; border-radius:20px; font-weight:800;">0</span>
+                </div>
+                <p style="margin:5px 0 0; font-size: 12px; color:#64748b;">Scan distance: 500m</p>
             </div>
-            <div class="sidebar-content" id="proximityList">
-                <p style="text-align:center; padding-top:50px; color:#94a3b8;">Scanning for active trips...</p>
-            </div>
+            <div class="sidebar-content" id="proximityList"></div>
         </div>
     </div>
 
+    <audio id="alertSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
-        const map = L.map('map', { zoomControl: false }).setView([22.5726, 88.3639], 14);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png').addTo(map);
+        const map = L.map('map', { zoomControl: false }).setView([22.5726, 88.3639], 13);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
 
         let busMarkers = {};
+        let busRadars = {}; 
         let studentMarkers = {};
+        let alertedStudents = new Set();
+        
         const AUTH_HEADER = { 'Authorization': `Bearer ${localStorage.getItem('erp-token')?.replace(/"/g, '')}` };
 
         function getDistMeters(lat1, lon1, lat2, lon2) {
@@ -135,86 +117,115 @@
 
         async function updateDashboard() {
             try {
-                // Fetch Bus Driver details & Live Locations
                 const res = await fetch('/api/transport/live-locations', { headers: AUTH_HEADER });
-                const buses = await res.json();
+                if(!res.ok) throw new Error("Unauthorized");
+                const activeBuses = await res.json();
                 
+                const activeBusIds = new Set(activeBuses.map(b => b.id));
                 const sidebar = document.getElementById('proximityList');
                 let alertHtml = "";
+                let activeAlertsCount = 0;
 
-                for (const bus of buses) {
+                // Cleanup: Remove buses that are no longer on trip
+                Object.keys(busMarkers).forEach(id => {
+                    if (!activeBusIds.has(id)) {
+                        map.removeLayer(busMarkers[id]);
+                        map.removeLayer(busRadars[id]);
+                        delete busMarkers[id];
+                        delete busRadars[id];
+                    }
+                });
+
+                for (const bus of activeBuses) {
                     if (!bus.current_coords) continue;
                     const [bLat, bLng] = bus.current_coords.split(',').map(Number);
 
-                    // --- UPDATED BUS ICON LOGIC ---
                     const busHtml = `
                         <div class="bus-marker-container">
                             <div class="bus-floating-label">
                                 ${bus.vehicle_no}
-                                <span>Driver: ${bus.driver_name || 'Assigned'}</span>
+                                <span><i class="fas fa-id-badge"></i> ${bus.driver_name || 'Active'}</span>
                             </div>
-                            <div class="bus-icon-wrapper">
-                                <i class="fas fa-bus"></i>
-                            </div>
+                            <div class="bus-icon-wrapper"><i class="fas fa-bus"></i></div>
                         </div>`;
 
                     if (busMarkers[bus.id]) {
                         busMarkers[bus.id].setLatLng([bLat, bLng]);
+                        busRadars[bus.id].setLatLng([bLat, bLng]);
                     } else {
                         busMarkers[bus.id] = L.marker([bLat, bLng], {
-                            icon: L.divIcon({ 
-                                html: busHtml, 
-                                className: 'dummy', 
-                                iconSize: [100, 80], 
-                                iconAnchor: [50, 75] 
-                            })
+                            icon: L.divIcon({ html: busHtml, className: 'dummy', iconSize: [120, 90], iconAnchor: [60, 85] })
+                        }).addTo(map);
+
+                        busRadars[bus.id] = L.circle([bLat, bLng], {
+                            radius: 500, color: '#2563eb', weight: 1, fillOpacity: 0.05
                         }).addTo(map);
                     }
 
-                    // Fetch assignments to calculate proximity
                     const sRes = await fetch(`/api/transport/assignments/${bus.id}`, { headers: AUTH_HEADER });
                     const students = await sRes.json();
 
                     students.forEach(s => {
-                        if (!s.location_coords) return;
+                        if (!s.location_coords || s.is_boarded) return;
+                        
                         const [sLat, sLng] = s.location_coords.split(',').map(Number);
                         const dist = getDistMeters(bLat, bLng, sLat, sLng);
 
                         if (!studentMarkers[s.student_id]) {
                             studentMarkers[s.student_id] = L.marker([sLat, sLng], {
                                 icon: L.divIcon({ 
-                                    html: `<i class="fas fa-home" style="color:#94a3b8; font-size:16px;"></i>`, 
-                                    className: 'dummy' 
+                                    html: `<div class="student-home-icon" style="background:#fff; border:2px solid #94a3b8; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;"><i class="fas fa-home" style="color:#64748b; font-size:12px;"></i></div>`, 
+                                    className: 'dummy', iconSize: [24, 24]
                                 })
-                            }).addTo(map).bindPopup(`<b>Student:</b> ${s.full_name}`);
+                            }).addTo(map).bindPopup(`<b>${s.full_name}</b>`);
                         }
 
                         if (dist < 500) {
+                            activeAlertsCount++;
+                            if (!alertedStudents.has(s.student_id)) {
+                                try { document.getElementById('alertSound').play(); } catch(e){}
+                                alertedStudents.add(s.student_id);
+                            }
+
                             alertHtml += `
-                                <div class="status-card arriving">
-                                    <div style="display:flex; justify-content:space-between; font-weight:bold;">
-                                        <span>${s.full_name}</span>
-                                        <span style="color:var(--success)">${Math.round(dist)}m</span>
+                                <div class="status-card arriving" onclick="map.flyTo([${bLat}, ${bLng}], 17)">
+                                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                                        <span style="font-weight:700;">${s.full_name}</span>
+                                        <span style="background:var(--success); color:white; font-size:10px; padding:2px 8px; border-radius:20px;">${Math.round(dist)}m</span>
                                     </div>
-                                    <div style="font-size:11px; margin-top:5px; color:#64748b;">
-                                        <i class="fas fa-bus"></i> Bus ${bus.vehicle_no} is arriving
+                                    <div style="font-size:12px; margin-top:8px; color:var(--slate-700);">
+                                        <i class="fas fa-bus-alt"></i> Bus ${bus.vehicle_no} is arriving
                                     </div>
                                 </div>`;
-                            studentMarkers[s.student_id].getElement()?.classList.add('pulse-home');
+                            
+                            studentMarkers[s.student_id].getElement()?.querySelector('.student-home-icon')?.classList.add('pulse-home');
                         } else {
-                            studentMarkers[s.student_id].getElement()?.classList.remove('pulse-home');
+                            alertedStudents.delete(s.student_id);
+                            studentMarkers[s.student_id].getElement()?.querySelector('.student-home-icon')?.classList.remove('pulse-home');
                         }
                     });
                 }
                 
-                sidebar.innerHTML = alertHtml || `<p style="text-align:center; padding-top:50px; color:#94a3b8;">No proximity alerts...</p>`;
-                document.getElementById('lastUpdate').innerText = `Sync: ${new Date().toLocaleTimeString()}`;
+                sidebar.innerHTML = alertHtml || `<div style="text-align:center; padding-top:80px; color:#94a3b8;"><p>Searching for active trips...</p></div>`;
+                document.getElementById('alertCount').innerText = activeAlertsCount;
+                document.getElementById('lastUpdate').innerText = `SYNC: ${new Date().toLocaleTimeString()}`;
 
-            } catch (err) { console.error(err); }
+                // Auto-zoom to show all buses if they exist
+                const markerArray = Object.values(busMarkers);
+                if (markerArray.length > 0) {
+                    const group = new L.featureGroup(markerArray);
+                    map.fitBounds(group.getBounds().pad(0.3));
+                }
+
+            } catch (err) { 
+                document.getElementById('connectionStatus').style.color = 'var(--danger)';
+                document.getElementById('connectionStatus').innerText = 'OFFLINE';
+            }
         }
 
         setInterval(updateDashboard, 5000);
         updateDashboard();
+        window.addEventListener('resize', () => map.invalidateSize());
     </script>
 </body>
 </html>

@@ -3,80 +3,262 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Assign Driver | School ERP</title>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Driver Command | Fleet ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        :root { --primary: #005A9C; --bg: #f1f5f9; }
-        body { font-family: 'Poppins', sans-serif; background: var(--bg); margin: 0; padding: 20px; }
-        .container { max-width: 600px; margin: 40px auto; background: white; padding: 30px; border-radius: 15px; box-shadow: 0 10px 25px rgba(0,0,0,0.05); }
-        h2 { color: var(--primary); text-align: center; margin-bottom: 25px; }
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-weight: 500; color: #475569; }
-        select, button { width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 16px; }
-        button { background: var(--primary); color: white; font-weight: 600; border: none; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        button:hover { background: #004578; }
-        .status-msg { margin-top: 15px; text-align: center; padding: 10px; border-radius: 8px; display: none; }
+        :root {
+            --primary: #005A9C;
+            --primary-light: #e0f2fe;
+            --secondary: #f97316;
+            --success: #10b981;
+            --bg: #f8fafc;
+            --text-dark: #1e293b;
+            --text-muted: #64748b;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: var(--bg); 
+            margin: 0; 
+            padding: 20px; 
+            color: var(--text-dark);
+        }
+
+        .dashboard {
+            max-width: 900px;
+            margin: 40px auto;
+            display: grid;
+            grid-template-columns: 1fr 350px;
+            gap: 25px;
+        }
+
+        .main-card {
+            background: white;
+            padding: 30px;
+            border-radius: 24px;
+            box-shadow: 0 10px 30px -5px rgba(0,0,0,0.05);
+            border: 1px solid #e2e8f0;
+        }
+
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h2 { 
+            margin: 0 0 10px 0; 
+            font-size: 24px; 
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .subtitle { color: var(--text-muted); font-size: 14px; margin-bottom: 30px; }
+
+        .form-group { margin-bottom: 25px; position: relative; }
+        
+        label { 
+            display: block; 
+            margin-bottom: 8px; 
+            font-size: 13px;
+            font-weight: 600; 
+            color: var(--text-dark); 
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .custom-select {
+            appearance: none;
+            width: 100%;
+            padding: 14px;
+            border-radius: 12px;
+            border: 2px solid #e2e8f0;
+            background: #fff;
+            font-size: 15px;
+            transition: 0.3s;
+            cursor: pointer;
+        }
+
+        .custom-select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px var(--primary-light);
+            outline: none;
+        }
+
+        .link-preview {
+            background: #f1f5f9;
+            padding: 20px;
+            border-radius: 16px;
+            border: 2px dashed #cbd5e1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+        }
+
+        .link-item { text-align: center; flex: 1; }
+        .link-item i { font-size: 20px; color: var(--primary); margin-bottom: 5px; }
+        .link-item span { display: block; font-size: 12px; font-weight: 700; }
+        .link-item small { color: var(--text-muted); font-size: 11px; }
+
+        .btn-assign {
+            width: 100%;
+            padding: 16px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: 0.3s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-assign:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,90,156,0.3); }
+
+        .history-card {
+            background: white;
+            padding: 20px;
+            border-radius: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .history-list { list-style: none; padding: 0; margin: 0; }
+        .history-item {
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 13px;
+        }
+
+        .badge {
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 700;
+        }
+        .badge-blue { background: var(--primary-light); color: var(--primary); }
+
+        @media (max-width: 800px) {
+            .dashboard { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2>🚚 Driver Assignment</h2>
-    
-    <div class="form-group">
-        <label>Select Driver (Staff Type: Driver)</label>
-        <select id="driverSelect">
-            <option value="">-- Loading Drivers --</option>
-        </select>
+<div class="dashboard">
+    <div class="main-card">
+        <h2><i class="fas fa-link"></i> Deployment Desk</h2>
+        <p class="subtitle">Assign a certified driver to an active vehicle in your fleet.</p>
+        
+        <div class="form-group">
+            <label><i class="fas fa-user-tie"></i> Certified Driver</label>
+            <select id="driverSelect" class="custom-select" onchange="updatePreview()">
+                <option value="">-- Loading Drivers --</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label><i class="fas fa-bus"></i> Fleet Vehicle</label>
+            <select id="vehicleSelect" class="custom-select" onchange="updatePreview()">
+                <option value="">-- Loading Vehicles --</option>
+            </select>
+        </div>
+
+        <div class="link-preview">
+            <div class="link-item">
+                <i class="fas fa-user-circle"></i>
+                <span id="prevDriver">No Driver</span>
+                <small>Designated Pilot</small>
+            </div>
+            <div style="color: #cbd5e1; font-size: 24px;"><i class="fas fa-arrow-right"></i></div>
+            <div class="link-item">
+                <i class="fas fa-truck-monster"></i>
+                <span id="prevVehicle">No Vehicle</span>
+                <small>Assigned Unit</small>
+            </div>
+        </div>
+
+        <button class="btn-assign" onclick="assignDriver()">
+            <i class="fas fa-check-circle"></i> Confirm Deployment
+        </button>
     </div>
 
-    <div class="form-group">
-        <label>Select Vehicle</label>
-        <select id="vehicleSelect">
-            <option value="">-- Loading Vehicles --</option>
-        </select>
-    </div>
+    <div class="side-panel">
+        <div class="history-card">
+            <h3 style="font-size: 16px; margin-top: 0;"><i class="fas fa-clock-rotate-left"></i> Recent Activity</h3>
+            <div class="history-list" id="historyLog">
+                <div style="text-align:center; padding: 20px; color: #94a3b8;">
+                    <i class="fas fa-info-circle"></i><br><small>No recent deployments</small>
+                </div>
+            </div>
+        </div>
 
-    <button onclick="assignDriver()">Assign Driver to Vehicle</button>
-    <div id="msg" class="status-msg"></div>
+        <div class="history-card" style="background: var(--primary); color: white;">
+            <p style="font-size: 12px; margin: 0; opacity: 0.8;">Fleet Status</p>
+            <h4 style="margin: 5px 0 0 0;">Secure Connection Active</h4>
+        </div>
+    </div>
 </div>
 
 <script>
-    const token = localStorage.getItem('erp-token');
+    const token = localStorage.getItem('erp-token')?.replace(/"/g, '');
 
-    // ডাটা লোড করা (Drivers and Vehicles)
     async function loadData() {
         try {
-            // ড্রাইভারদের লিস্ট আনা (যাদের staff_type = 'driver')
-            const dRes = await fetch('/api/transport/staff/drivers', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const [dRes, vRes] = await Promise.all([
+                fetch('/api/transport/staff/drivers', { headers: { 'Authorization': `Bearer ${token}` } }),
+                fetch('/api/transport/vehicles', { headers: { 'Authorization': `Bearer ${token}` } })
+            ]);
+
             const drivers = await dRes.json();
+            const vehicles = await vRes.json();
+
             const dSelect = document.getElementById('driverSelect');
-            dSelect.innerHTML = '<option value="">-- Select Driver --</option>';
+            dSelect.innerHTML = '<option value="">-- Select Available Driver --</option>';
             drivers.forEach(d => {
-                dSelect.innerHTML += `<option value="${d.user_id}">${d.full_name} (${d.license_no})</option>`;
+                dSelect.innerHTML += `<option value="${d.user_id}" data-name="${d.full_name}">${d.full_name} [${d.license_no}]</option>`;
             });
 
-            // বাসের লিস্ট আনা
-            const vRes = await fetch('/api/transport/vehicles', {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            const vehicles = await vRes.json();
             const vSelect = document.getElementById('vehicleSelect');
-            vSelect.innerHTML = '<option value="">-- Select Vehicle --</option>';
+            vSelect.innerHTML = '<option value="">-- Select Fleet Vehicle --</option>';
             vehicles.forEach(v => {
-                vSelect.innerHTML += `<option value="${v.id}">${v.vehicle_no} - ${v.model}</option>`;
+                vSelect.innerHTML += `<option value="${v.id}" data-no="${v.vehicle_no}">${v.vehicle_no} (${v.model})</option>`;
             });
-        } catch (err) { console.error("Load failed", err); }
+        } catch (err) {
+            console.error("Load failed", err);
+        }
+    }
+
+    function updatePreview() {
+        const d = document.getElementById('driverSelect');
+        const v = document.getElementById('vehicleSelect');
+        
+        document.getElementById('prevDriver').innerText = d.options[d.selectedIndex].dataset.name || 'No Driver';
+        document.getElementById('prevVehicle').innerText = v.options[v.selectedIndex].dataset.no || 'No Vehicle';
     }
 
     async function assignDriver() {
         const userId = document.getElementById('driverSelect').value;
         const vehicleId = document.getElementById('vehicleSelect').value;
-        const msgDiv = document.getElementById('msg');
+        const btn = document.querySelector('.btn-assign');
 
-        if(!userId || !vehicleId) return alert("Please select both!");
+        if(!userId || !vehicleId) {
+            alert("⚠️ Critical: Select both Driver and Vehicle.");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
 
         try {
             const res = await fetch('/api/transport/assign-driver', {
@@ -89,12 +271,36 @@
             });
             
             if(res.ok) {
-                msgDiv.style.display = 'block';
-                msgDiv.style.background = '#dcfce7';
-                msgDiv.style.color = '#15803d';
-                msgDiv.innerText = "Driver assigned successfully!";
+                addToHistory(
+                    document.getElementById('prevDriver').innerText,
+                    document.getElementById('prevVehicle').innerText
+                );
+                alert("✅ Success: Driver deployed successfully!");
+            } else {
+                alert("❌ Conflict: This driver might already be assigned elsewhere.");
             }
-        } catch (err) { alert("Assignment failed!"); }
+        } catch (err) { 
+            alert("Server Error"); 
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-check-circle"></i> Confirm Deployment';
+        }
+    }
+
+    function addToHistory(driver, bus) {
+        const log = document.getElementById('historyLog');
+        if(log.innerHTML.includes('No recent')) log.innerHTML = '';
+        
+        const item = document.createElement('div');
+        item.className = 'history-item';
+        item.innerHTML = `
+            <i class="fas fa-check-circle" style="color:var(--success)"></i>
+            <div>
+                <b>${driver}</b> assigned to <span class="badge badge-blue">${bus}</span>
+                <br><small style="color: #94a3b8">Just now</small>
+            </div>
+        `;
+        log.prepend(item);
     }
 
     window.onload = loadData;
