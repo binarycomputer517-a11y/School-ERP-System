@@ -85,12 +85,15 @@
                     <span id="alertCount" style="background:var(--danger); color:white; font-size:11px; padding:3px 10px; border-radius:20px; font-weight:800;">0</span>
                 </div>
                 <p style="margin:5px 0 0; font-size: 12px; color:#64748b;">Scan distance: 500m</p>
+                <button id="enableAudio" style="margin-top:10px; padding:5px 10px; font-size:10px; cursor:pointer; background:var(--primary); color:white; border:none; border-radius:4px;">
+                   <i class="fas fa-volume-up"></i> Enable Sound
+                </button>
             </div>
             <div class="sidebar-content" id="proximityList"></div>
         </div>
     </div>
 
-    <audio id="alertSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
+    <audio id="alertSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
@@ -104,8 +107,16 @@
         let busRadars = {}; 
         let studentMarkers = {};
         let alertedStudents = new Set();
-        
-        const AUTH_HEADER = { 'Authorization': `Bearer ${localStorage.getItem('erp-token')?.replace(/"/g, '')}` };
+        let audioEnabled = false;
+
+        // সাউন্ড এরর হ্যান্ডলিং করার জন্য বাটন লজিক
+        document.getElementById('enableAudio').addEventListener('click', function() {
+            audioEnabled = true;
+            this.innerHTML = '<i class="fas fa-check"></i> Sound Active';
+            this.style.background = 'var(--success)';
+            // সাউন্ড টেস্ট
+            document.getElementById('alertSound').play().catch(e => console.log("Init audio failed"));
+        });
 
         function getDistMeters(lat1, lon1, lat2, lon2) {
             const R = 6371e3;
@@ -126,7 +137,7 @@
                 let alertHtml = "";
                 let activeAlertsCount = 0;
 
-                // Cleanup: Remove buses that are no longer on trip
+                // Cleanup
                 Object.keys(busMarkers).forEach(id => {
                     if (!activeBusIds.has(id)) {
                         map.removeLayer(busMarkers[id]);
@@ -138,7 +149,18 @@
 
                 for (const bus of activeBuses) {
                     if (!bus.current_coords) continue;
-                    const [bLat, bLng] = bus.current_coords.split(',').map(Number);
+
+                    // Robust Coordinates Parsing (Handles JSON and String)
+                    let bLat, bLng;
+                    if (typeof bus.current_coords === 'object') {
+                        bLat = parseFloat(bus.current_coords.lat);
+                        bLng = parseFloat(bus.current_coords.lng);
+                    } else if (typeof bus.current_coords === 'string' && bus.current_coords.includes(',')) {
+                        const parts = bus.current_coords.split(',').map(Number);
+                        bLat = parts[0]; bLng = parts[1];
+                    }
+
+                    if (!bLat || !bLng) continue;
 
                     const busHtml = `
                         <div class="bus-marker-container">
@@ -162,55 +184,60 @@
                         }).addTo(map);
                     }
 
-                    const sRes = await fetch(`/api/transport/assignments/${bus.id}`, { headers: AUTH_HEADER });
-                    const students = await sRes.json();
+                    // Fetch Assignments
+                    try {
+                        const sRes = await fetch(`/api/transport/assignments/${bus.id}`, { headers: AUTH_HEADER });
+                        const students = await sRes.json();
 
-                    students.forEach(s => {
-                        if (!s.location_coords || s.is_boarded) return;
-                        
-                        const [sLat, sLng] = s.location_coords.split(',').map(Number);
-                        const dist = getDistMeters(bLat, bLng, sLat, sLng);
+                        students.forEach(s => {
+                            if (!s.location_coords || s.is_boarded) return;
+                            
+                            // Parse Student Coords
+                            const [sLat, sLng] = s.location_coords.split(',').map(Number);
+                            const dist = getDistMeters(bLat, bLng, sLat, sLng);
 
-                        if (!studentMarkers[s.student_id]) {
-                            studentMarkers[s.student_id] = L.marker([sLat, sLng], {
-                                icon: L.divIcon({ 
-                                    html: `<div class="student-home-icon" style="background:#fff; border:2px solid #94a3b8; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center;"><i class="fas fa-home" style="color:#64748b; font-size:12px;"></i></div>`, 
-                                    className: 'dummy', iconSize: [24, 24]
-                                })
-                            }).addTo(map).bindPopup(`<b>${s.full_name}</b>`);
-                        }
-
-                        if (dist < 500) {
-                            activeAlertsCount++;
-                            if (!alertedStudents.has(s.student_id)) {
-                                try { document.getElementById('alertSound').play(); } catch(e){}
-                                alertedStudents.add(s.student_id);
+                            if (!studentMarkers[s.student_id]) {
+                                studentMarkers[s.student_id] = L.marker([sLat, sLng], {
+                                    icon: L.divIcon({ 
+                                        html: `<div class="student-home-icon" style="background:#fff; border:2px solid #94a3b8; border-radius:50%; width:24px; height:24px; display:flex; align-items:center; justify-content:center; transition:0.3s;"><i class="fas fa-home" style="color:#64748b; font-size:12px;"></i></div>`, 
+                                        className: 'dummy', iconSize: [24, 24]
+                                    })
+                                }).addTo(map).bindPopup(`<b>${s.full_name}</b>`);
                             }
 
-                            alertHtml += `
-                                <div class="status-card arriving" onclick="map.flyTo([${bLat}, ${bLng}], 17)">
-                                    <div style="display:flex; justify-content:space-between; align-items:center;">
-                                        <span style="font-weight:700;">${s.full_name}</span>
-                                        <span style="background:var(--success); color:white; font-size:10px; padding:2px 8px; border-radius:20px;">${Math.round(dist)}m</span>
-                                    </div>
-                                    <div style="font-size:12px; margin-top:8px; color:var(--slate-700);">
-                                        <i class="fas fa-bus-alt"></i> Bus ${bus.vehicle_no} is arriving
-                                    </div>
-                                </div>`;
-                            
-                            studentMarkers[s.student_id].getElement()?.querySelector('.student-home-icon')?.classList.add('pulse-home');
-                        } else {
-                            alertedStudents.delete(s.student_id);
-                            studentMarkers[s.student_id].getElement()?.querySelector('.student-home-icon')?.classList.remove('pulse-home');
-                        }
-                    });
+                            if (dist < 500) {
+                                activeAlertsCount++;
+                                if (!alertedStudents.has(s.student_id)) {
+                                    if (audioEnabled) {
+                                        document.getElementById('alertSound').play().catch(e => console.log("Sound block"));
+                                    }
+                                    alertedStudents.add(s.student_id);
+                                }
+
+                                alertHtml += `
+                                    <div class="status-card arriving" onclick="map.flyTo([${bLat}, ${bLng}], 17)">
+                                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                                            <span style="font-weight:700;">${s.full_name}</span>
+                                            <span style="background:var(--success); color:white; font-size:10px; padding:2px 8px; border-radius:20px;">${Math.round(dist)}m</span>
+                                        </div>
+                                        <div style="font-size:12px; margin-top:8px; color:var(--slate-700);">
+                                            <i class="fas fa-bus-alt"></i> Bus ${bus.vehicle_no} is arriving
+                                        </div>
+                                    </div>`;
+                                
+                                studentMarkers[s.student_id].getElement()?.querySelector('.student-home-icon')?.classList.add('pulse-home');
+                            } else {
+                                alertedStudents.delete(s.student_id);
+                                studentMarkers[s.student_id].getElement()?.querySelector('.student-home-icon')?.classList.remove('pulse-home');
+                            }
+                        });
+                    } catch(e) { console.error("Roster error", e); }
                 }
                 
                 sidebar.innerHTML = alertHtml || `<div style="text-align:center; padding-top:80px; color:#94a3b8;"><p>Searching for active trips...</p></div>`;
                 document.getElementById('alertCount').innerText = activeAlertsCount;
                 document.getElementById('lastUpdate').innerText = `SYNC: ${new Date().toLocaleTimeString()}`;
 
-                // Auto-zoom to show all buses if they exist
                 const markerArray = Object.values(busMarkers);
                 if (markerArray.length > 0) {
                     const group = new L.featureGroup(markerArray);
@@ -223,6 +250,7 @@
             }
         }
 
+        const AUTH_HEADER = { 'Authorization': `Bearer ${localStorage.getItem('erp-token')?.replace(/"/g, '')}` };
         setInterval(updateDashboard, 5000);
         updateDashboard();
         window.addEventListener('resize', () => map.invalidateSize());
