@@ -715,14 +715,23 @@ router.get('/admin/fleet-status', authenticateToken, authorize(ALLOWED_STAFF), a
         
         const { rows } = await pool.query(query);
 
-        // ম্যাপের জন্য কোঅর্ডিনেট ফরম্যাট করা
         const fleetData = rows.map(bus => {
             let lat = 22.5726, lng = 88.3639; // ডিফল্ট লোকেশন
-            if (bus.current_coords && bus.current_coords.includes(',')) {
-                const parts = bus.current_coords.split(',');
-                lat = parseFloat(parts[0]);
-                lng = parseFloat(parts[1]);
+
+            if (bus.current_coords) {
+                // ১. যদি ডাটাবেস থেকে সরাসরি Object হিসেবে আসে (লাইভ সার্ভার - JSONB)
+                if (typeof bus.current_coords === 'object' && bus.current_coords !== null) {
+                    lat = parseFloat(bus.current_coords.lat) || lat;
+                    lng = parseFloat(bus.current_coords.lng) || lng;
+                } 
+                // ২. যদি ডাটাবেস থেকে String হিসেবে আসে (লোকাল সার্ভার - Text)
+                else if (typeof bus.current_coords === 'string' && bus.current_coords.includes(',')) {
+                    const parts = bus.current_coords.split(',');
+                    lat = parseFloat(parts[0]);
+                    lng = parseFloat(parts[1]);
+                }
             }
+
             return {
                 vehicle_id: bus.vehicle_id,
                 vehicle_number: bus.vehicle_number,
@@ -737,10 +746,9 @@ router.get('/admin/fleet-status', authenticateToken, authorize(ALLOWED_STAFF), a
         res.json(fleetData);
     } catch (err) {
         console.error('Fleet Status API Error:', err.message);
-        res.status(500).json({ error: 'Failed to fetch fleet status' });
+        res.status(500).json({ error: 'Internal Server Error', detail: err.message });
     }
 });
-
 // =================================================================
 // 19. FUEL: GET LAST ENTRY FOR DRIVER (Fixes 404 in logs)
 // =================================================================
