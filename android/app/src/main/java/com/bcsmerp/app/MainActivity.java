@@ -15,27 +15,27 @@ public class MainActivity extends BridgeActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // অ্যাপ চালু হলে এই পারমিশনগুলো চেক করবে
+        // List to hold permissions that need to be requested
         List<String> permissionsToRequest = new ArrayList<>();
 
-        // ১. ক্যামেরা
+        // 1. Check Camera Permission
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             permissionsToRequest.add(Manifest.permission.CAMERA);
         }
 
-        // ২. লোকেশন (GPS)
+        // 2. Check Location Permission (GPS)
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             permissionsToRequest.add(Manifest.permission.ACCESS_FINE_LOCATION);
         }
 
-        // ৩. নোটিফিকেশন (শুধুমাত্র Android 13 বা তার ওপরের ফোনের জন্য)
+        // 3. Check Notification Permission (Only for Android 13 Tiramisu or higher)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS);
             }
         }
 
-        // যদি কোনো পারমিশন বাকি থাকে, তবে পপ-আপ দেখাবে
+        // If there are any missing permissions, request them via popup
         if (!permissionsToRequest.isEmpty()) {
             ActivityCompat.requestPermissions(this, permissionsToRequest.toArray(new String[0]), 1);
         }
