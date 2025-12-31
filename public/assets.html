@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Asset Register | School ERP</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <link rel="stylesheet" href="css/style.css">
+    
+    <style>
+        /* Asset Specific Styles */
+        .value-badge {
+            background: #ecfdf5; 
+            color: #047857; 
+            padding: 5px 10px; 
+            border-radius: 8px; 
+            font-weight: 700;
+            border: 1px solid #d1fae5;
+        }
+        .depreciation-text {
+            font-size: 0.75rem;
+            color: #ef4444;
+            display: block;
+            margin-top: 2px;
+        }
+        .history-table {
+            font-size: 0.85rem;
+        }
+        .history-table th {
+            background-color: #f3f4f6;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="glass-nav mb-4">
+    <div class="d-flex align-items-center gap-2">
+        <i class="fas fa-laptop-medical text-primary fa-lg"></i>
+        <span class="fw-bold text-dark fs-5">Fixed Asset Register</span>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="admin-dashboard.html" class="btn btn-sm btn-light border">
+            <i class="fas fa-home text-muted"></i> Dashboard
+        </a>
+        <a href="inventory.html" class="btn btn-sm btn-primary text-white shadow-sm">
+            <i class="fas fa-boxes"></i> Inventory
+        </a>
+    </div>
+</nav>
+
+<div class="container-fluid">
+    
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-center mb-4 fade-in">
+        <div>
+            <h2 class="fw-bold text-dark mb-0">Asset Lifecycle</h2>
+            <p class="text-muted mb-0">Track depreciation, current value, and maintenance history.</p>
+        </div>
+        <div class="mt-3 mt-md-0">
+            <button class="btn btn-light shadow-sm text-primary" onclick="loadAssets()" title="Refresh Data">
+                <i class="fas fa-sync-alt spin-hover"></i> Refresh Data
+            </button>
+        </div>
+    </div>
+
+    <div class="glass-card p-0 overflow-hidden">
+        <div class="p-3 border-bottom bg-white bg-opacity-50">
+            <h5 class="fw-bold text-primary mb-0"><i class="fas fa-server me-2"></i>Fixed Assets List</h5>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="bg-light">
+                    <tr>
+                        <th class="ps-4">Asset Name</th>
+                        <th>SKU Code</th>
+                        <th>Location</th>
+                        <th>Original Cost</th>
+                        <th>Current Value</th>
+                        <th>Age</th>
+                        <th class="text-end pe-4">Maintenance</th>
+                    </tr>
+                </thead>
+                <tbody id="assetTableBody" class="bg-white">
+                    <tr><td colspan="7" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2"></div> Loading Assets...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="maintenanceModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content glass-card p-0 border-0">
+            <div class="modal-header border-0 bg-light">
+                <h5 class="modal-title fw-bold text-dark"><i class="fas fa-tools me-2"></i>Maintenance & Repair Log</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div class="row g-0">
+                    <div class="col-md-5 border-end p-4 bg-white">
+                        <h6 class="fw-bold text-primary mb-3">LOG NEW REPAIR</h6>
+                        <form id="maintenanceForm">
+                            <input type="hidden" id="selectedAssetId" name="asset_id">
+                            <div class="mb-3">
+                                <label class="small fw-bold text-muted">ISSUE DESCRIPTION</label>
+                                <textarea class="form-control" name="issue_description" rows="3" required placeholder="e.g. Hard drive failure..."></textarea>
+                            </div>
+                            <div class="mb-3">
+                                <label class="small fw-bold text-muted">REPAIR COST</label>
+                                <div class="input-group">
+                                    <span class="input-group-text">$</span>
+                                    <input type="number" class="form-control" name="cost" placeholder="0.00">
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="small fw-bold text-muted">TECHNICIAN / VENDOR</label>
+                                <input type="text" class="form-control" name="performed_by" required placeholder="Name or Company">
+                            </div>
+                            <button type="button" class="btn btn-primary w-100 text-white mt-2" onclick="submitMaintenance()">
+                                <i class="fas fa-save me-2"></i> Save Record
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <div class="col-md-7 p-4 bg-light">
+                        <h6 class="fw-bold text-secondary mb-3">REPAIR HISTORY</h6>
+                        <div class="table-responsive border rounded bg-white" style="max-height: 320px; overflow-y: auto;">
+                            <table class="table table-sm table-striped history-table mb-0">
+                                <thead class="sticky-top">
+                                    <tr>
+                                        <th class="ps-3 py-2">Date</th>
+                                        <th class="py-2">Issue</th>
+                                        <th class="py-2">Cost</th>
+                                        <th class="py-2">By</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="historyTableBody">
+                                    <tr><td colspan="4" class="text-center py-3 text-muted">Select an asset to view history.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script src="js/global-config.js"></script> 
+
+<script>
+    // --- 1. CONFIG HELPER ---
+    async function safeApiCall(url, options = {}) {
+        if (window.authFetch) return window.authFetch(url, options);
+        
+        // Fallback
+        const token = localStorage.getItem('erp-token') || localStorage.getItem('token');
+        const headers = { 'Content-Type': 'application/json', ...options.headers };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch(url, { ...options, headers });
+    }
+
+    // --- 2. INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', loadAssets);
+
+    // --- 3. LOAD ASSETS ---
+    async function loadAssets() {
+        const tbody = document.getElementById('assetTableBody');
+        try {
+            const res = await safeApiCall('/api/asset');
+            
+            if (res.status === 403 || res.status === 401) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5 text-danger">Access Denied. Please Login.</td></tr>`;
+                return;
+            }
+
+            const data = await res.json();
+            tbody.innerHTML = '';
+
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="text-center py-5 text-muted">
+                            <i class="fas fa-search mb-2 fa-2x"></i><br>
+                            No fixed assets found.<br>
+                            Go to <a href="inventory.html">Inventory</a> and add items with type <strong>'Fixed Asset'</strong>.
+                        </td>
+                    </tr>`;
+                return;
+            }
+
+            data.forEach(asset => {
+                const original = parseFloat(asset.unit_price);
+                const current = parseFloat(asset.current_value);
+                const loss = (original - current).toFixed(2);
+                const currencySymbol = window.formatCurrency ? '' : '$'; // Use global formatter if available
+                
+                // Format Price
+                const displayOriginal = window.formatCurrency ? window.formatCurrency(original) : `$${original.toFixed(2)}`;
+                const displayCurrent = window.formatCurrency ? window.formatCurrency(current) : `$${current.toFixed(2)}`;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="ps-4 fw-bold text-dark">${asset.item_name}</td>
+                        <td><span class="sku-badge">${asset.sku_code || '-'}</span></td>
+                        <td>${asset.location_aisle || '-'} / ${asset.location_bin || '-'}</td>
+                        <td>${displayOriginal}</td>
+                        <td>
+                            <span class="value-badge">${displayCurrent}</span>
+                            ${loss > 0 ? `<span class="depreciation-text"><i class="fas fa-arrow-down"></i> Depreciated by ${loss}</span>` : ''}
+                        </td>
+                        <td>${asset.age}</td>
+                        <td class="text-end pe-4">
+                            <button class="btn btn-sm btn-outline-dark shadow-sm" onclick="openMaintenance('${asset.id}')">
+                                <i class="fas fa-tools me-1"></i> Log Repair
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch (error) {
+            console.error(error);
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-5">Error loading assets. Check console.</td></tr>`;
+        }
+    }
+
+    // --- 4. OPEN MAINTENANCE MODAL ---
+    async function openMaintenance(id) {
+        document.getElementById('selectedAssetId').value = id;
+        document.getElementById('historyTableBody').innerHTML = `<tr><td colspan="4" class="text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</td></tr>`;
+        
+        const modal = new bootstrap.Modal(document.getElementById('maintenanceModal'));
+        modal.show();
+
+        // Load History
+        try {
+            const res = await safeApiCall(`/api/asset/maintenance/${id}`);
+            const logs = await res.json();
+            const tbody = document.getElementById('historyTableBody');
+            tbody.innerHTML = '';
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 text-muted">No repair history found.</td></tr>`;
+            } else {
+                logs.forEach(log => {
+                    const date = new Date(log.maintenance_date).toLocaleDateString();
+                    const costDisplay = window.formatCurrency ? window.formatCurrency(log.cost) : `$${log.cost}`;
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td class="ps-3">${date}</td>
+                            <td>${log.issue_description}</td>
+                            <td class="fw-bold text-danger">${costDisplay}</td>
+                            <td>${log.performed_by || '-'}</td>
+                        </tr>
+                    `;
+                });
+            }
+        } catch (err) { console.error(err); }
+    }
+
+    // --- 5. SUBMIT MAINTENANCE LOG ---
+    async function submitMaintenance() {
+        const formData = new FormData(document.getElementById('maintenanceForm'));
+        const jsonData = Object.fromEntries(formData.entries());
+
+        if (!jsonData.issue_description || !jsonData.performed_by) {
+            alert("Please fill in description and technician.");
+            return;
+        }
+
+        try {
+            const res = await safeApiCall('/api/asset/maintenance', {
+                method: 'POST',
+                body: JSON.stringify(jsonData)
+            });
+
+            if (res.ok) {
+                document.getElementById('maintenanceForm').reset();
+                // Reload history to show the new entry immediately
+                const assetId = document.getElementById('selectedAssetId').value;
+                
+                // Re-fetch history logic (Simplified by calling modal open logic again or manually appending)
+                // For simplicity, let's just close modal and alert, or users can re-open to see
+                const modalEl = document.getElementById('maintenanceModal');
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                modal.hide();
+                alert("Maintenance record saved successfully!");
+                
+            } else {
+                alert('Failed to save log');
+            }
+        } catch (err) {
+            console.error(err);
+            alert("Server Error");
+        }
+    }
+</script>
+
+</body>
+</html>

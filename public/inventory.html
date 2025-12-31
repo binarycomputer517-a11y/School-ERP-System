@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inventory & Procurement | School ERP</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+   <link rel="stylesheet" href="css/style.css">
+    
+    <style>
+        /* Custom Tab Styles */
+        .nav-tabs { border-bottom: none; }
+        .nav-tabs .nav-link { color: #6c757d; font-weight: 600; border: none; padding: 10px 20px; transition: all 0.3s; }
+        .nav-tabs .nav-link.active { color: var(--primary-dark); border-bottom: 3px solid var(--primary-dark); background: transparent; }
+        .nav-tabs .nav-link:hover { color: var(--primary-dark); background: rgba(0,0,0,0.02); }
+        
+        /* Status Badges */
+        .status-Pending { background: #fff3cd; color: #856404; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #ffeeba; }
+        .status-Received { background: #d4edda; color: #155724; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #c3e6cb; }
+        
+        /* Table Styles */
+        .table-hover tbody tr:hover { background-color: rgba(0,0,0,0.02); }
+    </style>
+</head>
+<body>
+
+<nav class="glass-nav mb-4">
+    <div class="d-flex align-items-center gap-2">
+        <i class="fas fa-boxes text-primary fa-lg"></i>
+        <span class="fw-bold fs-5 text-dark">Inventory Manager</span>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="dashboard.html" class="btn btn-sm btn-light border shadow-sm">
+            <i class="fas fa-home text-muted"></i> Dashboard
+        </a>
+        <a href="assets.html" class="btn btn-sm btn-light border shadow-sm">
+            <i class="fas fa-laptop-medical text-muted"></i> Assets
+        </a>
+        <button onclick="logout()" class="btn btn-sm btn-danger text-white shadow-sm">
+            <i class="fas fa-power-off"></i>
+        </button>
+    </div>
+</nav>
+
+<div class="container-fluid fade-in">
+
+    <ul class="nav nav-tabs mb-4" id="mainTab" role="tablist">
+        <li class="nav-item">
+            <button class="nav-link active" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stock-pane">
+                <i class="fas fa-cubes me-2"></i>Stock List
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="po-tab" data-bs-toggle="tab" data-bs-target="#po-pane" onclick="loadPOs()">
+                <i class="fas fa-file-invoice-dollar me-2"></i>Purchase Orders
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" id="vendor-tab" data-bs-toggle="tab" data-bs-target="#vendor-pane" onclick="loadVendors()">
+                <i class="fas fa-truck me-2"></i>Suppliers
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="mainTabContent">
+        
+        <div class="tab-pane fade show active" id="stock-pane">
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="p-3 border-bottom bg-white bg-opacity-50 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                    <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-list me-2"></i>Current Inventory</h5>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-light border shadow-sm" onclick="loadInventory()"><i class="fas fa-sync-alt text-muted"></i></button>
+                        <button class="btn btn-primary shadow-sm text-white" data-bs-toggle="modal" data-bs-target="#addItemModal">
+                            <i class="fas fa-plus-circle me-1"></i> Add Item
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-4">Item Name</th>
+                                <th>Type</th>
+                                <th>Location</th>
+                                <th>Unit Price</th>
+                                <th>Stock Level</th>
+                                <th class="text-end pe-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody" class="bg-white">
+                            <tr><td colspan="6" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="po-pane">
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="p-3 border-bottom bg-white bg-opacity-50 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                    <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-shopping-cart me-2"></i>Purchase Orders</h5>
+                    <button class="btn btn-success shadow-sm text-white" onclick="openCreatePO()">
+                        <i class="fas fa-file-contract me-1"></i> Create New PO
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-4">PO Number</th>
+                                <th>Supplier</th>
+                                <th>Date</th>
+                                <th>Total Amount</th>
+                                <th>Status</th>
+                                <th class="text-end pe-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="poTableBody" class="bg-white">
+                            <tr><td colspan="6" class="text-center py-5 text-muted">No orders found.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="vendor-pane">
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="p-3 border-bottom bg-white bg-opacity-50 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
+                    <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-users me-2"></i>Supplier List</h5>
+                    <button class="btn btn-info shadow-sm text-white" data-bs-toggle="modal" data-bs-target="#addVendorModal">
+                        <i class="fas fa-user-plus me-1"></i> Add Supplier
+                    </button>
+                </div>
+
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-4">Company Name</th>
+                                <th>Contact Person</th>
+                                <th>Phone</th>
+                                <th>GST / Tax ID</th>
+                                <th class="text-end pe-4">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vendorTableBody" class="bg-white">
+                            <tr><td colspan="5" class="text-center py-5 text-muted">No suppliers found.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div> </div>
+
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content glass-card p-0 border-0">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">Add Inventory Item</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addItemForm">
+                    <div class="mb-3">
+                        <label class="small text-muted fw-bold">ITEM NAME <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" name="item_name" required placeholder="e.g. Science Kit">
+                    </div>
+                    <div class="mb-3">
+                        <label class="small text-muted fw-bold">CATEGORY</label>
+                        <select class="form-select" name="item_type">
+                            <option value="CONSUMABLE">Consumable (Daily Use)</option>
+                            <option value="FIXED_ASSET">Fixed Asset (Long Term)</option>
+                        </select>
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-6">
+                            <label class="small text-muted fw-bold">MIN STOCK</label>
+                            <input type="number" class="form-control" name="min_stock_level" value="10">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted fw-bold">UNIT PRICE</label>
+                            <input type="number" class="form-control" name="unit_price" step="0.01">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted fw-bold">AISLE</label>
+                            <input type="text" class="form-control" name="location_aisle" placeholder="A1">
+                        </div>
+                        <div class="col-6">
+                            <label class="small text-muted fw-bold">BIN</label>
+                            <input type="text" class="form-control" name="location_bin" placeholder="B2">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-primary w-100" onclick="submitItem()">Save Item</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="addVendorModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content glass-card p-0 border-0">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">Add Supplier</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="vendorForm">
+                    <div class="mb-2">
+                        <input type="text" class="form-control" name="company_name" placeholder="Company Name *" required>
+                    </div>
+                    <div class="mb-2">
+                        <input type="text" class="form-control" name="contact_person" placeholder="Contact Person">
+                    </div>
+                    <div class="row g-2 mb-2">
+                        <div class="col-6"><input type="text" class="form-control" name="phone" placeholder="Phone"></div>
+                        <div class="col-6"><input type="text" class="form-control" name="gst_number" placeholder="GST / Tax ID"></div>
+                    </div>
+                    <div class="mb-2">
+                        <input type="email" class="form-control" name="email" placeholder="Email Address">
+                    </div>
+                    <div>
+                        <textarea class="form-control" name="address" placeholder="Full Address" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-primary w-100" onclick="submitVendor()">Save Supplier</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="createPOModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content glass-card p-0 border-0">
+            <div class="modal-header border-0 bg-light">
+                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-file-contract me-2"></i>Create Purchase Order</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                
+                <div class="row g-3 mb-4 bg-white p-3 rounded shadow-sm mx-1">
+                    <div class="col-md-6">
+                        <label class="small text-muted fw-bold">SUPPLIER</label>
+                        <select class="form-select" id="poVendorSelect"></select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="small text-muted fw-bold">ORDER DATE</label>
+                        <input type="date" class="form-control" id="poDate">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="small text-muted fw-bold">EXPECTED BY</label>
+                        <input type="date" class="form-control" id="poExpDate">
+                    </div>
+                </div>
+                
+                <div class="card bg-light border-0 p-3 mb-3">
+                    <h6 class="fw-bold text-muted border-bottom pb-2 mb-3">ADD ITEMS</h6>
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-5">
+                            <label class="small">Inventory Item</label>
+                            <select class="form-select" id="poItemSelect" onchange="updateUnitCost()"></select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="small">Quantity</label>
+                            <input type="number" class="form-control text-center fw-bold" id="poQty" value="1" min="1">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="small">Cost Per Unit</label>
+                            <input type="number" class="form-control" id="poCost" placeholder="0.00">
+                        </div>
+                        <div class="col-md-2">
+                            <button class="btn btn-success w-100 text-white" onclick="addPoItem()">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive border rounded bg-white">
+                    <table class="table table-sm mb-0">
+                        <thead class="bg-light">
+                            <tr>
+                                <th class="ps-3">Item Name</th>
+                                <th class="text-center">Qty</th>
+                                <th>Unit Cost</th>
+                                <th>Total</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="newPoItemsBody">
+                            </tbody>
+                        <tfoot class="bg-light fw-bold">
+                            <tr>
+                                <td colspan="3" class="text-end pe-3">Grand Total:</td>
+                                <td class="text-primary" id="newPoTotal">0.00</td>
+                                <td></td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer border-0">
+                <button type="button" class="btn btn-primary w-100 shadow-sm" onclick="submitPO()">Generate Purchase Order</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js"></script> 
+
+<script>
+    // --- VARIABLES ---
+    let poItems = [];
+    let inventoryList = [];
+
+    // --- INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', () => {
+        loadInventory();
+        // Set default date for PO
+        document.getElementById('poDate').valueAsDate = new Date();
+    });
+
+    // --- API WRAPPER (Connects to backend) ---
+    async function api(url, method = 'GET', body = null) {
+        if(window.authFetch) return window.authFetch(url, { method, body: body ? JSON.stringify(body) : null });
+        
+        // Fallback
+        const token = localStorage.getItem('erp-token') || localStorage.getItem('token');
+        const headers = { 'Content-Type': 'application/json' };
+        if(token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch(url, { method, headers, body: body ? JSON.stringify(body) : null });
+    }
+
+    // ============================================
+    // 1. INVENTORY LOGIC
+    // ============================================
+    async function loadInventory() {
+        const res = await api('/api/inventory/items');
+        if(!res.ok) return console.error("Failed to load inventory");
+        
+        const data = await res.json();
+        inventoryList = data; // Store for dropdown usage
+        const tbody = document.getElementById('inventoryTableBody');
+        tbody.innerHTML = '';
+
+        if(data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">No items found. Add your first item!</td></tr>`;
+            return;
+        }
+
+        data.forEach(i => {
+            // Price formatter
+            const price = window.formatCurrency ? window.formatCurrency(i.unit_price) : '$' + i.unit_price;
+            
+            tbody.innerHTML += `
+                <tr>
+                    <td class="ps-4 fw-bold text-dark">${i.item_name}</td>
+                    <td><small class="badge bg-light text-dark border">${i.item_type}</small></td>
+                    <td>${i.location_aisle || '-'}-${i.location_bin || '-'}</td>
+                    <td>${price}</td>
+                    <td class="fw-bold">${i.quantity_in_stock}</td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteItem('${i.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    async function submitItem() {
+        const formData = new FormData(document.getElementById('addItemForm'));
+        const res = await api('/api/inventory/add-item', 'POST', Object.fromEntries(formData));
+        if(res.ok) { 
+            bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
+            document.getElementById('addItemForm').reset();
+            loadInventory();
+        } else { alert("Failed to add item"); }
+    }
+    
+    async function deleteItem(id) {
+        if(!confirm("Are you sure? This cannot be undone.")) return;
+        const res = await api(`/api/inventory/${id}`, 'DELETE');
+        if(res.ok) loadInventory();
+        else alert("Cannot delete this item. It might be used in a Purchase Order.");
+    }
+
+    // ============================================
+    // 2. VENDOR LOGIC
+    // ============================================
+    async function loadVendors() {
+        const res = await api('/api/inventory/vendors');
+        const data = await res.json();
+        const tbody = document.getElementById('vendorTableBody');
+        tbody.innerHTML = '';
+
+        if(data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted">No suppliers found.</td></tr>`;
+            return;
+        }
+
+        data.forEach(v => {
+            tbody.innerHTML += `
+                <tr>
+                    <td class="ps-4 fw-bold">${v.company_name}</td>
+                    <td>${v.contact_person || '-'}</td>
+                    <td>${v.phone || '-'}</td>
+                    <td>${v.gst_number || '-'}</td>
+                    <td class="text-end pe-4">
+                        <button class="btn btn-sm btn-outline-danger" onclick="deleteVendor('${v.id}')"><i class="fas fa-trash"></i></button>
+                    </td>
+                </tr>`;
+        });
+    }
+
+    async function submitVendor() {
+        const formData = new FormData(document.getElementById('vendorForm'));
+        const res = await api('/api/inventory/vendors', 'POST', Object.fromEntries(formData));
+        if(res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('addVendorModal')).hide();
+            document.getElementById('vendorForm').reset();
+            loadVendors();
+        } else { alert("Failed to save vendor"); }
+    }
+
+    async function deleteVendor(id) {
+        if(!confirm("Delete supplier?")) return;
+        const res = await api(`/api/inventory/vendors/${id}`, 'DELETE');
+        if(res.ok) loadVendors();
+        else alert("Cannot delete supplier. They have active Purchase Orders.");
+    }
+
+    // ============================================
+    // 3. PURCHASE ORDER LOGIC
+    // ============================================
+    async function loadPOs() {
+        const res = await api('/api/inventory/purchase-orders');
+        const data = await res.json();
+        const tbody = document.getElementById('poTableBody');
+        tbody.innerHTML = '';
+
+        if(data.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">No purchase orders found.</td></tr>`;
+            return;
+        }
+
+        data.forEach(po => {
+            let actions = '';
+            if(po.status === 'Pending') {
+                actions = `
+                    <button class="btn btn-sm btn-success shadow-sm me-1" onclick="receivePO('${po.id}')" title="Receive Items"><i class="fas fa-check"></i></button>
+                    <button class="btn btn-sm btn-danger shadow-sm" onclick="deletePO('${po.id}')" title="Cancel PO"><i class="fas fa-times"></i></button>
+                `;
+            } else {
+                actions = `<span class="text-muted small"><i class="fas fa-lock"></i> Completed</span>`;
+            }
+            
+            const total = window.formatCurrency ? window.formatCurrency(po.total_amount) : '$' + po.total_amount;
+
+            tbody.innerHTML += `
+                <tr>
+                    <td class="ps-4 fw-bold font-monospace text-primary">${po.po_number}</td>
+                    <td>${po.vendor_name || 'Unknown Vendor'}</td>
+                    <td>${new Date(po.created_at).toLocaleDateString()}</td>
+                    <td class="fw-bold">${total}</td>
+                    <td><span class="status-${po.status}">${po.status}</span></td>
+                    <td class="text-end pe-4">${actions}</td>
+                </tr>`;
+        });
+    }
+
+    // --- CREATE PO WORKFLOW ---
+    async function openCreatePO() {
+        // 1. Fetch & Populate Vendors
+        const vRes = await api('/api/inventory/vendors');
+        const vendors = await vRes.json();
+        const vSelect = document.getElementById('poVendorSelect');
+        vSelect.innerHTML = '<option value="">Select Supplier</option>';
+        vendors.forEach(v => vSelect.innerHTML += `<option value="${v.id}">${v.company_name}</option>`);
+
+        // 2. Populate Items
+        const iSelect = document.getElementById('poItemSelect');
+        iSelect.innerHTML = '<option value="">Select Item to Order</option>';
+        inventoryList.forEach(i => iSelect.innerHTML += `<option value="${i.id}" data-price="${i.unit_price}">${i.item_name}</option>`);
+
+        // 3. Reset Table
+        poItems = [];
+        updatePOTable();
+        new bootstrap.Modal(document.getElementById('createPOModal')).show();
+    }
+
+    function updateUnitCost() {
+        const select = document.getElementById('poItemSelect');
+        const price = select.options[select.selectedIndex].getAttribute('data-price');
+        document.getElementById('poCost').value = price || 0;
+    }
+
+    function addPoItem() {
+        const select = document.getElementById('poItemSelect');
+        const item_id = select.value;
+        const item_name = select.options[select.selectedIndex].text;
+        const quantity = parseInt(document.getElementById('poQty').value);
+        const unit_cost = parseFloat(document.getElementById('poCost').value);
+
+        if(!item_id || quantity < 1) {
+            alert("Please select an item and quantity.");
+            return;
+        }
+
+        poItems.push({ item_id, item_name, quantity, unit_cost, total: quantity * unit_cost });
+        updatePOTable();
+        
+        // Reset Inputs
+        select.value = "";
+        document.getElementById('poQty').value = 1;
+        document.getElementById('poCost').value = "";
+    }
+
+    function updatePOTable() {
+        const tbody = document.getElementById('newPoItemsBody');
+        tbody.innerHTML = '';
+        let grandTotal = 0;
+        
+        poItems.forEach((item, index) => {
+            grandTotal += item.total;
+            tbody.innerHTML += `
+                <tr>
+                    <td class="ps-3">${item.item_name}</td>
+                    <td class="text-center">${item.quantity}</td>
+                    <td>${item.unit_cost}</td>
+                    <td>${item.total.toFixed(2)}</td>
+                    <td><button class="btn btn-sm text-danger" onclick="poItems.splice(${index},1);updatePOTable()"><i class="fas fa-times"></i></button></td>
+                </tr>`;
+        });
+        document.getElementById('newPoTotal').innerText = grandTotal.toFixed(2);
+    }
+
+    async function submitPO() {
+        const supplier_id = document.getElementById('poVendorSelect').value;
+        const order_date = document.getElementById('poDate').value;
+        const expected_date = document.getElementById('poExpDate').value;
+        
+        if(!supplier_id) return alert("Please select a supplier.");
+        if(poItems.length === 0) return alert("Please add at least one item.");
+
+        const res = await api('/api/inventory/purchase-orders', 'POST', {
+            supplier_id, order_date, expected_date, items: poItems
+        });
+
+        if(res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('createPOModal')).hide();
+            loadPOs();
+        } else {
+            alert("Failed to create Purchase Order.");
+        }
+    }
+
+    async function receivePO(id) {
+        if(!confirm("Are you sure? This will add quantities to your stock.")) return;
+        const res = await api(`/api/inventory/purchase-orders/${id}/receive`, 'POST');
+        if(res.ok) {
+            loadPOs();
+            loadInventory(); // Update stock view immediately
+        }
+    }
+
+    async function deletePO(id) {
+        if(!confirm("Delete this pending order?")) return;
+        const res = await api(`/api/inventory/purchase-orders/${id}`, 'DELETE');
+        if(res.ok) loadPOs();
+    }
+    
+    function logout() {
+        localStorage.removeItem('token');
+        localStorage.removeItem('erp-token');
+        window.location.href = 'login.html';
+    }
+</script>
+
+</body>
+</html>

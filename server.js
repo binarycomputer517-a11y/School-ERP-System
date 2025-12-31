@@ -189,6 +189,10 @@ app.use('/api/users', usersRouter);
 app.use('/api/vms', vmsRouter); 
 app.use('/api/public/verify', verifyRouter); 
 app.use('/api/health-records', healthRouter);
+app.use('/api/inventory', inventoryRouter); 
+app.use('/api/asset', assetRouter);
+
+
 
 // --- B. PROTECTED ROUTES (JWT Token Required) ---
 // All routes mounted below require a valid Bearer Token
@@ -399,9 +403,6 @@ app.use('/api/hostel', hostelRouter);
 app.use('/api/cafeteria', cafeteriaRouter); 
 app.use('/api/library', libraryRouter); 
 
-// Inventory & Asset
-app.use('/api/inventory', inventoryRouter); 
-app.use('/api/asset', assetRouter);         
 
 app.use('/api/it-helpdesk', itHelpdeskRouter);
 
