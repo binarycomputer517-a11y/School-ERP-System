@@ -3,37 +3,182 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Schedule | BCSM ERP</title>
+    <title>Student Schedule | Academic Portal</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        :root { --primary: #003366; --accent: #FF9933; --success: #138808; }
-        body { font-family: 'Outfit', sans-serif; background: #f4f7f6; }
-        .smart-header { background: var(--primary); color: white; padding: 60px 0 110px 0; border-radius: 0 0 50px 50px; }
-        .day-tabs { background: white; padding: 10px; border-radius: 30px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); margin-top: -55px; display: flex; overflow-x: auto; gap: 8px; position: relative; z-index: 10; }
-        .day-tab { padding: 12px 25px; border-radius: 25px; cursor: pointer; white-space: nowrap; font-weight: 600; color: #64748b; }
-        .day-tab.active { background: var(--primary); color: white; transform: scale(1.05); }
-        .slot-card { background: white; border-radius: 30px; padding: 25px; border: none; transition: 0.4s; box-shadow: 0 10px 20px rgba(0,0,0,0.02); }
-        .slot-card.ongoing { border: 2px solid var(--success); }
-        .slot-card.passed { filter: grayscale(1) opacity(0.5); }
-        .live-glow { width: 10px; height: 10px; background: var(--success); border-radius: 50%; display: inline-block; box-shadow: 0 0 10px var(--success); animation: pulse 1.5s infinite; margin-right: 8px; }
-        @keyframes pulse { 0% { transform: scale(1); } 50% { transform: scale(1.4); opacity: 0.5; } 100% { transform: scale(1); } }
+        :root { 
+            --primary: #003366; 
+            --accent: #FF9933; 
+            --success: #138808; 
+            --bg-light: #f8fafc;
+        }
+
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background: var(--bg-light); 
+            color: #1e293b;
+        }
+
+        /* Header Styling */
+        .smart-header { 
+            background: linear-gradient(135deg, var(--primary) 0%, #001a33 100%); 
+            color: white; 
+            padding: 50px 0 100px 0; 
+            border-radius: 0 0 40px 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        /* Day Tabs - Mobile Responsive Scroll */
+        .tabs-wrapper {
+            margin-top: -50px;
+            position: relative;
+            z-index: 100;
+        }
+
+        .day-tabs { 
+            background: white; 
+            padding: 8px; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+            display: flex; 
+            overflow-x: auto; 
+            gap: 10px;
+            scrollbar-width: none; /* Firefox */
+        }
+        
+        .day-tabs::-webkit-scrollbar { display: none; } /* Chrome/Safari */
+
+        .day-tab { 
+            padding: 12px 24px; 
+            border-radius: 15px; 
+            cursor: pointer; 
+            white-space: nowrap; 
+            font-weight: 600; 
+            color: #64748b;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
+        }
+
+        .day-tab.active { 
+            background: var(--primary); 
+            color: white; 
+            box-shadow: 0 8px 15px rgba(0,51,102,0.2);
+        }
+
+        /* Slot Card Styling */
+        .slot-card { 
+            background: white; 
+            border-radius: 24px; 
+            padding: 24px; 
+            border: 1px solid #edf2f7; 
+            transition: 0.3s; 
+            height: 100%;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slot-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.08);
+        }
+
+        .slot-card.ongoing { 
+            border: 2px solid var(--success); 
+            background: #f0fff4;
+        }
+        
+        .slot-card.passed { 
+            opacity: 0.6; 
+            filter: grayscale(0.8);
+            background: #f1f5f9;
+        }
+
+        .time-badge {
+            font-size: 0.85rem;
+            font-weight: 700;
+            padding: 6px 14px;
+            border-radius: 10px;
+            background: #e2e8f0;
+            color: var(--primary);
+            display: inline-block;
+        }
+
+        .ongoing .time-badge {
+            background: var(--success);
+            color: white;
+        }
+
+        .live-glow { 
+            width: 8px; height: 8px; 
+            background: #fff; 
+            border-radius: 50%; 
+            display: inline-block; 
+            margin-right: 6px;
+            animation: pulse 1.5s infinite; 
+        }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        .btn-join {
+            border-radius: 12px;
+            font-weight: 600;
+            padding: 8px 20px;
+            transition: 0.3s;
+        }
+
+        /* Empty State */
+        .no-schedule {
+            text-align: center;
+            padding: 60px 20px;
+            color: #94a3b8;
+        }
+        .no-schedule i { font-size: 4rem; margin-bottom: 20px; opacity: 0.2; }
+
+        @media (max-width: 768px) {
+            .smart-header { padding: 40px 0 80px 0; }
+            .institution-name { font-size: 1.5rem; }
+            .slot-card { padding: 20px; }
+        }
     </style>
 </head>
 <body>
-    <div class="smart-header text-center">
+
+    <div class="smart-header">
         <div class="container">
-            <h2 class="fw-bold"><i class="fas fa-calendar-alt me-2"></i>My Academic Schedule</h2>
-            <a href="/student-dashboard.html" class="btn btn-outline-secondary btn-sm ms-2 fw-bold px-4">Back</a>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h2 class="fw-bold mb-1"><i class="fas fa-calendar-day me-2 text-warning"></i>My Schedule</h2>
+                    <p class="mb-0 opacity-75 small"><i class="fas fa-clock me-1"></i> Track your daily academic sessions</p>
+                </div>
+                <a href="/student-dashboard.html" class="btn btn-light btn-sm fw-bold px-4 rounded-pill shadow-sm">
+                    <i class="fas fa-arrow-left me-2"></i>Dashboard
+                </a>
+            </div>
         </div>
     </div>
+
     <div class="container">
-        <div class="day-tabs mb-5" id="tabs"></div>
-        <div id="schedule-feed" class="row g-4 mb-5"></div>
+        <div class="tabs-wrapper">
+            <div class="day-tabs" id="tabs">
+                </div>
+        </div>
+
+        <div id="schedule-feed" class="row g-4 mt-2 mb-5">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Loading your schedule...</p>
+            </div>
+        </div>
     </div>
+
     <script>
         const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-        let currentDay = DAYS[Math.max(0, new Date().getDay() - 1)];
+        // বর্তমান দিন সেট করা (রবিবার হলে সোমবার দেখাবে)
+        let currentDay = DAYS[Math.max(0, new Date().getDay() - 1)]; 
         let scheduleData = [];
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -42,49 +187,127 @@
         });
 
         function renderTabs() {
-            document.getElementById('tabs').innerHTML = DAYS.map(d => `<div class="day-tab ${d === currentDay ? 'active' : ''}" onclick="setDay('${d}')">${d}</div>`).join('');
+            const tabsContainer = document.getElementById('tabs');
+            tabsContainer.innerHTML = DAYS.map(d => `
+                <div class="day-tab ${d === currentDay ? 'active' : ''}" onclick="setDay(this, '${d}')">
+                    ${d}
+                </div>
+            `).join('');
+            
+            // মোবাইল স্ক্রিনে একটিভ ট্যাবকে মাঝখানে রাখা
+            if(window.innerWidth < 768) {
+                const activeTab = tabsContainer.querySelector('.active');
+                activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            }
         }
 
-        function setDay(d) { currentDay = d; renderTabs(); renderFeed(); }
+        function setDay(el, d) {
+            currentDay = d;
+            document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            renderFeed();
+        }
 
         async function loadData() {
             const token = localStorage.getItem('erp-token');
-            const res = await fetch('/api/timetable/student/me', { headers: { 'Authorization': `Bearer ${token}` } });
-            scheduleData = await res.json();
-            renderFeed();
+            if(!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/timetable/student/me', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                scheduleData = await res.json();
+                renderFeed();
+            } catch (error) {
+                document.getElementById('schedule-feed').innerHTML = `
+                    <div class="no-schedule">
+                        <i class="fas fa-exclamation-circle"></i>
+                        <h5>Unable to load schedule</h5>
+                        <p>Please check your connection or login again.</p>
+                    </div>`;
+            }
         }
 
         function renderFeed() {
             const feed = document.getElementById('schedule-feed');
             const filtered = scheduleData.filter(s => s.day_of_week === currentDay);
-            feed.innerHTML = '';
-            filtered.forEach(s => {
+            
+            if (filtered.length === 0) {
+                feed.innerHTML = `
+                    <div class="col-12">
+                        <div class="no-schedule">
+                            <i class="fas fa-bed"></i>
+                            <h5>No classes scheduled for ${currentDay}</h5>
+                            <p>Enjoy your break or catch up on self-study!</p>
+                        </div>
+                    </div>`;
+                return;
+            }
+
+            feed.innerHTML = filtered.map(s => {
                 const state = getSlotState(s.start_time, s.end_time);
-                feed.innerHTML += `
+                const isOngoing = state === 'ongoing';
+                
+                return `
                     <div class="col-md-6 col-lg-4">
                         <div class="slot-card ${state}">
-                            <div class="fw-bold text-primary small mb-2">${state === 'ongoing' ? '<span class="live-glow"></span>' : ''}${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}</div>
-                            <h5 class="fw-bold mb-1">${s.subject_name}</h5>
-                            <p class="text-muted small mb-3"><i class="fas fa-user-tie me-1"></i> ${s.teacher_name || 'Staff'}</p>
-                            <div class="d-flex justify-content-between align-items-center">
-                                <span class="small fw-bold"><i class="fas fa-map-marker-alt"></i> RM: ${s.room_number || 'TBA'}</span>
-                                ${state !== 'passed' ? `<a href="#" class="btn btn-sm btn-outline-primary rounded-pill px-3">Join Hub</a>` : ''}
+                            <div class="mb-3">
+                                <div class="time-badge">
+                                    ${isOngoing ? '<span class="live-glow"></span>LIVE | ' : ''}
+                                    ${formatTime(s.start_time)} - ${formatTime(s.end_time)}
+                                </div>
+                            </div>
+                            
+                            <h5 class="fw-bold mb-1 text-dark">${s.subject_name}</h5>
+                            <div class="text-muted small mb-4">
+                                <div class="mb-1"><i class="fas fa-user-tie me-2"></i>${s.teacher_name || 'Assigned Staff'}</div>
+                                <div><i class="fas fa-map-marker-alt me-2"></i>Room: ${s.room_number || 'TBA'}</div>
+                            </div>
+                            
+                            <div class="d-flex justify-content-between align-items-center pt-3 border-top">
+                                <span class="badge ${state === 'passed' ? 'bg-secondary' : 'bg-primary-subtle text-primary'} rounded-pill px-3 py-2">
+                                    ${state.charAt(0).toUpperCase() + state.slice(1)}
+                                </span>
+                                ${state !== 'passed' ? `
+                                    <button class="btn btn-sm btn-primary btn-join">
+                                        Join <i class="fas fa-chevron-right ms-1 small"></i>
+                                    </button>
+                                ` : ''}
                             </div>
                         </div>
                     </div>`;
-            });
+            }).join('');
         }
 
         function getSlotState(start, end) {
             const now = new Date();
-            const todayName = DAYS[now.getDay() - 1];
+            const todayIndex = now.getDay();
+            const dayMap = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const todayName = dayMap[todayIndex];
+
             if(todayName !== currentDay) return 'upcoming';
+
             const cur = now.getHours() * 60 + now.getMinutes();
             const [sh, sm] = start.split(':').map(Number);
             const [eh, em] = end.split(':').map(Number);
-            if(cur > (eh*60+em)) return 'passed';
-            if(cur >= (sh*60+sm)) return 'ongoing';
+            
+            const startTotal = sh * 60 + sm;
+            const endTotal = eh * 60 + em;
+
+            if(cur > endTotal) return 'passed';
+            if(cur >= startTotal && cur <= endTotal) return 'ongoing';
             return 'upcoming';
+        }
+
+        function formatTime(timeStr) {
+            const [h, m] = timeStr.split(':');
+            const hour = parseInt(h);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${m} ${ampm}`;
         }
     </script>
 </body>
