@@ -3,251 +3,273 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Attendance Record</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" integrity="sha512-SnH5WK+bZxgPHs44uWIX+LLJAJ9/2PkPKZ5QiAj6Ta86w+fsb2TkcmfRyVX3pBnMFcV7oQPJkl9QevSCWr3W6A==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <title>My Attendance | Student Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
     <style>
-        /* Reusing core styles for consistency */
-        body { font-family: Arial, Helvetica, sans-serif; margin: 0; background-color: #eef1f5; color: #333; font-size: 14px; padding: 2em; }
-        .container { max-width: 900px; margin: 25px auto; padding: 20px; background-color: #ffffff; border: 1px solid #ccc; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
-        h1 { font-family: Georgia, "Times New Roman", Times, serif; color: #003366; text-align: center; border-bottom: 1px solid #b0c4de; padding-bottom: 15px; font-size: 28px; margin-bottom: 20px; }
-        .filter-section { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; padding: 15px; background-color: #f8f9fa; border: 1px solid #d0d7de; margin-bottom: 20px; }
-        .filter-section label { font-weight: bold; margin-bottom: 5px; color: #333; display: block; }
-        .filter-section select, .filter-section input[type="date"] { padding: 8px; border: 1px solid #aaa; width: 100%; box-sizing: border-box; }
-        button.primary { padding: 9px 15px; color: white; border: 1px solid #0056b3; cursor: pointer; font-weight: bold; background: linear-gradient(to bottom, #007bff, #0056b3); width: 100%; }
-        button.primary:hover { background: linear-gradient(to bottom, #0069d9, #0050a2); }
-        table { width: 100%; border-collapse: collapse; background-color: #fff; margin-top: 15px; }
-        th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #ddd; border-right: 1px solid #ddd; }
-        th { background-color: #e2e5e8; color: #333; font-weight: bold; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
-        .status-badge { padding: 3px 8px; border: 1px solid; font-weight: bold; font-size: 0.9em; text-transform: capitalize; }
-        .status-P { background-color: #c8e6c9; border-color: #81c784; color: #1e7e34; }
-        .status-A { background-color: #ffcdd2; border-color: #e57373; color: #c62828; }
-        .status-L { background-color: #fff9c4; border-color: #ffd54f; color: #8a6d3b; }
-        .status-H { background-color: #e1bee7; border-color: #ba68c8; color: #512da8; }
-        .status-U { background-color: #f5f5f5; border-color: #bdbdbd; color: #616161; }
-        .dashboard-link { display: inline-block; margin-bottom: 20px; color: #005a9c; text-decoration: none; font-weight: bold; }
-        #loading-modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.6); justify-content: center; align-items: center; }
+        :root {
+            --primary: #003366;
+            --accent: #007bff;
+            --success: #28a745;
+            --danger: #dc3545;
+            --warning: #ffc107;
+            --bg: #f4f7f6;
+            --card: #ffffff;
+        }
+
+        body { 
+            background-color: var(--bg); 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            margin: 0; padding: 15px; color: #2d3436;
+        }
+
+        .container { 
+            max-width: 1000px; margin: 0 auto; 
+        }
+
+        /* Header */
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--primary); padding: 20px 25px;
+            border-radius: 15px; color: white; margin-bottom: 25px;
+            box-shadow: 0 10px 20px rgba(0,51,102,0.1);
+        }
+
+        header h1 { font-size: 1.4rem; margin: 0; font-weight: 800; }
+        .exit-link { color: #fff; text-decoration: none; font-weight: 600; font-size: 0.9rem; opacity: 0.9; }
+        .exit-link:hover { opacity: 1; text-decoration: underline; }
+
+        /* Summary Dashboard */
+        .summary-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px; margin-bottom: 25px;
+        }
+
+        .summary-card {
+            background: white; padding: 20px; border-radius: 15px;
+            text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+            border-bottom: 4px solid #eee;
+        }
+        .summary-card h3 { margin: 0; font-size: 0.85rem; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+        .summary-card p { margin: 10px 0 0; font-size: 1.8rem; font-weight: 800; color: var(--primary); }
+        .card-present { border-color: var(--success); }
+        .card-absent { border-color: var(--danger); }
+
+        /* Filters */
+        .filter-section { 
+            background: white; padding: 20px; border-radius: 15px; 
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); 
+            gap: 15px; margin-bottom: 25px; align-items: flex-end;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+        }
+
+        .filter-group label { display: block; font-weight: 700; font-size: 0.8rem; margin-bottom: 8px; color: #475569; }
+        .filter-group select, .filter-group input { 
+            width: 100%; padding: 10px; border: 1px solid #e2e8f0; 
+            border-radius: 10px; font-family: inherit; box-sizing: border-box;
+        }
+
+        .btn-view { 
+            background: var(--primary); color: white; border: none; 
+            padding: 11px; border-radius: 10px; font-weight: 700; 
+            cursor: pointer; transition: 0.3s;
+        }
+        .btn-view:hover { background: var(--accent); }
+
+        /* Table */
+        .table-card { background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8fafc; padding: 15px; text-align: left; font-size: 0.8rem; color: #64748b; text-transform: uppercase; }
+        td { padding: 15px; border-top: 1px solid #f1f5f9; font-size: 0.9rem; }
+
+        /* Badges */
+        .status-badge { 
+            padding: 5px 12px; border-radius: 20px; font-weight: 700; font-size: 0.75rem; 
+            text-transform: uppercase; display: inline-block;
+        }
+        .status-P { background: #dcfce7; color: #15803d; }
+        .status-A { background: #fee2e2; color: #b91c1c; }
+        .status-L { background: #fef9c3; color: #a16207; }
+        .status-H { background: #f3e8ff; color: #7e22ce; }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .summary-grid { grid-template-columns: 1fr 1fr; }
+            .filter-section { grid-template-columns: 1fr; }
+            
+            table, thead, tbody, th, td, tr { display: block; }
+            thead tr { position: absolute; top: -9999px; left: -9999px; }
+            tr { border-bottom: 1px solid #eee; padding: 10px; }
+            td { border: none; position: relative; padding-left: 45% !important; text-align: right; }
+            td:before { content: attr(data-label); position: absolute; left: 15px; font-weight: 700; color: #64748b; }
+        }
+
+        #loading-modal { 
+            display: none; position: fixed; inset: 0; background: rgba(255,255,255,0.8); 
+            z-index: 1000; justify-content: center; align-items: center; 
+        }
         #loading-modal.active { display: flex; }
-        .spinner { width: 50px; height: 50px; border: 5px solid #f3f3f3; border-top: 5px solid #005a9c; border-radius: 50%; animation: spin 1s linear infinite; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .spinner { width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-    <div class="container">
-        <div style="float: right;"><a href="/teacher-dashboard.html" style="font-weight: bold; color: #005A9C;">&larr; Exit Console</a></div>
-        <h1>My Detailed Attendance Record</h1>
+<div class="container">
+    <header>
+        <h1><i class="fas fa-user-check"></i> My Attendance</h1>
+        <a href="/student-dashboard.html" class="exit-link"><i class="fas fa-arrow-left"></i> Dashboard</a>
+    </header>
 
-        <div class="filter-section">
-            <div>
-                <label for="subjectSelect">Subject (Optional):</label>
-                <select id="subjectSelect">
-                    <option value="">All Subjects</option>
-                </select>
-            </div>
-            <div>
-                <label for="startDate">Start Date:</label>
-                <input type="date" id="startDate">
-            </div>
-            <div>
-                <label for="endDate">End Date:</label>
-                <input type="date" id="endDate">
-            </div>
-            <div style="display: flex; align-items: flex-end;">
-                <button class="primary" onclick="loadUserAttendance()">View Attendance</button>
-            </div>
+    <div class="summary-grid">
+        <div class="summary-card">
+            <h3>Total Classes</h3>
+            <p id="totalClasses">0</p>
         </div>
+        <div class="summary-card card-present">
+            <h3>Present</h3>
+            <p id="presentCount" style="color: var(--success);">0</p>
+        </div>
+        <div class="summary-card">
+            <h3>Percentage</h3>
+            <p id="attendancePercent">0%</p>
+        </div>
+    </div>
 
-        <h3 id="reportStatus">Initializing... Please wait.</h3>
+    <div class="filter-section">
+        <div class="filter-group">
+            <label>Subject</label>
+            <select id="subjectSelect"><option value="">All Subjects</option></select>
+        </div>
+        <div class="filter-group">
+            <label>From Date</label>
+            <input type="date" id="startDate">
+        </div>
+        <div class="filter-group">
+            <label>To Date</label>
+            <input type="date" id="endDate">
+        </div>
+        <div class="filter-group">
+            <button class="btn-view" onclick="loadUserAttendance()">Fetch Records</button>
+        </div>
+    </div>
+
+    <div class="table-card">
+        <table>
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Subject</th>
+                    <th>Status</th>
+                    <th>Remarks</th>
+                </tr>
+            </thead>
+            <tbody id="attendanceTbody">
+                <tr><td colspan="4" style="text-align:center; padding: 40px; color: #888;">Select filters to view data</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+
+<div id="loading-modal"><div class="spinner"></div></div>
+
+<script src="js/global-config.js"></script>
+<script>
+    const API_BASE_URL = window.GLOBAL_CONFIG ? window.GLOBAL_CONFIG.API_BASE_URL : 'http://localhost:3005/api';
+    const token = localStorage.getItem('erp-token');
+    let currentUserId = ''; 
+
+    function decodeJwtPayload(jwtToken) {
+        try {
+            const base64Url = jwtToken.split('.')[1];
+            return JSON.parse(atob(base64Url.replace(/-/g, '+').replace(/_/g, '/')));
+        } catch (e) { return null; }
+    }
+
+    function showLoading() { document.getElementById('loading-modal').classList.add('active'); }
+    function hideLoading() { document.getElementById('loading-modal').classList.remove('active'); }
+
+    async function handleApi(endpoint) {
+        showLoading();
+        try {
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('API Error');
+            return await response.json();
+        } catch (error) { return null; }
+        finally { hideLoading(); }
+    }
+
+    async function loadUserAttendance() {
+        const subject = document.getElementById('subjectSelect').value;
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        const tbody = document.getElementById('attendanceTbody');
         
-        <div class="table-wrapper">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Subject</th>
-                        <th>Status</th>
-                        <th>Remarks</th>
-                    </tr>
-                </thead>
-                <tbody id="attendanceTbody">
-                    </tbody>
-            </table>
-        </div>
-    </div>
+        let url = `/attendance/report/user/${currentUserId}?start_date=${start}&end_date=${end}`;
+        if (subject) url += `&subject_id=${subject}`;
 
-    <div id="loading-modal">
-        <div class="modal-content"><div class="spinner"></div></div>
-    </div>
-
-    <script>
-        // NOTE: API_BASE_URL is loaded from global-config.js
-        const API_BASE_URL = window.GLOBAL_CONFIG ? window.GLOBAL_CONFIG.API_BASE_URL : 'http://localhost:3005/api';
-        const token = localStorage.getItem('erp-token');
-        let currentUserId = ''; 
-
-        // Helper function to decode JWT payload safely
-        function decodeJwtPayload(jwtToken) {
-            if (!jwtToken) return null;
-            try {
-                const parts = jwtToken.split('.');
-                if (parts.length !== 3) return null;
-                const base64Url = parts[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                    return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                }).join(''));
-                return JSON.parse(jsonPayload);
-            } catch (e) {
-                console.error("Failed to decode JWT:", e);
-                return null;
-            }
+        const records = await handleApi(url);
+        tbody.innerHTML = '';
+        
+        if (!records || records.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding: 40px;">No records found.</td></tr>';
+            updateStats(0, 0);
+            return;
         }
 
-        // --- Utility Functions ---
-        function showLoading() { document.getElementById('loading-modal').classList.add('active'); }
-        function hideLoading() { document.getElementById('loading-modal').classList.remove('active'); }
+        let present = 0;
+        records.forEach(rec => {
+            if(rec.status.toLowerCase() === 'present') present++;
+            const statusChar = rec.status.charAt(0).toUpperCase();
+            const row = `<tr>
+                <td data-label="Date">${new Date(rec.attendance_date).toLocaleDateString()}</td>
+                <td data-label="Subject">${rec.subject_name || 'N/A'}</td>
+                <td data-label="Status"><span class="status-badge status-${statusChar}">${rec.status}</span></td>
+                <td data-label="Remarks">${rec.remarks || '-'}</td>
+            </tr>`;
+            tbody.insertAdjacentHTML('beforeend', row);
+        });
 
-        async function handleApi(endpoint) {
-            showLoading();
-            try {
-                // Ensure API_BASE_URL is used correctly
-                const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
-                
-                const response = await fetch(url, {
-                    method: 'GET',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                
-                if (response.status === 403 || response.status === 401) {
-                    const errorDetails = await response.json().catch(() => ({ message: 'No message provided' }));
-                    alert(`Authentication/Authorization Failed. Status ${response.status}. Please log in again. ${errorDetails.message}`);
-                    window.location.href = '/login.html';
-                    return null;
-                }
-                
-                if (!response.ok) {
-                    const err = await response.json();
-                    throw new Error(err.message || `Error ${response.status}`);
-                }
-                return await response.json();
-            } catch (error) {
-                console.error(`API Error (${endpoint}):`, error);
-                alert(`Error: ${error.message}`);
-                return null;
-            } finally {
-                hideLoading();
-            }
-        }
+        updateStats(records.length, present);
+    }
 
-        // --- Main Attendance Function ---
-        async function loadUserAttendance() {
-            if (!currentUserId) {
-                document.getElementById('reportStatus').textContent = "Error: User ID is missing. Please log in again.";
-                return;
-            }
+    function updateStats(total, present) {
+        document.getElementById('totalClasses').textContent = total;
+        document.getElementById('presentCount').textContent = present;
+        const percent = total > 0 ? ((present / total) * 100).toFixed(1) : 0;
+        document.getElementById('attendancePercent').textContent = percent + '%';
+    }
 
-            const subject_id = document.getElementById('subjectSelect').value;
-            const start_date = document.getElementById('startDate').value;
-            const end_date = document.getElementById('endDate').value;
-            const tbody = document.getElementById('attendanceTbody');
-            const statusH3 = document.getElementById('reportStatus');
-            
-            let queryParams = new URLSearchParams();
-            if (subject_id) queryParams.append('subject_id', subject_id);
-            if (start_date) queryParams.append('start_date', start_date);
-            if (end_date) queryParams.append('end_date', end_date);
-            
-            const queryString = queryParams.toString();
-            
-            // Endpoint: /api/attendance/report/user/:userId
-            const endpoint = `/attendance/report/user/${currentUserId}${queryString ? '?' + queryString : ''}`;
-
-            const records = await handleApi(endpoint); 
-
-            tbody.innerHTML = ''; 
-            
-            if (!records || records.length === 0) {
-                statusH3.textContent = `No attendance records found for the selected criteria.`;
-                return;
-            }
-            
-            statusH3.textContent = `Displaying ${records.length} records for User ID: ${currentUserId}`;
-
-            records.forEach(record => {
-                const date = new Date(record.attendance_date).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
-                const statusValue = record.status || 'unmarked';
-                const statusInitial = statusValue.charAt(0).toUpperCase();
-                
-                const row = document.createElement('tr');
-                row.innerHTML = `
-                    <td>${date}</td>
-                    <td>${record.subject_name || 'N/A'}</td>
-                    <td><span class="status-badge status-${statusInitial}">${statusValue}</span></td>
-                    <td>${record.remarks || '-'}</td>
-                `;
-                tbody.appendChild(row);
+    async function loadSubjects() {
+        const subjects = await handleApi('/attendance/subjects');
+        if (subjects) {
+            const select = document.getElementById('subjectSelect');
+            subjects.forEach(sub => {
+                select.insertAdjacentHTML('beforeend', `<option value="${sub.id}">${sub.subject_name || sub.name}</option>`);
             });
         }
+    }
 
-        // Function to load subjects for the dropdown
-        async function loadSubjectsForDropdown() {
-            // ✅ FIX: Using the correct attendance/subjects endpoint
-            const subjects = await handleApi('/attendance/subjects'); 
-            if (subjects) {
-                const select = document.getElementById('subjectSelect');
-                subjects.forEach(sub => {
-                    const option = document.createElement('option');
-                    option.value = sub.id;
-                    // Assuming API returns subject_name
-                    option.textContent = sub.subject_name || sub.name || sub.subject_code; 
-                    select.appendChild(option);
-                });
-            }
+    document.addEventListener('DOMContentLoaded', () => {
+        const payload = decodeJwtPayload(token);
+        if (payload && payload.id) {
+            currentUserId = payload.id;
+            const today = new Date();
+            const lastMonth = new Date();
+            lastMonth.setDate(today.getDate() - 30);
+            document.getElementById('endDate').value = today.toISOString().split('T')[0];
+            document.getElementById('startDate').value = lastMonth.toISOString().split('T')[0];
+            loadSubjects();
+            loadUserAttendance();
+        } else {
+            window.location.href = '/login.html';
         }
-
-
-        // --- Initial Load ---
-        document.addEventListener('DOMContentLoaded', () => {
-            
-            const payload = decodeJwtPayload(token);
-            let idToUse = null;
-            
-            if (payload) {
-                idToUse = payload.id; 
-            }
-
-            // --- Apply the extracted ID ---
-            if (idToUse) {
-                currentUserId = idToUse;
-                document.getElementById('reportStatus').textContent = `Ready to view records for User ID: ${currentUserId}`;
-                
-                // Set default date range (last 30 days)
-                const today = new Date();
-                const lastMonth = new Date();
-                lastMonth.setDate(today.getDate() - 30);
-                
-                const formatDate = (date) => date.toISOString().split('T')[0];
-                
-                document.getElementById('endDate').value = formatDate(today);
-                document.getElementById('startDate').value = formatDate(lastMonth);
-                
-                // Now load subjects for the dropdown
-                loadSubjectsForDropdown(); 
-
-                // ✅ Auto-load attendance on page load for convenience
-                loadUserAttendance(); 
-
-            } else {
-                 document.getElementById('reportStatus').textContent = "Error: Authentication token is missing or invalid. Redirecting to login...";
-                 alert("Authentication required. Please log in again.");
-                 window.location.href = '/login.html'; 
-            }
-            
-            hideLoading();
-        });
-        
-    </script>
-    <script src="js/global-config.js"></script> 
+    });
+</script>
 </body>
 </html>
