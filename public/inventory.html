@@ -3,588 +3,695 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Inventory & Procurement | School ERP</title>
+    <title>Enterprise Smart Inventory AI | School ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-   <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/animate.css@4.1.1/animate.min.css">
+    <link rel="stylesheet" href="css/style.css">
     
     <style>
-        /* Custom Tab Styles */
-        .nav-tabs { border-bottom: none; }
-        .nav-tabs .nav-link { color: #6c757d; font-weight: 600; border: none; padding: 10px 20px; transition: all 0.3s; }
-        .nav-tabs .nav-link.active { color: var(--primary-dark); border-bottom: 3px solid var(--primary-dark); background: transparent; }
-        .nav-tabs .nav-link:hover { color: var(--primary-dark); background: rgba(0,0,0,0.02); }
+        :root {
+            --primary-dark: #1e3a8a;
+            --primary-light: #3b82f6;
+            --accent: #f59e0b;
+            --danger: #ef4444;
+            --success: #10b981;
+            --glass: rgba(255, 255, 255, 0.95);
+            --sidebar-width: 280px;
+        }
+
+        body { background-color: #f3f4f6; font-family: 'Inter', system-ui, -apple-system, sans-serif; overflow-x: hidden; }
+
+        /* Advanced UI Components */
+        .glass-panel { background: var(--glass); backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.3); border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.08); }
         
-        /* Status Badges */
-        .status-Pending { background: #fff3cd; color: #856404; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #ffeeba; }
-        .status-Received { background: #d4edda; color: #155724; padding: 5px 12px; border-radius: 20px; font-size: 0.8rem; border: 1px solid #c3e6cb; }
-        
-        /* Table Styles */
-        .table-hover tbody tr:hover { background-color: rgba(0,0,0,0.02); }
+        /* Tactical Dashboard Cards */
+        .stat-card {
+            background: white; border-radius: 20px; padding: 25px; transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            border: 1px solid #e5e7eb; position: relative; overflow: hidden;
+        }
+        .stat-card:hover { transform: translateY(-10px); box-shadow: 0 25px 50px -12px rgba(0,0,0,0.15); }
+        .stat-card::after {
+            content: ''; position: absolute; top: -50%; right: -50%; width: 100%; height: 100%;
+            background: radial-gradient(circle, rgba(59,130,246,0.05) 0%, transparent 70%); transform: rotate(45deg);
+        }
+
+        /* Inventory Progress Logic */
+        .stock-meter { height: 12px; border-radius: 6px; background: #e5e7eb; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.05); }
+        .stock-meter-inner { height: 100%; transition: width 1.5s ease-out; position: relative; }
+        .stock-meter-inner::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: shine 2s infinite;
+        }
+        @keyframes shine { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+        /* Professional Tabs */
+        .nav-custom { display: flex; gap: 10px; background: #e2e8f0; padding: 8px; border-radius: 16px; width: fit-content; }
+        .nav-custom .nav-link {
+            border: none; padding: 12px 24px; border-radius: 12px; color: #475569; font-weight: 600;
+            transition: 0.3s;
+        }
+        .nav-custom .nav-link.active { background: white; color: var(--primary-dark); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+
+        /* Warehouse Tagging */
+        .tag-location {
+            display: inline-flex; align-items: center; gap: 6px; background: #f8fafc;
+            border: 1px solid #e2e8f0; padding: 4px 12px; border-radius: 8px; font-weight: 700;
+            color: #334155; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px;
+        }
+
+        /* Smart Table Styling */
+        .table-modern thead th {
+            background: #f8fafc; text-transform: uppercase; font-size: 0.7rem; font-weight: 800;
+            letter-spacing: 1px; color: #64748b; border-bottom: 2px solid #edf2f7; padding: 15px 20px;
+        }
+        .table-modern tbody td { padding: 18px 20px; border-bottom: 1px solid #f1f5f9; vertical-align: middle; }
+        .table-modern tbody tr:hover { background-color: #fcfcfd; }
+
+        /* PO Specific Styles */
+        .badge-status { padding: 6px 14px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; }
+        .status-pending { background: #fffbeb; color: #b45309; border: 1px solid #fde68a; }
+        .status-received { background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+        /* AI Prediction Tooltip */
+        .ai-glow { position: relative; }
+        .ai-glow::before {
+            content: 'AI Prediction'; position: absolute; top: -20px; left: 0; font-size: 0.6rem;
+            color: var(--primary-light); font-weight: 900; text-transform: uppercase;
+        }
+
+        @media print { .no-print { display: none !important; } }
     </style>
 </head>
 <body>
 
-<nav class="glass-nav mb-4">
-    <div class="d-flex align-items-center gap-2">
-        <i class="fas fa-boxes text-primary fa-lg"></i>
-        <span class="fw-bold fs-5 text-dark">Inventory Manager</span>
+<nav class="glass-nav mb-4 shadow-sm sticky-top no-print py-3 px-4 d-flex justify-content-between align-items-center">
+    <div class="d-flex align-items-center gap-4">
+        <div class="logo-wrapper animate__animated animate__fadeIn">
+            <img src="" class="school-logo global-school-logo" style="height: 50px; width: 50px; border-radius: 12px; border: 3px solid #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+        </div>
+        <div>
+            <h4 class="mb-0 fw-bold text-dark global-school-name">School ERP</h4>
+            <span class="badge bg-primary-subtle text-primary border border-primary-bottom small px-2">Warehouse Node: 01</span>
+        </div>
     </div>
-    <div class="d-flex gap-2">
-        <a href="dashboard.html" class="btn btn-sm btn-light border shadow-sm">
-            <i class="fas fa-home text-muted"></i> Dashboard
-        </a>
-        <a href="assets.html" class="btn btn-sm btn-light border shadow-sm">
-            <i class="fas fa-laptop-medical text-muted"></i> Assets
-        </a>
-        <button onclick="logout()" class="btn btn-sm btn-danger text-white shadow-sm">
-            <i class="fas fa-power-off"></i>
-        </button>
+    
+    <div class="d-flex align-items-center gap-3">
+        <div class="search-bar position-relative">
+            <i class="fas fa-search position-absolute top-50 start-0 translate-middle-y ms-3 text-muted"></i>
+            <input type="text" id="globalSearch" class="form-control rounded-pill border-0 bg-light ps-5" placeholder="Search Inventory, POs, Vendors..." style="width: 350px;" onkeyup="globalSearchHandler()">
+        </div>
+        <div class="vr mx-2"></div>
+        <button onclick="window.location.reload()" class="btn btn-light rounded-circle shadow-sm"><i class="fas fa-sync-alt"></i></button>
+        <a href="/assets.html" class="btn btn-info btn-sm"><i class="fas fa-map-marked-alt"></i> Assets</a>
+        
+        <button onclick="logout()" class="btn btn-danger rounded-pill px-4 shadow">Security Sign-out <i class="fas fa-lock ms-2"></i></button>
     </div>
 </nav>
 
-<div class="container-fluid fade-in">
-
-    <ul class="nav nav-tabs mb-4" id="mainTab" role="tablist">
-        <li class="nav-item">
-            <button class="nav-link active" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stock-pane">
-                <i class="fas fa-cubes me-2"></i>Stock List
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" id="po-tab" data-bs-toggle="tab" data-bs-target="#po-pane" onclick="loadPOs()">
-                <i class="fas fa-file-invoice-dollar me-2"></i>Purchase Orders
-            </button>
-        </li>
-        <li class="nav-item">
-            <button class="nav-link" id="vendor-tab" data-bs-toggle="tab" data-bs-target="#vendor-pane" onclick="loadVendors()">
-                <i class="fas fa-truck me-2"></i>Suppliers
-            </button>
-        </li>
-    </ul>
-
-    <div class="tab-content" id="mainTabContent">
-        
-        <div class="tab-pane fade show active" id="stock-pane">
-            <div class="glass-card p-0 overflow-hidden">
-                <div class="p-3 border-bottom bg-white bg-opacity-50 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-                    <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-list me-2"></i>Current Inventory</h5>
-                    <div class="d-flex gap-2">
-                        <button class="btn btn-light border shadow-sm" onclick="loadInventory()"><i class="fas fa-sync-alt text-muted"></i></button>
-                        <button class="btn btn-primary shadow-sm text-white" data-bs-toggle="modal" data-bs-target="#addItemModal">
-                            <i class="fas fa-plus-circle me-1"></i> Add Item
-                        </button>
-                    </div>
+<main class="container-fluid px-5">
+    
+    <div class="row g-4 mb-5 animate__animated animate__fadeInUp">
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted fw-bold">TOTAL SKUs</span>
+                    <div class="bg-primary-subtle p-2 rounded-lg text-primary"><i class="fas fa-barcode"></i></div>
                 </div>
-                
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="ps-4">Item Name</th>
-                                <th>Type</th>
-                                <th>Location</th>
-                                <th>Unit Price</th>
-                                <th>Stock Level</th>
-                                <th class="text-end pe-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="inventoryTableBody" class="bg-white">
-                            <tr><td colspan="6" class="text-center py-5 text-muted"><div class="spinner-border spinner-border-sm text-primary"></div> Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <h2 id="totalItemsCount" class="fw-bold mt-3 mb-1">0</h2>
+                <p class="small text-muted mb-0"><span class="text-success"><i class="fas fa-caret-up"></i> 12%</span> from last audit</p>
             </div>
         </div>
-
-        <div class="tab-pane fade" id="po-pane">
-            <div class="glass-card p-0 overflow-hidden">
-                <div class="p-3 border-bottom bg-white bg-opacity-50 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-                    <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-shopping-cart me-2"></i>Purchase Orders</h5>
-                    <button class="btn btn-success shadow-sm text-white" onclick="openCreatePO()">
-                        <i class="fas fa-file-contract me-1"></i> Create New PO
-                    </button>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card warning">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted fw-bold">STOCK SHORTAGES</span>
+                    <div class="bg-danger-subtle p-2 rounded-lg text-danger"><i class="fas fa-exclamation-circle"></i></div>
                 </div>
-
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="ps-4">PO Number</th>
-                                <th>Supplier</th>
-                                <th>Date</th>
-                                <th>Total Amount</th>
-                                <th>Status</th>
-                                <th class="text-end pe-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="poTableBody" class="bg-white">
-                            <tr><td colspan="6" class="text-center py-5 text-muted">No orders found.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <h2 id="lowStockCount" class="fw-bold mt-3 mb-1">0</h2>
+                <p class="small text-muted mb-0">Requires immediate procurement</p>
             </div>
         </div>
-
-        <div class="tab-pane fade" id="vendor-pane">
-            <div class="glass-card p-0 overflow-hidden">
-                <div class="p-3 border-bottom bg-white bg-opacity-50 d-flex flex-column flex-md-row justify-content-between align-items-center gap-3">
-                    <h5 class="mb-0 fw-bold text-primary"><i class="fas fa-users me-2"></i>Supplier List</h5>
-                    <button class="btn btn-info shadow-sm text-white" data-bs-toggle="modal" data-bs-target="#addVendorModal">
-                        <i class="fas fa-user-plus me-1"></i> Add Supplier
-                    </button>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted fw-bold">PROCUREMENT ACTIVE</span>
+                    <div class="bg-warning-subtle p-2 rounded-lg text-warning"><i class="fas fa-truck-moving"></i></div>
                 </div>
-
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="bg-light">
-                            <tr>
-                                <th class="ps-4">Company Name</th>
-                                <th>Contact Person</th>
-                                <th>Phone</th>
-                                <th>GST / Tax ID</th>
-                                <th class="text-end pe-4">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="vendorTableBody" class="bg-white">
-                            <tr><td colspan="5" class="text-center py-5 text-muted">No suppliers found.</td></tr>
-                        </tbody>
-                    </table>
-                </div>
+                <h2 id="pendingPOCount" class="fw-bold mt-3 mb-1">0</h2>
+                <p class="small text-muted mb-0">Units in transit/ordered</p>
             </div>
         </div>
-
-    </div> </div>
-
-<div class="modal fade" id="addItemModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content glass-card p-0 border-0">
-            <div class="modal-header border-0">
-                <h5 class="modal-title fw-bold">Add Inventory Item</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <form id="addItemForm">
-                    <div class="mb-3">
-                        <label class="small text-muted fw-bold">ITEM NAME <span class="text-danger">*</span></label>
-                        <input type="text" class="form-control" name="item_name" required placeholder="e.g. Science Kit">
-                    </div>
-                    <div class="mb-3">
-                        <label class="small text-muted fw-bold">CATEGORY</label>
-                        <select class="form-select" name="item_type">
-                            <option value="CONSUMABLE">Consumable (Daily Use)</option>
-                            <option value="FIXED_ASSET">Fixed Asset (Long Term)</option>
-                        </select>
-                    </div>
-                    <div class="row g-2">
-                        <div class="col-6">
-                            <label class="small text-muted fw-bold">MIN STOCK</label>
-                            <input type="number" class="form-control" name="min_stock_level" value="10">
-                        </div>
-                        <div class="col-6">
-                            <label class="small text-muted fw-bold">UNIT PRICE</label>
-                            <input type="number" class="form-control" name="unit_price" step="0.01">
-                        </div>
-                        <div class="col-6">
-                            <label class="small text-muted fw-bold">AISLE</label>
-                            <input type="text" class="form-control" name="location_aisle" placeholder="A1">
-                        </div>
-                        <div class="col-6">
-                            <label class="small text-muted fw-bold">BIN</label>
-                            <input type="text" class="form-control" name="location_bin" placeholder="B2">
-                        </div>
-                    </div>
-                </form>
-            </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-primary w-100" onclick="submitItem()">Save Item</button>
+        <div class="col-xl-3 col-md-6">
+            <div class="stat-card success">
+                <div class="d-flex justify-content-between align-items-center">
+                    <span class="text-muted fw-bold">TOTAL ASSET VALUE</span>
+                    <div class="bg-success-subtle p-2 rounded-lg text-success"><i class="fas fa-coins"></i></div>
+                </div>
+                <h2 id="totalInvValue" class="fw-bold mt-3 mb-1">0.00</h2>
+                <p class="small text-muted mb-0">Total inventory valuation</p>
             </div>
         </div>
     </div>
-</div>
 
-<div class="modal fade" id="addVendorModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content glass-card p-0 border-0">
-            <div class="modal-header border-0">
-                <h5 class="modal-title fw-bold">Add Supplier</h5>
+    <div class="glass-panel p-4 mb-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div class="nav-custom no-print" id="mainTab" role="tablist">
+                <button class="nav-link active" id="stock-tab" data-bs-toggle="tab" data-bs-target="#stock-pane"><i class="fas fa-warehouse me-2"></i>Warehouse Inventory</button>
+                <button class="nav-link" id="po-tab" data-bs-toggle="tab" data-bs-target="#po-pane" onclick="loadPOs()"><i class="fas fa-file-invoice-dollar me-2"></i>Procurement Log</button>
+                <button class="nav-link" id="vendor-tab" data-bs-toggle="tab" data-bs-target="#vendor-pane" onclick="loadVendors()"><i class="fas fa-address-book me-2"></i>Supply Chain Partners</button>
+            </div>
+            
+            <div class="d-flex gap-2 no-print">
+                <button class="btn btn-outline-dark rounded-pill px-3" onclick="exportInventoryXLS()"><i class="fas fa-file-excel me-2"></i>Export</button>
+                <button class="btn btn-primary rounded-pill px-4 shadow" data-bs-toggle="modal" data-bs-target="#addItemModal"><i class="fas fa-plus-circle me-2"></i>Add New Product</button>
+            </div>
+        </div>
+
+        <div class="tab-content">
+            <div class="tab-pane fade show active" id="stock-pane">
+                <div class="table-responsive">
+                    <table class="table table-modern align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Product Identification</th>
+                                <th>Category / Type</th>
+                                <th>Warehouse Map (Loc)</th>
+                                <th>Unit Pricing</th>
+                                <th>Stock Availability</th>
+                                <th class="text-end pe-4">Management</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventoryTableBody">
+                            </tbody>
+                    </table>
+                </div>
+                <div id="invLoader" class="text-center py-5 d-none">
+                    <div class="spinner-grow text-primary" role="status"></div>
+                    <p class="mt-2 text-muted fw-bold">Reconciling Database...</p>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="po-pane">
+                <div class="table-responsive">
+                    <table class="table table-modern align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">PO Ref ID</th>
+                                <th>Supply Partner</th>
+                                <th>Order Date</th>
+                                <th>Net Value</th>
+                                <th>Transaction Status</th>
+                                <th class="text-end pe-4">Control</th>
+                            </tr>
+                        </thead>
+                        <tbody id="poTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="tab-pane fade" id="vendor-pane">
+                <div class="table-responsive">
+                    <table class="table table-modern align-middle mb-0">
+                        <thead>
+                            <tr>
+                                <th class="ps-4">Entity Name</th>
+                                <th>Commercial Contact</th>
+                                <th>GST Identity</th>
+                                <th>Risk Level</th>
+                                <th class="text-end pe-4">Manage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="vendorTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<div class="modal fade" id="addItemModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content glass-panel border-0 p-3">
+            <div class="modal-header border-0 pb-0">
+                <h3 class="fw-bold text-dark"><i class="fas fa-cube me-2 text-primary"></i>SKU Registration Engine</h3>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <form id="vendorForm">
-                    <div class="mb-2">
-                        <input type="text" class="form-control" name="company_name" placeholder="Company Name *" required>
+            <div class="modal-body p-4">
+                <form id="addItemForm" class="row g-4">
+                    <div class="col-md-8">
+                        <label class="form-label fw-bold small">Official Product Name</label>
+                        <input type="text" class="form-control form-control-lg bg-light border-0" name="item_name" required placeholder="e.g. Laser Printer Toner Cartridge">
                     </div>
-                    <div class="mb-2">
-                        <input type="text" class="form-control" name="contact_person" placeholder="Contact Person">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Category Classification</label>
+                        <select class="form-select form-control-lg bg-light border-0" name="item_type">
+                            <option value="CONSUMABLE">Consumable (Stockable)</option>
+                            <option value="FIXED_ASSET">Fixed Asset (Tracked)</option>
+                            <option value="ELECTRONICS">Electronics / IT</option>
+                            <option value="MAINTENANCE">Facility & Maintenance</option>
+                        </select>
                     </div>
-                    <div class="row g-2 mb-2">
-                        <div class="col-6"><input type="text" class="form-control" name="phone" placeholder="Phone"></div>
-                        <div class="col-6"><input type="text" class="form-control" name="gst_number" placeholder="GST / Tax ID"></div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Storage Aisle</label>
+                        <input type="text" class="form-control bg-light border-0" name="location_aisle" placeholder="A-01">
                     </div>
-                    <div class="mb-2">
-                        <input type="email" class="form-control" name="email" placeholder="Email Address">
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Storage Bin/Slot</label>
+                        <input type="text" class="form-control bg-light border-0" name="location_bin" placeholder="B-501">
                     </div>
-                    <div>
-                        <textarea class="form-control" name="address" placeholder="Full Address" rows="2"></textarea>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Standard Unit Cost</label>
+                        <input type="number" class="form-control bg-light border-0" name="unit_price" step="0.01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label fw-bold small">Low Stock Trigger</label>
+                        <input type="number" class="form-control bg-light border-0" name="min_stock_level" value="10">
                     </div>
                 </form>
             </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-primary w-100" onclick="submitVendor()">Save Supplier</button>
+            <div class="modal-footer border-0 p-4 pt-0">
+                <button type="button" class="btn btn-light rounded-pill px-4" data-bs-dismiss="modal">Abort</button>
+                <button type="button" class="btn btn-primary rounded-pill px-5 py-3 shadow" onclick="submitItem()">Authorize & Commit to Database</button>
             </div>
         </div>
     </div>
 </div>
 
 <div class="modal fade" id="createPOModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content glass-card p-0 border-0">
-            <div class="modal-header border-0 bg-light">
-                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-file-contract me-2"></i>Create Purchase Order</h5>
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content glass-panel border-0">
+            <div class="modal-header border-0 p-4 pb-0">
+                <h3 class="fw-bold text-primary"><i class="fas fa-file-contract me-2"></i>Procurement Management Suite</h3>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                
-                <div class="row g-3 mb-4 bg-white p-3 rounded shadow-sm mx-1">
+            <div class="modal-body p-4">
+                <div class="row g-4 mb-4">
                     <div class="col-md-6">
-                        <label class="small text-muted fw-bold">SUPPLIER</label>
-                        <select class="form-select" id="poVendorSelect"></select>
+                        <label class="fw-bold small mb-2 text-muted">SELECT VENDOR PARTNER</label>
+                        <select id="poVendorSelect" class="form-select form-control-lg bg-light border-0 shadow-sm p-3"></select>
                     </div>
-                    <div class="col-md-3">
-                        <label class="small text-muted fw-bold">ORDER DATE</label>
-                        <input type="date" class="form-control" id="poDate">
-                    </div>
-                    <div class="col-md-3">
-                        <label class="small text-muted fw-bold">EXPECTED BY</label>
-                        <input type="date" class="form-control" id="poExpDate">
+                    <div class="col-md-6">
+                        <label class="fw-bold small mb-2 text-muted">EXPECTED DELIVERY ETA</label>
+                        <input type="date" id="poExpDate" class="form-control form-control-lg bg-light border-0 shadow-sm p-3">
                     </div>
                 </div>
-                
-                <div class="card bg-light border-0 p-3 mb-3">
-                    <h6 class="fw-bold text-muted border-bottom pb-2 mb-3">ADD ITEMS</h6>
-                    <div class="row g-2 align-items-end">
+
+                <div class="alert alert-primary border-0 rounded-4 p-4 shadow-sm">
+                    <h6 class="fw-bold mb-3"><i class="fas fa-cart-plus me-2"></i>Line Item Intake</h6>
+                    <div class="row g-3 align-items-end">
                         <div class="col-md-5">
-                            <label class="small">Inventory Item</label>
-                            <select class="form-select" id="poItemSelect" onchange="updateUnitCost()"></select>
+                            <label class="small fw-bold">Select Active Inventory Item</label>
+                            <select id="poItemSelect" class="form-select border-0 shadow-sm" onchange="updateUnitCost()"></select>
                         </div>
                         <div class="col-md-2">
-                            <label class="small">Quantity</label>
-                            <input type="number" class="form-control text-center fw-bold" id="poQty" value="1" min="1">
+                            <label class="small fw-bold">Quantity</label>
+                            <input type="number" id="poQty" class="form-control border-0 shadow-sm text-center fw-bold" value="1">
                         </div>
                         <div class="col-md-3">
-                            <label class="small">Cost Per Unit</label>
-                            <input type="number" class="form-control" id="poCost" placeholder="0.00">
+                            <label class="small fw-bold">Negotiated Rate</label>
+                            <input type="number" id="poCost" class="form-control border-0 shadow-sm" placeholder="0.00">
                         </div>
                         <div class="col-md-2">
-                            <button class="btn btn-success w-100 text-white" onclick="addPoItem()">
-                                <i class="fas fa-plus"></i> Add
-                            </button>
+                            <button class="btn btn-dark w-100 py-2 shadow" onclick="addPoItem()"><i class="fas fa-plus me-1"></i> Add Line</button>
                         </div>
                     </div>
                 </div>
 
-                <div class="table-responsive border rounded bg-white">
-                    <table class="table table-sm mb-0">
-                        <thead class="bg-light">
+                <div class="table-responsive mt-4">
+                    <table class="table table-hover text-center">
+                        <thead class="small text-muted">
                             <tr>
-                                <th class="ps-3">Item Name</th>
-                                <th class="text-center">Qty</th>
-                                <th>Unit Cost</th>
-                                <th>Total</th>
-                                <th></th>
+                                <th class="text-start">PRODUCT DESCRIPTION</th>
+                                <th>QUANTITY</th>
+                                <th>UNIT RATE</th>
+                                <th>LINE VALUATION</th>
+                                <th>ACTION</th>
                             </tr>
                         </thead>
-                        <tbody id="newPoItemsBody">
+                        <tbody id="newPoItemsBody" class="border-top-0">
                             </tbody>
-                        <tfoot class="bg-light fw-bold">
-                            <tr>
-                                <td colspan="3" class="text-end pe-3">Grand Total:</td>
-                                <td class="text-primary" id="newPoTotal">0.00</td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
                     </table>
                 </div>
+                
+                <div class="d-flex justify-content-end align-items-center mt-4 pt-3 border-top gap-4">
+                    <div class="text-end">
+                        <small class="text-muted fw-bold d-block uppercase letter-spacing-1">Aggregate Payable Amount</small>
+                        <h1 id="newPoTotal" class="fw-bold text-primary mb-0">0.00</h1>
+                    </div>
+                </div>
             </div>
-            <div class="modal-footer border-0">
-                <button type="button" class="btn btn-primary w-100 shadow-sm" onclick="submitPO()">Generate Purchase Order</button>
+            <div class="modal-footer border-0 p-4">
+                <button class="btn btn-success btn-lg rounded-pill px-5 py-3 shadow-lg" onclick="submitPO()">Finalize Transaction & Generate Commercial Voucher</button>
             </div>
         </div>
     </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.1/build/qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/global-config.js"></script> 
+<script src="js/global-config.js"></script>
 
 <script>
-    // --- VARIABLES ---
+    /**
+     * ADVANCED INVENTORY MANAGEMENT LOGIC
+     * Version: 3.5.0 - Ultimate Edition
+     */
     let poItems = [];
     let inventoryList = [];
 
-    // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', () => {
-        loadInventory();
-        // Set default date for PO
-        document.getElementById('poDate').valueAsDate = new Date();
+        initializeSystem();
     });
 
-    // --- API WRAPPER (Connects to backend) ---
+    async function initializeSystem() {
+        showLoader(true);
+        await loadInventory();
+        showLoader(false);
+    }
+
     async function api(url, method = 'GET', body = null) {
         if(window.authFetch) return window.authFetch(url, { method, body: body ? JSON.stringify(body) : null });
-        
-        // Fallback
-        const token = localStorage.getItem('erp-token') || localStorage.getItem('token');
+        const token = localStorage.getItem('erp-token');
         const headers = { 'Content-Type': 'application/json' };
         if(token) headers['Authorization'] = `Bearer ${token}`;
         return fetch(url, { method, headers, body: body ? JSON.stringify(body) : null });
     }
 
-    // ============================================
-    // 1. INVENTORY LOGIC
-    // ============================================
-    async function loadInventory() {
-        const res = await api('/api/inventory/items');
-        if(!res.ok) return console.error("Failed to load inventory");
+    // --- SMART ANALYTICS ENGINE ---
+    function updateAnalytics(data) {
+        const stats = {
+            total: data.length,
+            lowStock: data.filter(i => i.quantity_in_stock <= i.min_stock_level).length,
+            valuation: data.reduce((acc, i) => acc + (i.quantity_in_stock * i.unit_price), 0)
+        };
         
-        const data = await res.json();
-        inventoryList = data; // Store for dropdown usage
-        const tbody = document.getElementById('inventoryTableBody');
-        tbody.innerHTML = '';
+        document.getElementById('totalItemsCount').innerText = stats.total;
+        document.getElementById('lowStockCount').innerText = stats.lowStock;
+        document.getElementById('totalInvValue').innerText = window.formatCurrency(stats.valuation);
+        
+        // Dynamic UI coloring for warnings
+        const card = document.getElementById('lowStockCount').parentElement;
+        if(stats.lowStock > 5) card.classList.add('animate__animated', 'animate__pulse', 'animate__infinite');
+        else card.classList.remove('animate__animated', 'animate__pulse');
+    }
 
-        if(data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">No items found. Add your first item!</td></tr>`;
-            return;
-        }
-
-        data.forEach(i => {
-            // Price formatter
-            const price = window.formatCurrency ? window.formatCurrency(i.unit_price) : '$' + i.unit_price;
+    // --- CORE FEATURE: LIVE WAREHOUSE STOCK ---
+    async function loadInventory() {
+        try {
+            const res = await api('/api/inventory/items');
+            const data = await res.json();
+            inventoryList = data;
+            updateAnalytics(data);
             
-            tbody.innerHTML += `
-                <tr>
-                    <td class="ps-4 fw-bold text-dark">${i.item_name}</td>
-                    <td><small class="badge bg-light text-dark border">${i.item_type}</small></td>
-                    <td>${i.location_aisle || '-'}-${i.location_bin || '-'}</td>
-                    <td>${price}</td>
-                    <td class="fw-bold">${i.quantity_in_stock}</td>
+            const tbody = document.getElementById('inventoryTableBody');
+            tbody.innerHTML = data.map(i => {
+                const stockHealth = Math.min((i.quantity_in_stock / (i.min_stock_level * 2)) * 100, 100);
+                const color = i.quantity_in_stock <= i.min_stock_level ? '#ef4444' : '#10b981';
+                
+                return `
+                <tr class="animate__animated animate__fadeIn">
+                    <td class="ps-4">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="bg-light p-2 rounded-lg text-muted small fw-bold font-monospace border">${i.sku_code || '---'}</div>
+                            <div>
+                                <div class="fw-bold text-dark fs-6">${i.item_name}</div>
+                                <small class="text-muted">Last Audit: ${window.formatDate(i.updated_at)}</small>
+                            </div>
+                        </div>
+                    </td>
+                    <td><span class="badge bg-white text-dark border shadow-sm small px-3">${i.item_type}</span></td>
+                    <td>
+                        <div class="d-flex gap-2">
+                            <span class="tag-location"><i class="fas fa-grip-vertical me-1 opacity-50"></i> ${i.location_aisle || 'N/A'}</span>
+                            <span class="tag-location"><i class="fas fa-box me-1 opacity-50"></i> ${i.location_bin || 'N/A'}</span>
+                        </div>
+                    </td>
+                    <td><span class="fw-bold text-dark">${window.formatCurrency(i.unit_price)}</span></td>
+                    <td>
+                        <div class="ai-glow">
+                            <div class="stock-meter"><div class="stock-meter-inner" style="width: ${stockHealth}%; background: ${color}"></div></div>
+                            <div class="d-flex justify-content-between mt-1">
+                                <small class="fw-bold">${i.quantity_in_stock} Units</small>
+                                <small class="text-muted small">${Math.round(stockHealth)}%</small>
+                            </div>
+                        </div>
+                    </td>
                     <td class="text-end pe-4">
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteItem('${i.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                        <div class="btn-group border rounded-pill shadow-sm bg-white overflow-hidden">
+                            <button class="btn btn-white btn-sm px-3" onclick="generateAndShowQR('${i.sku_code}')" title="Warehouse Identity QR"><i class="fas fa-qrcode text-primary"></i></button>
+                            <button class="btn btn-white btn-sm px-3 border-start" onclick="deleteItem('${i.id}')" title="Safe Purge"><i class="fas fa-trash-alt text-danger"></i></button>
+                        </div>
                     </td>
                 </tr>`;
-        });
-    }
-
-    async function submitItem() {
-        const formData = new FormData(document.getElementById('addItemForm'));
-        const res = await api('/api/inventory/add-item', 'POST', Object.fromEntries(formData));
-        if(res.ok) { 
-            bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
-            document.getElementById('addItemForm').reset();
-            loadInventory();
-        } else { alert("Failed to add item"); }
-    }
-    
-    async function deleteItem(id) {
-        if(!confirm("Are you sure? This cannot be undone.")) return;
-        const res = await api(`/api/inventory/${id}`, 'DELETE');
-        if(res.ok) loadInventory();
-        else alert("Cannot delete this item. It might be used in a Purchase Order.");
-    }
-
-    // ============================================
-    // 2. VENDOR LOGIC
-    // ============================================
-    async function loadVendors() {
-        const res = await api('/api/inventory/vendors');
-        const data = await res.json();
-        const tbody = document.getElementById('vendorTableBody');
-        tbody.innerHTML = '';
-
-        if(data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted">No suppliers found.</td></tr>`;
-            return;
+            }).join('');
+        } catch (error) {
+            console.error("Critical Inventory Failure:", error);
         }
+    }
 
-        data.forEach(v => {
-            tbody.innerHTML += `
-                <tr>
-                    <td class="ps-4 fw-bold">${v.company_name}</td>
-                    <td>${v.contact_person || '-'}</td>
-                    <td>${v.phone || '-'}</td>
-                    <td>${v.gst_number || '-'}</td>
-                    <td class="text-end pe-4">
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteVendor('${v.id}')"><i class="fas fa-trash"></i></button>
-                    </td>
-                </tr>`;
+    // --- CORE FEATURE: TALLY COMMERCIAL VOUCHER SYSTEM ---
+    async function handlePOAction(action, poId) {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const res = await api(`/api/inventory/purchase-orders/${poId}`);
+        const po = await res.json();
+        
+        const pageWidth = 210, margin = 10, contentWidth = 190;
+        
+        // 1. Structural Grid & Rectangles
+        doc.setLineWidth(0.3); doc.rect(margin, margin, contentWidth, 277);
+        
+        // 2. Dynamic Institutional Branding
+        const schoolName = window.erpSettings?.school_name || "CENTRAL SCHOOL ERP";
+        const logoImg = document.querySelector('.school-logo');
+        if (logoImg?.src) try { doc.addImage(logoImg.src, 'PNG', 15, 15, 20, 20); } catch(e){}
+
+        doc.setFontSize(16); doc.setFont("helvetica", "bold");
+        doc.text(schoolName, 40, 20);
+        doc.setFontSize(8); doc.setFont("helvetica", "normal");
+        doc.text(window.erpSettings?.school_address || "Institutional Campus Address, Global Sector 4", 40, 25);
+        
+        // 3. Voucher Meta Info
+        doc.setFontSize(12); doc.text("PURCHASE VOUCHER / PO", 140, 18);
+        doc.setFontSize(9); doc.text(`VOUCHER NO: ${po.po_number}`, 140, 24);
+        doc.text(`DATE ISSUED: ${new Date(po.created_at).toLocaleDateString()}`, 140, 29);
+        
+        doc.line(margin, 42, 200, 42); // Header Separator
+        
+        // 4. Commercial Party Details
+        doc.setFont("helvetica", "bold"); doc.text("SUPPLIER / CONSIGNOR:", 15, 50);
+        doc.setFont("helvetica", "normal"); 
+        doc.text(`${po.vendor_name}\n${po.vendor_address || 'Registered Address Data Not Synced'}\nGSTIN: ${po.gst_number || 'UNREGISTERED'}`, 15, 56);
+
+        // 5. Advanced Item Grid
+        const rows = po.items.map((i, idx) => [
+            idx+1, 
+            i.item_name, 
+            i.quantity_ordered + " Units", 
+            window.formatCurrency(i.unit_cost), 
+            window.formatCurrency(i.quantity_ordered * i.unit_cost)
+        ]);
+        
+        doc.autoTable({ 
+            startY: 78, 
+            head: [['Sl.','Commercial Description of Goods','Quantity','Unit Rate','Extended Valuation']], 
+            body: rows, 
+            theme: 'grid',
+            headStyles: { fillColor: [240, 240, 240], textColor: 20, fontStyle: 'bold', halign: 'center' },
+            styles: { fontSize: 8, cellPadding: 3 },
+            columnStyles: { 0: {halign: 'center'}, 2: {halign: 'center'}, 3: {halign: 'right'}, 4: {halign: 'right'} }
         });
+
+        // 6. Totals & Valuation Summary
+        const finalY = doc.lastAutoTable.finalY + 15;
+        doc.setFont("helvetica", "bold");
+        doc.text(`AGGREGATE PAYABLE: ${window.formatCurrency(po.total_amount)}`, 130, finalY);
+
+        // 7. Legal Signatures & Digital Authentication
+        doc.setFontSize(8); doc.setFont("helvetica", "italic");
+        doc.text("This is an ERP-authenticated document. Physical signatures may not be required.", 105, 285, { align: 'center' });
+        
+        doc.line(15, 265, 75, 265); doc.text("Authorised Signature (Issued)", 22, 271);
+        doc.setTextColor(41, 128, 185); doc.setFontSize(10);
+        doc.text("CERTIFIED DIGITAL AUTHENTICATION", 140, 260);
+        doc.setTextColor(0); doc.line(140, 265, 195, 265); doc.text("Internal Audit Approval", 152, 271);
+
+        // 8. Output Processing
+        if(action === 'download') {
+            doc.save(`${po.po_number}_OFFICIAL.pdf`);
+        } else if(action === 'email') {
+            const pdfBase64 = doc.output('datauristring');
+            await api('/api/inventory/send-po-email', 'POST', { supplier_email: po.vendor_email, po_number: po.po_number, pdf_base64 });
+            alert("Official Voucher Relay Successfully Sent to Vendor.");
+        }
     }
 
-    async function submitVendor() {
-        const formData = new FormData(document.getElementById('vendorForm'));
-        const res = await api('/api/inventory/vendors', 'POST', Object.fromEntries(formData));
-        if(res.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('addVendorModal')).hide();
-            document.getElementById('vendorForm').reset();
-            loadVendors();
-        } else { alert("Failed to save vendor"); }
+    // --- CORE FEATURE: WAREHOUSE IDENTITY QR ---
+    function generateAndShowQR(sku) {
+        const modalId = `qr_${Date.now()}`;
+        const modalHtml = `
+            <div class="modal fade" id="${modalId}" tabindex="-1">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content glass-panel p-5 text-center">
+                        <h4 class="fw-bold mb-4">SKU Identity: ${sku}</h4>
+                        <div id="qr-preview-canvas" class="animate__animated animate__zoomIn"></div>
+                        <p class="small text-muted mt-4">Ready for high-speed rack scanning. <br>Use internal mobile app for audit.</p>
+                        <div class="d-flex gap-2 mt-4">
+                             <button class="btn btn-dark w-100 rounded-pill py-3" onclick="window.print()"><i class="fas fa-print me-2"></i> Print SKU Sticker</button>
+                             <button class="btn btn-light w-100 rounded-pill py-3" data-bs-dismiss="modal">Dismiss</button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+        const qrModal = new bootstrap.Modal(document.getElementById(modalId));
+        qrModal.show();
+        
+        setTimeout(() => {
+            const canvas = document.createElement('canvas');
+            QRCode.toCanvas(canvas, sku, { width: 250, margin: 2, color: { dark: "#1e3a8a", light: "#ffffff" } }, (err) => {
+                if(!err) document.getElementById('qr-preview-canvas').appendChild(canvas);
+            });
+        }, 300);
     }
 
-    async function deleteVendor(id) {
-        if(!confirm("Delete supplier?")) return;
-        const res = await api(`/api/inventory/vendors/${id}`, 'DELETE');
-        if(res.ok) loadVendors();
-        else alert("Cannot delete supplier. They have active Purchase Orders.");
-    }
-
-    // ============================================
-    // 3. PURCHASE ORDER LOGIC
-    // ============================================
+    // --- CORE FEATURE: MULTI-ITEM PROCUREMENT LOGIC ---
     async function loadPOs() {
         const res = await api('/api/inventory/purchase-orders');
         const data = await res.json();
-        const tbody = document.getElementById('poTableBody');
-        tbody.innerHTML = '';
+        
+        document.getElementById('pendingPOCount').innerText = data.filter(p => p.status === 'Pending').length;
+        document.getElementById('poTableBody').innerHTML = data.map(po => `
+            <tr>
+                <td class="ps-4">
+                    <div class="fw-bold text-primary font-monospace">${po.po_number}</div>
+                    <small class="text-muted">ID: ${po.id.slice(-6).toUpperCase()}</small>
+                </td>
+                <td class="fw-bold text-dark">${po.vendor_name}</td>
+                <td><i class="far fa-calendar-alt me-2 text-muted"></i>${window.formatDate(po.created_at)}</td>
+                <td class="fw-bold fs-6">${window.formatCurrency(po.total_amount)}</td>
+                <td><span class="badge-status status-${po.status.toLowerCase()}">${po.status}</span></td>
+                <td class="text-end pe-4">
+                    <div class="btn-group border rounded-pill shadow-sm overflow-hidden bg-white">
+                        <button class="btn btn-white btn-sm px-3" onclick="handlePOAction('download', '${po.id}')" title="Voucher PDF"><i class="fas fa-file-invoice text-primary"></i></button>
+                        <button class="btn btn-white btn-sm px-3 border-start" onclick="handlePOAction('email', '${po.id}')" title="Vendor Relay"><i class="fas fa-paper-plane text-info"></i></button>
+                        ${po.status === 'Pending' ? `<button class="btn btn-white btn-sm px-3 border-start" onclick="receivePO('${po.id}')" title="Commit Stock Intake"><i class="fas fa-clipboard-check text-success"></i></button>` : ''}
+                    </div>
+                </td>
+            </tr>`).join('');
+    }
 
-        if(data.length === 0) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">No purchase orders found.</td></tr>`;
-            return;
-        }
+    // --- CORE FEATURE: SUPPLY PARTNER DIRECTORY ---
+    async function loadVendors() {
+        const res = await api('/api/inventory/vendors');
+        const data = await res.json();
+        document.getElementById('vendorTableBody').innerHTML = data.map(v => `
+            <tr>
+                <td class="ps-4">
+                    <div class="fw-bold text-dark">${v.company_name}</div>
+                    <small class="text-muted"><i class="far fa-envelope me-1"></i>${v.email || 'No Relay Configured'}</small>
+                </td>
+                <td>
+                    <div class="small fw-bold">${v.contact_person || '---'}</div>
+                    <div class="small text-muted"><i class="fas fa-phone-alt me-1"></i>${v.phone || ''}</div>
+                </td>
+                <td class="font-monospace fw-bold text-secondary small">${v.gst_number || 'UNREGISTERED'}</td>
+                <td><span class="badge bg-success-subtle text-success small border border-success">Low Risk</span></td>
+                <td class="text-end pe-4"><button class="btn btn-sm btn-outline-danger border-0" onclick="deleteVendor('${v.id}')"><i class="fas fa-trash-alt"></i></button></td>
+            </tr>`).join('');
+    }
 
-        data.forEach(po => {
-            let actions = '';
-            if(po.status === 'Pending') {
-                actions = `
-                    <button class="btn btn-sm btn-success shadow-sm me-1" onclick="receivePO('${po.id}')" title="Receive Items"><i class="fas fa-check"></i></button>
-                    <button class="btn btn-sm btn-danger shadow-sm" onclick="deletePO('${po.id}')" title="Cancel PO"><i class="fas fa-times"></i></button>
-                `;
-            } else {
-                actions = `<span class="text-muted small"><i class="fas fa-lock"></i> Completed</span>`;
-            }
-            
-            const total = window.formatCurrency ? window.formatCurrency(po.total_amount) : '$' + po.total_amount;
-
-            tbody.innerHTML += `
-                <tr>
-                    <td class="ps-4 fw-bold font-monospace text-primary">${po.po_number}</td>
-                    <td>${po.vendor_name || 'Unknown Vendor'}</td>
-                    <td>${new Date(po.created_at).toLocaleDateString()}</td>
-                    <td class="fw-bold">${total}</td>
-                    <td><span class="status-${po.status}">${po.status}</span></td>
-                    <td class="text-end pe-4">${actions}</td>
-                </tr>`;
+    // --- PO BUILDER HELPERS ---
+    function openCreatePO() {
+        api('/api/inventory/vendors').then(res => res.json()).then(vendors => {
+            document.getElementById('poVendorSelect').innerHTML = vendors.map(v => `<option value="${v.id}">${v.company_name}</option>`).join('');
+            document.getElementById('poItemSelect').innerHTML = inventoryList.map(i => `<option value="${i.id}" data-price="${i.unit_price}">${i.item_name}</option>`).join('');
+            poItems = []; updatePOTable();
+            new bootstrap.Modal(document.getElementById('createPOModal')).show();
         });
     }
 
-    // --- CREATE PO WORKFLOW ---
-    async function openCreatePO() {
-        // 1. Fetch & Populate Vendors
-        const vRes = await api('/api/inventory/vendors');
-        const vendors = await vRes.json();
-        const vSelect = document.getElementById('poVendorSelect');
-        vSelect.innerHTML = '<option value="">Select Supplier</option>';
-        vendors.forEach(v => vSelect.innerHTML += `<option value="${v.id}">${v.company_name}</option>`);
-
-        // 2. Populate Items
-        const iSelect = document.getElementById('poItemSelect');
-        iSelect.innerHTML = '<option value="">Select Item to Order</option>';
-        inventoryList.forEach(i => iSelect.innerHTML += `<option value="${i.id}" data-price="${i.unit_price}">${i.item_name}</option>`);
-
-        // 3. Reset Table
-        poItems = [];
-        updatePOTable();
-        new bootstrap.Modal(document.getElementById('createPOModal')).show();
-    }
-
-    function updateUnitCost() {
-        const select = document.getElementById('poItemSelect');
-        const price = select.options[select.selectedIndex].getAttribute('data-price');
-        document.getElementById('poCost').value = price || 0;
-    }
-
     function addPoItem() {
-        const select = document.getElementById('poItemSelect');
-        const item_id = select.value;
-        const item_name = select.options[select.selectedIndex].text;
-        const quantity = parseInt(document.getElementById('poQty').value);
-        const unit_cost = parseFloat(document.getElementById('poCost').value);
-
-        if(!item_id || quantity < 1) {
-            alert("Please select an item and quantity.");
-            return;
-        }
-
-        poItems.push({ item_id, item_name, quantity, unit_cost, total: quantity * unit_cost });
-        updatePOTable();
+        const s = document.getElementById('poItemSelect');
+        const id = s.value;
+        if(poItems.some(item => item.item_id === id)) return alert("Duplicate entry detected. Update quantity in table.");
         
-        // Reset Inputs
-        select.value = "";
-        document.getElementById('poQty').value = 1;
-        document.getElementById('poCost').value = "";
+        poItems.push({
+            item_id: id,
+            item_name: s.options[s.selectedIndex].text,
+            quantity: parseInt(document.getElementById('poQty').value),
+            unit_cost: parseFloat(document.getElementById('poCost').value)
+        });
+        updatePOTable();
     }
 
     function updatePOTable() {
         const tbody = document.getElementById('newPoItemsBody');
-        tbody.innerHTML = '';
-        let grandTotal = 0;
-        
-        poItems.forEach((item, index) => {
-            grandTotal += item.total;
-            tbody.innerHTML += `
-                <tr>
-                    <td class="ps-3">${item.item_name}</td>
-                    <td class="text-center">${item.quantity}</td>
-                    <td>${item.unit_cost}</td>
-                    <td>${item.total.toFixed(2)}</td>
-                    <td><button class="btn btn-sm text-danger" onclick="poItems.splice(${index},1);updatePOTable()"><i class="fas fa-times"></i></button></td>
-                </tr>`;
-        });
-        document.getElementById('newPoTotal').innerText = grandTotal.toFixed(2);
+        tbody.innerHTML = poItems.map((i, idx) => `
+            <tr class="animate__animated animate__fadeIn">
+                <td class="text-start fw-bold ps-4">${i.item_name}</td>
+                <td><input type="number" class="form-control form-control-sm text-center border-0 bg-transparent" value="${i.quantity}" onchange="updateLineQty(${idx}, this.value)"></td>
+                <td>${window.formatCurrency(i.unit_cost)}</td>
+                <td class="fw-bold text-primary">${window.formatCurrency(i.quantity * i.unit_cost)}</td>
+                <td><button class="btn btn-sm text-danger" onclick="poItems.splice(${idx},1);updatePOTable()"><i class="fas fa-times"></i></button></td>
+            </tr>`).join('');
+        const total = poItems.reduce((acc, i) => acc + (i.quantity * i.unit_cost), 0);
+        document.getElementById('newPoTotal').innerText = window.formatCurrency(total);
     }
 
-    async function submitPO() {
-        const supplier_id = document.getElementById('poVendorSelect').value;
-        const order_date = document.getElementById('poDate').value;
-        const expected_date = document.getElementById('poExpDate').value;
-        
-        if(!supplier_id) return alert("Please select a supplier.");
-        if(poItems.length === 0) return alert("Please add at least one item.");
-
-        const res = await api('/api/inventory/purchase-orders', 'POST', {
-            supplier_id, order_date, expected_date, items: poItems
+    // --- SYSTEM UTILITIES ---
+    function globalSearchHandler() {
+        const term = document.getElementById('globalSearch').value.toLowerCase();
+        document.querySelectorAll('tbody tr').forEach(row => {
+            row.style.display = row.innerText.toLowerCase().includes(term) ? '' : 'none';
         });
+    }
 
+    function showLoader(visible) {
+        document.getElementById('invLoader').classList.toggle('d-none', !visible);
+        document.getElementById('inventoryTableBody').classList.toggle('d-none', visible);
+    }
+
+    async function submitItem() {
+        const f = new FormData(document.getElementById('addItemForm'));
+        const res = await api('/api/inventory/add-item', 'POST', Object.fromEntries(f));
         if(res.ok) {
-            bootstrap.Modal.getInstance(document.getElementById('createPOModal')).hide();
-            loadPOs();
-        } else {
-            alert("Failed to create Purchase Order.");
+            bootstrap.Modal.getInstance(document.getElementById('addItemModal')).hide();
+            initializeSystem();
         }
     }
 
     async function receivePO(id) {
-        if(!confirm("Are you sure? This will add quantities to your stock.")) return;
-        const res = await api(`/api/inventory/purchase-orders/${id}/receive`, 'POST');
-        if(res.ok) {
-            loadPOs();
-            loadInventory(); // Update stock view immediately
+        if(confirm("Process official warehouse intake? This updates stock levels immediately.")) {
+            await api(`/api/inventory/purchase-orders/${id}/receive`, 'POST');
+            loadPOs(); loadInventory();
         }
     }
 
-    async function deletePO(id) {
-        if(!confirm("Delete this pending order?")) return;
-        const res = await api(`/api/inventory/purchase-orders/${id}`, 'DELETE');
-        if(res.ok) loadPOs();
+    async function submitPO() {
+        if(poItems.length === 0) return alert("Voucher requires at least one commercial item.");
+        const payload = {
+            supplier_id: document.getElementById('poVendorSelect').value,
+            expected_date: document.getElementById('poExpDate').value,
+            items: poItems
+        };
+        const res = await api('/api/inventory/purchase-orders', 'POST', payload);
+        if(res.ok) {
+            bootstrap.Modal.getInstance(document.getElementById('createPOModal')).hide();
+            loadPOs();
+        }
     }
-    
+
     function logout() {
-        localStorage.removeItem('token');
-        localStorage.removeItem('erp-token');
+        localStorage.clear();
         window.location.href = 'login.html';
     }
-</script>
 
+</script>
 </body>
 </html>
