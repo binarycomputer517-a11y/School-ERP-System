@@ -3,108 +3,254 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Scholarship Status</title>
+    <title>Scholarship Status | Student Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; }
-        .container { max-width: 900px; margin: auto; background-color: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; }
-        .back-link { margin-bottom: 20px; display: inline-block; text-decoration: none; color: #007bff; }
-        .info-box { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; padding: 10px; margin-top: 20px; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
-        th { background-color: #f2f2f2; }
-        .loading-row td { text-align: center; font-style: italic; color: #777; }
+        :root {
+            --primary: #4f46e5;
+            --success: #15803d;
+            --warning: #b45309;
+            --danger: #b91c1c;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            padding: 10px; 
+            background-color: var(--bg); 
+            color: #1e293b;
+            margin: 0;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .container { 
+            max-width: 1000px; 
+            margin: 10px auto; 
+            background-color: var(--card-bg); 
+            padding: 20px; 
+            border-radius: 20px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); 
+        }
+
+        .header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 20px;
+            margin-bottom: 25px;
+            gap: 10px;
+        }
+
+        h1 { font-size: 1.25rem; font-weight: 800; margin: 0; color: #0f172a; letter-spacing: -0.025em; }
+
+        .btn-back {
+            text-decoration: none;
+            padding: 10px 18px;
+            border-radius: 12px;
+            background: #f1f5f9;
+            color: #475569;
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .btn-back:hover { background: #e2e8f0; transform: translateX(-3px); }
+
+        /* Responsive Table Wrapper */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+
+        table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            min-width: 800px; 
+        }
+
+        th { 
+            background-color: #f8fafc; 
+            padding: 16px; 
+            text-align: left; 
+            font-size: 0.75rem; 
+            text-transform: uppercase; 
+            letter-spacing: 0.1em; 
+            color: #64748b;
+            font-weight: 800;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td { 
+            padding: 18px 16px; 
+            font-size: 0.95rem; 
+            border-bottom: 1px solid var(--border);
+            color: #334155;
+        }
+
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #f8fafc; }
+
+        /* Status Badges */
+        .status-badge {
+            padding: 6px 14px;
+            border-radius: 10px;
+            font-size: 0.75rem;
+            font-weight: 800;
+            display: inline-block;
+            text-transform: uppercase;
+        }
+        .status-awarded { background: #dcfce7; color: var(--success); }
+        .status-pending { background: #fef9c3; color: var(--warning); }
+        .status-rejected { background: #fee2e2; color: var(--danger); }
+
+        .info-box { 
+            background-color: #eff6ff; 
+            color: #1e40af; 
+            border-left: 5px solid var(--primary); 
+            padding: 18px; 
+            margin-top: 30px; 
+            border-radius: 12px;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            line-height: 1.5;
+        }
+
+        .info-box i { font-size: 1.2rem; margin-top: 2px; }
+
+        .loading-row td { text-align: center; padding: 60px; color: #64748b; font-weight: 600; }
+
+        /* Mobile specific adjustments */
+        @media (max-width: 768px) {
+            body { padding: 5px; }
+            .container { padding: 15px; border-radius: 0; margin: 0; min-height: 100vh; }
+            h1 { font-size: 1.1rem; }
+            .btn-back { padding: 8px 12px; font-size: 0.75rem; }
+            
+            /* টেবিলকে ছোট স্ক্রিনে কার্ড ভিউ করার অপশন চাইলে নিচেরটা ব্যবহার করতে পারেন, 
+               তবে আপনার দেওয়া কোড অনুযায়ী অনুভূমিক স্ক্রল (Horizontal Scroll) বেশি প্রফেশনাল। */
+            .table-responsive { border: none; }
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="/student-dashboard.html" class="btn btn-outline-secondary btn-sm ms-2 fw-bold px-4">Back</a>
-        <h1>My Scholarship Status</h1>
+        <div class="header-section">
+            <h1><i class="fas fa-graduation-cap me-2 text-primary"></i>Scholarship Status</h1>
+            <a href="/student-dashboard.html" class="btn-back">
+                <i class="fas fa-arrow-left"></i> Dashboard
+            </a>
+        </div>
 
-        <h2>Your Applications and Awards</h2>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Scholarship Name</th>
-                    <th>Application Date</th>
-                    <th>Status</th>
-                    <th>Award Amount (Annual)</th>
-                    <th>Next Disbursement Date</th>
-                </tr>
-            </thead>
-            <tbody id="scholarship-table-body">
-                <tr class="loading-row"><td colspan="5">Loading scholarship data...</td></tr>
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Scholarship Name</th>
+                        <th>Application Date</th>
+                        <th>Status</th>
+                        <th>Award Amount</th>
+                        <th>Next Disbursement</th>
+                    </tr>
+                </thead>
+                <tbody id="scholarship-table-body">
+                    <tr class="loading-row">
+                        <td colspan="5">
+                            <i class="fas fa-circle-notch fa-spin me-2 text-primary"></i> 
+                            Fetching secure data...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
 
         <div class="info-box">
-            If your status is **Awarded**, the amount will be automatically adjusted in your fee ledger.
+            <i class="fas fa-info-circle"></i>
+            <span><strong>Note:</strong> Approved scholarship amounts are credited directly to your academic ledger. Please check your <strong>Payment History</strong> for adjustment details.</span>
         </div>
     </div>
 
     <script>
+        // --- AUTH & SESSION SYNC ---
         const token = localStorage.getItem('erp-token');
-        const studentId = localStorage.getItem('student_id');
-        const API_BASE_URL = '/api/finance'; // ✅ FIX: Use /api/finance prefix
+        const studentId = localStorage.getItem('student_id') || localStorage.getItem('user-reference-id');
+        const API_BASE_URL = '/api/finance';
 
-        if (!token || !studentId) {
-            alert('Session expired or unauthorized. Please log in again.');
+        // Redirect if session is missing
+        if (!token || !studentId || studentId === "undefined" || studentId === "null") {
             window.location.href = '/login.html';
         }
 
         async function loadScholarshipStatus() {
             const tableBody = document.getElementById('scholarship-table-body');
-            tableBody.innerHTML = '<tr class="loading-row"><td colspan="5">Loading scholarship data...</td></tr>';
 
             try {
-                // ✅ FIX: Correct path with /api/finance prefix
-                const url = `${API_BASE_URL}/student/${studentId}/scholarships`;
-                
-                const response = await fetch(url, {
-                    headers: {
+                const response = await fetch(`${API_BASE_URL}/student/${studentId}/scholarships`, {
+                    headers: { 
                         'Authorization': `Bearer ${token}`,
                         'Content-Type': 'application/json'
                     }
                 });
                 
-                if (response.status === 403) {
-                    throw new Error('Authorization failed. Token expired.');
+                if (response.status === 401 || response.status === 403) {
+                    localStorage.clear();
+                    window.location.href = '/login.html';
+                    return;
                 }
-                if (!response.ok) {
-                    throw new Error(`Failed to load scholarships: ${response.statusText}`);
-                }
+
+                if (!response.ok) throw new Error('Network response error');
 
                 const scholarships = await response.json();
-                tableBody.innerHTML = ''; // Clear loading message
+                tableBody.innerHTML = '';
 
-                if (scholarships.length === 0) {
-                    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center;">No scholarship data found.</td></tr>';
+                if (!scholarships || scholarships.length === 0) {
+                    tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 60px; color: #94a3b8;">No scholarship history found for your profile.</td></tr>';
                     return;
                 }
 
                 scholarships.forEach(s => {
                     const row = document.createElement('tr');
-                    const statusClass = s.status === 'Awarded' ? 'style="color: green; font-weight: bold;"' : 
-                                       s.status === 'Pending' ? 'style="color: orange;"' : 'style="color: red;"';
                     
+                    let statusClass = 'status-pending';
+                    let statusText = s.status || 'In Review';
+                    
+                    if(statusText.toLowerCase() === 'awarded') statusClass = 'status-awarded';
+                    if(statusText.toLowerCase() === 'rejected') statusClass = 'status-rejected';
+                    
+                    const appDate = s.application_date ? new Date(s.application_date).toLocaleDateString('en-GB', {
+                        day: '2-digit', month: 'short', year: 'numeric'
+                    }) : '--';
+                    
+                    const disburseDate = s.next_disbursement_date ? new Date(s.next_disbursement_date).toLocaleDateString('en-GB', {
+                        day: '2-digit', month: 'short', year: 'numeric'
+                    }) : 'Pending';
+
                     row.innerHTML = `
-                        <td>${s.scholarship_name || 'N/A'}</td>
-                        <td>${s.application_date ? new Date(s.application_date).toLocaleDateString() : 'N/A'}</td>
-                        <td ${statusClass}>${s.status || 'N/A'}</td>
-                        <td>₹${(parseFloat(s.award_amount) || 0).toLocaleString('en-IN')}</td>
-                        <td>${s.next_disbursement_date ? new Date(s.next_disbursement_date).toLocaleDateString() : 'N/A'}</td>
+                        <td style="font-weight: 700; color: #0f172a;">${s.scholarship_name || 'Academic Grant'}</td>
+                        <td>${appDate}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td style="font-weight: 800; color: var(--success);">₹${(parseFloat(s.award_amount) || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                        <td style="font-weight: 600;">${disburseDate}</td>
                     `;
                     tableBody.appendChild(row);
                 });
 
             } catch (error) {
-                console.error("Scholarship Load Error:", error);
-                tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red;">Error loading data. Check console for details.</td></tr>';
-                if (error.message.includes('Token expired')) {
-                     alert('Session expired or unauthorized. Please log in again.');
-                     window.location.href = '/login.html';
-                }
+                console.error("Fetch Error:", error);
+                tableBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger); padding: 40px;"><i class="fas fa-wifi-slash me-2"></i> Connection error. Please check your internet.</td></tr>';
             }
         }
 
