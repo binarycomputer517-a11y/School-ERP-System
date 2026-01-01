@@ -3,61 +3,142 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Payment History</title>
+    <title>My Payment History | Student Portal</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     
     <style>
-        :root { --primary: #0e1b4d; --accent: #d4af37; --bg: #f4f7f6; --text: #333; }
-        body { background-color: var(--bg); font-family: 'Inter', sans-serif; margin: 0; padding: 20px; }
+        :root { 
+            --primary: #0e1b4d; 
+            --accent: #d4af37; 
+            --bg: #f4f7f6; 
+            --text: #333; 
+            --success: #198754;
+            --danger: #dc3545;
+        }
 
-        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        body { 
+            background-color: var(--bg); 
+            font-family: 'Inter', sans-serif; 
+            margin: 0; 
+            padding: 10px; /* মোবাইলে প্যাডিং কমানো হয়েছে */
+            box-sizing: border-box;
+        }
+
+        .container { 
+            max-width: 1000px; 
+            margin: 10px auto; 
+            background: white; 
+            padding: 20px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+        }
+
+        @media (min-width: 768px) {
+            body { padding: 30px; }
+            .container { padding: 35px; }
+        }
         
-        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 15px; margin-bottom: 20px; }
-        .header h2 { color: var(--primary); margin: 0; }
+        .header { 
+            display: flex; 
+            flex-direction: column; /* মোবাইলে নিচে নিচে থাকবে */
+            gap: 15px;
+            border-bottom: 2px solid #eee; 
+            padding-bottom: 15px; 
+            margin-bottom: 20px; 
+        }
+
+        @media (min-width: 576px) {
+            .header { flex-direction: row; justify-content: space-between; align-items: center; }
+        }
+
+        .header h2 { color: var(--primary); margin: 0; font-size: 1.4rem; font-weight: 700; }
         
-        .table-responsive { overflow-x: auto; }
-        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-        th, td { padding: 12px 15px; text-align: left; border-bottom: 1px solid #ddd; }
-        th { background-color: #f8f9fa; color: #555; font-weight: 600; text-transform: uppercase; font-size: 0.85rem; }
-        tr:hover { background-color: #f9f9f9; }
+        /* Table Responsive Tweaks */
+        .table-responsive { 
+            overflow-x: auto; 
+            -webkit-overflow-scrolling: touch; /* মোবাইলে স্মুথ স্ক্রলিং */
+            border-radius: 8px;
+        }
+
+        table { width: 100%; border-collapse: collapse; min-width: 600px; /* মোবাইলে টেবিল ভেঙে যাওয়া আটকাবে */ }
+        th, td { padding: 14px 15px; text-align: left; border-bottom: 1px solid #edf2f7; font-size: 0.9rem; }
+        th { background-color: #f8f9fa; color: #4a5568; font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.05em; }
+        
+        tr:last-child td { border-bottom: none; }
+        tr:hover { background-color: #fcfcfc; }
 
         /* Status Badges */
-        .badge { padding: 5px 10px; border-radius: 15px; font-size: 0.75rem; font-weight: 600; }
-        .bg-paid { background-color: #d1e7dd; color: #0f5132; } /* Green */
-        .bg-partial { background-color: #fff3cd; color: #664d03; } /* Yellow */
-        .bg-pending { background-color: #f8d7da; color: #842029; } /* Red */
+        .badge { 
+            padding: 6px 12px; 
+            border-radius: 20px; 
+            font-size: 0.75rem; 
+            font-weight: 700; 
+            text-transform: uppercase;
+            display: inline-block;
+        }
+        .bg-paid { background-color: #defadb; color: #1e4620; } 
+        .bg-partial { background-color: #fef3c7; color: #92400e; } 
+        .bg-pending { background-color: #fee2e2; color: #991b1b; } 
 
-        .btn-back { text-decoration: none; color: white; background: var(--primary); padding: 8px 15px; border-radius: 5px; font-size: 0.9rem; }
+        .btn-back { 
+            text-decoration: none; 
+            color: white; 
+            background: var(--primary); 
+            padding: 10px 20px; 
+            border-radius: 8px; 
+            font-size: 0.85rem; 
+            font-weight: 600; 
+            display: inline-block;
+            text-align: center;
+            transition: 0.3s;
+        }
+        .btn-back:hover { background: #1a2a6c; opacity: 0.9; }
+
+        /* Mobile helper text */
+        .scroll-hint { 
+            display: block; 
+            font-size: 0.75rem; 
+            color: #888; 
+            margin-bottom: 8px; 
+            text-align: right;
+        }
+        @media (min-width: 768px) { .scroll-hint { display: none; } }
     </style>
 </head>
 <body>
 
     <div class="container">
         <div class="header">
-            <h2><i class="fas fa-file-invoice-dollar"></i> Payment History</h2>
-            <a href="/student-dashboard.html" class="btn-back">Back to Dashboard</a>
+            <h2><i class="fas fa-file-invoice-dollar me-2"></i> Payment History</h2>
+            <a href="/student-dashboard.html" class="btn-back"><i class="fas fa-arrow-left me-1"></i> Dashboard</a>
         </div>
 
+        <small class="scroll-hint"><i class="fas fa-arrows-alt-h"></i> Swipe left to see more</small>
+        
         <div class="table-responsive">
             <table id="payment-table">
                 <thead>
                     <tr>
                         <th>Date</th>
                         <th>Fee Type</th>
-                        <th>Total Amount</th>
-                        <th>Paid Amount</th>
+                        <th>Total</th>
+                        <th>Paid</th>
                         <th>Balance</th>
                         <th>Status</th>
                     </tr>
                 </thead>
                 <tbody id="table-body">
-                    <tr><td colspan="6" style="text-align:center;">Loading records...</td></tr>
+                    <tr><td colspan="6" style="text-align:center; padding: 30px;">
+                        <i class="fas fa-circle-notch fa-spin text-primary"></i> Loading records...
+                    </td></tr>
                 </tbody>
             </table>
         </div>
     </div>
+
+    
 
     <script src="/js/global-config.js"></script>
     <script>
@@ -67,46 +148,43 @@
             if(!TOKEN) return window.location.href = '/login.html';
 
             try {
-                // 1. Fetch Data from the Backend Route
-                // Note: Ensure this URL matches where you mounted the router in server.js
-                // If you added the route to 'routes/fees.js' and mounted it at '/api/finance', use this:
                 const response = await fetch('/api/finance/student/payment-history', { 
                     headers: { 'Authorization': `Bearer ${TOKEN}` } 
                 });
                 
-                if (!response.ok) throw new Error("Failed to fetch data");
+                if (!response.ok) throw new Error("Connection Error");
 
                 const data = await response.json();
                 const tbody = document.getElementById('table-body');
                 tbody.innerHTML = '';
 
-                if (data.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:20px; color:#777;">No payment records found.</td></tr>`;
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:40px; color:#718096;">
+                        <i class="fas fa-folder-open fa-2x mb-3 d-block"></i> No payment history available.
+                    </td></tr>`;
                     return;
                 }
 
-                // 2. Render Rows
                 data.forEach(row => {
-                    const date = new Date(row.payment_date || row.created_at).toLocaleDateString('en-GB');
+                    const date = new Date(row.payment_date || row.created_at).toLocaleDateString('en-GB', {
+                        day: '2-digit', month: 'short', year: 'numeric'
+                    });
                     
-                    // Logic for Badge Color
                     let badgeClass = 'bg-pending';
                     const status = row.status ? row.status.toLowerCase() : 'pending';
-                    if(status === 'paid' || status === 'cleared') badgeClass = 'bg-paid';
+                    if(status === 'paid' || status === 'cleared' || status === 'success') badgeClass = 'bg-paid';
                     else if(status === 'partial') badgeClass = 'bg-partial';
 
-                    // Formatting numbers
-                    const total = parseFloat(row.total_amount || 0).toFixed(2);
-                    const paid = parseFloat(row.amount_paid || 0).toFixed(2);
-                    const balance = parseFloat(row.balance || 0).toFixed(2);
+                    // Formatting with local currency symbol if needed (defaulting to ₹ as per your previous context)
+                    const formatCurrency = (val) => '₹' + parseFloat(val || 0).toLocaleString('en-IN', {minimumFractionDigits: 2});
 
                     const tr = `
                         <tr>
-                            <td>${date}</td>
-                            <td>Tuition / Exam Fee</td>
-                            <td>$${total}</td>
-                            <td style="font-weight:bold; color:#2e7d32;">$${paid}</td>
-                            <td style="color:#c62828;">$${balance}</td>
+                            <td style="font-weight:500;">${date}</td>
+                            <td style="color: #4a5568;">${row.fee_type || 'Tuition Fee'}</td>
+                            <td>${formatCurrency(row.total_amount)}</td>
+                            <td style="font-weight:700; color: var(--success);">${formatCurrency(row.amount_paid)}</td>
+                            <td style="color: var(--danger); font-weight:500;">${formatCurrency(row.balance)}</td>
                             <td><span class="badge ${badgeClass}">${row.status || 'Pending'}</span></td>
                         </tr>
                     `;
@@ -115,7 +193,10 @@
 
             } catch (error) {
                 console.error(error);
-                document.getElementById('table-body').innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">Error loading history.</td></tr>`;
+                document.getElementById('table-body').innerHTML = `
+                    <tr><td colspan="6" style="text-align:center; padding:30px; color:var(--danger);">
+                        <i class="fas fa-exclamation-triangle"></i> Sync Error: Unable to load data.
+                    </td></tr>`;
             }
         }
 

@@ -5,41 +5,93 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Fee Payment | SaaS ERP</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
 
     <style>
-        :root { --primary: #4f46e5; --bg: #f8fafc; --text: #1e293b; }
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background: var(--bg); display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
+        :root { 
+            --primary: #4f46e5; 
+            --primary-dark: #4338ca;
+            --bg: #f8fafc; 
+            --text: #1e293b; 
+            --slate-500: #64748b;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background: var(--bg); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            min-height: 100vh; 
+            margin: 0; 
+            padding: 20px;
+        }
         
         .payment-card { 
             background: white; 
-            padding: 40px; 
+            padding: 32px; 
             border-radius: 24px; 
-            box-shadow: 0 20px 50px rgba(0,0,0,0.05); 
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.08); 
             border: 1px solid #e2e8f0; 
             width: 100%; 
-            max-width: 450px; 
+            max-width: 420px; 
             text-align: center;
+            transition: transform 0.3s ease;
         }
 
-        .icon-header { font-size: 3rem; color: var(--primary); margin-bottom: 20px; }
-        h1 { font-size: 1.5rem; font-weight: 800; margin-bottom: 10px; color: var(--text); }
-        p { color: #64748b; font-size: 0.9rem; margin-bottom: 30px; }
+        .icon-header { 
+            width: 70px;
+            height: 70px;
+            background: rgba(79, 70, 229, 0.1);
+            color: var(--primary);
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            margin: 0 auto 24px;
+        }
 
-        .form-group { text-align: left; margin-bottom: 20px; }
-        label { display: block; font-size: 0.85rem; font-weight: 600; margin-bottom: 8px; color: #475569; }
+        h1 { font-size: 1.6rem; font-weight: 800; margin-bottom: 8px; color: var(--text); letter-spacing: -0.025em; }
+        p { color: var(--slate-500); font-size: 0.95rem; margin-bottom: 32px; line-height: 1.5; }
+
+        .form-group { text-align: left; margin-bottom: 24px; }
+        label { display: block; font-size: 0.875rem; font-weight: 700; margin-bottom: 10px; color: #334155; }
+        
+        .input-container {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        
+        .input-container i {
+            position: absolute;
+            left: 16px;
+            color: var(--slate-500);
+            font-size: 1.1rem;
+        }
+
         input { 
             width: 100%; 
-            padding: 14px; 
-            border: 1px solid #e2e8f0; 
-            border-radius: 12px; 
-            font-size: 1rem; 
+            padding: 14px 14px 14px 45px; 
+            border: 2px solid #e2e8f0; 
+            border-radius: 14px; 
+            font-size: 1rem; /* 16px to prevent mobile zoom */
+            font-weight: 600;
+            color: var(--text);
             box-sizing: border-box; 
-            transition: 0.3s;
+            transition: all 0.2s ease;
+            background: #fdfdfd;
         }
-        input:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1); }
+
+        input:focus { 
+            border-color: var(--primary); 
+            outline: none; 
+            background: white;
+            box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1); 
+        }
 
         .btn-pay { 
             width: 100%; 
@@ -47,61 +99,121 @@
             color: white; 
             padding: 16px; 
             border: none; 
-            border-radius: 12px; 
+            border-radius: 14px; 
             font-weight: 700; 
-            font-size: 1rem;
+            font-size: 1.05rem;
             cursor: pointer; 
-            transition: 0.3s; 
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
         }
-        .btn-pay:hover { background: #4338ca; transform: translateY(-2px); }
 
-        .back-link { display: block; margin-top: 20px; color: #64748b; text-decoration: none; font-size: 0.85rem; font-weight: 600; }
+        .btn-pay:hover:not(:disabled) { 
+            background: var(--primary-dark); 
+            transform: translateY(-2px);
+            box-shadow: 0 10px 15px -3px rgba(79, 70, 229, 0.3);
+        }
+
+        .btn-pay:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .trust-badges {
+            margin-top: 24px;
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            opacity: 0.6;
+        }
+        
+        .badge { font-size: 0.75rem; font-weight: 600; color: var(--slate-500); display: flex; align-items: center; gap: 5px; }
+
+        .back-link { 
+            display: inline-block; 
+            margin-top: 24px; 
+            color: var(--slate-500); 
+            text-decoration: none; 
+            font-size: 0.9rem; 
+            font-weight: 600; 
+            transition: color 0.2s;
+        }
         .back-link:hover { color: var(--primary); }
+
+        @media (max-width: 480px) {
+            .payment-card { padding: 24px; }
+        }
     </style>
 </head>
 <body>
 
 <div class="payment-card">
-    <div class="icon-header"><i class="fa-solid fa-file-invoice-dollar"></i></div>
-    <h1>Online Fee Payment</h1>
-    <p>Securely pay your tuition and academic fees.</p>
+    <div class="icon-header">
+        <i class="fa-solid fa-shield-halved"></i>
+    </div>
+    <h1>Fee Payment</h1>
+    <p>Enter the amount to proceed with your secure academic fee payment.</p>
 
     <form id="payment-form">
         <div class="form-group">
-            <label for="amount">Payment Amount (INR)</label>
-            <input type="number" id="amount" placeholder="Enter amount" required min="1">
+            <label for="amount">Amount to Pay (INR)</label>
+            <div class="input-container">
+                <i>₹</i>
+                <input type="number" id="amount" placeholder="e.g. 5000" required min="1" step="any">
+            </div>
         </div>
-        <button type="submit" class="btn-pay" id="pay-button">Proceed to Payment</button>
+        <button type="submit" class="btn-pay" id="pay-button">
+            <span>Proceed to Payment</span>
+            <i class="fa-solid fa-arrow-right"></i>
+        </button>
     </form>
 
-    <a href="/student-dashboard.html" class="back-link"><i class="fa-solid fa-arrow-left"></i> Back to Dashboard</a>
+    <div class="trust-badges">
+        <div class="badge"><i class="fa-solid fa-lock"></i> SSL Secure</div>
+        <div class="badge"><i class="fa-solid fa-certificate"></i> PCI-DSS</div>
+    </div>
+
+    <a href="/student-dashboard.html" class="back-link">
+        <i class="fa-solid fa-chevron-left me-1" style="font-size: 0.8rem;"></i> Return to Dashboard
+    </a>
 </div>
 
+
+
+[Image of online payment processing flow]
+
+
 <script>
-    // --- Auth & Session Setup ---
     const token = localStorage.getItem('erp-token');
-    const userRole = localStorage.getItem('user-role');
     const studentId = localStorage.getItem('user-reference-id');
 
-    // Protect Route
+    // Route Protection
     if (!token) window.location.href = '/login.html';
 
-    const cashfree = Cashfree({ mode: "sandbox" }); // Toggle "production" for live
+    // Initialize Cashfree
+    const cashfree = Cashfree({ mode: "sandbox" }); 
 
     document.getElementById('payment-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const amount = document.getElementById('amount').value;
         const btn = document.getElementById('pay-button');
+        const btnText = btn.querySelector('span');
+        const btnIcon = btn.querySelector('i');
 
-        // Validation against the localStorage issue you faced
         if (!studentId || studentId === "undefined" || studentId === "null") {
-            alert('CRITICAL ERROR: Your account link is missing. Please log out and log back in to refresh your session.');
+            alert('Session error: Student ID not found. Please log out and login again.');
             return;
         }
 
+        // UI State: Loading
         btn.disabled = true;
-        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Processing...';
+        btnText.innerText = 'Verifying...';
+        btnIcon.className = 'fa-solid fa-circle-notch fa-spin';
 
         try {
             const response = await fetch('/api/finance/create-cashfree-order', {
@@ -113,25 +225,23 @@
                 body: JSON.stringify({ amount, studentId })
             });
 
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.message || 'Server error occurred.');
-            }
+            const result = await response.json();
+            
+            if (!response.ok) throw new Error(result.message || 'Payment initiation failed.');
 
-            const { payment_session_id } = await response.json();
-
-            // Launch Cashfree Checkout
+            // Launch Checkout
             await cashfree.checkout({
-                paymentSessionId: payment_session_id,
+                paymentSessionId: result.payment_session_id,
                 redirectTarget: "_self" 
             });
 
         } catch (error) {
             console.error('Payment Error:', error);
-            alert('Payment Initiation Failed: ' + error.message);
-        } finally {
+            alert('Error: ' + error.message);
+            // Reset Button on failure
             btn.disabled = false;
-            btn.innerHTML = 'Proceed to Payment';
+            btnText.innerText = 'Proceed to Payment';
+            btnIcon.className = 'fa-solid fa-arrow-right';
         }
     });
 </script>
