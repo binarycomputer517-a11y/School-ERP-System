@@ -2,171 +2,269 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Search Library Catalog</title>
-    <link rel="stylesheet" href="/css/style.css"> 
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Library Catalog | OPAC</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        /* Basic Styles */
-        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f4f4f4; }
-        .container { max-width: 900px; margin: auto; background-color: white; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-        h1 { border-bottom: 2px solid #ccc; padding-bottom: 10px; }
-        .nav-links { margin-bottom: 20px; }
+        :root {
+            --primary: #003366;
+            --accent: #0056b3;
+            --bg: #f8fafc;
+            --card-bg: #ffffff;
+            --border: #e2e8f0;
+            --success: #15803d;
+            --danger: #b91c1c;
+        }
 
-        /* Search & Filter Styles */
-        .search-filters { display: flex; gap: 10px; margin-bottom: 20px; align-items: center; }
-        .search-filters input, .search-filters select, .search-filters button { padding: 8px; border: 1px solid #ccc; }
-        
-        /* Table Styles */
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-        th { background-color: #003366; color: white; }
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            margin: 0; 
+            padding: 10px; 
+            background-color: var(--bg); 
+            color: #1e293b;
+        }
 
-        /* Status Badges */
-        .status-available { color: green; font-weight: bold; }
-        .status-issued { color: #d9534f; font-weight: bold; }
-        .status-none { color: orange; font-weight: bold; }
+        .container { 
+            max-width: 1100px; 
+            margin: 10px auto; 
+            background: var(--card-bg); 
+            padding: 20px; 
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); 
+        }
+
+        h1 { 
+            font-size: 1.5rem; 
+            font-weight: 700; 
+            color: var(--primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .nav-links a {
+            text-decoration: none;
+            color: var(--accent);
+            font-weight: 600;
+            font-size: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            margin-bottom: 20px;
+        }
+
+        /* --- Search & Filters --- */
+        .search-filters { 
+            display: flex; 
+            flex-direction: column; 
+            gap: 12px; 
+            margin-bottom: 25px; 
+            background: #f1f5f9;
+            padding: 15px;
+            border-radius: 12px;
+        }
+
+        .search-filters input, .search-filters select { 
+            padding: 12px; 
+            border: 1px solid var(--border); 
+            border-radius: 8px;
+            font-size: 1rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .btn-search { 
+            background: var(--primary); 
+            color: white; 
+            border: none; 
+            padding: 12px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            font-weight: 700;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 8px;
+            transition: background 0.2s;
+        }
+
+        .btn-search:hover { background: var(--accent); }
+
+        /* --- Table/Card System --- */
+        .table-responsive {
+            width: 100%;
+            overflow-x: auto;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th, td { padding: 15px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background-color: var(--primary); color: white; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; }
+
+        /* --- Status Colors --- */
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+        .status-available { background: #dcfce7; color: var(--success); }
+        .status-issued { background: #fee2e2; color: var(--danger); }
+        .status-none { background: #fef3c7; color: #92400e; }
+
+        .action-btn {
+            background: #fff;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .action-btn:hover { background: var(--primary); color: white; }
+
+        /* --- Desktop View Adjustment --- */
+        @media (min-width: 768px) {
+            body { padding: 30px; }
+            .search-filters { flex-direction: row; }
+            .search-filters input { flex: 2; }
+            .search-filters select { flex: 1; }
+            .btn-search { padding: 12px 25px; }
+            h1 { font-size: 2rem; }
+        }
     </style>
 </head>
 <body>
-    <script>
-        const token = localStorage.getItem('erp-token');
-        if (!token) { 
-            // Accessible by Student, Teacher, Admin
-            window.location.href = '/login';
-        }
-    </script>
 
-    <div class="container">
-        <h1>Search the Library Catalog (OPAC)</h1>
-        <div class="nav-links">
-            <a href="/student-dashboard.html">← Back to My Dashboard</a>
-        </div>
+<div class="container">
+    <div class="nav-links">
+        <a href="/student-dashboard.html"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+    <h1><i class="fas fa-book-reader"></i> Library Catalog (OPAC)</h1>
 
-        <div class="search-filters">
-            <input type="text" id="search-input" placeholder="Search by title, author, or ISBN...">
-            <select id="category-filter"><option value="">All Categories</option></select>
-            <button onclick="searchBooks()">Search</button>
-        </div>
+    <div class="search-filters">
+        <input type="text" id="search-input" placeholder="Title, author, or ISBN...">
+        <select id="category-filter">
+            <option value="">All Categories</option>
+        </select>
+        <button class="btn-search" onclick="searchBooks()">
+            <i class="fas fa-search"></i> Search
+        </button>
+    </div>
 
+    <div class="table-responsive">
         <table>
             <thead>
                 <tr>
-                    <th>Title</th>
-                    <th>Author</th>
+                    <th>Book Details</th>
                     <th>Subject Area</th>
-                    <th>Available Copies</th>
+                    <th>Availability</th>
                     <th>Status</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody id="results-body">
-                <tr><td colspan="6" style="text-align: center;">Loading categories and catalog...</td></tr>
+                <tr><td colspan="5" style="text-align: center; padding: 40px;">Initializing library system...</td></tr>
             </tbody>
         </table>
     </div>
+</div>
+
+
 
 <script>
+    const token = localStorage.getItem('erp-token');
+    if (!token) window.location.href = '/login';
     const authHeaders = { 'Authorization': `Bearer ${token}` };
 
     function loadCategories() {
         const catFilter = document.getElementById('category-filter');
-        
-        // Load categories using the new /api/library/categories route
         fetch('/api/library/categories', { headers: authHeaders })
-            .then(res => {
-                if (!res.ok) throw new Error('Failed to fetch categories.');
-                return res.json();
-            })
+            .then(res => res.json())
             .then(cats => {
-                // Ensure cats is an array (prevents TypeError: forEach is not a function)
                 if (Array.isArray(cats)) {
                     cats.forEach(c => {
-                        // Assuming c.id (subject_area) and c.name are passed from the backend
-                        catFilter.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                        const option = document.createElement('option');
+                        option.value = c.id;
+                        option.textContent = c.name;
+                        catFilter.appendChild(option);
                     });
                 }
             })
-            .catch(error => {
-                console.error("Category Load Error:", error);
-                // The frontend should continue even if categories fail to load
-            });
+            .catch(err => console.error("Category Load Error:", err));
     }
 
     function searchBooks() {
         const resultsBody = document.getElementById('results-body');
-        resultsBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">Searching...</td></tr>';
+        resultsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px;"><i class="fas fa-spinner fa-spin"></i> Searching catalog...</td></tr>';
 
         const search = document.getElementById('search-input').value;
         const category = document.getElementById('category-filter').value;
         
-        // Use backend's expected query parameters: search and category_name
         let url = `/api/library/books?`;
         if (search) url += `search=${encodeURIComponent(search)}&`;
-        if (category) url += `category_name=${encodeURIComponent(category)}&`; // Use category_name parameter
+        if (category) url += `category_name=${encodeURIComponent(category)}&`;
         
         fetch(url, { headers: authHeaders })
-            .then(res => {
-                if (!res.ok) throw new Error('Failed to fetch books.');
-                return res.json();
-            })
+            .then(res => res.json())
             .then(books => {
                 resultsBody.innerHTML = '';
-                // Ensure books is an array
                 if (!Array.isArray(books) || books.length === 0) {
-                    resultsBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No books found matching your criteria.</td></tr>';
+                    resultsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 40px;">No matches found in our collection.</td></tr>';
                     return;
                 }
 
                 books.forEach(book => {
                     const available = parseInt(book.available_copies || 0);
                     const total = parseInt(book.total_copies || 0);
-                    let statusHtml, actionHtml;
+                    let statusClass, statusText, actionHtml;
 
                     if (available > 0) {
-                        statusHtml = `<span class="status-available">Available (${available})</span>`;
-                        actionHtml = `<button onclick="requestBook('${book.id}')">Issue/Request</button>`;
+                        statusClass = 'status-available';
+                        statusText = 'Available';
+                        actionHtml = `<button class="action-btn" onclick="requestBook('${book.id}')">Request</button>`;
                     } else if (total > 0) {
-                        statusHtml = `<span class="status-issued">Issued (0)</span>`;
-                        actionHtml = `<button onclick="reserveBook('${book.id}')">Reserve</button>`;
+                        statusClass = 'status-issued';
+                        statusText = 'Waitlist';
+                        actionHtml = `<button class="action-btn" onclick="reserveBook('${book.id}')">Reserve</button>`;
                     } else {
-                        statusHtml = `<span class="status-none">No Copies</span>`;
-                        actionHtml = `<span>-</span>`;
+                        statusClass = 'status-none';
+                        statusText = 'Out of Stock';
+                        actionHtml = `<span style="color:#94a3b8;">N/A</span>`;
                     }
 
                     resultsBody.innerHTML += `
                         <tr>
-                            <td>${book.title}</td>
-                            <td>${book.author}</td>
+                            <td>
+                                <strong>${book.title}</strong><br>
+                                <small style="color: #64748b;">by ${book.author}</small>
+                            </td>
                             <td>${book.subject_area || 'General'}</td>
-                            <td>${available} / ${total}</td>
-                            <td>${statusHtml}</td>
+                            <td><strong>${available}</strong> <small>/ ${total}</small></td>
+                            <td><span class="status-badge ${statusClass}">${statusText}</span></td>
                             <td>${actionHtml}</td>
                         </tr>
                     `;
                 });
             })
-            .catch(error => {
-                console.error("Book Search Error:", error);
-                resultsBody.innerHTML = '<tr><td colspan="6" style="text-align: center; color: red;">Error searching catalog.</td></tr>';
+            .catch(err => {
+                resultsBody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: red; padding: 40px;">Connection error. Please try again.</td></tr>';
             });
     }
 
-    function requestBook(bookId) {
-        // Book ID here is the Catalog ID (lc.id)
-        alert(`Requesting book ID: ${bookId}. (Implementation required: POST to /api/library/request)`);
-    }
+    function requestBook(bookId) { alert(`Requesting: ${bookId}`); }
+    function reserveBook(bookId) { alert(`Reserving: ${bookId}`); }
 
-    function reserveBook(bookId) {
-        // Book ID here is the Catalog ID (lc.id)
-        alert(`Reserving book ID: ${bookId}. (Implementation required: POST to /api/library/reserve)`);
-    }
-
-    // Load categories and perform an initial search when the page loads
     window.onload = () => {
         loadCategories();
-        // Initial search is usually run after categories load, but running here for quick startup
         searchBooks(); 
     };
 </script>
-<script src="js/global-config.js"></script>
 </body>
 </html>

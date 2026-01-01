@@ -3,33 +3,111 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Issued Books</title>
+    <title>My Issued Books | Student Portal</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <style>
-        body { background-color: #f8f9fa; font-family: Arial, sans-serif; }
-        .container { max-width: 900px; margin-top: 50px; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        h1 { color: #003366; border-bottom: 2px solid #003366; padding-bottom: 10px; margin-bottom: 30px; }
-        .table thead th { background-color: #003366; color: white; }
+        :root {
+            --primary-navy: #003366;
+            --danger-red: #dc3545;
+            --success-green: #15803d;
+        }
+
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         
-        /* Status Indicators */
-        .status-overdue { color: white; background-color: #dc3545; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-        .status-pending { color: #856404; background-color: #fff3cd; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
-        .status-ok { color: #155724; background-color: #d4edda; padding: 4px 8px; border-radius: 4px; font-weight: bold; }
+        .container { 
+            max-width: 950px; 
+            margin-top: 30px; 
+            margin-bottom: 30px;
+            background: white; 
+            padding: 25px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+        }
+
+        h1 { 
+            color: var(--primary-navy); 
+            font-weight: 700;
+            border-bottom: 3px solid var(--primary-navy); 
+            padding-bottom: 15px; 
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+        }
+
+        /* Responsive Table */
+        @media (max-width: 768px) {
+            .table-responsive table thead { display: none; } /* মোবাইলে হেডার হাইড */
+            .table-responsive table td { 
+                display: block; 
+                text-align: right; 
+                padding-left: 50%; 
+                position: relative; 
+                border: none;
+            }
+            .table-responsive table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 15px;
+                width: 45%;
+                font-weight: bold;
+                text-align: left;
+                color: var(--primary-navy);
+            }
+            .table-responsive table tr {
+                display: block;
+                border: 1px solid #eee;
+                margin-bottom: 15px;
+                border-radius: 10px;
+                padding: 10px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            }
+            .action-cell { text-align: center !important; padding-left: 0 !important; }
+            .action-cell::before { display: none; }
+            .action-cell button { width: 100%; margin-top: 10px; }
+        }
+
+        .table thead th { background-color: var(--primary-navy); color: white; border: none; }
         
-        .action-cell button { font-size: 0.9em; padding: 5px 10px; }
+        /* Status Badges */
+        .badge-custom {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .status-overdue { background-color: var(--danger-red); color: white; }
+        .status-ok { background-color: #dcfce7; color: var(--success-green); }
+        
+        .btn-renew {
+            font-weight: 600;
+            border-radius: 8px;
+            transition: 0.3s;
+        }
+        
+        .summary-alert {
+            border-left: 5px solid var(--danger-red);
+            border-radius: 10px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary mb-3"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary px-3">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+        </div>
         
-        <h1>Books Issued to Me</h1>
+        <h1><i class="fas fa-book-reader me-2"></i>Books Issued to Me</h1>
         
-        <p id="loading-status" class="text-info text-center">Loading issued book records...</p>
+        <div id="loading-status" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Synchronizing with library records...</p>
+        </div>
         
         <div class="table-responsive">
-            <table class="table table-bordered table-hover align-middle">
+            <table class="table table-hover align-middle">
                 <thead>
                     <tr>
                         <th>Title & Author</th>
@@ -45,101 +123,87 @@
             </table>
         </div>
 
-        <div id="summary-info" class="alert alert-warning mt-4 d-none">
-            <i class="fas fa-exclamation-triangle"></i> You have <span id="overdue-count">0</span> books overdue. Please return them immediately to avoid fines.
+        <div id="summary-info" class="alert alert-danger summary-alert mt-4 d-none">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-circle fa-2x me-3"></i>
+                <div>
+                    <h6 class="mb-0 fw-bold">Action Required!</h6>
+                    <p class="mb-0 small">You have <span id="overdue-count" class="fw-bold">0</span> book(s) overdue. Please return or renew them to avoid fines.</p>
+                </div>
+            </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    
+
     <script>
         const token = localStorage.getItem('erp-token');
         const body = document.getElementById('issued-books-body');
         const loadingStatus = document.getElementById('loading-status');
         const summaryInfo = document.getElementById('summary-info');
         
-        if (!token) {
-            window.location.href = '/login.html';
-        }
-
-        const API_BASE_URL = '/api/library';
+        if (!token) window.location.href = '/login.html';
 
         async function fetchIssuedBooks() {
-            loadingStatus.textContent = 'Fetching issued book data...';
-            body.innerHTML = '';
-            summaryInfo.classList.add('d-none');
-            
             try {
-                // Use the dedicated route defined in routes/library.js
-                const response = await fetch(`${API_BASE_URL}/student/issued`, {
+                const response = await fetch(`/api/library/student/issued`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (response.status === 403 || response.status === 401) {
-                    throw new Error('Authorization failed. Please log in again.');
-                }
-                
-                if (!response.ok) {
-                    const err = await response.json().catch(() => ({ message: 'Server error fetching data.' }));
-                    throw new Error(err.message || `HTTP error! Status: ${response.status}`);
-                }
+                if (!response.ok) throw new Error('Could not fetch data');
 
                 const records = await response.json();
-                
                 loadingStatus.classList.add('d-none');
                 let overdueCount = 0;
 
                 if (records.length === 0) {
-                    body.innerHTML = '<tr><td colspan="6" class="text-center text-secondary">No books are currently issued to you.</td></tr>';
+                    body.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">No books currently issued.</td></tr>';
                     return;
                 }
 
                 records.forEach(record => {
-                    const isOverdue = record.is_overdue; // Boolean from backend query
+                    if (record.is_overdue) overdueCount++;
                     
-                    const statusClass = isOverdue ? 'status-overdue' : 'status-ok';
-                    const statusText = isOverdue ? 'OVERDUE' : 'Issued (On Time)';
-                    
-                    if (isOverdue) overdueCount++;
-
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td><strong>${record.title}</strong><br><small>by ${record.author}</small></td>
-                        <td>${record.accession_number}</td>
-                        <td>${new Date(record.issue_date).toLocaleDateString()}</td>
-                        <td>${new Date(record.due_date).toLocaleDateString()}</td>
-                        <td><span class="${statusClass}">${statusText}</span></td>
+                        <td data-label="Book Details">
+                            <div class="fw-bold">${record.title}</div>
+                            <div class="small text-muted">${record.author}</div>
+                        </td>
+                        <td data-label="Accession No.">${record.accession_number}</td>
+                        <td data-label="Issued On">${new Date(record.issue_date).toLocaleDateString('en-GB')}</td>
+                        <td data-label="Due Date">${new Date(record.due_date).toLocaleDateString('en-GB')}</td>
+                        <td data-label="Status">
+                            <span class="badge-custom ${record.is_overdue ? 'status-overdue' : 'status-ok'}">
+                                ${record.is_overdue ? 'Overdue' : 'Healthy'}
+                            </span>
+                        </td>
                         <td class="action-cell">
-                            <button class="btn btn-sm btn-outline-info" onclick="requestRenewal('${record.circulation_id}')">Request Renewal</button>
+                            <button class="btn btn-sm btn-primary btn-renew w-100 w-md-auto" onclick="requestRenewal('${record.circulation_id}')">
+                                <i class="fas fa-sync-alt me-1"></i> Renew
+                            </button>
                         </td>
                     `;
                     body.appendChild(row);
                 });
                 
-                // Update summary info
                 if (overdueCount > 0) {
                     document.getElementById('overdue-count').textContent = overdueCount;
                     summaryInfo.classList.remove('d-none');
                 }
 
             } catch (error) {
-                console.error("Issued Book Fetch Error:", error);
-                loadingStatus.classList.remove('d-none');
-                loadingStatus.className = 'text-danger text-center';
-                loadingStatus.textContent = `Error: ${error.message}. Please try logging in again.`;
+                loadingStatus.innerHTML = `<p class="text-danger"><i class="fas fa-wifi-slash"></i> Error: ${error.message}</p>`;
             }
         }
 
-        function requestRenewal(circulationId) {
-            if (confirm("Are you sure you want to request a renewal for this book?")) {
-                // Placeholder: Implement renewal POST request to /api/library/renew/:circulationId
-                alert(`Renewal request sent for Circulation ID: ${circulationId}`);
-                // Re-fetch data after successful request
-                // fetchIssuedBooks(); 
+        function requestRenewal(id) {
+            if (confirm("Request a 7-day extension for this book?")) {
+                alert(`Renewal requested for: ${id}`);
             }
         }
 
         document.addEventListener('DOMContentLoaded', fetchIssuedBooks);
     </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>

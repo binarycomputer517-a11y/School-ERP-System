@@ -476,22 +476,20 @@ router.post('/renew', authenticateToken, authorize(MANAGER_ROLES), async (req, r
 
 /**
  * @route   GET /api/library/student/issued
- * @desc    Get all books currently issued to the logged-in student.
- * @access  Private (Student, Super Admin)
+ * @desc    শিক্ষার্থীর বর্তমানে ইস্যু করা বইয়ের তালিকা
  */
 router.get('/student/issued', authenticateToken, authorize(['Student', 'Super Admin']), async (req, res) => {
-    // FIX: Using req.user.id (UUID) to fetch the linked student_id
     const userId = req.user.id; 
     
-    // Get the linked student_id (Assuming students table links via user_id)
-    const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
-    const studentId = studentRes.rows[0]?.student_id;
-
-    if (!studentId) {
-        return res.status(404).json({ message: 'Student profile not found.' });
-    }
-
     try {
+        // User ID থেকে Student ID খুঁজে বের করা
+        const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
+        const studentId = studentRes.rows[0]?.student_id;
+
+        if (!studentId) {
+            return res.status(404).json({ message: 'Student profile not found.' });
+        }
+
         const query = `
             SELECT
                 circ.id AS circulation_id, circ.issue_date, circ.due_date, 
@@ -501,24 +499,23 @@ router.get('/student/issued', authenticateToken, authorize(['Student', 'Super Ad
             JOIN ${INVENTORY_TABLE} bi ON circ.inventory_id = bi.id
             JOIN ${CATALOG_TABLE} lc ON bi.book_id = lc.id
             WHERE circ.student_id = $1 AND circ.is_returned = FALSE
-            ORDER BY circ.due_date;
+            ORDER BY circ.due_date ASC;
         `;
         const result = await pool.query(query, [studentId]);
-        
         res.status(200).json(result.rows);
 
     } catch (error) {
         console.error('Student Issued Books Error:', error);
-        res.status(500).json({ message: 'Failed to retrieve issued books.' });
+        res.status(500).json({ message: 'Internal server error.' });
     }
 });
 
 /**
- * @route   GET /api/library/history
- * @desc    Search and retrieve circulation history. (Can be filtered by Student ID)
- * @access  Private (Admin, Teacher, Student)
+ * @route   GET /api/library/student/history
+ * @desc    শিক্ষার্থীর পুরো লাইব্রেরি ট্রানজ্যাকশন হিস্ট্রি (সংশোধিত পাথ)
  */
-router.get('/history', authenticateToken, authorize(LIBRARY_ROLES), async (req, res) => {
+// লগ ফাইলের 404 এরর ফিক্স করতে পাথটি /history থেকে /student/history করা হয়েছে
+router.get('/student/history', authenticateToken, authorize(LIBRARY_ROLES), async (req, res) => {
     const { studentId, accessionNo } = req.query;
     const userId = req.user.id;
     const userRole = req.user.role;
@@ -535,47 +532,39 @@ router.get('/history', authenticateToken, authorize(LIBRARY_ROLES), async (req, 
     const values = [];
     let paramIndex = 1;
 
-    // --- Student Self-View Restriction ---
-    if (userRole === 'Student' || userRole === 'student') {
-        const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
-        const studentProfileId = studentRes.rows[0]?.student_id;
+    try {
+        // --- শিক্ষার্থী হলে শুধু নিজের ডেটা দেখবে (Data Privacy) ---
+        if (userRole.toLowerCase() === 'student') {
+            const studentRes = await pool.query(`SELECT student_id FROM ${STUDENT_TABLE} WHERE user_id = $1::uuid`, [userId]);
+            const studentProfileId = studentRes.rows[0]?.student_id;
 
-        if (!studentProfileId) {
-            return res.status(404).json({ message: "Student profile ID not found." });
-        }
-        // Force filter by the logged-in student's ID
-        query += ` AND circ.student_id = $${paramIndex++}`;
-        values.push(studentProfileId);
-    }
-    // --- Admin/Teacher Filters ---
-    else {
-        if (studentId) {
+            if (!studentProfileId) {
+                return res.status(404).json({ message: "Student profile ID not found." });
+            }
+            query += ` AND circ.student_id = $${paramIndex++}`;
+            values.push(studentProfileId);
+        } 
+        // --- অ্যাডমিন/টিচার অন্য স্টুডেন্ট আইডি দিয়ে সার্চ করতে পারবে ---
+        else if (studentId) {
             query += ` AND circ.student_id = $${paramIndex++}`;
             values.push(studentId);
         }
-    }
 
-    if (accessionNo) {
-        query += ` AND bi.accession_number = $${paramIndex++}`;
-        values.push(accessionNo);
-    }
-    
-    // Default: Show recent records if no search criteria are given by admin roles
-    if (!studentId && !accessionNo && userRole !== 'Student' && userRole !== 'student') {
-        query += ` ORDER BY circ.issue_date DESC LIMIT 50`;
-    } else {
+        if (accessionNo) {
+            query += ` AND bi.accession_number = $${paramIndex++}`;
+            values.push(accessionNo);
+        }
+        
         query += ` ORDER BY circ.issue_date DESC`;
-    }
 
-    try {
         const result = await pool.query(query, values);
         res.status(200).json(result.rows);
+
     } catch (error) {
         console.error('History Fetch Error:', error);
         res.status(500).json({ message: 'Failed to retrieve history records.' });
     }
 });
-
 
 // =========================================================
 // 5. FINE MANAGEMENT (FIXED SQL CALCULATION)
