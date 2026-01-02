@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Student Portal | BCSM Final Edition</title>
+    <title>Student Portal | Final Production Edition</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -30,7 +30,19 @@
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
         .fade-in { animation: fadeIn 0.5s ease forwards; }
 
-        /* --- Header Section --- */
+        /* --- Shimmer Skeleton --- */
+        .shimmer {
+            background: #f6f7f8;
+            background-image: linear-gradient(to right, #f6f7f8 0%, #edeef1 20%, #f6f7f8 40%, #f6f7f8 100%);
+            background-repeat: no-repeat;
+            background-size: 800px 100%;
+            display: inline-block;
+            animation: shimmer-anim 1.5s infinite linear;
+            border-radius: 4px;
+        }
+        @keyframes shimmer-anim { 0% { background-position: -468px 0; } 100% { background-position: 468px 0; } }
+
+        /* --- Header --- */
         .mobile-header {
             background: linear-gradient(135deg, var(--primary-purple) 0%, var(--secondary-purple) 100%);
             padding: 25px 20px 65px;
@@ -38,9 +50,14 @@
             border-bottom-right-radius: 40px;
             color: var(--white);
             box-shadow: 0 10px 20px rgba(94, 53, 177, 0.2);
+            position: relative;
         }
 
-        /* Profile Wrapper & Online Status */
+        #ptr-indicator {
+            position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+            display: none; color: white; font-size: 1.2rem; z-index: 10;
+        }
+
         .profile-wrapper { position: relative; display: inline-block; }
         .profile-img {
             width: 70px; height: 70px;
@@ -58,78 +75,57 @@
         }
         .status-dot.online { background-color: var(--success-green); box-shadow: 0 0 8px var(--success-green); }
 
-        /* Clock & Notification */
         .header-clock {
-            font-size: 11px;
-            margin-top: 8px;
+            font-size: 11px; margin-top: 8px;
             background: rgba(255, 255, 255, 0.15);
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-weight: 600;
+            padding: 4px 12px; border-radius: 20px; font-weight: 600;
             backdrop-filter: blur(5px);
         }
-        .notif-btn {
-            position: relative;
-            background: rgba(255,255,255,0.1);
-            width: 38px; height: 38px;
-            border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            cursor: pointer;
+
+        .notif-wrapper {
+            position: relative; background: rgba(255,255,255,0.1);
+            width: 38px; height: 38px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
         }
         .notif-badge {
-            position: absolute; top: -2px; right: -2px;
-            background: var(--danger-red);
-            color: white; border-radius: 50%;
-            padding: 2px 5px; font-size: 9px; border: 2px solid var(--secondary-purple);
+            position: absolute; top: -2px; right: -2px; background: var(--danger-red);
+            color: white; border-radius: 50%; padding: 2px 5px; font-size: 9px;
+            border: 2px solid var(--secondary-purple);
         }
 
-        /* --- Quick Action Grid --- */
+        /* --- UI Components --- */
+        .glass-panel { background: var(--white); border-radius: 24px; padding: 20px; margin-bottom: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.03); }
         .action-card {
             background: var(--white); border-radius: 20px; padding: 18px 10px;
-            text-align: center; text-decoration: none; color: #444;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.04); display: block;
-            border: 1px solid rgba(255,255,255,0.8); transition: 0.2s;
+            text-align: center; text-decoration: none; color: #444; display: block;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.04); transition: 0.2s;
         }
         .action-card:active { transform: scale(0.95); }
         .action-card i { font-size: 24px; margin-bottom: 8px; }
 
-        /* --- Panels --- */
-        .glass-panel {
-            background: var(--white); border-radius: 24px; padding: 20px;
-            margin-bottom: 20px; box-shadow: 0 8px 25px rgba(0,0,0,0.03);
-            border: 1px solid #fff;
-        }
-
-        /* --- Menu Drawer --- */
+        /* --- Drawer --- */
         #menuDrawer {
             position: fixed; top: 0; left: -100%; width: 85%; height: 100%;
-            background: var(--white); z-index: 2200; transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--white); z-index: 2200; transition: 0.4s;
             overflow-y: auto; border-top-right-radius: 30px; border-bottom-right-radius: 30px;
         }
         #menuDrawer.open { left: 0; }
-        .overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
-            display: none; z-index: 2100;
-        }
+        .overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; z-index: 2100; }
         .overlay.show { display: block; }
 
-        /* --- Bottom Navigation --- */
         .bottom-nav {
             position: fixed; bottom: 0; left: 0; right: 0; height: 75px;
             background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
             display: flex; justify-content: space-around; align-items: center; z-index: 1000;
             border-top: 1px solid rgba(0,0,0,0.05); border-top-left-radius: 30px; border-top-right-radius: 30px;
         }
-        .nav-link-mobile { text-align: center; color: #b0b0b0; text-decoration: none; font-size: 11px; font-weight: 600; flex: 1; position: relative; }
+        .nav-link-mobile { text-align: center; color: #b0b0b0; text-decoration: none; font-size: 11px; font-weight: 600; flex: 1; position: relative;}
         .nav-link-mobile.active { color: var(--primary-purple); }
         .nav-link-mobile i { font-size: 22px; display: block; margin-bottom: 4px; }
-        .badge-pill { position: absolute; top: -5px; right: 20%; background: #ff3b30; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; border: 2px solid #fff; }
 
-        /* Accordion Style */
         .accordion-button { font-size: 14px; font-weight: 600; box-shadow: none !important; }
         .accordion-button:not(.collapsed) { background: #f3f0ff; color: var(--primary-purple); }
-        .list-group-item { font-size: 14px; border: none; padding: 12px 25px; border-bottom: 1px solid #f8f8f8; color: #555; text-decoration: none; display: flex; align-items: center;}
+        .list-group-item { font-size: 14px; border: none; padding: 12px 25px; display: flex; align-items: center; text-decoration: none; color: #555; border-bottom: 1px solid #f8f8f8;}
         .list-group-item i { width: 25px; margin-right: 10px; color: var(--primary-purple); opacity: 0.7; }
     </style>
 </head>
@@ -144,7 +140,7 @@
                 <div class="status-dot" id="drawer-status-dot"></div>
             </div>
             <div class="text-truncate">
-                <h6 class="mb-0 fw-bold" id="drawer-name">Guest Student</h6>
+                <h6 class="mb-0 fw-bold" id="drawer-name">User Profile</h6>
                 <small class="opacity-75 d-block text-truncate" id="drawer-email">email@example.com</small>
                 <small class="opacity-75" id="drawer-id">ID: 0000000</small>
             </div>
@@ -152,7 +148,7 @@
         
         <div class="accordion accordion-flush" id="mainMenu">
             <div class="accordion-item">
-                <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#mAcademics"><i class="fas fa-graduation-cap me-3"></i> Academics</button></h2>
+                <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mAcademics"><i class="fas fa-graduation-cap me-3"></i> Academics</button></h2>
                 <div id="mAcademics" class="accordion-collapse collapse" data-bs-parent="#mainMenu">
                     <div class="list-group">
                         <a href="/registration-certificate.html" class="list-group-item"><i class="fas fa-certificate"></i> Registration Cert.</a>
@@ -177,7 +173,7 @@
                         <a href="/online-payment.html" class="list-group-item"><i class="fas fa-credit-card"></i> Pay Online</a>
                         <a href="/my-payment-history.html" class="list-group-item"><i class="fas fa-history"></i> Payment History</a>
                         <a href="/my-fee-receipts.html" class="list-group-item"><i class="fas fa-receipt"></i> Fee Receipts</a>
-                        <a href="/my-scholarship.html" class="list-group-item"><i class="fas fa-user-graduate"></i> Scholarship Status</a>
+                        <a href="/my-scholarship.html" class="list-group-item"><i class="fas fa-user-graduate"></i> Scholarship</a>
                     </div>
                 </div>
             </div>
@@ -196,10 +192,10 @@
             </div>
 
             <div class="accordion-item">
-                <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mServices"><i class="fas fa-concierge-bell me-3"></i> Services</button></h2>
+                <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#mServices"><i class="fas fa-bus me-3"></i> Services</button></h2>
                 <div id="mServices" class="accordion-collapse collapse" data-bs-parent="#mainMenu">
                     <div class="list-group">
-                        <a href="/my-bus.html" class="list-group-item"><i class="fas fa-bus"></i> Bus Route</a>
+                        <a href="/my-bus.html" class="list-group-item"><i class="fas fa-route"></i> Bus Route</a>
                         <a href="/mybus-tracker.html" class="list-group-item"><i class="fas fa-map-marker-alt"></i> Live Tracker</a>
                         <a href="/mymess-menu.html" class="list-group-item"><i class="fas fa-utensils"></i> Mess Menu</a>
                         <a href="/myhostel-leave.html" class="list-group-item"><i class="fas fa-bed"></i> Hostel Leave</a>
@@ -222,12 +218,11 @@
                 </div>
             </div>
         </div>
-        <div class="p-4 mt-auto">
-            <button class="btn btn-danger w-100 rounded-pill fw-bold shadow-sm" onclick="logout()">Logout Now</button>
-        </div>
+        <div class="p-4 mt-auto"><button class="btn btn-danger w-100 rounded-pill fw-bold" onclick="logout()">Logout Now</button></div>
     </div>
 
     <div class="mobile-header">
+        <div id="ptr-indicator"><i class="fas fa-sync fa-spin"></i></div>
         <div class="d-flex justify-content-between align-items-start">
             <div style="max-width: 60%;">
                 <small class="opacity-75" id="greeting-txt">Good Day,</small>
@@ -237,7 +232,7 @@
             </div>
             <div class="text-center">
                 <div class="d-flex gap-2 align-items-center mb-2 justify-content-end">
-                    <div class="notif-wrapper" onclick="location.href='/notices.html'">
+                    <div class="notif-wrapper" onclick="init()">
                         <i class="fas fa-bell"></i>
                         <span class="notif-badge">3</span>
                     </div>
@@ -259,35 +254,35 @@
             <div class="col-3"><a href="/online-payment.html" class="action-card"><i class="fas fa-wallet text-danger"></i><span>Fees</span></a></div>
         </div>
 
-        <div class="glass-panel mt-4">
+        <div class="glass-panel mt-4" id="finance-panel">
             <h6 class="fw-bold mb-3">Finance Overview</h6>
-            <div class="row text-center">
-                <div class="col-4 border-end"><small class="text-muted d-block">Due</small><span id="fee-due" class="fw-bold text-danger h6 mb-0">...</span></div>
-                <div class="col-4 border-end"><small class="text-muted d-block">Paid</small><span id="fee-paid" class="fw-bold text-success h6 mb-0">...</span></div>
-                <div class="col-4"><small class="text-muted d-block">Bal.</small><span id="fee-balance" class="fw-bold text-dark h6 mb-0">...</span></div>
+            <div class="row text-center" id="finance-content">
+                <div class="col-4 border-end"><small class="text-muted d-block">Due</small><div class="shimmer" style="width: 45px; height: 15px;"></div></div>
+                <div class="col-4 border-end"><small class="text-muted d-block">Paid</small><div class="shimmer" style="width: 45px; height: 15px;"></div></div>
+                <div class="col-4"><small class="text-muted d-block">Bal.</small><div class="shimmer" style="width: 45px; height: 15px;"></div></div>
             </div>
         </div>
 
         <div class="glass-panel">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h6 class="fw-bold mb-0"><i class="fas fa-bullhorn me-2 text-warning"></i>Latest Notices</h6>
-                <a href="/notices.html" class="badge bg-light text-primary rounded-pill text-decoration-none">View All</a>
+            <h6 class="fw-bold mb-3"><i class="fas fa-bullhorn me-2 text-warning"></i>Latest Notices</h6>
+            <div id="notice-board-list" class="small text-muted">
+                <div class="shimmer w-100 mb-2" style="height: 12px;"></div>
+                <div class="shimmer w-75" style="height: 12px;"></div>
             </div>
-            <div id="notice-board-list" class="small text-muted">Syncing...</div>
         </div>
 
         <h6 class="fw-bold mb-3 px-1">Your Instructors</h6>
-        <div id="my-teachers-list" class="d-flex overflow-auto gap-3 pb-3" style="scrollbar-width: none; -ms-overflow-style: none;">
-             <div class="text-muted small px-1">Loading...</div>
+        <div id="my-teachers-list" class="d-flex overflow-auto gap-3 pb-3" style="scrollbar-width: none;">
+             <div class="shimmer" style="min-width: 120px; height: 130px; border-radius: 20px;"></div>
+             <div class="shimmer" style="min-width: 120px; height: 130px; border-radius: 20px;"></div>
+             <div class="shimmer" style="min-width: 120px; height: 130px; border-radius: 20px;"></div>
         </div>
     </div>
 
     <nav class="bottom-nav">
         <a href="#" class="nav-link-mobile active"><i class="fas fa-home"></i><span>Home</span></a>
         <a href="/my-messages.html" class="nav-link-mobile">
-            <i class="fas fa-comment-dots"></i>
-            <span class="badge-pill" id="msg-count">5</span>
-            <span>Inbox</span>
+            <i class="fas fa-comment-dots"></i><span class="badge bg-danger rounded-circle position-absolute top-0 end-0" style="font-size: 8px; padding: 2px 5px;">5</span><span>Inbox</span>
         </a>
         <a href="javascript:void(0)" class="nav-link-mobile" id="btnMenu"><i class="fas fa-th-large"></i><span>Menu</span></a>
         <a href="/student-profile.html" class="nav-link-mobile"><i class="fas fa-user-circle"></i><span>Profile</span></a>
@@ -296,7 +291,6 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/global-config.js"></script>
     <script>
-        // --- Navigation Logic ---
         const btnMenu = document.getElementById('btnMenu');
         const drawer = document.getElementById('menuDrawer');
         const overlay = document.getElementById('overlay');
@@ -310,7 +304,6 @@
         btnMenu.addEventListener('click', () => toggleDrawer(true));
         overlay.addEventListener('click', () => toggleDrawer(false));
 
-        // --- Real-time Features ---
         function updateClock() {
             const now = new Date();
             const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
@@ -326,7 +319,6 @@
         }
         window.addEventListener('online', checkStatus); window.addEventListener('offline', checkStatus); checkStatus();
 
-        // --- API Integration Logic ---
         function logout() { localStorage.clear(); window.location.href = '/login.html'; }
 
         async function authFetch(url) {
@@ -340,15 +332,20 @@
         }
 
         async function init() {
+            document.getElementById('ptr-indicator').style.display = 'block';
             const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
             if (!sid) return;
 
-            // Handle Dynamic Greeting
             const hr = new Date().getHours();
             document.getElementById('greeting-txt').innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
 
             try {
-                const p = await authFetch(`/api/students/${sid}`);
+                const token = localStorage.getItem('erp-token');
+                const headers = { 'Authorization': `Bearer ${token}` };
+
+                // 1. Profile Data
+                const pRes = await fetch(`/api/students/${sid}`, { headers });
+                const p = await pRes.json();
                 if(p) {
                     document.getElementById('welcome-name').innerText = p.first_name || 'Student';
                     document.getElementById('drawer-name').innerText = `${p.first_name || ''} ${p.last_name || ''}`;
@@ -362,27 +359,31 @@
                     }
                 }
 
-                const f = await authFetch(`/api/students/${sid}/fees`);
-                if(f) {
-                    document.getElementById('fee-due').innerText = `$${f.total_billed || 0}`;
-                    document.getElementById('fee-paid').innerText = `$${f.total_paid || 0}`;
-                    document.getElementById('fee-balance').innerText = `$${f.balance_due || 0}`;
-                }
+                // 2. Finance Data
+                const fRes = await fetch(`/api/students/${sid}/fees`, { headers });
+                const f = await fRes.json();
+                document.getElementById('finance-content').innerHTML = `
+                    <div class="col-4 border-end"><small class="text-muted d-block">Due</small><span class="fw-bold text-danger">$${f.total_billed || 0}</span></div>
+                    <div class="col-4 border-end"><small class="text-muted d-block">Paid</small><span class="fw-bold text-success">$${f.total_paid || 0}</span></div>
+                    <div class="col-4"><small class="text-muted d-block">Bal.</small><span class="fw-bold text-dark">$${f.balance_due || 0}</span></div>
+                `;
 
-                const t = await authFetch(`/api/students/${sid}/teachers`);
+                // 3. Teachers Slider
+                const tRes = await fetch(`/api/students/${sid}/teachers`, { headers });
+                const t = await tRes.json();
                 if(t && t.length > 0) {
                     document.getElementById('my-teachers-list').innerHTML = t.map(i => `
-                        <div class="bg-white p-3 rounded-4 shadow-sm text-center" style="min-width: 130px; border: 1px solid #f0f0f0;">
+                        <div class="bg-white p-3 rounded-4 shadow-sm text-center" style="min-width: 130px; border: 1px solid #eee;">
                             <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(i.full_name)}&background=f3f0ff&color=5e35b1&bold=true" class="rounded-circle mb-2 shadow-sm" style="width:45px">
                             <div class="small fw-bold text-truncate">${i.full_name}</div>
                             <div class="text-muted" style="font-size: 10px;">${i.subject_name || 'Instructor'}</div>
                         </div>
                     `).join('');
-                } else {
-                    document.getElementById('my-teachers-list').innerHTML = '<div class="text-muted small px-1">No instructors assigned.</div>';
                 }
 
-                const n = await authFetch(`/api/announcements/role/student`);
+                // 4. Announcements
+                const nRes = await fetch(`/api/announcements/role/student`, { headers });
+                const n = await nRes.json();
                 if(n && n.length > 0) {
                     document.getElementById('notice-board-list').innerHTML = n.slice(0, 3).map(i => `
                         <div class="d-flex gap-3 mb-3 border-bottom pb-2">
@@ -396,7 +397,12 @@
                         </div>
                     `).join('');
                 }
-            } catch (err) { console.error("Initialization Error:", err); }
+
+                document.getElementById('ptr-indicator').style.display = 'none';
+            } catch (err) { 
+                console.error(err); 
+                document.getElementById('ptr-indicator').style.display = 'none';
+            }
         }
         document.addEventListener('DOMContentLoaded', init);
     </script>
