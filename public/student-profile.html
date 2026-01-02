@@ -2,680 +2,334 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Profile | ERP System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Digital ID | Mobile Portal</title>
     
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
     <style>
-        :root {
-            --bg-dark: #050505;
-            --panel-bg: rgba(20, 25, 35, 0.85);
-            --primary: #00f3ff;
-            --secondary: #7000ff;
-            --success: #00ff9d;
-            --danger: #ff0055;
-            --warning: #ffbe0b;
-            --text-main: #e0e6ed;
-            --text-muted: #94a3b8;
-            --border: 1px solid rgba(0, 243, 255, 0.2);
-            --glass: blur(10px);
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
 
-        * { box-sizing: border-box; outline: none; }
+        :root {
+            --brand: #6366f1;
+            --brand-dark: #4338ca;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text-main: #0f172a;
+            --text-sub: #64748b;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
 
         body {
-            font-family: 'Rajdhani', sans-serif;
-            background-color: var(--bg-dark);
+            background-color: var(--bg);
+            font-family: 'Plus Jakarta Sans', sans-serif;
             color: var(--text-main);
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
+            margin: 0; padding-bottom: 120px; 
+            overflow-x: hidden;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        /* Background Grid */
-        body::before {
-            content: "";
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-image: linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
-            background-size: 30px 30px;
-            z-index: -1;
+        /* --- Full Width App Header --- */
+        .mobile-header {
+            background: linear-gradient(135deg, var(--brand) 0%, var(--brand-dark) 100%);
+            padding: 30px 20px 110px;
+            text-align: center; color: white; position: relative;
+            border-bottom-left-radius: 45px; border-bottom-right-radius: 45px;
+            box-shadow: 0 10px 30px rgba(99, 102, 241, 0.2);
         }
 
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: 300px 1fr;
-            gap: 20px;
+        .top-action-bar {
+            display: flex; justify-content: space-between; align-items: center;
+            margin-bottom: 20px;
         }
 
-        /* --- Sidebar --- */
-        .profile-sidebar {
-            background: var(--panel-bg);
-            border: var(--border);
-            padding: 20px;
-            text-align: center;
-            height: fit-content;
-            position: sticky;
-            top: 20px;
+        .back-btn {
+            width: 40px; height: 40px; border-radius: 12px;
+            background: rgba(255,255,255,0.2); display: flex;
+            align-items: center; justify-content: center; backdrop-filter: blur(10px);
         }
 
-        .avatar-frame {
-            width: 150px; height: 150px;
-            margin: 0 auto 15px;
-            padding: 5px;
-            border: 2px dashed var(--primary);
-            border-radius: 50%;
-            overflow: hidden;
+        /* Identity Persona Stack */
+        .id-stack {
+            position: relative; margin-top: -85px; padding: 0 20px; z-index: 10;
         }
 
-        .avatar-frame img {
-            width: 100%; height: 100%;
-            object-fit: cover;
-            border-radius: 50%;
-            background: #000;
+        .id-card-mobile {
+            background: var(--card); border-radius: 35px; padding: 30px 20px;
+            text-align: center; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.1);
+            border: 1px solid rgba(255,255,255,1);
         }
 
-        .student-name { font-size: 1.8rem; margin: 10px 0 5px; color: #fff; text-shadow: 0 0 10px var(--primary); }
-        .student-id { color: var(--primary); font-family: 'JetBrains Mono', monospace; font-size: 0.9rem; }
-        
-        .sidebar-stats {
-            margin-top: 20px;
-            display: flex;
-            justify-content: space-around;
-            border-top: 1px solid rgba(255,255,255,0.1);
-            padding-top: 15px;
-        }
-        .stat-box small { display: block; color: var(--text-muted); font-size: 0.7rem; }
-        .stat-box span { font-size: 1.2rem; font-weight: bold; color: #fff; }
-
-        /* --- Main Content --- */
-        .main-content { display: flex; flex-direction: column; gap: 20px; }
-
-        .tabs-nav { display: flex; background: var(--panel-bg); border: var(--border); padding: 5px; overflow-x: auto; }
-        .tab-btn {
-            background: transparent; border: none; color: var(--text-muted);
-            padding: 12px 25px; cursor: pointer; font-family: 'Rajdhani', sans-serif;
-            font-weight: 700; font-size: 1.1rem; text-transform: uppercase; transition: 0.3s;
-        }
-        .tab-btn:hover { color: var(--primary); }
-        .tab-btn.active { color: var(--bg-dark); background: var(--primary); box-shadow: 0 0 15px var(--primary); }
-
-        .tab-pane { display: none; background: var(--panel-bg); border: var(--border); padding: 25px; animation: fadeIn 0.4s ease; min-height: 400px;}
-        .tab-pane.active { display: block; }
-
-        .section-title {
-            font-size: 1.4rem; color: var(--primary); border-bottom: 1px solid rgba(0, 243, 255, 0.3);
-            padding-bottom: 10px; margin-bottom: 20px; display: flex; align-items: center; gap: 10px;
+        .profile-wrapper {
+            width: 130px; height: 130px; margin: -95px auto 15px;
+            position: relative;
         }
 
-        .info-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; }
-        .info-item { background: rgba(255,255,255,0.03); padding: 15px; border-left: 3px solid var(--secondary); }
-        .info-item label { display: block; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 5px; text-transform: uppercase; }
-        .info-item .value { font-size: 1.1rem; font-weight: 600; color: #fff; }
-
-        /* Empty State */
-        .no-data {
-            text-align: center; color: var(--text-muted); padding: 40px;
-            border: 1px dashed var(--text-muted); font-family: 'JetBrains Mono';
+        .profile-img-mobile {
+            width: 100%; height: 100%; border-radius: 40px;
+            border: 6px solid var(--card); object-fit: cover;
+            box-shadow: 0 15px 30px rgba(0,0,0,0.15);
+            background: #f1f5f9;
         }
 
-        /* Fee Widget */
-        .fee-widget { background: rgba(0,0,0,0.3); padding: 20px; margin-top: 20px; border: 1px solid var(--text-muted); }
-        .progress-container { height: 20px; background: #333; border-radius: 10px; overflow: hidden; margin: 10px 0; }
-        .progress-bar { height: 100%; background: linear-gradient(90deg, var(--primary), var(--secondary)); width: 0%; transition: width 1s ease-in-out; }
-        
-        /* Tables */
-        table { width: 100%; margin-top: 20px; border-collapse: collapse; font-family: 'JetBrains Mono'; font-size: 0.9rem; }
-        th { text-align: left; padding: 10px; color: var(--primary); border-bottom: 2px solid var(--text-muted); }
-        td { padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
-
-        /* Heatmap */
-        .attendance-heatmap { display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr)); gap: 5px; margin-top: 15px; }
-        .heat-box { height: 30px; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 0.7rem; }
-        .heat-present { background: rgba(0, 255, 157, 0.6); color: #000; }
-        .heat-absent { background: rgba(255, 0, 85, 0.6); color: #fff; }
-        .heat-leave { background: var(--warning); color: #000; }
-
-        /* Timeline */
-        .timeline { border-left: 2px solid var(--primary); margin-left: 10px; padding-left: 20px; }
-        .timeline-item { position: relative; margin-bottom: 25px; }
-        .timeline-item::before {
-            content: ''; position: absolute; left: -26px; top: 5px; width: 10px; height: 10px;
-            background: var(--bg-dark); border: 2px solid var(--primary); border-radius: 50%;
+        .verified-badge {
+            position: absolute; bottom: 5px; right: 5px;
+            background: var(--success); color: white;
+            width: 28px; height: 28px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            border: 3px solid white; font-size: 12px;
+            animation: pulse 2s infinite;
         }
-        .t-date { color: var(--primary); font-size: 0.85rem; font-family: 'JetBrains Mono'; }
-        .t-content { background: rgba(255,255,255,0.05); padding: 10px; margin-top: 5px; border-radius: 4px; }
 
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        /* Mobile */
-        @media (max-width: 768px) {
-            .container { grid-template-columns: 1fr; }
-            .profile-sidebar { position: static; }
+        /* --- Mobile Content Panels --- */
+        .mobile-panel {
+            background: var(--card); border-radius: 30px;
+            padding: 24px; margin: 0 20px 20px;
+            border: 1px solid #f1f5f9;
         }
-        
-        /* 🚀 PRINT SUMMARY MODIFICATIONS 🚀 */
-        @media print {
-            body { 
-                background: #fff; 
-                color: #000; 
-                margin: 0; 
-                padding: 10mm;
-            }
-            .container { 
-                display: block; 
-                max-width: 100%;
-            }
-            
-            /* Hide non-summary UI elements */
-            .tabs-nav, .back-nav, button { 
-                display: none; 
-            }
-            body::before, .avatar-frame { 
-                border: none; 
-                background: none; 
-            }
 
-            /* Main Content and Sidebar Layout for Print */
-            .main-content {
-                padding-top: 20px;
-            }
-            .profile-sidebar { 
-                border: none; 
-                background: none; 
-                padding: 0; 
-                margin-bottom: 20px;
-                position: static; 
-                width: 100%;
-                text-align: left; 
-            }
-            .profile-sidebar h1, .profile-sidebar div {
-                text-align: left;
-            }
-            .sidebar-stats {
-                justify-content: flex-start;
-                gap: 40px;
-                border: none;
-                padding-top: 0;
-            }
-            .stat-box {
-                border: 1px solid #ccc;
-                padding: 10px;
-            }
+        .panel-tag {
+            font-size: 0.7rem; font-weight: 800; color: var(--brand);
+            text-transform: uppercase; letter-spacing: 1.5px;
+            margin-bottom: 15px; display: flex; align-items: center; gap: 8px;
+        }
 
+        .m-data-row {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 0; border-bottom: 1px solid #f8fafc;
+        }
+        .m-data-row:last-child { border-bottom: none; }
+        .m-key { font-size: 0.8rem; color: var(--text-sub); font-weight: 500; }
+        .m-val { font-size: 0.85rem; font-weight: 700; color: var(--text-main); text-align: right; }
 
-            /* Display ALL panes for a complete summary, but simplify their appearance */
-            .tab-pane { 
-                display: block !important; 
-                border: 1px solid #ccc; 
-                background: none; 
-                color: #000; 
-                page-break-inside: avoid;
-                margin-top: 20px;
-                padding: 15px;
-            }
-            
-            /* Remove background/glass effects in print */
-            .profile-sidebar, .tab-pane, .tabs-nav {
-                background: none !important;
-                border: 1px solid #ccc !important;
-            }
-            
-            /* Re-style titles for print */
-            .section-title {
-                color: #333;
-                border-bottom: 1px solid #ddd;
-            }
-            
-            /* Ensure maps and charts are visible and legible */
-            #map-container { 
-                filter: none !important; 
-                border: 1px solid #ddd !important;
-                height: 150px !important; 
-            }
-            #charts-container {
-                grid-template-columns: 1fr; 
-            }
-            #charts-container > div {
-                 background: #f7f7f7 !important; 
-            }
+        /* --- Service Badges --- */
+        .service-pill {
+            display: flex; align-items: center; gap: 15px;
+            background: #f8fafc; padding: 18px; border-radius: 20px; margin-bottom: 12px;
+        }
+        .icon-sq {
+            width: 46px; height: 46px; border-radius: 14px;
+            display: flex; align-items: center; justify-content: center; font-size: 1.2rem;
+        }
 
-            /* Hide elements intended for interactive use or excessive detail */
-            #invoice-table, #timeline-container, .attendance-heatmap {
-                display: none; 
-            }
-            
-            /* Keep essential finance summary */
-            .fee-widget {
-                border: 1px solid #ccc;
-                background: #f7f7f7;
-            }
+        /* --- Mobile Navigation Dock --- */
+        .nav-dock {
+            position: fixed; bottom: 20px; left: 20px; right: 20px;
+            height: 75px; background: #0f172a; border-radius: 28px;
+            display: flex; justify-content: space-around; align-items: center;
+            z-index: 2000; box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .nav-btn { text-align: center; color: #94a3b8; text-decoration: none; font-size: 0.7rem; font-weight: 700; transition: 0.3s; }
+        .nav-btn.active { color: #fff; transform: translateY(-5px); }
+        .nav-btn i { font-size: 1.5rem; display: block; margin-bottom: 4px; }
 
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
         }
     </style>
 </head>
 <body>
 
-<div class="container">
-    
-    <aside class="profile-sidebar">
-        <div style="margin-bottom: 20px; text-align: left;" class="back-nav">
-            <a href="/students-list.html" style="color: var(--text-muted); text-decoration: none; font-weight:bold;"><i class="fas fa-arrow-left"></i> BACK</a>
+    <div class="mobile-header">
+        <div class="top-action-bar">
+            <a href="/student-dashboard.html" class="back-btn text-white"><i class="fas fa-arrow-left"></i></a>
+            <span class="fw-bold small tracking-widest">SECURE IDENTITY</span>
+            <div class="back-btn text-white" onclick="location.reload()"><i class="fas fa-sync-alt"></i></div>
         </div>
-
-        <div class="avatar-frame">
-            <img id="p-photo" src="" alt="Profile Photo">
+        <div class="mt-2">
+            <h4 class="fw-black mb-0" id="ui-name">...</h4>
+            <p class="small opacity-50 mb-0" id="ui-email">...</p>
         </div>
-        
-        <h1 class="student-name" id="p-name">Loading...</h1>
-        <div class="student-id" id="p-admission-id">---</div>
-        <div id="p-status-container" style="margin-top: 10px;"></div>
+    </div>
 
-        <div class="sidebar-stats">
-            <div class="stat-box">
-                <small>Attendance</small>
-                <span id="p-attendance-stat">--</span>
+    <div class="id-stack">
+        <div class="id-card-mobile">
+            <div class="profile-wrapper">
+                <img id="ui-img" src="" class="profile-img-mobile" alt="Student">
+                <div class="verified-badge"><i class="fas fa-check"></i></div>
             </div>
-            <div class="stat-box">
-                <small>Due Fees</small>
-                <span id="p-due-stat" style="color: var(--danger)">--</span>
-            </div>
-        </div>
-
-        <div style="margin-top: 25px; display: grid; gap: 10px;">
-            <button onclick="window.print()" class="tab-btn" style="border: 1px solid var(--text-muted); font-size: 0.9rem;">
-                <i class="fas fa-print"></i> PRINT
-            </button>
-            <button onclick="generateIdCard()" class="tab-btn" style="border: 1px solid var(--primary); font-size: 0.9rem; color: var(--primary);">
-                <i class="fas fa-id-card"></i> ID CARD
-            </button>
-        </div>
-    </aside>
-
-    <main class="main-content">
-        
-        <nav class="tabs-nav">
-            <button class="tab-btn active" onclick="switchTab('overview')">Overview</button>
-            <button class="tab-btn" onclick="switchTab('academic')">Academic</button>
-            <button class="tab-btn" onclick="switchTab('finance')">Finance</button>
-            <button class="tab-btn" onclick="switchTab('history')">Timeline</button>
-        </nav>
-
-        <div id="overview" class="tab-pane active">
-            <h2 class="section-title"><i class="fas fa-user-astronaut"></i> Personal Data</h2>
-            <div class="info-grid">
-                <div class="info-item"><label>Full Name</label><div class="value" id="d-fullname"></div></div>
-                <div class="info-item"><label>Date of Birth</label><div class="value" id="d-dob"></div></div>
-                <div class="info-item"><label>Gender</label><div class="value" id="d-gender"></div></div>
-                <div class="info-item"><label>Blood Group</label><div class="value" id="d-blood"></div></div>
-                <div class="info-item"><label>Phone</label><div class="value" id="d-phone"></div></div>
-                <div class="info-item"><label>Email</label><div class="value" id="d-email"></div></div>
-            </div>
-
-            <h2 class="section-title" style="margin-top: 30px;"><i class="fas fa-users"></i> Guardian Info</h2>
-            <div class="info-grid">
-                <div class="info-item"><label>Father's Name</label><div class="value" id="d-father"></div></div>
-                <div class="info-item"><label>Mother's Name</label><div class="value" id="d-mother"></div></div>
-                <div class="info-item"><label>Emergency Contact</label><div class="value" id="d-emergency"></div></div>
-            </div>
-
-            <h2 class="section-title" style="margin-top: 30px;"><i class="fas fa-map-marker-alt"></i> Address</h2>
-            <div class="info-item">
-                <label>Present Address</label>
-                <div class="value" id="d-address"></div>
-            </div>
-            <div id="map-container" style="height: 250px; border: 1px solid var(--text-muted); margin-top: 15px; display:none;"></div>
-        </div>
-
-        <div id="academic" class="tab-pane">
-            <h2 class="section-title"><i class="fas fa-chart-line"></i> Performance</h2>
-            <div id="charts-container" style="display: grid; grid-template-columns: 2fr 1fr; gap: 20px;">
-                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
-                    <canvas id="examChart"></canvas>
+            <h5 class="fw-black mb-1 text-primary" id="ui-course">...</h5>
+            <div class="badge bg-light text-primary rounded-pill px-3 py-2 mb-3" id="ui-id" style="font-size: 0.75rem;">ID: ----</div>
+            
+            <div class="row mt-3 pt-3 border-top g-0 text-center">
+                <div class="col-4 border-end">
+                    <small class="text-muted d-block" style="font-size: 9px; font-weight: 800;">BATCH</small>
+                    <span class="fw-bold" id="ui-batch" style="font-size: 0.85rem;">...</span>
                 </div>
-                <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 8px;">
-                    <canvas id="skillsChart"></canvas>
+                <div class="col-4 border-end">
+                    <small class="text-muted d-block" style="font-size: 9px; font-weight: 800;">ROLL NO</small>
+                    <span class="fw-bold" id="ui-roll" style="font-size: 0.85rem;">...</span>
+                </div>
+                <div class="col-4">
+                    <small class="text-muted d-block" style="font-size: 9px; font-weight: 800;">STATUS</small>
+                    <span class="text-success fw-bold" style="font-size: 0.85rem;">ACTIVE</span>
                 </div>
             </div>
-            <div id="no-academic-data" class="no-data" style="display:none;">No academic records found.</div>
+        </div>
+    </div>
 
-            <h2 class="section-title" style="margin-top: 30px;"><i class="fas fa-calendar-alt"></i> Attendance History</h2>
-            <div class="attendance-heatmap" id="attendance-grid"></div>
-            <div id="no-attendance-data" class="no-data" style="display:none;">No attendance logs available.</div>
+    <div class="mt-4 pb-5">
+        
+        <div class="mobile-panel">
+            <span class="panel-tag"><i class="fas fa-wallet"></i> Financial Standing</span>
+            <div class="d-flex justify-content-between align-items-end mb-2">
+                <h3 class="fw-black mb-0 text-danger" id="ui-fee-due">₹0.00</h3>
+                <span class="badge bg-light text-muted rounded-pill" id="ui-fee-percent">0% Paid</span>
+            </div>
+            <div class="progress" style="height: 6px; border-radius: 10px; background: #eee;">
+                <div id="ui-fee-bar" class="progress-bar bg-primary" style="width: 0%"></div>
+            </div>
         </div>
 
-        <div id="finance" class="tab-pane">
-            <h2 class="section-title"><i class="fas fa-credit-card"></i> Fee Status</h2>
-            
-            <div id="finance-content">
-                <div class="fee-widget">
-                    <div style="display: flex; justify-content: space-between; align-items: end; margin-bottom: 5px;">
-                        <span>Payment Progress</span>
-                        <span id="fee-percentage" style="color: var(--primary); font-weight: bold;">0%</span>
-                    </div>
-                    <div class="progress-container">
-                        <div class="progress-bar" id="fee-bar"></div>
-                    </div>
-                    <div class="fee-details" style="display: flex; justify-content: space-between;">
-                        <span style="color: var(--success);">PAID: <span id="val-paid">₹0</span></span>
-                        <span style="color: var(--danger);">DUE: <span id="val-due">₹0</span></span>
-                    </div>
+        <div class="mobile-panel">
+            <span class="panel-tag"><i class="fas fa-fingerprint"></i> Personal Intelligence</span>
+            <div class="m-data-row"><span class="m-key">Date of Birth</span><span class="m-val" id="ui-dob">...</span></div>
+            <div class="m-data-row"><span class="m-key">Blood Group</span><span class="m-val" id="ui-blood">...</span></div>
+            <div class="m-data-row"><span class="m-key">Primary Phone</span><span class="m-val" id="ui-phone">...</span></div>
+            <div class="m-data-row"><span class="m-key">Aadhaar / ID</span><span class="m-val" id="ui-aadhaar">...</span></div>
+        </div>
+
+        <div class="mobile-panel text-center">
+            <span class="panel-tag"><i class="fas fa-chart-pie"></i> Skill DNA Profile</span>
+            <canvas id="skillsRadar" height="250"></canvas>
+            <div class="mt-4 pt-3 border-top d-flex justify-content-around">
+                <div>
+                    <h4 class="fw-black text-primary mb-0" id="ui-att">0%</h4>
+                    <small class="text-muted fw-bold" style="font-size: 9px;">ATTENDANCE</small>
                 </div>
-
-                <table id="invoice-table">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Description</th>
-                            <th style="text-align: right;">Amount</th>
-                            <th style="text-align: center;">Status</th>
-                        </tr>
-                    </thead>
-                    <tbody id="invoice-list"></tbody>
-                </table>
-            </div>
-            
-            <div id="no-finance-data" class="no-data" style="display:none;">
-                Financial records not initialized for this student.
+                <div>
+                    <h4 class="fw-black text-success mb-0">A+</h4>
+                    <small class="text-muted fw-bold" style="font-size: 9px;">GPA GRADE</small>
+                </div>
             </div>
         </div>
 
-        <div id="history" class="tab-pane">
-            <h2 class="section-title"><i class="fas fa-history"></i> Activity Log</h2>
-            <div class="timeline" id="timeline-container"></div>
-            <div id="no-timeline-data" class="no-data" style="display:none;">No activity history recorded.</div>
+        <div class="mobile-panel">
+            <span class="panel-tag"><i class="fas fa-layer-group"></i> Campus Facilities</span>
+            <div class="service-pill">
+                <div class="icon-sq bg-primary bg-opacity-10 text-primary"><i class="fas fa-bus"></i></div>
+                <div class="flex-grow-1">
+                    <span class="fw-bold small d-block">Transport Route</span>
+                    <small class="text-muted" id="ui-bus">Loading route...</small>
+                </div>
+                <i class="fas fa-map-marker-alt text-muted"></i>
+            </div>
+            <div class="service-pill">
+                <div class="icon-sq bg-success bg-opacity-10 text-success"><i class="fas fa-bed"></i></div>
+                <div class="flex-grow-1">
+                    <span class="fw-bold small d-block">Hostel Block</span>
+                    <small class="text-muted" id="ui-hostel">Loading room...</small>
+                </div>
+                <i class="fas fa-key text-muted"></i>
+            </div>
         </div>
 
-    </main>
-</div>
+        <div class="mobile-panel text-center">
+            <span class="panel-tag justify-content-center">Gate Access Token</span>
+            <div id="qr-wrap" class="d-flex justify-content-center mb-3"></div>
+            <p class="small text-muted mb-0">Authorized Digital Identity Card 2026. Non-Transferable.</p>
+        </div>
 
-<script>
-    // Note: Assuming window.API_BASE_URL is loaded from global-config.js
-    const API_BASE_URL = window.API_BASE_URL || '/api';
-    const token = localStorage.getItem('erp-token');
-    if (!token) window.location.href = '/login.html';
+    </div>
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const studentId = urlParams.get('id');
-    let mapInstance = null;
+    <nav class="nav-dock">
+        <a href="/student-dashboard.html" class="nav-btn"><i class="fas fa-th-large"></i>Portal</a>
+        <a href="#" class="nav-btn active"><i class="fas fa-id-badge"></i>Identity</a>
+        <a href="javascript:window.print()" class="nav-btn"><i class="fas fa-print"></i>Print</a>
+        <a href="javascript:logout()" class="nav-btn"><i class="fas fa-power-off"></i>Logout</a>
+    </nav>
 
-    document.addEventListener('DOMContentLoaded', async () => {
-        if (!studentId) {
-            document.querySelector('.container').innerHTML = "<h1 style='color:var(--danger); text-align:center;'>Error: Missing Student ID. Access this page from the student list.</h1>";
-            return;
-        }
+    <script>
+        const sid = localStorage.getItem('student_id');
+        const token = localStorage.getItem('erp-token');
+
         
-        let studentData;
-        try {
-            // 1. Fetch Student Profile Data
-            const studentRes = await fetch(`${API_BASE_URL}/students/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
-            
-            if (!studentRes.ok) throw new Error("Failed to load student");
-            studentData = await studentRes.json();
-            
-            populateBasicInfo(studentData);
-            populateAcademic(studentData);
-            populateTimeline(studentData);
-            
-            // 2. Fetch and Populate Financial Data Separately (CRITICAL FIX)
-            await populateFinance(studentData);
 
-        } catch (error) {
-            console.error(error);
-            document.querySelector('.container').innerHTML = `<h2 style='color:var(--danger); text-align:center;'>Error Loading Profile: ${error.message}</h2>`;
-        }
-    });
+        async function initialize() {
+            if (!sid || !token) { location.href = '/login.html'; return; }
 
-    // 1. Basic Info Populator
-    function populateBasicInfo(data) {
-        const set = (id, val) => {
-            const el = document.getElementById(id);
-            if(el) el.textContent = val || 'N/A';
-        };
-        
-        document.title = `${data.first_name}'s Profile`;
-        set('p-name', `${data.first_name} ${data.last_name}`);
-        set('p-admission-id', data.admission_id || data.student_id);
-        
-        // Status Badge
-        const statusDiv = document.getElementById('p-status-container');
-        statusDiv.innerHTML = `<span style="padding: 5px 10px; border: 1px solid var(--success); color: var(--success); font-weight:bold; text-transform:uppercase;">${data.status || 'Active'}</span>`;
+            try {
+                const h = { 'Authorization': `Bearer ${token}` };
+                const [pRes, fRes, aRes, sRes] = await Promise.all([
+                    fetch(`/api/students/${sid}`, { headers: h }),
+                    fetch(`/api/students/${sid}/fees`, { headers: h }),
+                    fetch(`/api/attendance/student/${sid}/summary`, { headers: h }),
+                    fetch(`/api/marks/student/${sid}/skills`, { headers: h })
+                ]);
 
-        // --- FIXED IMAGE LOGIC ---
-        const photoEl = document.getElementById('p-photo');
-        const imagePath = data.profile_image_path || data.profile_image; 
-        const defaultAvatar = `https://ui-avatars.com/api/?name=${data.first_name}+${data.last_name}&background=0a0f18&color=00f3ff&bold=true`;
+                const p = await pRes.json();
+                const f = await fRes.json();
+                const a = await aRes.json();
+                const s = await sRes.json();
 
-        if (imagePath) {
-            if (imagePath.startsWith('data:image')) {
-                photoEl.src = imagePath; // Base64
-            } else if (imagePath.startsWith('http')) {
-                photoEl.src = imagePath; // Full URL
-            } else {
-                // Ensure correct relative path starting from the uploads folder.
-                const cleanPath = imagePath.replace(/^\//, ''); 
-                photoEl.src = `/uploads/${cleanPath}`; 
-            }
-        } else {
-            photoEl.src = defaultAvatar;
-        }
-        photoEl.onerror = () => { photoEl.src = defaultAvatar; };
-        // --------------------------
+                // 1. Identity Mapping
+                document.getElementById('ui-name').innerText = `${p.first_name} ${p.last_name}`;
+                document.getElementById('ui-email').innerText = p.email;
+                document.getElementById('ui-course').innerText = p.course_name || 'N/A';
+                document.getElementById('ui-id').innerText = `ID: ${p.admission_id}`;
+                document.getElementById('ui-batch').innerText = p.batch_name || 'TBD';
+                document.getElementById('ui-roll').innerText = p.roll_number || 'TBD';
+                document.getElementById('ui-dob').innerText = p.dob ? new Date(p.dob).toLocaleDateString('en-GB') : 'N/A';
+                document.getElementById('ui-blood').innerText = p.blood_group || 'N/A';
+                document.getElementById('ui-phone').innerText = p.phone_number;
+                document.getElementById('ui-aadhaar').innerText = p.aadhaar_number || 'Not Linked';
+                
+                // Profile Image
+                const imgPath = p.profile_image_path;
+                document.getElementById('ui-img').src = imgPath ? 
+                    (imgPath.startsWith('data:') ? imgPath : `/api/uploads/${imgPath}`) : 
+                    `https://ui-avatars.com/api/?name=${p.first_name}&background=6366f1&color=fff&size=256`;
 
-        set('p-attendance-stat', data.attendance_percentage ? `${data.attendance_percentage}%` : 'N/A');
-        
-        set('d-fullname', `${data.first_name} ${data.last_name}`);
-        set('d-dob', data.dob ? new Date(data.dob).toLocaleDateString() : 'N/A');
-        set('d-gender', data.gender);
-        set('d-blood', data.blood_group);
-        set('d-phone', data.phone_number);
-        set('d-email', data.email);
-        set('d-father', data.parent_first_name);
-        set('d-mother', data.parent_last_name);
-        set('d-emergency', data.emergency_contact_number || data.emergency_contact);
-        set('d-address', data.permanent_address || data.present_address);
+                // 2. Financial Progress
+                const billed = parseFloat(f.total_billed || 0);
+                const paid = parseFloat(f.total_paid || 0);
+                const percent = billed > 0 ? Math.round((paid / billed) * 100) : 0;
+                document.getElementById('ui-fee-bar').style.width = `${percent}%`;
+                document.getElementById('ui-fee-percent').innerText = `${percent}% Paid`;
+                document.getElementById('ui-fee-due').innerText = `₹${(billed - paid).toLocaleString()}`;
 
-        // Map Setup
-        if (data.location_coords) {
-            const [lat, lng] = data.location_coords.split(',').map(c => parseFloat(c.trim()));
-            if (!isNaN(lat) && !isNaN(lng)) {
-                document.getElementById('map-container').style.display = 'block';
-                initMap(lat, lng);
-            }
-        }
-    }
+                // 3. Services Mapping
+                document.getElementById('ui-bus').innerText = p.bus_route_name || 'Day Scholar';
+                document.getElementById('ui-hostel').innerText = p.hostel_name ? `${p.hostel_name} - Rm ${p.room_number}` : 'N/A';
 
-    // 2. Finance - CRITICAL FIX APPLIED
-    async function populateFinance(studentProfileData) {
-        const financeContent = document.getElementById('finance-content');
-        const noFinanceData = document.getElementById('no-finance-data');
-        const tbody = document.getElementById('invoice-list');
-        const pDueStat = document.getElementById('p-due-stat');
+                // 4. Academic Summary
+                document.getElementById('ui-att').innerText = `${a.percentage || 0}%`;
 
-        // Hide initialization message by default
-        noFinanceData.style.display = 'none';
-
-        try {
-            // CALL THE BACKEND ROUTE THAT AUTO-GENERATES INVOICES (routes/fees.js, Section 3.2)
-            const feeRes = await fetch(`${API_BASE_URL}/fees/student/${studentId}`, { headers: { 'Authorization': `Bearer ${token}` } });
-            
-            // Handle case where backend returns 404 or non-OK status due to deep internal error
-            if (!feeRes.ok) {
-                 const errorBody = await feeRes.json().catch(() => ({ message: feeRes.statusText }));
-                 throw new Error(errorBody.message || `HTTP Error ${feeRes.status}`);
-            }
-
-            const feeData = await feeRes.json();
-            
-            const total = parseFloat(feeData.total_fees) || 0;
-            const paid = parseFloat(feeData.total_paid) || 0;
-            const due = total - paid;
-            
-            if (total === 0 && feeData.payments.length === 0) {
-                 // Successfully loaded API, but total fees is 0.
-                 financeContent.style.display = 'none';
-                 noFinanceData.style.display = 'block';
-                 pDueStat.textContent = '₹0.00';
-                 noFinanceData.innerHTML = `Financial records not initialized for this student. <br><small style="color:var(--primary);">Reason: No fee structure found or Total Billed is zero.</small>`;
-                 return;
-            }
-
-            // --- Update UI ---
-            financeContent.style.display = 'block';
-
-            if (total > 0) {
-                const percent = Math.round((paid / total) * 100);
-                document.getElementById('fee-bar').style.width = `${percent}%`;
-                document.getElementById('fee-percentage').textContent = `${percent}%`;
-            } else {
-                document.getElementById('fee-bar').style.width = `100%`; // Paid > 0, Billed = 0
-                document.getElementById('fee-percentage').textContent = `100%`;
-            }
-
-            document.getElementById('val-paid').textContent = `₹${paid.toFixed(2)}`;
-            document.getElementById('val-due').textContent = `₹${due.toFixed(2)}`;
-            
-            // Update sidebar due stat using actual calculated balance
-            pDueStat.textContent = `₹${due.toFixed(2)}`;
-
-            // --- Populate Payment History (using feeData.payments) ---
-            tbody.innerHTML = '';
-            if (feeData.payments && feeData.payments.length > 0) {
-                feeData.payments.forEach(pay => {
-                    const statusText = pay.status || (pay.amount_paid >= pay.amount_due ? 'Paid' : 'Due');
-                    const row = `<tr>
-                        <td>${new Date(pay.payment_date || pay.invoice_date).toLocaleDateString()}</td>
-                        <td>${pay.description || pay.fee_item_name || 'Fee Payment'} - Ref: ${pay.receipt_number || pay.payment_id || pay.invoice_id.substring(0, 8).toUpperCase()}</td>
-                        <td style="text-align:right; color: ${statusText === 'Paid' ? 'var(--success)' : 'var(--danger)'};">
-                            ₹${parseFloat(pay.amount_paid || pay.amount_due).toFixed(2)}
-                        </td>
-                        <td style="text-align:center;">
-                            <span class="status-badge" style="background: ${statusText === 'Paid' ? 'var(--success)' : 'var(--danger)'}; color:var(--bg-dark); padding: 2px 8px; border-radius: 4px;">${statusText}</span>
-                        </td>
-                    </tr>`;
-                    tbody.innerHTML += row;
+                // 5. Radar Performance Chart
+                new Chart(document.getElementById('skillsRadar'), {
+                    type: 'radar',
+                    data: {
+                        labels: s.labels || ['Theory', 'Practical', 'Logic', 'Lab', 'Language', 'Project'],
+                        datasets: [{
+                            data: s.values || [0,0,0,0,0,0],
+                            backgroundColor: 'rgba(99, 102, 241, 0.2)',
+                            borderColor: '#6366f1', borderWidth: 2, pointBackgroundColor: '#10b981'
+                        }]
+                    },
+                    options: { 
+                        scales: { r: { suggestMin: 0, suggestMax: 100, ticks: { display: false } } },
+                        plugins: { legend: { display: false } }
+                    }
                 });
-            } else {
-                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No transaction history.</td></tr>';
-            }
 
-        } catch (error) {
-            console.error('Finance API Failed to Load/Generate:', error);
-            // Display initialization error if API failed due to status/internal crash
-            financeContent.style.display = 'none';
-            noFinanceData.style.display = 'block';
-            pDueStat.textContent = '--';
-            noFinanceData.innerHTML = `Financial records not initialized for this student. <br><small style="color:var(--danger);">Error: Transaction Failed. Check database links (Fee Structure).</small>`;
-        }
-    }
+                // 6. QR Pass Generation
+                new QRCode(document.getElementById("qr-wrap"), { 
+                    text: `STU_VERIFY:${p.admission_id}`, 
+                    width: 150, height: 150,
+                    colorDark: "#0f172a", colorLight: "#ffffff"
+                });
 
-
-    // 3. Academic
-    function populateAcademic(data) {
-        const hasExamData = data.exam_results && Array.isArray(data.exam_results) && data.exam_results.length > 0;
-        if (hasExamData) {
-            const labels = data.exam_results.map(e => e.exam_name);
-            const scores = data.exam_results.map(e => e.percentage || e.total_marks);
-            
-            new Chart(document.getElementById('examChart'), {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Performance (%)',
-                        data: scores,
-                        borderColor: '#00f3ff',
-                        tension: 0.3
-                    }]
-                },
-                options: { responsive: true, scales: { y: { beginAtZero: true, max: 100, ticks: { color: 'var(--text-main)' }, grid: { color: 'rgba(255,255,255,0.1)' } }, x: { ticks: { color: 'var(--text-main)' }, grid: { color: 'rgba(255,255,255,0.1)' } } }, plugins: { legend: { labels: { color: 'var(--text-main)' } } } }
-            });
-        } else {
-            document.getElementById('charts-container').style.display = 'none';
-            document.getElementById('no-academic-data').style.display = 'block';
+            } catch (err) { console.error("Initialization Failed", err); }
         }
 
-        const attendanceGrid = document.getElementById('attendance-grid');
-        attendanceGrid.innerHTML = '';
-        if (data.attendance_logs && Array.isArray(data.attendance_logs) && data.attendance_logs.length > 0) {
-            document.getElementById('no-attendance-data').style.display = 'none';
-            data.attendance_logs.forEach(log => {
-                const box = document.createElement('div');
-                box.className = `heat-box ${log.status === 'Present' ? 'heat-present' : log.status === 'Absent' ? 'heat-absent' : 'heat-leave'}`;
-                box.title = `${new Date(log.date).toDateString()}: ${log.status}`;
-                box.textContent = new Date(log.date).getDate();
-                attendanceGrid.appendChild(box);
-            });
-        } else {
-            document.getElementById('no-attendance-data').style.display = 'block';
-        }
-    }
-
-    // 4. Timeline
-    function populateTimeline(data) {
-        const container = document.getElementById('timeline-container');
-        container.innerHTML = '';
-        if (data.activity_logs && Array.isArray(data.activity_logs) && data.activity_logs.length > 0) {
-            document.getElementById('no-timeline-data').style.display = 'none';
-            data.activity_logs.forEach(log => {
-                const item = `<div class="timeline-item">
-                    <div class="t-date">${new Date(log.timestamp).toLocaleString()}</div>
-                    <div class="t-content">${log.message}</div>
-                </div>`;
-                container.innerHTML += item;
-            });
-        } else {
-            document.getElementById('no-timeline-data').style.display = 'block';
-        }
-    }
-
-    // --- Map Initialization (Fixed) ---
-    function initMap(lat, lng) {
-        if (typeof L === 'undefined') {
-            console.error("Leaflet library not loaded.");
-            return;
-        }
-        if (mapInstance) mapInstance.remove();
-        
-        mapInstance = L.map('map-container').setView([lat, lng], 14);
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-            subdomains: 'abcd',
-            maxZoom: 20
-        }).addTo(mapInstance);
-        L.marker([lat, lng]).addTo(mapInstance);
-    }
-
-    window.switchTab = (tabId) => {
-        document.querySelectorAll('.tab-pane').forEach(el => el.classList.remove('active'));
-        document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-        document.getElementById(tabId).classList.add('active');
-        event.currentTarget.classList.add('active');
-        
-        if(tabId === 'overview' && mapInstance) {
-            setTimeout(() => mapInstance.invalidateSize(), 200);
-        }
-    };
-
-    window.generateIdCard = () => {
-        if (!studentId) {
-             alert("Cannot generate ID card: Student ID is missing.");
-             return;
-        }
-        window.open(`${API_BASE_URL}/reports/generate-id?studentId=${studentId}`, '_blank');
-    };
-</script>
-<script src="js/global-config.js"></script>
+        function logout() { localStorage.clear(); location.href = '/login.html'; }
+        document.addEventListener('DOMContentLoaded', initialize);
+    </script>
 </body>
 </html>
