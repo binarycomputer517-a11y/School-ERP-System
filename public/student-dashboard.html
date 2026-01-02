@@ -3,235 +3,266 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Dashboard | Global Edition</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <title>BCSM Student Portal - Full Edition</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
-    
     <style>
         :root {
-            --primary: #6366f1;
-            --primary-dark: #4f46e5;
-            --bg-body: #f8fafc;
-            --card-bg: #ffffff;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
+            --primary-dark: #003366; 
+            --primary-accent: #1e88e5; 
+            --secondary-purple: #5e35b1; 
+            --secondary-light: #7a44f2;
+            --bg-body: #f0f2f8;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --sidebar-width: 280px;
         }
 
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            padding-bottom: 30px;
+            font-family: 'Montserrat', sans-serif;
+            background: linear-gradient(135deg, #f0f2f8 0%, #e0e4f1 100%);
+            min-height: 100vh;
+            margin: 0;
+            overflow-x: hidden;
         }
 
-        /* --- Global Sidebar Navigation --- */
-        .sidebar-nav {
-            background: var(--card-bg);
-            border-radius: 24px;
-            padding: 20px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
-            border: 1px solid #f1f5f9;
-        }
+        /* --- Layout Structures --- */
+        #wrapper { display: flex; width: 100%; }
 
-        .nav-header {
-            font-size: 0.75rem;
-            font-weight: 700;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin: 20px 0 10px 10px;
-        }
-
-        .nav-item-link {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            color: var(--text-main);
-            text-decoration: none;
-            border-radius: 12px;
-            font-weight: 500;
+        #sidebar {
+            min-width: var(--sidebar-width);
+            max-width: var(--sidebar-width);
+            background: var(--secondary-purple);
+            color: #fff;
             transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            margin-bottom: 4px;
+            min-height: 100vh;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            z-index: 1000;
         }
 
-        .nav-item-link i {
-            width: 24px;
-            font-size: 1.1rem;
-            margin-right: 12px;
-            color: var(--text-muted);
-        }
+        #sidebar.inactive { margin-left: calc(-1 * var(--sidebar-width)); }
 
-        .nav-item-link:hover {
-            background: #f1f5f9;
-            color: var(--primary);
-        }
-
-        .nav-item-link:hover i {
-            color: var(--primary);
-        }
-
-        /* --- Profile Header (Centred Global Style) --- */
-        .header-banner {
-            background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
-            height: 160px;
-            border-radius: 30px;
-            margin-bottom: -60px;
-        }
-
-        .profile-container {
-            text-align: center;
-            padding-bottom: 30px;
-        }
-
-        #student-photo {
-            width: 120px;
-            height: 120px;
-            border-radius: 40px; /* Modern Squircle Shape */
-            border: 6px solid white;
-            object-fit: cover;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-            background: white;
-        }
-
-        /* --- Analytics Cards --- */
-        .stat-card {
-            background: var(--card-bg);
-            border-radius: 24px;
-            padding: 24px;
-            border: 1px solid #f1f5f9;
-            transition: transform 0.3s ease;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.02);
-        }
-
-        .stat-card:hover {
-            transform: translateY(-5px);
-        }
-
-        .icon-box {
-            width: 48px;
-            height: 48px;
-            border-radius: 14px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 16px;
-        }
-
-        /* --- Notifications & Teachers --- */
-        .glass-panel {
-            background: white;
-            border-radius: 24px;
+        #content {
+            width: 100%;
             padding: 25px;
-            border: 1px solid #f1f5f9;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.03);
+            transition: all 0.3s;
         }
 
-        .notice-pill {
-            background: #f8fafc;
-            border-radius: 16px;
-            padding: 12px 16px;
-            margin-bottom: 12px;
-            border-left: 4px solid var(--primary);
+        /* --- Sidebar Navigation --- */
+        .sidebar-header { padding: 25px 20px; background: rgba(0,0,0,0.15); text-align: center; }
+        
+        .nav-card { background: transparent !important; border: none; }
+        
+        .nav-card .card-header {
+            color: rgba(255,255,255,0.85);
+            padding: 12px 20px;
+            cursor: pointer;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
         }
 
-        @media (max-width: 768px) {
-            .sidebar-col { order: 2; margin-top: 20px; }
-            .content-col { order: 1; }
+        .nav-card .card-header:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+        .list-group-item {
+            background: rgba(0,0,0,0.1) !important;
+            color: #d1d1d1 !important;
+            border: none !important;
+            font-size: 13px;
+            padding: 10px 25px 10px 45px !important;
+            transition: 0.2s;
+            text-decoration: none;
+            display: block;
+        }
+
+        .list-group-item:hover {
+            background: var(--primary-accent) !important;
+            color: white !important;
+            padding-left: 50px !important;
+        }
+
+        /* --- Original Dashboard Elements --- */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+            margin-bottom: 20px;
+        }
+
+        .profile-card {
+            background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary-purple) 100%);
+            border-radius: 20px;
+            padding: 25px;
+            color: white;
+            box-shadow: 0 10px 30px rgba(94, 53, 177, 0.3);
+            margin-bottom: 25px;
+        }
+
+        #student-photo { width: 90px; height: 90px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); object-fit: cover; }
+
+        /* Responsive Mobile */
+        @media (max-width: 992px) {
+            #sidebar { position: fixed; margin-left: calc(-1 * var(--sidebar-width)); }
+            #sidebar.active { margin-left: 0; }
         }
     </style>
 </head>
 <body>
 
-<div class="container-fluid px-4 py-4">
-    <div class="header-banner"></div>
+<div id="wrapper">
+    <nav id="sidebar">
+        <div class="sidebar-header">
+            <h4 class="fw-bold mb-0"><i class="fas fa-university me-2"></i>BCSM Portal</h4>
+        </div>
 
-    <div class="row g-4">
-        <div class="col-lg-3 sidebar-col">
-            <div class="sidebar-nav">
-                <div class="d-flex align-items-center mb-4 px-2">
-                    <div class="bg-primary rounded-3 p-2 me-2">
-                        <i class="fas fa-graduation-cap text-white"></i>
-                    </div>
-                    <h5 class="fw-bold m-0">BCSM ELITE</h5>
+        <div class="mt-2">
+            <div class="card nav-card">
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mAcademics">
+                    <span><i class="fas fa-book-open me-2"></i>Academics</span>
+                    <i class="fas fa-chevron-down small"></i>
                 </div>
+                <div id="mAcademics" class="collapse show">
+                    <div class="list-group">
+                        <a href="/registration-certificate.html" class="list-group-item">Registration Cert.</a>
+                        <a href="/student-class-timetable.html" class="list-group-item">Class Timetable</a>
+                        <a href="/my-exam-schedule.html" class="list-group-item">Exam Schedule</a>
+                        <a href="/student-admit-card.html" class="list-group-item">Admit Card</a>
+                        <a href="/my-syllabus.html" class="list-group-item">Syllabus</a>
+                        <a href="/my-assignments.html" class="list-group-item">Assignments</a>
+                        <a href="/my-study-material.html" class="list-group-item">Study Material</a>
+                        <a href="/my-quiz.html" class="list-group-item">Online Quiz</a>
+                        <a href="/view-transcript.html" class="list-group-item">View Marks</a>
+                        <a href="/my-view-attendance.html" class="list-group-item">View Attendance</a>
+                        <a href="/student-certificate.html" class="list-group-item">My Certificate</a>
+                    </div>
+                </div>
+            </div>
 
-                <div class="nav-header">Main Menu</div>
-                <a href="/student-dashboard.html" class="nav-item-link"><i class="fas fa-columns"></i> Dashboard</a>
-                <a href="/student-class-timetable.html" class="nav-item-link"><i class="fas fa-calendar-alt"></i> Timetable</a>
-                <a href="/my-assignments.html" class="nav-item-link"><i class="fas fa-tasks"></i> Assignments</a>
-                <a href="/view-transcript.html" class="nav-item-link"><i class="fas fa-poll"></i> Results</a>
+            <div class="card nav-card">
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mFinance">
+                    <span><i class="fas fa-file-invoice-dollar me-2"></i>Finance</span>
+                    <i class="fas fa-chevron-down small"></i>
+                </div>
+                <div id="mFinance" class="collapse">
+                    <div class="list-group">
+                        <a href="/online-payment.html" class="list-group-item">Pay Fees Online</a>
+                        <a href="/my-payment-history.html" class="list-group-item">Payment History</a>
+                        <a href="/my-fee-receipts.html" class="list-group-item">Fee Receipts</a>
+                        <a href="/my-scholarship.html" class="list-group-item">Scholarship Status</a>
+                    </div>
+                </div>
+            </div>
 
-                <div class="nav-header">Accounts</div>
-                <a href="/online-payment.html" class="nav-item-link"><i class="fas fa-wallet"></i> Payments</a>
-                <a href="/my-fee-receipts.html" class="nav-item-link"><i class="fas fa-file-invoice-dollar"></i> Receipts</a>
+            <div class="card nav-card">
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mLibrary">
+                    <span><i class="fas fa-book-reader me-2"></i>Library</span>
+                    <i class="fas fa-chevron-down small"></i>
+                </div>
+                <div id="mLibrary" class="collapse">
+                    <div class="list-group">
+                        <a href="/library-search.html" class="list-group-item">Search Books</a>
+                        <a href="/library-issued.html" class="list-group-item">Issued Books</a>
+                        <a href="/mylibrary-history.html" class="list-group-item">Reading History</a>
+                        <a href="/mylibraryfines.html" class="list-group-item">View Fines</a>
+                        <a href="/myebooks.html" class="list-group-item">e-Resources</a>
+                    </div>
+                </div>
+            </div>
 
-                <div class="nav-header">Support</div>
-                <a href="/my-messages.html" class="nav-item-link"><i class="fas fa-comment-alt"></i> Messages</a>
-                <a href="javascript:void(0)" onclick="logout()" class="nav-item-link text-danger"><i class="fas fa-sign-out-alt"></i> Logout</a>
+            <div class="card nav-card">
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mServices">
+                    <span><i class="fas fa-concierge-bell me-2"></i>Services</span>
+                    <i class="fas fa-chevron-down small"></i>
+                </div>
+                <div id="mServices" class="collapse">
+                    <div class="list-group">
+                        <a href="/my-bus.html" class="list-group-item">View Bus Route</a>
+                        <a href="/mybus-tracker.html" class="list-group-item">Track Bus (Live)</a>
+                        <a href="/mymess-menu.html" class="list-group-item">View Mess Menu</a>
+                        <a href="/myhostel-leave.html" class="list-group-item">Hostel Leave</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card nav-card">
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mProfile">
+                    <span><i class="fas fa-user-circle me-2"></i>Profile & More</span>
+                    <i class="fas fa-chevron-down small"></i>
+                </div>
+                <div id="mProfile" class="collapse">
+                    <div class="list-group">
+                        <a href="/student-profile.html" class="list-group-item">Full Profile</a>
+                        <a href="/change-password.html" class="list-group-item">Change Password</a>
+                        <a href="/apply-leave.html" class="list-group-item">Apply for Leave</a>
+                        <a href="/leave-status.html" class="list-group-item">Leave Status</a>
+                        <a href="/my-id-card.html" class="list-group-item">My ID Card</a>
+                        <a href="/my-school-calendar.html" class="list-group-item">Event Calendar</a>
+                        <a href="/my-messages.html" class="list-group-item">Messages</a>
+                        <a href="/my-feedback.html" class="list-group-item">Feedback</a>
+                        <a href="/gallery.html" class="list-group-item">School Gallery</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div id="content">
+        <header class="d-flex justify-content-between align-items-center mb-4">
+            <button type="button" id="sidebarCollapse" class="btn btn-primary shadow-sm">
+                <i class="fas fa-bars"></i>
+            </button>
+            <button class="btn btn-danger btn-sm rounded-pill px-4" onclick="logout()">
+                <i class="fas fa-sign-out-alt me-1"></i> Logout
+            </button>
+        </header>
+
+        <div class="profile-card">
+            <div class="row align-items-center">
+                <div class="col-md-auto mb-3 mb-md-0 text-center">
+                    <img id="student-photo" src="https://placehold.co/100x100?text=Profile" alt="Photo">
+                </div>
+                <div class="col-md">
+                    <h4 id="welcome-message" class="fw-bold mb-3 text-center text-md-start">Welcome back!</h4>
+                    <div class="row g-2 text-center text-md-start">
+                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Student ID</small><span id="student-id" class="fw-bold">...</span></div>
+                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Grade</small><span id="student-grade" class="fw-bold">...</span></div>
+                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Roll / Sec</small><span class="fw-bold"><span id="student-roll">...</span> / <span id="student-section">...</span></span></div>
+                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Email</small><span id="student-email" class="fw-bold small">...</span></div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="col-lg-9 content-col">
-            <div class="profile-container">
-                <img id="student-photo" src="https://placehold.co/120x120?text=Student" alt="Profile">
-                <h3 class="fw-bold mt-3" id="welcome-message">Hi, Student! 👋</h3>
-                <p class="text-muted small">Academic Excellence Dashboard</p>
-                
-                <div class="d-flex justify-content-center gap-2 mt-2">
-                    <span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">ID: <span id="student-id">...</span></span>
-                    <span class="badge bg-white text-dark border px-3 py-2 rounded-pill shadow-sm">Roll: <span id="student-roll">...</span></span>
+        <div class="row g-3">
+            <div class="col-md-6">
+                <div class="card glass-card p-3 h-100">
+                    <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="fas fa-chart-pie me-2"></i>Finance Summary</h6>
+                    <div class="d-flex justify-content-between my-2"><span>Total Due:</span> <span id="fee-due" class="fw-bold text-dark">...</span></div>
+                    <div class="d-flex justify-content-between my-2"><span>Total Paid:</span> <span id="fee-paid" class="text-success fw-bold">...</span></div>
+                    <div class="d-flex justify-content-between my-2 border-top pt-2"><span>Balance:</span> <span id="fee-balance" class="text-danger fw-bold">...</span></div>
+                    <a href="/online-payment.html" class="btn btn-primary btn-sm w-100 mt-3">Pay Fees</a>
                 </div>
             </div>
-
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <div class="stat-card">
-                        <div class="icon-box bg-primary-subtle text-primary"><i class="fas fa-wallet"></i></div>
-                        <div class="text-muted small fw-medium">Outstanding Fees</div>
-                        <h4 class="fw-bold mt-1" id="fee-balance">₹0.00</h4>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card">
-                        <div class="icon-box bg-success-subtle text-success"><i class="fas fa-user-check"></i></div>
-                        <div class="text-muted small fw-medium">Attendance</div>
-                        <h4 class="fw-bold mt-1">92.5%</h4>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="stat-card">
-                        <div class="icon-box bg-warning-subtle text-warning"><i class="fas fa-book"></i></div>
-                        <div class="text-muted small fw-medium">Courses</div>
-                        <h4 class="fw-bold mt-1" id="student-grade">N/A</h4>
-                    </div>
+            <div class="col-md-6">
+                <div class="card glass-card p-3 h-100">
+                    <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="fas fa-bell me-2"></i>Recent Notices</h6>
+                    <ul class="list-unstyled small mb-0" id="notice-board-list">
+                        <li><i class="fas fa-spinner fa-spin me-2"></i>Loading...</li>
+                    </ul>
                 </div>
             </div>
+        </div>
 
-            <div class="row mt-4 g-4">
-                <div class="col-md-7">
-                    <div class="glass-panel">
-                        <h6 class="fw-bold mb-4 d-flex align-items-center">
-                            <i class="fas fa-bullhorn me-2 text-primary"></i> Notifications
-                        </h6>
-                        <div id="notice-board-list">
-                            <div class="notice-pill">
-                                <div class="fw-semibold small">Exam Portal Updated</div>
-                                <div class="text-muted" style="font-size: 11px;">Posted on: Jan 02, 2026</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-5">
-                    <div class="glass-panel">
-                        <h6 class="fw-bold mb-4 d-flex align-items-center">
-                            <i class="fas fa-user-tie me-2 text-primary"></i> Faculty
-                        </h6>
-                        <div id="my-teachers-list">
-                            <div class="text-muted small">Connecting with teachers...</div>
-                        </div>
-                    </div>
-                </div>
+        <div class="card glass-card mt-4 p-3">
+            <h6 class="fw-bold mb-3"><i class="fas fa-chalkboard-teacher me-2"></i>My Assigned Teachers</h6>
+            <div id="my-teachers-list" class="row g-2">
+                <div class="col-12 text-muted small">Loading...</div>
             </div>
         </div>
     </div>
@@ -240,6 +271,13 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="js/global-config.js"></script>
 <script>
+    // Sidebar Toggle
+    document.getElementById('sidebarCollapse').addEventListener('click', function () {
+        document.getElementById('sidebar').classList.toggle('active'); // For mobile
+        document.getElementById('sidebar').classList.toggle('inactive'); // For desktop
+    });
+
+    // Original Functions
     function logout() { localStorage.clear(); window.location.href = '/login.html'; }
 
     async function authFetch(url) {
@@ -256,25 +294,36 @@
 
         try {
             const p = await authFetch(`/api/students/${sid}`);
-            document.getElementById('welcome-message').innerText = `Hi, ${p.first_name || 'Student'}! 👋`;
-            document.getElementById('student-id').innerText = p.admission_id || sid;
-            document.getElementById('student-grade').innerText = p.course_name || 'General';
-            document.getElementById('student-roll').innerText = p.roll_number || 'N/A';
+            document.getElementById('welcome-message').innerHTML = `Hi, ${p.first_name || 'Student'}! 👋`;
+            document.getElementById('student-id').textContent = p.admission_id || sid;
+            document.getElementById('student-grade').textContent = p.course_name || 'N/A';
+            document.getElementById('student-roll').textContent = p.roll_number || 'N/A';
+            document.getElementById('student-section').textContent = p.batch_name || 'N/A';
+            document.getElementById('student-email').textContent = p.email || 'N/A';
             if(p.profile_image_path) document.getElementById('student-photo').src = p.profile_image_path;
 
             const f = await authFetch(`/api/students/${sid}/fees`);
-            document.getElementById('fee-balance').innerText = `₹${f.balance_due || 0}`;
+            document.getElementById('fee-due').textContent = `₹${f.total_billed || 0}`;
+            document.getElementById('fee-paid').textContent = `₹${f.total_paid || 0}`;
+            document.getElementById('fee-balance').textContent = `₹${f.balance_due || 0}`;
 
             const t = await authFetch(`/api/students/${sid}/teachers`);
-            document.getElementById('my-teachers-list').innerHTML = t.slice(0, 3).map(i => `
-                <div class="d-flex align-items-center mb-3">
-                    <div class="bg-light rounded-circle p-2 me-2"><i class="fas fa-user-circle text-muted"></i></div>
-                    <div>
-                        <div class="fw-bold small">${i.full_name}</div>
-                        <div class="text-muted" style="font-size:10px">${i.subject_name}</div>
+            document.getElementById('my-teachers-list').innerHTML = t.map(i => `
+                <div class="col-6 col-md-3">
+                    <div class="p-2 border rounded bg-white text-center small shadow-sm">
+                        <b>${i.full_name}</b><br>
+                        <span class="text-muted" style="font-size:10px">${i.subject_name}</span>
                     </div>
                 </div>
-            `).join('') || 'No faculty assigned.';
+            `).join('') || 'No teachers found.';
+
+            const n = await authFetch(`/api/announcements/role/student`);
+            document.getElementById('notice-board-list').innerHTML = n.slice(0, 3).map(i => `
+                <li class="border-bottom mb-2 pb-1">
+                    <b>${i.title}</b><br>
+                    <small class="text-muted ps-2">${new Date(i.created_at).toDateString()}</small>
+                </li>
+            `).join('') || 'No notices.';
 
         } catch (e) { console.error("Init Error:", e); }
     }
