@@ -430,7 +430,7 @@ router.get('/student/:sid/summary', authenticateToken, async (req, res) => {
         // ⭐ FIX: Added ::text cast to the status column to handle ENUM comparison
         const query = `
             SELECT 
-                COUNT(*) FILTER (WHERE status::text IN ('Present', 'P')) as present,
+                COUNT(*) FILTER (WHERE LOWER(status::text) IN ('present', 'p')) as present,
                 COUNT(*) FILTER (WHERE status::text IN ('Late', 'L')) as late,
                 COUNT(*) as total
             FROM attendance 
