@@ -1054,4 +1054,53 @@ router.get('/staff/drivers-summary', authenticateToken, authorize(ALLOWED_STAFF)
     }
 });
 
+// Add this to your transport routes file
+router.get('/student/:sid/bus-location', authenticateToken, async (req, res) => {
+    const { sid } = req.params;
+
+    try {
+        const query = `
+            SELECT 
+                v.current_coords, 
+                v.status, 
+                v.vehicle_no,
+                v.last_updated
+            FROM student_transport_assignments sta
+            JOIN transport_vehicles v ON sta.vehicle_id = v.id
+            WHERE sta.student_id = $1 AND sta.is_active = TRUE;
+        `;
+
+        const { rows } = await pool.query(query, [sid]);
+
+        if (rows.length === 0) {
+            return res.status(404).json({ error: "No active transport assignment found for this student." });
+        }
+
+        const vehicle = rows[0];
+
+        // If the bus hasn't started a trip or coords are missing
+        if (!vehicle.current_coords) {
+            return res.status(200).json({ 
+                status: vehicle.status, 
+                message: "Bus is currently stationary or GPS is offline." 
+            });
+        }
+
+        // Split "latitude, longitude" string into separate fields for the frontend
+        const [lat, lng] = vehicle.current_coords.split(',');
+
+        res.json({
+            latitude: lat.trim(),
+            longitude: lng.trim(),
+            vehicle_no: vehicle.vehicle_no,
+            status: vehicle.status,
+            last_sync: vehicle.last_updated
+        });
+
+    } catch (err) {
+        console.error("Bus Location Error:", err.message);
+        res.status(500).json({ error: "Server error fetching bus location" });
+    }
+});
+
 module.exports = router;

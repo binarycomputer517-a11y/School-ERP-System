@@ -621,4 +621,92 @@ router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 
     }
 });
 
+
+const path = require('path');
+const fs = require('fs');
+
+// =========================================================
+// 10. GET: Secure Digital Vault (File Protection)
+// =========================================================
+router.get('/vault/:filename', authenticateToken, async (req, res) => {
+    const { filename } = req.params;
+    const authUserId = req.user.id; // User ID from JWT
+
+    try {
+        // Security Check: Does this file belong to the student or is requester an Admin?
+        const verifyQuery = `
+            SELECT 1 FROM ${STUDENTS_TABLE} 
+            WHERE (user_id = $1 OR student_id = $1) 
+            AND (id_document_path = $2 OR signature_path = $2 OR profile_image_path = $2)
+        `;
+        const ownership = await pool.query(verifyQuery, [authUserId, filename]);
+
+        if (ownership.rowCount === 0 && !['Super Admin', 'Admin'].includes(req.user.role)) {
+            return res.status(403).json({ message: "Access Denied: Unauthorised vault access." });
+        }
+
+        // Resolve absolute path to the file
+        const filePath = path.join(__dirname, '../uploads', filename);
+
+        if (fs.existsSync(filePath)) {
+            res.sendFile(filePath);
+        } else {
+            res.status(404).json({ message: "Document not found in vault." });
+        }
+    } catch (error) {
+        console.error('Vault Streaming Error:', error);
+        res.status(500).json({ message: "Internal server error accessing vault." });
+    }
+});
+
+// =========================================================
+// 11. GET: Attendance Percentage (Dashboard Aggregate)
+// =========================================================
+router.get('/:id/attendance-summary', authenticateToken, async (req, res) => {
+    const safeId = toUUID(req.params.id);
+    try {
+        const query = `
+            SELECT 
+                ROUND((COUNT(CASE WHEN status = 'Present' THEN 1 END) * 100.0) / NULLIF(COUNT(*), 0)) as percentage
+            FROM attendance 
+            WHERE student_id = $1::uuid OR user_id = $1::uuid;
+        `;
+        const result = await pool.query(query, [safeId]);
+        res.json(result.rows[0] || { percentage: 0 });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to fetch attendance summary" });
+    }
+});
+
+// =========================================================
+// 12. GET: Skills Radar Data (Marks Aggregate)
+// =========================================================
+router.get('/:id/skills', authenticateToken, async (req, res) => {
+    const safeId = toUUID(req.params.id);
+    try {
+        const query = `
+            SELECT 
+                s.subject_name as label, 
+                MAX(m.attained_marks) as value 
+            FROM marks m
+            JOIN subjects s ON m.subject_id = s.id
+            WHERE m.student_id = $1::uuid
+            GROUP BY s.subject_name 
+            LIMIT 6;
+        `;
+        const result = await pool.query(query, [safeId]);
+        
+        const labels = result.rows.map(row => row.label);
+        const values = result.rows.map(row => row.value);
+
+        res.json({ 
+            labels: labels.length > 0 ? labels : ['Theory', 'Lab', 'Logic', 'English', 'Viva', 'Project'], 
+            values: values.length > 0 ? values : [0, 0, 0, 0, 0, 0] 
+        });
+    } catch (err) {
+        res.status(500).json({ error: "Failed to generate skill profile" });
+    }
+});
+
+
 module.exports = router;

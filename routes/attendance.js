@@ -400,4 +400,45 @@ router.get('/subjects', authenticateToken, async (req, res) => {
     }
 });
 
+// =================================================================
+// 7. STUDENT PROFILE SUMMARY (For Dashboard)
+// =================================================================
+router.get('/student/:sid/summary', authenticateToken, async (req, res) => {
+    const { sid } = req.params;
+
+    try {
+        // ⭐ FIX: Added ::text cast to the status column to handle ENUM comparison
+        const query = `
+            SELECT 
+                COUNT(*) FILTER (WHERE status::text IN ('Present', 'P')) as present,
+                COUNT(*) FILTER (WHERE status::text IN ('Late', 'L')) as late,
+                COUNT(*) as total
+            FROM attendance 
+            WHERE student_id = $1::uuid;
+        `;
+
+        const { rows } = await pool.query(query, [sid]);
+        
+        const present = parseInt(rows[0]?.present || 0);
+        const late = parseInt(rows[0]?.late || 0);
+        const total = parseInt(rows[0]?.total || 0);
+
+        if (total === 0) {
+            return res.json({ percentage: 0, present: 0, total: 0, status: 'No Data' });
+        }
+
+        const percentage = Math.round(((present + (late * 0.5)) / total) * 100);
+
+        res.json({
+            percentage: percentage,
+            present: present,
+            total: total,
+            status: percentage >= 75 ? 'Good' : 'Shortage'
+        });
+
+    } catch (err) {
+        console.error('Attendance Summary Error:', err.message);
+        res.status(500).json({ error: 'Failed to calculate attendance summary' });
+    }
+});
 module.exports = router;

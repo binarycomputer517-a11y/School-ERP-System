@@ -228,4 +228,42 @@ router.delete('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER
     }
 });
 
+
+router.get('/student/:sid/skills', authenticateToken, async (req, res) => {
+    try {
+        const { sid } = req.params;
+
+        // Fetching real average marks per subject for the competency chart
+        const query = `
+            SELECT 
+                s.subject_name as label,
+                COALESCE(AVG(m.total_marks_obtained), 0) as value
+            FROM subjects s
+            JOIN marks m ON s.id = m.subject_id
+            WHERE m.student_id = $1::uuid
+            GROUP BY s.subject_name
+            ORDER BY s.subject_name ASC
+            LIMIT 6;
+        `;
+
+        const { rows } = await pool.query(query, [sid]);
+
+        // Fallback labels if no marks are found yet
+        if (rows.length === 0) {
+            return res.json({
+                labels: ['Logic', 'Theory', 'Practical', 'Research', 'Viva', 'Ethics'],
+                values: [0, 0, 0, 0, 0, 0]
+            });
+        }
+
+        res.json({
+            labels: rows.map(r => r.label),
+            values: rows.map(r => Math.round(parseFloat(r.value)))
+        });
+
+    } catch (err) {
+        console.error('Skills Radar Error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch competency data' });
+    }
+});
 module.exports = router;
