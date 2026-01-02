@@ -2,341 +2,362 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BCSM Student Portal - Full Final Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BCSM Student Portal - Full Final Mobile</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --primary-dark: #003366; 
-            --primary-accent: #1e88e5; 
-            --secondary-purple: #5e35b1; 
-            --secondary-light: #7a44f2;
-            --bg-body: #f0f2f8;
-            --glass-bg: rgba(255, 255, 255, 0.75);
-            --sidebar-width: 280px;
+            --primary-purple: #5e35b1;
+            --secondary-purple: #4527a0;
+            --accent-blue: #1e88e5;
+            --bg-light: #f4f7fe;
         }
 
         body {
             font-family: 'Montserrat', sans-serif;
-            background: linear-gradient(135deg, #f0f2f8 0%, #e0e4f1 100%);
-            min-height: 100vh;
+            background-color: var(--bg-light);
             margin: 0;
-            overflow-x: hidden;
+            padding-bottom: 90px;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        /* --- Layout --- */
-        #wrapper { display: flex; width: 100%; }
+        /* --- Animations --- */
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .fade-in { animation: fadeIn 0.5s ease forwards; }
 
-        #sidebar {
-            min-width: var(--sidebar-width);
-            max-width: var(--sidebar-width);
-            background: var(--secondary-purple);
-            color: #fff;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            min-height: 100vh;
-            position: sticky;
-            top: 0;
-            height: 100vh;
+        /* --- Header Section --- */
+        .mobile-header {
+            background: linear-gradient(135deg, var(--primary-purple) 0%, var(--secondary-purple) 100%);
+            padding: 35px 20px 55px;
+            border-bottom-left-radius: 40px;
+            border-bottom-right-radius: 40px;
+            color: white;
+            box-shadow: 0 10px 20px rgba(94, 53, 177, 0.2);
+        }
+
+        .profile-img {
+            width: 65px; height: 65px;
+            border-radius: 50%;
+            border: 3px solid rgba(255,255,255,0.3);
+            object-fit: cover;
+        }
+
+        /* --- Action Grid --- */
+        .action-card {
+            background: white;
+            border-radius: 20px;
+            padding: 18px 10px;
+            text-align: center;
+            text-decoration: none;
+            color: #444;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.04);
+            display: block;
+            border: 1px solid rgba(255,255,255,0.8);
+            transition: all 0.2s;
+        }
+        .action-card i { font-size: 26px; margin-bottom: 10px; }
+        .action-card span { font-size: 12px; font-weight: 600; display: block; }
+
+        /* --- Custom Panels --- */
+        .glass-panel {
+            background: white;
+            border-radius: 24px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.03);
+            border: 1px solid #fff;
+        }
+
+        /* --- Menu Drawer --- */
+        #menuDrawer {
+            position: fixed;
+            top: 0; left: -100%;
+            width: 85%; height: 100%;
+            background: white;
+            z-index: 2100;
+            transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             overflow-y: auto;
-            z-index: 1060;
         }
-
-        #sidebar.inactive { margin-left: calc(-1 * var(--sidebar-width)); }
-
-        #content { width: 100%; padding: 25px; transition: all 0.3s; }
-
-        /* --- Sidebar Navigation --- */
-        .sidebar-header { padding: 25px 20px; background: rgba(0,0,0,0.15); text-align: center; }
-        .nav-card { background: transparent !important; border: none; }
-        .nav-card .card-header {
-            color: rgba(255,255,255,0.85);
-            padding: 12px 20px; cursor: pointer; font-size: 14px;
-            display: flex; justify-content: space-between; align-items: center;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
+        #menuDrawer.open { left: 0; }
+        .overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(4px);
+            display: none; z-index: 2050;
         }
-        .nav-card .card-header:hover { background: rgba(255,255,255,0.1); color: #fff; }
-        .list-group-item {
-            background: rgba(0,0,0,0.1) !important; color: #d1d1d1 !important;
-            border: none !important; font-size: 13px;
-            padding: 10px 25px 10px 45px !important; transition: 0.2s;
-            text-decoration: none; display: block;
-        }
-        .list-group-item:hover { background: var(--primary-accent) !important; color: white !important; padding-left: 50px !important; }
+        .overlay.show { display: block; }
 
-        /* --- Dashboard UI --- */
-        .glass-card { background: var(--glass-bg); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.4); border-radius: 20px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08); margin-bottom: 20px; }
-        .profile-card { background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary-purple) 100%); border-radius: 20px; padding: 25px; color: white; box-shadow: 0 10px 30px rgba(94, 53, 177, 0.3); margin-bottom: 25px; }
-        #student-photo { width: 90px; height: 90px; border-radius: 50%; border: 3px solid rgba(255,255,255,0.3); object-fit: cover; }
-
-        /* --- Bottom Nav & Badges --- */
+        /* --- Bottom Nav --- */
         .bottom-nav {
-            display: none; position: fixed; bottom: 0; left: 0; right: 0;
-            height: 65px; background: #fff; box-shadow: 0 -2px 15px rgba(0,0,0,0.1);
-            z-index: 1050; justify-content: space-around; align-items: center;
-            border-top-left-radius: 20px; border-top-right-radius: 20px;
+            position: fixed; bottom: 0; left: 0; right: 0; height: 75px;
+            background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px);
+            display: flex; justify-content: space-around;
+            align-items: center; z-index: 1000;
+            border-top: 1px solid rgba(0,0,0,0.05);
+            border-top-left-radius: 30px; border-top-right-radius: 30px;
         }
-        .bottom-nav-item { text-align: center; color: #666; text-decoration: none; font-size: 11px; flex: 1; position: relative; }
-        .bottom-nav-item i { font-size: 20px; display: block; margin-bottom: 2px; }
-        .nav-badge { position: absolute; top: -5px; right: 25%; background: #ff3b30; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; border: 2px solid #fff; }
+        .nav-link-mobile { text-align: center; color: #b0b0b0; text-decoration: none; font-size: 11px; font-weight: 600; flex: 1; }
+        .nav-link-mobile.active { color: var(--primary-purple); }
+        .nav-link-mobile i { font-size: 22px; display: block; margin-bottom: 4px; }
 
-        @media (max-width: 992px) {
-            #sidebar { position: fixed; margin-left: calc(-1 * var(--sidebar-width)); }
-            #sidebar.active { margin-left: 0; }
-            .bottom-nav { display: flex; }
-            body { padding-bottom: 75px; }
-            #sidebarCollapse { display: none; }
-        }
+        /* Accordion */
+        .accordion-button { font-size: 14px; font-weight: 600; }
+        .accordion-button:not(.collapsed) { background: #f3f0ff; color: var(--primary-purple); }
+        .list-group-item { font-size: 14px; border: none; padding: 12px 25px; border-bottom: 1px solid #f8f8f8; color: #555; text-decoration: none; display: block;}
+        .list-group-item i { width: 25px; color: var(--primary-purple); opacity: 0.7; }
+        .nav-badge { position: absolute; top: -5px; right: 25%; background: #ff3b30; color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; border: 2px solid #fff; }
     </style>
 </head>
 <body>
 
-<div id="wrapper">
-    <nav id="sidebar">
-        <div class="sidebar-header">
-            <h4 class="fw-bold mb-0"><i class="fas fa-university me-2"></i>BCSM Portal</h4>
-        </div>
+    <div class="overlay" id="overlay"></div>
 
-        <div class="mt-2">
-            <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mAcademics">
-                    <span><i class="fas fa-book-open me-2"></i>Academics</span>
-                    <i class="fas fa-chevron-down small"></i>
-                </div>
-                <div id="mAcademics" class="collapse show">
-                    <div class="list-group">
-                        <a href="/registration-certificate.html" class="list-group-item">Registration Cert.</a>
-                        <a href="/student-class-timetable.html" class="list-group-item">Class Timetable</a>
-                        <a href="/my-exam-schedule.html" class="list-group-item">Exam Schedule</a>
-                        <a href="/student-admit-card.html" class="list-group-item">Admit Card</a>
-                        <a href="/my-syllabus.html" class="list-group-item">Syllabus</a>
-                        <a href="/my-assignments.html" class="list-group-item">Assignments</a>
-                        <a href="/my-study-material.html" class="list-group-item">Study Material</a>
-                        <a href="/my-quiz.html" class="list-group-item">Online Quiz</a>
-                        <a href="/view-transcript.html" class="list-group-item">View Marks</a>
-                        <a href="/my-view-attendance.html" class="list-group-item">View Attendance</a>
-                        <a href="/student-certificate.html" class="list-group-item">My Certificate</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mFinance">
-                    <span><i class="fas fa-file-invoice-dollar me-2"></i>Finance</span>
-                    <i class="fas fa-chevron-down small"></i>
-                </div>
-                <div id="mFinance" class="collapse">
-                    <div class="list-group">
-                        <a href="/online-payment.html" class="list-group-item">Pay Fees Online</a>
-                        <a href="/my-payment-history.html" class="list-group-item">Payment History</a>
-                        <a href="/my-fee-receipts.html" class="list-group-item">Fee Receipts</a>
-                        <a href="/my-scholarship.html" class="list-group-item">Scholarship Status</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mLibrary">
-                    <span><i class="fas fa-book-reader me-2"></i>Library</span>
-                    <i class="fas fa-chevron-down small"></i>
-                </div>
-                <div id="mLibrary" class="collapse">
-                    <div class="list-group">
-                        <a href="/library-search.html" class="list-group-item">Search Books</a>
-                        <a href="/library-issued.html" class="list-group-item">Issued Books</a>
-                        <a href="/mylibrary-history.html" class="list-group-item">Reading History</a>
-                        <a href="/mylibraryfines.html" class="list-group-item">View Fines</a>
-                        <a href="/myebooks.html" class="list-group-item">e-Resources</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mServices">
-                    <span><i class="fas fa-concierge-bell me-2"></i>Services</span>
-                    <i class="fas fa-chevron-down small"></i>
-                </div>
-                <div id="mServices" class="collapse">
-                    <div class="list-group">
-                        <a href="/my-bus.html" class="list-group-item">View Bus Route</a>
-                        <a href="/mybus-tracker.html" class="list-group-item">Track Bus (Live)</a>
-                        <a href="/mymess-menu.html" class="list-group-item">View Mess Menu</a>
-                        <a href="/myhostel-leave.html" class="list-group-item">Hostel Leave</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mProfile">
-                    <span><i class="fas fa-user-circle me-2"></i>Profile & More</span>
-                    <i class="fas fa-chevron-down small"></i>
-                </div>
-                <div id="mProfile" class="collapse">
-                    <div class="list-group">
-                        <a href="/student-profile.html" class="list-group-item">Full Profile</a>
-                        <a href="/change-password.html" class="list-group-item">Change Password</a>
-                        <a href="/apply-leave.html" class="list-group-item">Apply for Leave</a>
-                        <a href="/leave-status.html" class="list-group-item">Leave Status</a>
-                        <a href="/my-id-card.html" class="list-group-item">My ID Card</a>
-                        <a href="/my-school-calendar.html" class="list-group-item">Event Calendar</a>
-                        <a href="/my-messages.html" class="list-group-item">Messages</a>
-                        <a href="/my-feedback.html" class="list-group-item">Feedback</a>
-                        <a href="/gallery.html" class="list-group-item">School Gallery</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </nav>
-
-    <div id="content">
-        <header class="d-flex justify-content-between align-items-center mb-4">
-            <button type="button" id="sidebarCollapse" class="btn btn-primary shadow-sm">
-                <i class="fas fa-bars"></i>
-            </button>
+    <div id="menuDrawer">
+        <div class="p-4 text-white" style="background: var(--primary-purple);">
             <div class="d-flex align-items-center gap-3">
-                <div class="position-relative d-none d-md-block" style="cursor: pointer;">
-                    <i class="fas fa-bell fs-4 text-primary"></i>
-                    <span class="nav-badge" style="right:-5px">3</span>
+                <img id="drawer-photo" src="https://placehold.co/100x100" style="width:55px; height:55px; border-radius:50%; border:2px solid #fff;">
+                <div>
+                    <h6 class="mb-0 fw-bold" id="drawer-name">Student Name</h6>
+                    <small class="opacity-75" id="drawer-id">ID: ...</small>
                 </div>
-                <button class="btn btn-danger btn-sm rounded-pill px-4 shadow-sm" onclick="logout()">
-                    <i class="fas fa-sign-out-alt me-1"></i> Logout
-                </button>
             </div>
-        </header>
-
-        <div class="profile-card">
-            <div class="row align-items-center">
-                <div class="col-md-auto mb-3 mb-md-0 text-center">
-                    <img id="student-photo" src="https://placehold.co/100x100?text=Profile" alt="Photo">
+        </div>
+        
+        <div class="accordion accordion-flush" id="mainMenu">
+            <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button" data-bs-toggle="collapse" data-bs-target="#mAcademics"><i class="fas fa-graduation-cap me-3"></i> Academics</button></h2>
+                <div id="mAcademics" class="accordion-collapse collapse show">
+                    <div class="list-group">
+                        <a href="/registration-certificate.html" class="list-group-item"><i class="fas fa-certificate"></i>Registration Cert.</a>
+                        <a href="/student-class-timetable.html" class="list-group-item"><i class="fas fa-calendar-alt"></i>Class Timetable</a>
+                        <a href="/my-exam-schedule.html" class="list-group-item"><i class="fas fa-clock"></i>Exam Schedule</a>
+                        <a href="/student-admit-card.html" class="list-group-item"><i class="fas fa-id-card"></i>Admit Card</a>
+                        <a href="/my-syllabus.html" class="list-group-item"><i class="fas fa-book"></i>Syllabus</a>
+                        <a href="/my-assignments.html" class="list-group-item"><i class="fas fa-tasks"></i>Assignments</a>
+                        <a href="/my-study-material.html" class="list-group-item"><i class="fas fa-file-pdf"></i>Study Material</a>
+                        <a href="/my-quiz.html" class="list-group-item"><i class="fas fa-question-circle"></i>Online Quiz</a>
+                        <a href="/view-transcript.html" class="list-group-item"><i class="fas fa-poll-h"></i>View Marks</a>
+                        <a href="/my-view-attendance.html" class="list-group-item"><i class="fas fa-check-double"></i>View Attendance</a>
+                        <a href="/student-certificate.html" class="list-group-item"><i class="fas fa-award"></i>My Certificate</a>
+                    </div>
                 </div>
-                <div class="col-md">
-                    <h4 id="welcome-message" class="fw-bold mb-3 text-center text-md-start">Welcome back!</h4>
-                    <div class="row g-2 text-center text-md-start">
-                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Student ID</small><span id="student-id" class="fw-bold">...</span></div>
-                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Grade</small><span id="student-grade" class="fw-bold">...</span></div>
-                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Roll / Sec</small><span class="fw-bold"><span id="student-roll">...</span> / <span id="student-section">...</span></span></div>
-                        <div class="col-6 col-md-3"><small class="opacity-75 d-block">Email</small><span id="student-email" class="fw-bold small">...</span></div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#mFinance"><i class="fas fa-file-invoice-dollar me-3"></i> Finance</button></h2>
+                <div id="mFinance" class="accordion-collapse collapse">
+                    <div class="list-group">
+                        <a href="/online-payment.html" class="list-group-item"><i class="fas fa-credit-card"></i>Pay Fees Online</a>
+                        <a href="/my-payment-history.html" class="list-group-item"><i class="fas fa-history"></i>Payment History</a>
+                        <a href="/my-fee-receipts.html" class="list-group-item"><i class="fas fa-receipt"></i>Fee Receipts</a>
+                        <a href="/my-scholarship.html" class="list-group-item"><i class="fas fa-user-graduate"></i>Scholarship</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#mLibrary"><i class="fas fa-book-reader me-3"></i> Library</button></h2>
+                <div id="mLibrary" class="accordion-collapse collapse">
+                    <div class="list-group">
+                        <a href="/library-search.html" class="list-group-item"><i class="fas fa-search"></i>Search Books</a>
+                        <a href="/library-issued.html" class="list-group-item"><i class="fas fa-book"></i>Issued Books</a>
+                        <a href="/mylibrary-history.html" class="list-group-item"><i class="fas fa-list"></i>Reading History</a>
+                        <a href="/mylibraryfines.html" class="list-group-item"><i class="fas fa-exclamation-triangle"></i>View Fines</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#mServices"><i class="fas fa-concierge-bell me-3"></i> Services</button></h2>
+                <div id="mServices" class="accordion-collapse collapse">
+                    <div class="list-group">
+                        <a href="/my-bus.html" class="list-group-item"><i class="fas fa-bus"></i>View Bus Route</a>
+                        <a href="/mybus-tracker.html" class="list-group-item"><i class="fas fa-map-marker-alt"></i>Track Bus (Live)</a>
+                        <a href="/mymess-menu.html" class="list-group-item"><i class="fas fa-utensils"></i>View Mess Menu</a>
+                        <a href="/myhostel-leave.html" class="list-group-item"><i class="fas fa-bed"></i>Hostel Leave</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="accordion-item">
+                <h2 class="accordion-header"><button class="accordion-button collapsed" data-bs-toggle="collapse" data-bs-target="#mProfile"><i class="fas fa-user-circle me-3"></i> Profile & More</button></h2>
+                <div id="mProfile" class="accordion-collapse collapse">
+                    <div class="list-group">
+                        <a href="/student-profile.html" class="list-group-item"><i class="fas fa-id-card"></i>Full Profile</a>
+                        <a href="/change-password.html" class="list-group-item"><i class="fas fa-key"></i>Change Password</a>
+                        <a href="/apply-leave.html" class="list-group-item"><i class="fas fa-paper-plane"></i>Apply for Leave</a>
+                        <a href="/leave-status.html" class="list-group-item"><i class="fas fa-clock"></i>Leave Status</a>
+                        <a href="/my-school-calendar.html" class="list-group-item"><i class="fas fa-calendar-check"></i>Event Calendar</a>
+                        <a href="/my-messages.html" class="list-group-item"><i class="fas fa-comment-dots"></i>Messages</a>
+                        <a href="/my-feedback.html" class="list-group-item"><i class="fas fa-bullhorn"></i>Feedback</a>
+                        <a href="/gallery.html" class="list-group-item"><i class="fas fa-images"></i>School Gallery</a>
                     </div>
                 </div>
             </div>
         </div>
-
-        <div class="row g-3">
-            <div class="col-md-6">
-                <div class="card glass-card p-3 h-100">
-                    <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="fas fa-chart-pie me-2"></i>Finance Summary</h6>
-                    <div class="d-flex justify-content-between my-2"><span>Total Due:</span> <span id="fee-due" class="fw-bold">...</span></div>
-                    <div class="d-flex justify-content-between my-2"><span>Total Paid:</span> <span id="fee-paid" class="text-success fw-bold">...</span></div>
-                    <div class="d-flex justify-content-between my-2 border-top pt-2"><span>Balance:</span> <span id="fee-balance" class="text-danger fw-bold">...</span></div>
-                    <a href="/online-payment.html" class="btn btn-primary btn-sm w-100 mt-3">Pay Now</a>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card glass-card p-3 h-100">
-                    <h6 class="fw-bold text-primary border-bottom pb-2 mb-3"><i class="fas fa-bell me-2"></i>Notice Board</h6>
-                    <ul class="list-unstyled small mb-0" id="notice-board-list">
-                        <li><i class="fas fa-spinner fa-spin me-2"></i>Loading announcements...</li>
-                    </ul>
-                </div>
-            </div>
+        <div class="p-4 mt-auto">
+            <button class="btn btn-danger w-100 rounded-pill fw-bold" onclick="logout()">Logout</button>
         </div>
+    </div>
 
-        <div class="card glass-card mt-4 p-3">
-            <h6 class="fw-bold mb-3"><i class="fas fa-chalkboard-teacher me-2"></i>My Assigned Teachers</h6>
-            <div id="my-teachers-list" class="row g-2">
-                <div class="col-12 text-muted small">Loading teachers...</div>
+    <div class="mobile-header">
+        <div class="d-flex justify-content-between align-items-start">
+            <div>
+                <small class="opacity-75">Assalamu Alaikum,</small>
+                <h4 class="mb-0 fw-bold" id="welcome-name">Loading...</h4>
+                <div class="mt-1"><span class="badge bg-white bg-opacity-25" id="student-id-top">ID: ...</span></div>
+            </div>
+            <div class="position-relative">
+                <img id="student-photo" src="https://placehold.co/100x100" class="profile-img" alt="Profile">
+                <span class="position-absolute bottom-0 end-0 bg-success border border-white rounded-circle shadow" style="width:16px; height:16px"></span>
             </div>
         </div>
     </div>
-</div>
 
-<div class="bottom-nav">
-    <a href="#" class="bottom-nav-item active">
-        <i class="fas fa-home"></i>
-        <span>Home</span>
-    </a>
-    <a href="/my-messages.html" class="bottom-nav-item">
-        <i class="fas fa-bell"></i>
-        <span class="nav-badge">3</span>
-        <span>Alerts</span>
-    </a>
-    <a href="javascript:void(0)" class="bottom-nav-item" id="mobileMenuBtn">
-        <i class="fas fa-th-large"></i>
-        <span>Menu</span>
-    </a>
-    <a href="/student-profile.html" class="bottom-nav-item">
-        <i class="fas fa-user-circle"></i>
-        <span>Profile</span>
-    </a>
-</div>
+    <div class="container fade-in" style="margin-top: -30px;">
+        <div class="row g-2 px-1">
+            <div class="col-3"><a href="/my-assignments.html" class="action-card"><i class="fas fa-edit text-primary"></i><span>Tasks</span></a></div>
+            <div class="col-3"><a href="/student-class-timetable.html" class="action-card"><i class="fas fa-calendar-check text-success"></i><span>Schedule</span></a></div>
+            <div class="col-3"><a href="/view-transcript.html" class="action-card"><i class="fas fa-poll-h text-warning"></i><span>Result</span></a></div>
+            <div class="col-3"><a href="/online-payment.html" class="action-card"><i class="fas fa-wallet text-danger"></i><span>Fees</span></a></div>
+        </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/global-config.js"></script>
-<script>
-    // --- Layout Logic ---
-    const sidebar = document.getElementById('sidebar');
-    document.getElementById('sidebarCollapse').addEventListener('click', () => {
-        sidebar.classList.toggle('inactive');
-    });
-    document.getElementById('mobileMenuBtn').addEventListener('click', () => {
-        sidebar.classList.toggle('active');
-    });
+        <div class="glass-panel mt-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0 text-dark">Finance Summary</h6>
+                <i class="fas fa-chevron-right text-muted small"></i>
+            </div>
+            <div class="row text-center">
+                <div class="col-4 border-end"><small class="text-muted d-block mb-1">Due</small><span id="fee-due" class="fw-bold text-danger h6 mb-0">...</span></div>
+                <div class="col-4 border-end"><small class="text-muted d-block mb-1">Paid</small><span id="fee-paid" class="fw-bold text-success h6 mb-0">...</span></div>
+                <div class="col-4"><small class="text-muted d-block mb-1">Balance</small><span id="fee-balance" class="fw-bold text-dark h6 mb-0">...</span></div>
+            </div>
+        </div>
 
-    // --- Original API & Auth Logic ---
-    function logout() { localStorage.clear(); window.location.href = '/login.html'; }
+        <div class="glass-panel">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0"><i class="fas fa-bell me-2 text-warning"></i>Latest Notices</h6>
+                <span class="badge bg-light text-primary rounded-pill">View All</span>
+            </div>
+            <div id="notice-board-list" class="small">
+                <div class="py-2 text-muted">Loading notices...</div>
+            </div>
+        </div>
 
-    async function authFetch(url) {
-        const token = localStorage.getItem('erp-token');
-        if (!token) logout();
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.status === 401) logout();
-        return res.json();
-    }
+        <h6 class="fw-bold mb-3 px-1">My Teachers</h6>
+        <div id="my-teachers-list" class="d-flex overflow-auto gap-3 pb-3" style="scrollbar-width: none; -ms-overflow-style: none;">
+            </div>
+    </div>
 
-    async function init() {
-        const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
-        if (!sid) return;
+    <nav class="bottom-nav">
+        <a href="#" class="nav-link-mobile active">
+            <i class="fas fa-home"></i>
+            <span>Home</span>
+        </a>
+        <a href="/my-messages.html" class="nav-link-mobile">
+            <i class="fas fa-comment-dots"></i>
+            <span class="nav-badge">3</span>
+            <span>Messages</span>
+        </a>
+        <a href="javascript:void(0)" class="nav-link-mobile" id="btnMenu">
+            <i class="fas fa-th-large"></i>
+            <span>Menu</span>
+        </a>
+        <a href="/student-profile.html" class="nav-link-mobile">
+            <i class="fas fa-user-circle"></i>
+            <span>Profile</span>
+        </a>
+    </nav>
 
-        try {
-            // Student Info
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="js/global-config.js"></script>
+    <script>
+        // --- Navigation Interaction ---
+        const btnMenu = document.getElementById('btnMenu');
+        const drawer = document.getElementById('menuDrawer');
+        const overlay = document.getElementById('overlay');
+
+        btnMenu.addEventListener('click', () => { 
+            drawer.classList.add('open'); 
+            overlay.classList.add('show'); 
+        });
+
+        overlay.addEventListener('click', () => { 
+            drawer.classList.remove('open'); 
+            overlay.classList.remove('show'); 
+        });
+
+        // --- Data Fetching Logic ---
+        function logout() { localStorage.clear(); window.location.href = '/login.html'; }
+
+        async function authFetch(url) {
+            const token = localStorage.getItem('erp-token');
+            if (!token) logout();
+            try {
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.status === 401) logout();
+                return await res.json();
+            } catch(e) { return null; }
+        }
+
+        async function init() {
+            const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
+            if (!sid) return;
+
+            // Load Student Profile
             const p = await authFetch(`/api/students/${sid}`);
-            document.getElementById('welcome-message').innerHTML = `Hi, ${p.first_name || 'Student'}! 👋`;
-            document.getElementById('student-id').textContent = p.admission_id || sid;
-            document.getElementById('student-grade').textContent = p.course_name || 'N/A';
-            document.getElementById('student-roll').textContent = p.roll_number || 'N/A';
-            document.getElementById('student-section').textContent = p.batch_name || 'N/A';
-            document.getElementById('student-email').textContent = p.email || 'N/A';
-            if(p.profile_image_path) document.getElementById('student-photo').src = p.profile_image_path;
+            if(p) {
+                document.getElementById('welcome-name').innerText = p.first_name || 'Student';
+                document.getElementById('drawer-name').innerText = (p.first_name || '') + ' ' + (p.last_name || '');
+                document.getElementById('student-id-top').innerText = 'ID: ' + (p.admission_id || sid);
+                document.getElementById('drawer-id').innerText = 'ID: ' + (p.admission_id || sid);
+                if(p.profile_image_path) {
+                    document.getElementById('student-photo').src = p.profile_image_path;
+                    document.getElementById('drawer-photo').src = p.profile_image_path;
+                }
+            }
 
-            // Finance Summary
+            // Load Fees
             const f = await authFetch(`/api/students/${sid}/fees`);
-            document.getElementById('fee-due').textContent = `₹${f.total_billed || 0}`;
-            document.getElementById('fee-paid').textContent = `₹${f.total_paid || 0}`;
-            document.getElementById('fee-balance').textContent = `₹${f.balance_due || 0}`;
+            if(f) {
+                document.getElementById('fee-due').innerText = '₹' + (f.total_billed || 0);
+                document.getElementById('fee-paid').innerText = '₹' + (f.total_paid || 0);
+                document.getElementById('fee-balance').innerText = '₹' + (f.balance_due || 0);
+            }
 
-            // Teachers List
+            // Load Teachers
             const t = await authFetch(`/api/students/${sid}/teachers`);
-            document.getElementById('my-teachers-list').innerHTML = t.map(i => `
-                <div class="col-6 col-md-3">
-                    <div class="p-2 border rounded bg-white text-center small shadow-sm">
-                        <b>${i.full_name}</b><br>
-                        <span class="text-muted" style="font-size:10px">${i.subject_name}</span>
+            if(t && t.length) {
+                document.getElementById('my-teachers-list').innerHTML = t.map(i => `
+                    <div class="bg-white p-3 rounded-4 shadow-sm text-center" style="min-width: 130px; border: 1px solid #f0f0f0;">
+                        <img src="https://ui-avatars.com/api/?name=${i.full_name}&background=f3f0ff&color=5e35b1" class="rounded-circle mb-2" style="width:45px">
+                        <div class="small fw-bold text-truncate">${i.full_name}</div>
+                        <div class="text-muted" style="font-size: 10px;">${i.subject_name}</div>
                     </div>
-                </div>
-            `).join('') || '<div class="col-12 text-muted small">No teachers found.</div>';
+                `).join('');
+            } else {
+                document.getElementById('my-teachers-list').innerHTML = '<small class="text-muted">No teachers assigned.</small>';
+            }
 
-            // Notices
+            // Load Notices
             const n = await authFetch(`/api/announcements/role/student`);
-            document.getElementById('notice-board-list').innerHTML = n.slice(0, 3).map(i => `
-                <li class="border-bottom mb-2 pb-1">
-                    <b>${i.title}</b><br>
-                    <small class="text-muted ps-2">${new Date(i.created_at).toDateString()}</small>
-                </li>
-            `).join('') || '<li class="small">No notices available.</li>';
-
-        } catch (e) { console.error("Init Error:", e); }
-    }
-    document.addEventListener('DOMContentLoaded', init);
-</script>
+            if(n && n.length) {
+                document.getElementById('notice-board-list').innerHTML = n.slice(0, 3).map(i => `
+                    <div class="d-flex gap-3 mb-3 border-bottom pb-2">
+                        <div class="bg-warning bg-opacity-10 text-warning p-2 rounded-circle d-flex align-items-center justify-content-center" style="width:35px; height:35px">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div style="flex:1">
+                            <div class="fw-bold text-dark" style="font-size:13px">${i.title}</div>
+                            <small class="text-muted">${new Date(i.created_at).toLocaleDateString()}</small>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                document.getElementById('notice-board-list').innerHTML = '<small class="text-muted">No recent notices.</small>';
+            }
+        }
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
 </body>
 </html>
