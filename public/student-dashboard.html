@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Full Student Dashboard - 3D Glass Edition</title>
+    <title>Student Dashboard | 3D Glass Final</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    
     <style>
         :root {
             --primary-dark: #003366; 
@@ -20,12 +22,13 @@
             font-family: 'Montserrat', sans-serif;
             background: linear-gradient(135deg, #f0f2f8 0%, #e0e4f1 100%);
             min-height: 100vh;
-            font-size: 14px;
+            color: var(--primary-dark);
+            overflow-x: hidden;
         }
 
         .dashboard-container { max-width: 1440px; margin: 0 auto; padding: 15px; }
 
-        /* --- 3D Glass Effect --- */
+        /* --- 3D Glassmorphism Cards --- */
         .glass-card {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
@@ -33,65 +36,88 @@
             border: 1px solid rgba(255, 255, 255, 0.4);
             border-radius: 20px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            margin-bottom: 20px;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        .glass-card:hover { transform: translateY(-8px); box-shadow: 0 15px 40px rgba(0, 0, 0, 0.12); }
 
         .profile-card {
             background: linear-gradient(135deg, var(--secondary-light) 0%, var(--secondary-purple) 100%);
-            border-radius: 20px;
-            padding: 25px;
+            border-radius: 25px;
+            padding: 30px;
             color: white;
-            box-shadow: 0 10px 30px rgba(94, 53, 177, 0.3);
-            margin-bottom: 25px;
+            box-shadow: 0 15px 35px rgba(94, 53, 177, 0.3);
+            margin-bottom: 30px;
+            position: relative;
+            overflow: hidden;
         }
 
         #student-photo {
-            width: 100px; height: 100px;
-            border-radius: 50%;
-            border: 4px solid rgba(255, 255, 255, 0.3);
+            width: 120px; height: 120px;
+            border-radius: 24px;
+            border: 5px solid rgba(255, 255, 255, 0.3);
             object-fit: cover;
             background: white;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
         }
 
+        /* --- Navigation Menu --- */
         .nav-card {
             background: var(--secondary-purple) !important;
             border: none;
-            border-radius: 15px;
+            border-radius: 18px;
             margin-bottom: 12px;
-            overflow: hidden;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.1);
         }
 
         .nav-card .card-header {
             color: white;
-            font-weight: 600;
-            padding: 12px 18px;
+            font-weight: 700;
+            padding: 16px 20px;
             cursor: pointer;
-            font-size: 14px;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            border: none;
         }
 
         .list-group-item {
-            background: rgba(255, 255, 255, 0.1) !important;
-            color: #f8f9fa !important;
+            background: rgba(255, 255, 255, 0.08) !important;
+            color: #ffffff !important;
             border: none !important;
             font-size: 13px;
-            padding: 10px 22px !important;
-            transition: all 0.2s;
-            border-left: 3px solid transparent !important;
+            font-weight: 500;
+            padding: 12px 25px !important;
+            transition: all 0.3s ease;
+            border-left: 4px solid transparent !important;
         }
 
         .list-group-item:hover {
             background: rgba(255, 255, 255, 0.2) !important;
-            border-left: 3px solid var(--primary-accent) !important;
-            padding-left: 28px !important;
+            border-left: 4px solid var(--primary-accent) !important;
+            padding-left: 32px !important;
+            color: #fff !important;
         }
 
+        /* --- Custom Widgets --- */
+        .attendance-circle {
+            width: 80px; height: 80px;
+            border: 8px solid #eef2f7;
+            border-top: 8px solid var(--primary-accent);
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 14px; margin: 0 auto 10px;
+        }
+
+        .badge-finance { background: rgba(30, 136, 229, 0.1); color: var(--primary-accent); border-radius: 8px; padding: 5px 12px; font-weight: 700; }
+        
+        .teacher-avatar { width: 45px; height: 45px; background: #eef2f7; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--primary-accent); margin: 0 auto 10px; font-size: 20px; transition: 0.3s; }
+        .teacher-card:hover .teacher-avatar { background: var(--primary-accent); color: white; }
+
         @media (max-width: 767px) {
-            .mobile-nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-            .nav-card .card-header { font-size: 11px; padding: 10px; }
-            .list-group-item { font-size: 11px; padding: 8px 12px !important; }
+            .mobile-nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+            .nav-card .card-header { font-size: 12px; padding: 12px; }
+            .profile-card { text-align: center; }
+            .profile-info-grid { font-size: 11px; }
         }
     </style>
 </head>
@@ -99,145 +125,144 @@
 
 <div class="dashboard-container">
     <header class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h4 fw-bold text-primary mb-0"><i class="fas fa-university me-2"></i>BCSM Portal</h1>
-        <button class="btn btn-danger btn-sm rounded-pill px-4 shadow-sm" onclick="logout()">
-            <i class="fas fa-sign-out-alt me-1"></i> Logout
-        </button>
+        <div>
+            <h1 class="h4 fw-bold text-primary mb-0"><i class="fas fa-university me-2"></i>BCSM Smart Portal</h1>
+            <small class="text-muted"><i class="fas fa-clock me-1"></i>Session: 2024-25</small>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <a href="/my-messages.html" class="btn btn-light rounded-circle shadow-sm position-relative">
+                <i class="fas fa-envelope text-primary"></i>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger" id="msg-count">0</span>
+            </a>
+            <button class="btn btn-danger btn-sm rounded-pill px-4 shadow-sm fw-bold" onclick="logout()">
+                <i class="fas fa-sign-out-alt me-1"></i> Logout
+            </button>
+        </div>
     </header>
 
     <div class="profile-card">
-        <div class="row align-items-center text-center text-md-start">
-            <div class="col-md-2 mb-3 mb-md-0">
-                <img id="student-photo" src="https://placehold.co/100x100?text=Profile" alt="Photo">
+        <div class="row align-items-center">
+            <div class="col-md-2 text-center mb-3 mb-md-0">
+                <img id="student-photo" src="https://placehold.co/120x120?text=Profile" alt="Student Photo">
             </div>
             <div class="col-md-10">
-                <h4 id="welcome-message" class="mb-3 fw-bold">Welcome back, Loading...</h4>
-                <div class="row g-3">
-                    <div class="col-6 col-md-3"><small class="opacity-75"><i class="fas fa-id-badge me-1"></i> Student ID</small><span id="student-id" class="fw-bold d-block">...</span></div>
-                    <div class="col-6 col-md-3"><small class="opacity-75"><i class="fas fa-chalkboard me-1"></i> Grade/Class</small><span id="student-grade" class="fw-bold d-block">...</span></div>
-                    <div class="col-6 col-md-3"><small class="opacity-75"><i class="fas fa-list-ol me-1"></i> Roll & Section</small><span class="fw-bold d-block"><span id="student-roll">...</span> / <span id="student-section">...</span></span></div>
-                    <div class="col-6 col-md-3"><small class="opacity-75"><i class="fas fa-envelope me-1"></i> Email</small><span id="student-email" class="fw-bold d-block small">...</span></div>
+                <h2 id="welcome-message" class="mb-3 fw-bold">Welcome, Student! 👋</h2>
+                <div class="row g-3 profile-info-grid">
+                    <div class="col-6 col-md-3">
+                        <small class="opacity-75 d-block"><i class="fas fa-id-card me-1"></i> Registration ID</small>
+                        <span id="student-id" class="fw-bold fs-5">...</span>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <small class="opacity-75 d-block"><i class="fas fa-graduation-cap me-1"></i> Academic Course</small>
+                        <span id="student-grade" class="fw-bold fs-5">...</span>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <small class="opacity-75 d-block"><i class="fas fa-users me-1"></i> Roll & Section</small>
+                        <span class="fw-bold fs-5"><span id="student-roll">...</span> / <span id="student-section">...</span></span>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <small class="opacity-75 d-block"><i class="fas fa-at me-1"></i> Official Email</small>
+                        <span id="student-email" class="fw-bold d-block text-truncate">...</span>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
+    
+
     <div class="row">
         <div class="col-md-3 mobile-nav-grid">
             <div class="card nav-card">
                 <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mAcademics">
-                    <span><i class="fas fa-book-open me-2"></i>Academics</span>
+                    <span><i class="fas fa-book-reader me-2"></i>Academics</span>
                     <i class="fas fa-chevron-down small"></i>
                 </div>
                 <div id="mAcademics" class="collapse show">
                     <div class="list-group">
-                        <a href="/registration-certificate.html" class="list-group-item"><i class="fas fa-certificate me-2"></i>Registration Cert.</a>
-                        <a href="/student-class-timetable.html" class="list-group-item"><i class="fas fa-calendar-alt me-2"></i>Class Timetable</a>
-                        <a href="/my-exam-schedule.html" class="list-group-item"><i class="fas fa-file-alt me-2"></i>Exam Schedule</a>
-                        <a href="/student-admit-card.html" class="list-group-item"><i class="fas fa-id-card-alt me-2"></i>Admit Card</a>
-                        <a href="/my-syllabus.html" class="list-group-item"><i class="fas fa-book me-2"></i>Syllabus</a>
-                        <a href="/my-assignments.html" class="list-group-item"><i class="fas fa-edit me-2"></i>Assignments</a>
-                        <a href="/my-study-material.html" class="list-group-item"><i class="fas fa-file-pdf me-2"></i>Study Material</a>
-                        <a href="/my-quiz.html" class="list-group-item"><i class="fas fa-question-circle me-2"></i>Online Quiz</a>
-                        <a href="/view-transcript.html" class="list-group-item"><i class="fas fa-poll me-2"></i>View Marks</a>
-                        <a href="/my-view-attendance.html" class="list-group-item"><i class="fas fa-user-check me-2"></i>View Attendance</a>
-                        <a href="/student-certificate.html" class="list-group-item"><i class="fas fa-award me-2"></i>My Certificate</a>
+                        <a href="/student-class-timetable.html" class="list-group-item"><i class="fas fa-clock me-2"></i>Timetable</a>
+                        <a href="/my-exam-schedule.html" class="list-group-item"><i class="fas fa-calendar-alt me-2"></i>Exam Routine</a>
+                        <a href="/my-assignments.html" class="list-group-item"><i class="fas fa-tasks me-2"></i>Assignments</a>
+                        <a href="/my-view-attendance.html" class="list-group-item"><i class="fas fa-check-double me-2"></i>Attendance</a>
+                        <a href="/view-transcript.html" class="list-group-item"><i class="fas fa-poll me-2"></i>Results</a>
                     </div>
                 </div>
             </div>
 
             <div class="card nav-card">
                 <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mFinance">
-                    <span><i class="fas fa-file-invoice-dollar me-2"></i>Finance</span>
+                    <span><i class="fas fa-wallet me-2"></i>Finance</span>
                     <i class="fas fa-chevron-down small"></i>
                 </div>
                 <div id="mFinance" class="collapse">
                     <div class="list-group">
-                        <a href="/online-payment.html" class="list-group-item"><i class="fas fa-credit-card me-2"></i>Pay Fees Online</a>
-                        <a href="/my-payment-history.html" class="list-group-item"><i class="fas fa-history me-2"></i>Payment History</a>
-                        <a href="/my-fee-receipts.html" class="list-group-item"><i class="fas fa-download me-2"></i>Fee Receipts</a>
-                        <a href="/my-scholarship.html" class="list-group-item"><i class="fas fa-graduation-cap me-2"></i>Scholarship Status</a>
+                        <a href="/online-payment.html" class="list-group-item"><i class="fas fa-money-bill-wave me-2"></i>Make Payment</a>
+                        <a href="/my-fee-receipts.html" class="list-group-item"><i class="fas fa-file-invoice me-2"></i>Receipts</a>
                     </div>
                 </div>
             </div>
 
             <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mLibrary">
-                    <span><i class="fas fa-book-reader me-2"></i>Library</span>
+                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mEssentials">
+                    <span><i class="fas fa-star me-2"></i>Essentials</span>
                     <i class="fas fa-chevron-down small"></i>
                 </div>
-                <div id="mLibrary" class="collapse">
+                <div id="mEssentials" class="collapse">
                     <div class="list-group">
-                        <a href="/library-search.html" class="list-group-item"><i class="fas fa-search me-2"></i>Search Books</a>
-                        <a href="/library-issued.html" class="list-group-item"><i class="fas fa-book me-2"></i>Issued Books</a>
-                        <a href="/mylibrary-history.html" class="list-group-item"><i class="fas fa-list me-2"></i>Reading History</a>
-                        <a href="/mylibraryfines.html" class="list-group-item"><i class="fas fa-exclamation-triangle me-2"></i>View Fines</a>
-                        <a href="/myebooks.html" class="list-group-item"><i class="fas fa-laptop me-2"></i>e-Resources</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mServices">
-                    <span><i class="fas fa-concierge-bell me-2"></i>Services</span>
-                    <i class="fas fa-chevron-down small"></i>
-                </div>
-                <div id="mServices" class="collapse">
-                    <div class="list-group">
-                        <a href="/my-bus.html" class="list-group-item"><i class="fas fa-route me-2"></i>View Bus Route</a>
-                        <a href="/mybus-tracker.html" class="list-group-item"><i class="fas fa-map-marker-alt me-2"></i>Track Bus (Live)</a>
-                        <a href="/mymess-menu.html" class="list-group-item"><i class="fas fa-utensils me-2"></i>View Mess Menu</a>
-                        <a href="/myhostel-leave.html" class="list-group-item"><i class="fas fa-bed me-2"></i>Hostel Leave</a>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card nav-card">
-                <div class="card-header" data-bs-toggle="collapse" data-bs-target="#mProfile">
-                    <span><i class="fas fa-user-circle me-2"></i>Profile & More</span>
-                    <i class="fas fa-chevron-down small"></i>
-                </div>
-                <div id="mProfile" class="collapse">
-                    <div class="list-group">
-                        <a href="/student-profile.html" class="list-group-item"><i class="fas fa-user me-2"></i>Full Profile</a>
-                        <a href="/change-password.html" class="list-group-item"><i class="fas fa-key me-2"></i>Change Password</a>
-                        <a href="/apply-leave.html" class="list-group-item"><i class="fas fa-paper-plane me-2"></i>Apply for Leave</a>
-                        <a href="/leave-status.html" class="list-group-item"><i class="fas fa-clock me-2"></i>Leave Status</a>
-                        <a href="/my-id-card.html" class="list-group-item"><i class="fas fa-id-card me-2"></i>My ID Card</a>
-                        <a href="/my-school-calendar.html" class="list-group-item"><i class="fas fa-calendar-check me-2"></i>Event Calendar</a>
-                        <a href="/my-messages.html" class="list-group-item"><i class="fas fa-comment-dots me-2"></i>Messages</a>
-                        <a href="/my-feedback.html" class="list-group-item"><i class="fas fa-bullhorn me-2"></i>Feedback</a>
-                        <a href="/gallery.html" class="list-group-item"><i class="fas fa-images me-2"></i>School Gallery</a>
+                        <a href="/mybus-tracker.html" class="list-group-item"><i class="fas fa-bus-alt me-2"></i>Bus Tracker</a>
+                        <a href="/myhostel-leave.html" class="list-group-item"><i class="fas fa-hotel me-2"></i>Hostel Pass</a>
+                        <a href="/my-school-calendar.html" class="list-group-item"><i class="fas fa-calendar-day me-2"></i>Calendar</a>
                     </div>
                 </div>
             </div>
         </div>
 
         <div class="col-md-9">
-            <div class="row g-3">
-                <div class="col-md-6">
-                    <div class="card glass-card h-100 p-3">
-                        <h6 class="fw-bold text-primary border-bottom pb-2"><i class="fas fa-chart-pie me-2"></i>Finance Summary</h6>
-                        <div class="d-flex justify-content-between my-2"><span>Total Due:</span> <span id="fee-due" class="fw-bold">...</span></div>
-                        <div class="d-flex justify-content-between my-2"><span>Total Paid:</span> <span id="fee-paid" class="text-success fw-bold">...</span></div>
-                        <div class="d-flex justify-content-between my-2"><span>Balance:</span> <span id="fee-balance" class="text-danger fw-bold">...</span></div>
-                        <a href="/online-payment.html" class="btn btn-primary btn-sm w-100 mt-2 shadow-sm"><i class="fas fa-wallet me-2"></i>Pay Now</a>
+            <div class="row g-4">
+                <div class="col-md-4">
+                    <div class="card glass-card h-100 p-4">
+                        <h6 class="fw-bold mb-4 text-primary"><i class="fas fa-coins me-2"></i>Fee Status</h6>
+                        <div class="text-center mb-4">
+                            <span class="fs-2 fw-800 text-danger" id="fee-balance">₹0</span><br>
+                            <small class="text-muted">Total Balance Due</small>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2 small">
+                            <span>Paid Amount:</span> <span id="fee-paid" class="text-success fw-bold">₹0</span>
+                        </div>
+                        <a href="/online-payment.html" class="btn btn-primary w-100 mt-3 fw-bold">Pay Balance</a>
                     </div>
                 </div>
-                <div class="col-md-6">
-                    <div class="card glass-card h-100 p-3">
-                        <h6 class="fw-bold text-primary border-bottom pb-2"><i class="fas fa-bell me-2"></i>Notice Board</h6>
-                        <ul class="list-unstyled small mb-0" id="notice-board-list">
-                            <li><i class="fas fa-spinner fa-spin me-2"></i>Loading announcements...</li>
+
+                <div class="col-md-4">
+                    <div class="card glass-card h-100 p-4">
+                        <h6 class="fw-bold mb-4 text-primary"><i class="fas fa-user-check me-2"></i>Attendance</h6>
+                        <div class="attendance-circle">
+                            <span id="att-percent">0%</span>
+                        </div>
+                        <div class="text-center small text-muted">Overall Presence</div>
+                        <div class="mt-3 text-center">
+                            <a href="/my-view-attendance.html" class="btn btn-outline-primary btn-sm w-100 rounded-pill">View History</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card glass-card h-100 p-4">
+                        <h6 class="fw-bold mb-3"><i class="fas fa-bullhorn me-2 text-danger"></i>Flash Notices</h6>
+                        <ul class="list-unstyled mb-0" id="notice-board-list">
+                            <li class="py-2"><i class="fas fa-circle-notch fa-spin me-2 text-muted"></i>Updating...</li>
                         </ul>
                     </div>
                 </div>
             </div>
 
-            <div class="card glass-card mt-4 p-3">
-                <h6 class="fw-bold mb-3"><i class="fas fa-chalkboard-teacher me-2"></i>My Assigned Teachers</h6>
-                <div id="my-teachers-list" class="row g-2">
-                    <div class="col-12 text-muted small">Loading teachers...</div>
+            <div class="card glass-card mt-4 p-4">
+                <h6 class="fw-bold mb-4"><i class="fas fa-user-graduate me-2 text-primary"></i>Your Faculty Members</h6>
+                <div id="my-teachers-list" class="row g-3">
+                    <div class="col-12 text-center py-4">
+                        <div class="spinner-grow text-primary" role="status"></div>
+                        <p class="mt-2 text-muted">Synchronizing Faculty Data...</p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -252,53 +277,80 @@
     async function authFetch(url) {
         const token = localStorage.getItem('erp-token');
         if (!token) logout();
-        const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
-        if (res.status === 401) logout();
-        return res.json();
+        try {
+            const res = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (res.status === 401) logout();
+            return await res.json();
+        } catch (e) { return null; }
     }
 
     async function init() {
         const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
-        if (!sid) return;
+        if (!sid) return logout();
 
         try {
-            const p = await authFetch(`/api/students/${sid}`);
-            document.getElementById('welcome-message').innerHTML = `Hi, ${p.first_name || 'Student'}! 👋`;
-            document.getElementById('student-id').textContent = p.admission_id || sid;
-            document.getElementById('student-grade').textContent = p.course_name || 'N/A';
-            document.getElementById('student-roll').textContent = p.roll_number || 'N/A';
-            document.getElementById('student-section').textContent = p.batch_name || 'N/A';
-            document.getElementById('student-email').textContent = p.email || 'N/A';
-            if(p.profile_image_path) document.getElementById('student-photo').src = p.profile_image_path;
+            // Parallel Fetch for Speed
+            const [profile, fees, teachers, notices, attendance] = await Promise.all([
+                authFetch(`/api/students/${sid}`),
+                authFetch(`/api/students/${sid}/fees`),
+                authFetch(`/api/students/${sid}/teachers`),
+                authFetch(`/api/announcements/role/student`),
+                authFetch(`/api/attendance/report/user/${sid}/summary`) // Assuming this endpoint exists
+            ]);
 
-            const f = await authFetch(`/api/students/${sid}/fees`);
-            document.getElementById('fee-due').textContent = `₹${f.total_billed || 0}`;
-            document.getElementById('fee-paid').textContent = `₹${f.total_paid || 0}`;
-            document.getElementById('fee-balance').textContent = `₹${f.balance_due || 0}`;
+            // Profile Mapping
+            if (profile) {
+                document.getElementById('welcome-message').innerHTML = `Hi, ${profile.first_name || 'Student'}! 👋`;
+                document.getElementById('student-id').textContent = profile.admission_id || sid;
+                document.getElementById('student-grade').textContent = profile.course_name || 'General';
+                document.getElementById('student-roll').textContent = profile.roll_number || 'N/A';
+                document.getElementById('student-section').textContent = profile.batch_name || 'A';
+                document.getElementById('student-email').textContent = profile.email || 'N/A';
+                if(profile.profile_image_path) document.getElementById('student-photo').src = profile.profile_image_path;
+            }
 
-            const t = await authFetch(`/api/students/${sid}/teachers`);
-            document.getElementById('my-teachers-list').innerHTML = t.map(i => `
-                <div class="col-6 col-md-3">
-                    <div class="p-2 border rounded bg-white text-center small shadow-sm">
-                        <i class="fas fa-user-circle text-primary mb-1"></i><br>
-                        <b>${i.full_name}</b><br>
-                        <span class="text-muted" style="font-size:10px">${i.subject_name}</span>
+            // Finance Mapping
+            if (fees) {
+                document.getElementById('fee-paid').textContent = `₹${parseFloat(fees.total_paid || 0).toLocaleString()}`;
+                document.getElementById('fee-balance').textContent = `₹${parseFloat(fees.balance_due || 0).toLocaleString()}`;
+            }
+
+            // Attendance Mapping
+            if (attendance) {
+                document.getElementById('att-percent').textContent = (attendance.percent || 0) + '%';
+            }
+
+            // Teachers Mapping
+            const teacherDiv = document.getElementById('my-teachers-list');
+            if (teachers && teachers.length > 0) {
+                teacherDiv.innerHTML = teachers.map(i => `
+                    <div class="col-6 col-md-3 teacher-card">
+                        <div class="p-3 border rounded-4 bg-white text-center shadow-sm h-100">
+                            <div class="teacher-avatar"><i class="fas fa-user-tie"></i></div>
+                            <div class="fw-bold small text-dark">${i.full_name}</div>
+                            <div class="text-muted" style="font-size:10px">${i.subject_name || 'Faculty'}</div>
+                        </div>
                     </div>
-                </div>
-            `).join('') || 'No teachers found.';
+                `).join('');
+            } else { teacherDiv.innerHTML = '<p class="text-muted text-center w-100">No faculty assigned.</p>'; }
 
-            const n = await authFetch(`/api/announcements/role/student`);
-            document.getElementById('notice-board-list').innerHTML = n.slice(0, 3).map(i => `
-                <li class="border-bottom mb-2 pb-1">
-                    <i class="fas fa-info-circle text-accent me-2"></i>
-                    <b>${i.title}</b><br>
-                    <small class="text-muted ps-4">${new Date(i.created_at).toDateString()}</small>
-                </li>
-            `).join('') || 'No notices.';
+            // Notices Mapping
+            const noticeDiv = document.getElementById('notice-board-list');
+            if (notices && notices.length > 0) {
+                noticeDiv.innerHTML = notices.slice(0, 3).map(i => `
+                    <li class="border-bottom py-2">
+                        <span class="fw-bold small d-block text-truncate">${i.title}</span>
+                        <small class="text-muted" style="font-size: 10px;">${new Date(i.created_at).toLocaleDateString()}</small>
+                    </li>
+                `).join('');
+            } else { noticeDiv.innerHTML = '<li class="text-muted">No notices found.</li>'; }
 
         } catch (e) { console.error("Init Error:", e); }
     }
+
     document.addEventListener('DOMContentLoaded', init);
+    // Refresh data every 5 minutes
+    setInterval(init, 300000);
 </script>
 </body>
 </html>
