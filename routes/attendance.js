@@ -289,34 +289,54 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 });
 
 // =================================================================
-// 4. INDIVIDUAL USER REPORT
-// [Unchanged]
+// 4. INDIVIDUAL USER REPORT (FIXED)
 // =================================================================
 router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLES), async (req, res) => {
     const targetUserId = req.params.userId; 
     const { subject_id, start_date, end_date } = req.query;
     
-    // Security check
     const isSelf = String(req.user.id) === targetUserId;
-    // Allow admins/teachers to view others
     const canViewOthers = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'super admin', 'admin', 'teacher', 'coordinator'].includes(req.user.role);
 
     if (!isSelf && !canViewOthers) {
         return res.status(403).json({ message: 'Forbidden: Can only view own records.' });
     }
       
+    // Use COALESCE to ensure 'General' shows up if subject_id is NULL
     let query = `
-        SELECT a.id, a.attendance_date, a.status, a.remarks, a.mark_method, s.subject_name 
+        SELECT 
+            a.id, 
+            a.attendance_date, 
+            a.status, 
+            a.remarks, 
+            a.mark_method, 
+            COALESCE(s.subject_name, 'General') as subject_name 
         FROM attendance a
         LEFT JOIN subjects s ON a.subject_id = s.id 
-        WHERE a.user_id = $1
+        WHERE a.user_id = $1::uuid
     `;
+    
     const params = [targetUserId];
     let paramCounter = 1;
     
-    if (subject_id) { paramCounter++; params.push(subject_id); query += ` AND a.subject_id = $${paramCounter}::uuid`; }
-    if (start_date) { paramCounter++; params.push(start_date); query += ` AND a.attendance_date >= $${paramCounter}`; }
-    if (end_date) { paramCounter++; params.push(end_date); query += ` AND a.attendance_date <= $${paramCounter}`; }
+    // ✅ FIX: Only filter by subject if subject_id is a valid string and not "all" or empty
+    if (subject_id && subject_id !== 'all' && subject_id !== '' && subject_id !== 'null') { 
+        paramCounter++; 
+        params.push(subject_id); 
+        query += ` AND a.subject_id = $${paramCounter}::uuid`; 
+    }
+    
+    if (start_date && start_date !== '') { 
+        paramCounter++; 
+        params.push(start_date); 
+        query += ` AND a.attendance_date >= $${paramCounter}`; 
+    }
+    
+    if (end_date && end_date !== '') { 
+        paramCounter++; 
+        params.push(end_date); 
+        query += ` AND a.attendance_date <= $${paramCounter}`; 
+    }
     
     query += ' ORDER BY a.attendance_date DESC;';
 
@@ -324,10 +344,10 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
         const { rows } = await pool.query(query, params);
         res.status(200).json(rows);
     } catch (err) {
+        console.error('User Report Error:', err.message);
         res.status(500).json({ message: 'Error fetching user report', error: err.message });
     }
 });
-
 // =================================================================
 // 5. UPDATE & DELETE
 // [Unchanged]
