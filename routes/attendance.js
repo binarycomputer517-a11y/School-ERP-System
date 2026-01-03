@@ -8,27 +8,20 @@ const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware'); 
 
 // =================================================================
-// CONFIGURATION: ROLES (Case-Insensitive Support)
+// CONFIGURATION: ROLES (Case-Insensitive Support via Middleware)
 // =================================================================
-// [Roles definitions unchanged]
 
-const MARKING_ROLES = [
-    'Super Admin', 'Admin', 'Teacher', 'ApiUser',
-    'super admin', 'admin', 'teacher', 'apiuser' 
-];
+const MARKING_ROLES = ['super admin', 'admin', 'teacher', 'apiuser'];
 
 const ROSTER_VIEW_ROLES = [
-    'Super Admin', 'Admin', 'Teacher', 'Coordinator', 'ApiUser', 'HR', 'Staff',
     'super admin', 'admin', 'teacher', 'coordinator', 'apiuser', 'hr', 'staff'
 ];
 
 const REPORT_VIEW_ROLES = [
-    'Super Admin', 'Admin', 'Coordinator', 'HR', 'Finance',
     'super admin', 'admin', 'coordinator', 'hr', 'finance'
 ];
 
 const USER_REPORT_ROLES = [
-    'Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Employee',
     'super admin', 'admin', 'teacher', 'coordinator', 'student', 'employee'
 ];
 
@@ -431,7 +424,7 @@ router.get('/student/:sid/summary', authenticateToken, async (req, res) => {
         const query = `
             SELECT 
                 COUNT(*) FILTER (WHERE LOWER(status::text) IN ('present', 'p')) as present,
-                COUNT(*) FILTER (WHERE status::text IN ('Late', 'L')) as late,
+                COUNT(*) FILTER (WHERE LOWER(status::text) IN ('late', 'l')) as late,
                 COUNT(*) as total
             FROM attendance 
             WHERE student_id = $1::uuid;
