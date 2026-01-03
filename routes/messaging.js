@@ -183,5 +183,35 @@ router.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
     if (!req.file) return res.status(400).json({ message: 'Upload failed' });
     res.json({ fileUrl: `/uploads/chat/${req.file.filename}` });
 });
+// =========================================================
+// 7. RENAME Conversation (Group Topic Edit)
+// =========================================================
+router.put('/conversations/:id/topic', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
+    const { id } = req.params;
+    const { topic } = req.body;
+    const userId = req.user.id;
 
+    if (!topic || topic.trim().length === 0) {
+        return res.status(400).json({ message: 'Topic name is required.' });
+    }
+
+    try {
+        // Optional: Check if user is Admin of the group
+        const updateResult = await pool.query(
+            `UPDATE conversations 
+             SET topic = $1 
+             WHERE id = $2 RETURNING *`,
+            [topic.trim(), id]
+        );
+
+        if (updateResult.rowCount === 0) {
+            return res.status(404).json({ message: 'Conversation not found.' });
+        }
+
+        res.status(200).json({ message: 'Topic updated successfully', conversation: updateResult.rows[0] });
+    } catch (error) {
+        console.error('Error updating topic:', error);
+        res.status(500).json({ message: 'Failed to update topic.' });
+    }
+});
 module.exports = router;

@@ -1,461 +1,298 @@
 /**
- * js/messaging-client.js
+ * js/messaging-client.js - FINAL ENTERPRISE EDITION
  * ----------------------------------------------------
- * Final code integrating Auth, Socket.io, Role-based controls, 
- * and New Conversation Modal logic.
+ * Integrated: Multimedia, Read Receipts, Socket Sync, 
+ * Group Topic Editing, and Typing Indicators.
  */
 
 // =========================================================
 // 1. CONFIGURATION & STATE
 // =========================================================
-
-// --- API Endpoints ---
 const API_BASE_URL = '/api/messaging';
 const CONVERSATIONS_URL = `${API_BASE_URL}/conversations`;
 const MESSAGES_URL = `${API_BASE_URL}/messages`;
-const USERS_URL = '/api/users'; // For Admin search API: /api/users/search?q=...
+const USERS_URL = '/api/users'; 
 
-// --- Global State ---
 let currentConversationId = null;
 let currentUserId = null; 
 let currentUserRole = null;
 let socket = null; 
+let currentAudio = null;
+let typingTimeout;
 
-// --- DOM Elements ---
+// DOM Elements
 const conversationList = document.getElementById('conversationList');
 const messageDisplay = document.getElementById('messageDisplay');
 const chatHeader = document.getElementById('chatHeader');
 const messageInput = document.getElementById('messageInput');
 const sendMessageBtn = document.getElementById('sendMessageBtn');
 const newConversationBtn = document.getElementById('newConversationBtn'); 
+const typingBox = document.getElementById('typing') || document.createElement('div');
 
-// --- Modal Elements (Used only by Admin/Staff) ---
+// Modal Elements
 const newConversationModal = document.getElementById('newConversationModal');
-const modalCloseBtn = newConversationModal ? newConversationModal.querySelector('.close-btn') : null;
+const modalCloseBtn = newConversationModal?.querySelector('.close-btn');
 const recipientSearchInput = document.getElementById('recipientSearchInput');
 const searchResultList = document.getElementById('searchResultList');
-const selectedRecipientsList = document.getElementById('selectedRecipientsList');
 const startChatBtn = document.getElementById('startChatBtn');
 
 // =========================================================
-// 2. AUTHENTICATION & UTILITIES
+// 2. AUTH & UTILS
 // =========================================================
 
-/**
- * Custom fetch wrapper including authentication headers.
- */
 async function fetchWithAuth(url, options = {}) {
     const token = localStorage.getItem('erp-token');
-    if (!token) {
-        console.error('Authentication token not found. Cannot perform API call.');
-        throw new Error('Authentication token not found.');
-    }
-    
-    const sessionId = localStorage.getItem('active_session_id');
-    
     const headers = { 
         'Authorization': `Bearer ${token}`,
-        'X-Session-ID': sessionId || '',
         'Content-Type': 'application/json',
         ...options.headers
     };
-
     const response = await fetch(url, { ...options, headers });
-
     if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({ message: 'Server error.' }));
-        console.error(`Fetch error from ${url}:`, errorBody);
-        throw new Error(`Failed to fetch: ${errorBody.message}`);
+        const err = await response.json();
+        throw new Error(err.message || 'API Error');
     }
-
     return response.json();
 }
 
 /**
- * Renders a single message bubble in the display area.
+ * Enhanced Rendering for Text, Voice, and Images
  */
 function renderMessage(message) {
     const isSender = message.sender_id === currentUserId;
-    const messageElement = document.createElement('div');
+    const msgDiv = document.createElement('div');
+    msgDiv.classList.add('message-bubble', isSender ? 'sent' : 'received');
     
-    messageElement.classList.add('message-bubble', isSender ? 'sent' : 'received');
-    
-    const senderName = isSender ? 'You' : (message.sender_name || 'System');
-    
-    messageElement.innerHTML = `
-        <div class="message-sender">${senderName}</div>
-        <div class="message-content">${message.content}</div>
-        <div class="message-timestamp">${new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+    let contentHTML = message.content;
+
+    if (message.message_type === 'voice') {
+        contentHTML = `
+            <div class="voice-msg" onclick="playAudio('${message.file_url}', this)" style="cursor:pointer; display:flex; align-items:center; gap:10px;">
+                <i class="fas fa-play-circle fa-2x"></i>
+                <span>Voice Note</span>
+            </div>`;
+    } else if (message.message_type === 'image') {
+        contentHTML = `<img src="${message.file_url}" style="max-width:100%; border-radius:8px; cursor:pointer;" onclick="window.open('${message.file_url}')">`;
+    }
+
+    msgDiv.innerHTML = `
+        <div class="message-sender">${isSender ? 'You' : (message.sender_name || 'System')}</div>
+        <div class="message-content">${contentHTML}</div>
+        <div class="message-timestamp">${new Date(message.timestamp || message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
     `;
-    messageDisplay.appendChild(messageElement);
-    messageDisplay.scrollTop = messageDisplay.scrollHeight; 
+    messageDisplay.appendChild(msgDiv);
+    messageDisplay.scrollTop = messageDisplay.scrollHeight;
+}
+
+function playAudio(url, element) {
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+    const icon = element.querySelector('i');
+    const originalClass = icon.className;
+    icon.className = 'fas fa-spinner fa-spin fa-2x';
+    
+    currentAudio = new Audio(url);
+    currentAudio.play().then(() => {
+        icon.className = 'fas fa-pause-circle fa-2x';
+    }).catch(() => {
+        icon.className = originalClass;
+        alert("Audio playback failed.");
+    });
+
+    currentAudio.onended = () => icon.className = 'fas fa-play-circle fa-2x';
 }
 
 // =========================================================
-// 3. CORE MESSAGING LOGIC (REST API)
+// 3. CORE LOGIC & TOPIC EDIT
 // =========================================================
 
-/**
- * Loads all messages for a selected conversation.
- */
 async function loadConversationMessages(conversationId, title) {
     if (conversationId === currentConversationId) return;
 
-    // 1. Update DOM state
-    chatHeader.textContent = title;
-    messageDisplay.innerHTML = '<div style="text-align: center; padding: 20px;">Loading messages...</div>';
+    // Reset Header & Enable UI
+    chatHeader.innerHTML = `${title} <i class="fas fa-edit topic-edit-icon" style="cursor:pointer; font-size:0.7em; margin-left:10px;" onclick="renameGroup('${conversationId}', '${title}')"></i>`;
+    messageDisplay.innerHTML = '<div class="loader">Syncing messages...</div>';
     messageInput.disabled = false;
     sendMessageBtn.disabled = false;
-    
-    // 2. Handle Socket.io room join/leave
-    if (socket && currentConversationId) {
-        socket.emit('leave_conversation', currentConversationId);
-    }
-    currentConversationId = conversationId;
-    if (socket) {
-        socket.emit('join_conversation', conversationId);
-    }
 
-    // 3. Fetch messages from API
+    // Mark as Read
+    fetchWithAuth(`${API_BASE_URL}/read/${conversationId}`, { method: 'PUT' }).catch(() => {});
+
+    if (socket && currentConversationId) socket.emit('leave_conversation', currentConversationId);
+    currentConversationId = conversationId;
+    if (socket) socket.emit('join_conversation', conversationId);
+
     try {
         const messages = await fetchWithAuth(`${MESSAGES_URL}/${conversationId}`);
-        
         messageDisplay.innerHTML = '';
-        messages.forEach(renderMessage);
-
-        if (messages.length === 0) {
-             messageDisplay.innerHTML = '<div style="text-align: center; padding: 20px; color: #888;">No messages yet. Start the conversation!</div>';
-        }
-
+        messages.length > 0 ? messages.forEach(renderMessage) : messageDisplay.innerHTML = '<p style="text-align:center; padding:20px; opacity:0.5;">No history found.</p>';
     } catch (error) {
-        console.error('Failed to load messages:', error);
-        messageDisplay.innerHTML = '<div style="text-align: center; padding: 20px; color: red;">Failed to load messages.</div>';
+        messageDisplay.innerHTML = '<div class="error">Failed to connect to chat server.</div>';
     }
 }
 
 /**
- * Fetches the user's list of conversations and renders them.
+ * Group Rename Feature
  */
+window.renameGroup = async (id, oldName) => {
+    if (currentUserRole === 'Student') return;
+    const newTopic = prompt("Enter new Group Topic:", oldName);
+    if (newTopic && newTopic !== oldName) {
+        try {
+            await fetchWithAuth(`${CONVERSATIONS_URL}/${id}/topic`, {
+                method: 'PUT',
+                body: JSON.stringify({ topic: newTopic })
+            });
+            chatHeader.innerHTML = `${newTopic} <i class="fas fa-edit topic-edit-icon" style="cursor:pointer; font-size:0.7em; margin-left:10px;" onclick="renameGroup('${id}', '${newTopic}')"></i>`;
+            fetchAndRenderConversations();
+        } catch (e) { alert("Failed to rename."); }
+    }
+};
+
 async function fetchAndRenderConversations() {
     try {
         const conversations = await fetchWithAuth(CONVERSATIONS_URL);
+        conversationList.innerHTML = conversations.length ? '' : '<li class="p-3 text-center">No chats available.</li>';
         
-        conversationList.innerHTML = '';
-        
-        if (conversations.length === 0) {
-            conversationList.innerHTML = '<li style="padding: 15px; color: #888;">No conversations found.</li>';
-            return;
-        }
-
         conversations.forEach(conv => {
-            const listItem = document.createElement('li');
-            listItem.classList.add('conversation-item');
-            listItem.setAttribute('data-id', conv.id);
-            
-            // Display the participant_name (which is the topic or the other user's name)
-            listItem.textContent = conv.participant_name || conv.title || `Chat with ${conv.id.substring(0, 8)}`; 
-            
-            listItem.addEventListener('click', () => {
-                document.querySelectorAll('.conversation-item').forEach(item => item.classList.remove('active'));
-                listItem.classList.add('active');
-                
-                loadConversationMessages(conv.id, listItem.textContent);
-            });
-
-            conversationList.appendChild(listItem);
+            const li = document.createElement('li');
+            li.className = `conversation-item ${conv.id === currentConversationId ? 'active' : ''}`;
+            li.innerHTML = `
+                <div class="conv-info">
+                    <strong>${conv.participant_name || conv.title || 'Untitled'}</strong>
+                    <small>${conv.last_message_at ? new Date(conv.last_message_at).toLocaleDateString() : 'New Chat'}</small>
+                </div>`;
+            li.onclick = () => loadConversationMessages(conv.id, conv.participant_name || conv.title);
+            conversationList.appendChild(li);
         });
-
-    } catch (error) {
-        console.error('Failed to fetch conversations:', error);
-        conversationList.innerHTML = '<li style="padding: 15px; color: red;">Error loading chats.</li>';
-    }
-}
-
-/**
- * Serves the POST request to the backend to create a new chat session.
- */
-async function startNewConversation(recipientIds, topic = null) {
-    
-    // 🔥 CRITICAL FIX 1: Ensure the current user ID is included and unique.
-    // The participants array MUST contain the creator's ID (currentUserId)
-    const participants = [currentUserId, ...recipientIds].filter((value, index, self) => 
-        self.indexOf(value) === index
-    );
-    
-    const isGroup = recipientIds.length > 1;
-
-    try {
-        const newConversation = await fetchWithAuth(`${CONVERSATIONS_URL}/new`, {
-            method: 'POST',
-            body: JSON.stringify({
-                participants: participants, // Send the fixed array
-                topic: isGroup ? topic || 'Group Chat' : null,
-                is_group: isGroup
-            })
-        });
-
-        console.log('Conversation created:', newConversation);
-        
-        // Refresh and immediately load the new conversation
-        await fetchAndRenderConversations();
-        
-        const displayTitle = newConversation.topic || newConversation.participant_name || 'New Chat';
-        loadConversationMessages(newConversation.id, displayTitle);
-
-        return newConversation;
-
-    } catch (error) {
-        console.error('Failed to start new conversation:', error);
-        alert('Error: Could not start new conversation.');
-        return null;
-    }
+    } catch (e) { console.error("Inbox load error", e); }
 }
 
 // =========================================================
-// 4. MESSAGE SENDING (SOCKET.IO)
-// =========================================================
-
-function sendMessage() {
-    const content = messageInput.value.trim();
-    if (!content || !currentConversationId || !currentUserId) {
-        return; 
-    }
-
-    const message = {
-        conversationId: currentConversationId,
-        senderId: currentUserId,
-        content: content,
-    };
-
-    // 1. Emit message to server
-    if (socket) {
-        socket.emit('new_message', message);
-    } else {
-        console.error('Socket connection not established.');
-        return;
-    }
-
-    // 2. Display message immediately (optimistic update)
-    renderMessage({ 
-        ...message, 
-        sender_id: currentUserId, 
-        sender_name: 'You',
-        timestamp: new Date().toISOString() 
-    });
-    
-    // 3. Clear input field
-    messageInput.value = '';
-}
-
-// =========================================================
-// 5. SOCKET.IO SETUP
+// 4. SOCKET & TYPING
 // =========================================================
 
 function initSocket() {
-    if (typeof io === 'undefined') {
-        console.error("Socket.io library not loaded. Ensure <script src='/socket.io/socket.io.js'></script> is present.");
-        return;
-    }
-    
-    socket = io(); 
+    if (typeof io === 'undefined') return;
+    socket = io({ reconnection: true, reconnectionAttempts: 5 }); 
 
-    socket.on('connect', () => {
-        console.log('Socket connected:', socket.id);
-        if (currentConversationId) {
-            socket.emit('join_conversation', currentConversationId);
-        }
-    });
-
-    socket.on('message_received', (message) => {
-        if (message.conversation_id === currentConversationId) {
-            renderMessage(message);
+    socket.on('message_received', (msg) => {
+        if (msg.conversation_id === currentConversationId) {
+            renderMessage(msg);
+            fetchWithAuth(`${API_BASE_URL}/read/${currentConversationId}`, { method: 'PUT' });
         } else {
-            console.log(`New message received in conversation ${message.conversation_id}`);
-            // TODO: Add logic to highlight the conversation in the list
+            fetchAndRenderConversations();
         }
     });
 
-    socket.on('disconnect', () => {
-        console.warn('Socket disconnected.');
+    socket.on('user_typing', (data) => {
+        if(data.conversationId === currentConversationId) {
+            typingBox.style.display = 'block';
+            typingBox.innerText = `${data.senderName} is typing...`;
+        }
     });
+
+    socket.on('user_stop_typing', () => { typingBox.style.display = 'none'; });
+}
+
+function handleTyping() {
+    socket.emit('typing', { conversationId: currentConversationId, senderName: 'Someone' });
+    clearTimeout(typingTimeout);
+    typingTimeout = setTimeout(() => socket.emit('stop_typing', currentConversationId), 3000);
+}
+
+function sendMessage() {
+    const text = messageInput.value.trim();
+    if (!text || !currentConversationId) return;
+
+    const payload = {
+        conversationId: currentConversationId,
+        senderId: currentUserId,
+        content: text,
+        message_type: 'text'
+    };
+
+    socket.emit('new_message', payload);
+    renderMessage({ ...payload, sender_name: 'You', timestamp: new Date().toISOString() });
+    messageInput.value = '';
+    socket.emit('stop_typing', currentConversationId);
 }
 
 // =========================================================
-// 6. ADMIN-SPECIFIC LOGIC (MODAL)
+// 5. ADMIN MODAL & SEARCH
 // =========================================================
 
 function initAdminControls() {
-    // State to hold users selected for the new chat
+    if (currentUserRole === 'Student' || !newConversationBtn) return;
     const selectedRecipients = new Map();
 
-    const openModal = () => {
-        console.log("Attempting to open New Conversation Modal."); // New Action Log
-
-        // Reset state
-        recipientSearchInput.value = '';
-        searchResultList.innerHTML = '<p style="text-align: center; color: #888;">Start typing to search for recipients.</p>';
+    newConversationBtn.onclick = () => {
         selectedRecipients.clear();
-        renderSelectedRecipients();
-        startChatBtn.disabled = true;
-        
+        searchResultList.innerHTML = '';
         newConversationModal.style.display = 'flex';
+        recipientSearchInput.value = '';
         recipientSearchInput.focus();
     };
 
-    const closeModal = () => {
-        newConversationModal.style.display = 'none';
-    };
+    modalCloseBtn.onclick = () => newConversationModal.style.display = 'none';
 
-    const renderSelectedRecipients = () => {
-        selectedRecipientsList.innerHTML = '';
-        if (selectedRecipients.size === 0) {
-            selectedRecipientsList.innerHTML = '<li>No recipients selected.</li>';
-        }
-        selectedRecipients.forEach((user, id) => {
-            // FIX 2: Use username if full_name is not available (to avoid 'null')
-            const displayName = user.name || user.username || 'Unknown User'; 
-            
-            const tag = document.createElement('li');
-            tag.classList.add('selected-recipient-tag');
-            tag.textContent = `${displayName} (${user.role}) X`; // Display the fixed name/username
-            
-            tag.addEventListener('click', () => {
-                selectedRecipients.delete(id);
-                renderSelectedRecipients();
+    recipientSearchInput.oninput = async (e) => {
+        const q = e.target.value;
+        if (q.length < 2) return;
+        try {
+            const users = await fetchWithAuth(`${USERS_URL}/search?q=${q}`);
+            searchResultList.innerHTML = '';
+            users.forEach(u => {
+                if (u.id === currentUserId) return;
+                const div = document.createElement('div');
+                div.className = 'search-item';
+                div.style = "padding:10px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;";
+                div.innerHTML = `<span>${u.full_name} (${u.role})</span> <button class="btn btn-sm btn-primary" onclick="addRecipient('${u.id}', '${u.full_name}')">Add</button>`;
+                searchResultList.appendChild(div);
             });
-            selectedRecipientsList.appendChild(tag);
-        });
-        startChatBtn.disabled = selectedRecipients.size === 0;
+        } catch(err) { console.error("Search failed"); }
     };
 
+    window.addRecipient = (id, name) => {
+        selectedRecipients.set(id, name);
+        startChatBtn.disabled = false;
+        alert(`${name} added.`);
+    };
 
-    // 1. Initial Check (Checks if Admin/Staff AND if all DOM elements are present)
-    if (currentUserRole === 'Student' || !newConversationBtn || !newConversationModal) {
-        console.warn("Admin controls are disabled (Student role) or required DOM elements are missing.");
-        return;
-    }
-    
-    console.log("Admin Controls Initialized: New Message Button is Active."); // Success Log
-
-    // 2. Event listeners
-    newConversationBtn.addEventListener('click', openModal);
-    modalCloseBtn.addEventListener('click', closeModal);
-    window.addEventListener('click', (event) => {
-        if (event.target === newConversationModal) {
-            closeModal();
-        }
-    });
-
-    // 3. Handle search input (API Call)
-    let searchTimeout;
-    recipientSearchInput.addEventListener('input', () => {
-        clearTimeout(searchTimeout);
-        const query = recipientSearchInput.value.trim();
-        if (query.length < 3) {
-            searchResultList.innerHTML = '<p style="text-align: center; color: #888;">Keep typing...</p>';
-            return;
-        }
-
-        searchTimeout = setTimeout(async () => {
-            searchResultList.innerHTML = '<p style="text-align: center;">Searching...</p>';
-            
-            try {
-                // IMPORTANT: Requires backend route GET /api/users/search?q=query
-                const users = await fetchWithAuth(`${USERS_URL}/search?q=${query}`);
-                
-                searchResultList.innerHTML = '';
-                if (users.length === 0) {
-                    searchResultList.innerHTML = '<p style="text-align: center;">No users found.</p>';
-                    return;
-                }
-                
-                users.forEach(user => {
-                    if (user.id === currentUserId) return; 
-                    
-                    // FIX 2: Use full_name or username for display
-                    const displayName = user.full_name || user.username || 'Unknown User'; 
-
-                    const item = document.createElement('div');
-                    item.classList.add('user-search-item');
-                    item.textContent = `${displayName} (${user.role})`; // Display the fixed name/username
-                    
-                    const addButton = document.createElement('button');
-                    addButton.textContent = selectedRecipients.has(user.id) ? 'Selected' : 'Add';
-                    addButton.disabled = selectedRecipients.has(user.id);
-                    
-                    addButton.addEventListener('click', () => {
-                        // FIX 2: Store the display name (full_name or username)
-                        selectedRecipients.set(user.id, { id: user.id, name: displayName, username: user.username, role: user.role });
-                        addButton.textContent = 'Selected';
-                        addButton.disabled = true;
-                        renderSelectedRecipients();
-                    });
-                    
-                    item.appendChild(addButton);
-                    searchResultList.appendChild(item);
-                });
-
-            } catch (e) {
-                console.error("User search failed:", e);
-                searchResultList.innerHTML = '<p style="text-align: center; color: red;">Error searching users.</p>';
-            }
-        }, 500);
-    });
-    
-    // 4. Handle starting the chat
-    startChatBtn.addEventListener('click', async () => {
-        const recipientIds = Array.from(selectedRecipients.keys());
-        
-        // Determine topic for group chats
-        let topic = null;
-        if (recipientIds.length > 1) {
-             topic = prompt("Enter a topic/name for this group chat (Optional):") || 'Group Chat';
-        }
-
-        const success = await startNewConversation(recipientIds, topic);
-        if (success) {
-            closeModal(); // Close only on successful creation
-        }
-    });
+    startChatBtn.onclick = async () => {
+        const ids = Array.from(selectedRecipients.keys());
+        try {
+            const res = await fetchWithAuth(`${CONVERSATIONS_URL}/new`, {
+                method: 'POST',
+                body: JSON.stringify({ participants: [currentUserId, ...ids], is_group: ids.length > 1 })
+            });
+            newConversationModal.style.display = 'none';
+            await fetchAndRenderConversations();
+            loadConversationMessages(res.id, res.participant_name || 'New Chat');
+        } catch(e) { alert("Failed to start chat."); }
+    };
 }
 
 // =========================================================
-// 7. INITIALIZATION
+// 6. INITIALIZE
 // =========================================================
-
-/**
- * Performs a robust check of user context and initializes all components.
- */
 function initializeMessagingClient() {
-    // 1. Set global state from localStorage
-    // 🔥 CRITICAL FIX: Use the key names set by the current login.js
     currentUserId = localStorage.getItem('profile-id'); 
     currentUserRole = localStorage.getItem('user-role');
     
-    if (!currentUserId || !currentUserRole) { 
-        console.error("User context (ID or Role) missing. Please ensure you are logged in and localStorage is populated.");
-        chatHeader.textContent = 'Login Required';
-        messageDisplay.innerHTML = '<div style="text-align: center; padding: 50px; color: red;">ERROR: User session data is missing. Please log out and log back in.</div>';
+    if (!currentUserId) {
+        window.location.href = '/login.html';
         return;
     }
 
-    // 2. Initialize core messaging components
     fetchAndRenderConversations();
-    
-    // 3. Initialize Socket.io
     initSocket();
-
-    // 4. Set up event listeners for sending messages
-    sendMessageBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            sendMessage();
-        }
-    });
-    
-    // 5. Initialize Admin/Staff controls
     initAdminControls();
+
+    sendMessageBtn.onclick = sendMessage;
+    messageInput.onkeypress = (e) => { 
+        if (e.key === 'Enter') sendMessage(); 
+        else handleTyping();
+    };
 }
 
 document.addEventListener('DOMContentLoaded', initializeMessagingClient);
