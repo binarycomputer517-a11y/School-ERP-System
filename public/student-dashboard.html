@@ -332,9 +332,16 @@
 
     <nav class="bottom-nav">
         <a href="#" class="nav-link-mobile active"><i class="fas fa-home"></i><span>Home</span></a>
-        <a href="/my-messages.html" class="nav-link-mobile">
-            <i class="fas fa-comment-dots"></i><span class="badge bg-danger rounded-circle position-absolute top-0 end-0" style="font-size: 8px; padding: 3px 5px; transform: translate(-20%, 20%); border: 2px solid white;">5</span><span>Inbox</span>
-        </a>
+        <a href="/my-messages.html" class="nav-link-mobile position-relative d-flex flex-column align-items-center">
+    <div class="icon-wrapper position-relative">
+        <i class="fas fa-comment-dots fa-lg"></i>
+        <span id="unread-count" class="badge rounded-pill bg-danger position-absolute" 
+              style="top: -5px; right: -10px; font-size: 10px; border: 2px solid white; min-width: 18px;">
+            5
+        </span>
+    </div>
+    <span style="font-size: 11px; margin-top: 4px; font-weight: 600;">Inbox</span>
+</a>
         <a href="javascript:void(0)" class="nav-link-mobile" id="btnMenu"><i class="fas fa-th-large"></i><span>Explore</span></a>
         <a href="/student-profile.html" class="nav-link-mobile"><i class="fas fa-user-circle"></i><span>Profile</span></a>
     </nav>
@@ -342,149 +349,197 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="js/global-config.js"></script>
     <script>
-        // Drawer Logic
-        const btnMenu = document.getElementById('btnMenu');
-        const drawer = document.getElementById('menuDrawer');
-        const overlay = document.getElementById('overlay');
+    // --- Configuration & Global Variables ---
+    const btnMenu = document.getElementById('btnMenu');
+    const drawer = document.getElementById('menuDrawer');
+    const overlay = document.getElementById('overlay');
+    const token = localStorage.getItem('erp-token');
 
-        const toggleDrawer = (isOpen) => {
-            if(isOpen) {
-                drawer.classList.add('open');
-                overlay.classList.add('show');
-                document.body.style.overflow = 'hidden';
-            } else {
-                drawer.classList.remove('open');
-                overlay.classList.remove('show');
-                document.body.style.overflow = 'auto';
-            }
-        };
-
-        btnMenu.addEventListener('click', () => toggleDrawer(true));
-        overlay.addEventListener('click', () => toggleDrawer(false));
-
-        // Clock Update
-        function updateClock() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-            const clockEl = document.getElementById('digital-clock');
-            if (clockEl) clockEl.innerText = timeStr;
+    // --- 1. Navigation & Drawer Logic ---
+    const toggleDrawer = (isOpen) => {
+        if(isOpen) {
+            drawer.classList.add('open');
+            overlay.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        } else {
+            drawer.classList.remove('open');
+            overlay.classList.remove('show');
+            document.body.style.overflow = 'auto';
         }
-        setInterval(updateClock, 1000); updateClock();
+    };
 
-        // Online Status Checker
-        function checkStatus() {
-            const isOnline = navigator.onLine;
-            const dotHeader = document.getElementById('header-status-dot');
-            const dotDrawer = document.getElementById('drawer-status-dot');
-            if(dotHeader) dotHeader.className = isOnline ? 'status-dot online' : 'status-dot';
-            if(dotDrawer) dotDrawer.className = isOnline ? 'status-dot online' : 'status-dot';
+    if(btnMenu) btnMenu.addEventListener('click', () => toggleDrawer(true));
+    if(overlay) overlay.addEventListener('click', () => toggleDrawer(false));
+
+    // --- 2. Real-time Utilities (Clock & Status) ---
+    function updateClock() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        const clockEl = document.getElementById('digital-clock');
+        if (clockEl) clockEl.innerText = timeStr;
+    }
+
+    function checkStatus() {
+        const isOnline = navigator.onLine;
+        const dots = ['header-status-dot', 'drawer-status-dot'];
+        dots.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.className = isOnline ? 'status-dot online' : 'status-dot';
+        });
+    }
+
+    // --- 3. Messaging Badge System (Dynamic) ---
+    async function updateMessagingBadge() {
+        const badge = document.getElementById('unread-count');
+        if (!badge || !token) return;
+
+        try {
+            // API কল করে আনরিড মেসেজ সংখ্যা আনা
+            const response = await fetch('/api/messaging/unread-count', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                const count = parseInt(data.count) || 0;
+                
+                if (count > 0) {
+                    badge.innerText = count > 9 ? '9+' : count;
+                    badge.style.display = 'flex'; // ব্যাজ দেখাবে
+                } else {
+                    badge.style.display = 'none'; // ০ হলে ব্যাজ লুকাবে
+                }
+            }
+        } catch (err) {
+            console.error("Messaging Badge Error:", err);
         }
-        window.addEventListener('online', checkStatus); window.addEventListener('offline', checkStatus); checkStatus();
+    }
 
-        // Logout
-        function logout() { localStorage.clear(); window.location.href = '/login.html'; }
+    // --- 4. Authentication ---
+    function logout() { 
+        localStorage.clear(); 
+        window.location.href = '/login.html'; 
+    }
 
-        // Data Initialization
-        async function init() {
-            const ptr = document.getElementById('ptr-indicator');
-            if(ptr) ptr.style.display = 'block';
-            
-            const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
-            if (!sid) {
-                console.warn("No Student ID found");
-                if(ptr) ptr.style.display = 'none';
-                return;
+    // --- 5. Data Initialization (Main Init) ---
+    async function init() {
+        const ptr = document.getElementById('ptr-indicator');
+        if(ptr) ptr.style.display = 'block';
+        
+        const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
+        if (!sid || !token) {
+            console.warn("Session invalid or No Student ID found");
+            if(ptr) ptr.style.display = 'none';
+            // window.location.href = '/login.html'; // Uncomment to force login
+            return;
+        }
+
+        // Greeting Logic
+        const hr = new Date().getHours();
+        const greetingTxt = document.getElementById('greeting-txt');
+        if(greetingTxt) {
+            if(hr < 12) greetingTxt.innerText = "Suprabhat / Good Morning,";
+            else if(hr < 18) greetingTxt.innerText = "Good Afternoon,";
+            else greetingTxt.innerText = "Good Evening,";
+        }
+
+        try {
+            const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
+
+            // সব ডাটা একসাথে ফেচ করা হচ্ছে (Parallel Fetching)
+            const [pRes, fRes, tRes, nRes] = await Promise.all([
+                fetch(`/api/students/${sid}`, { headers }).catch(() => null),
+                fetch(`/api/students/${sid}/fees`, { headers }).catch(() => null),
+                fetch(`/api/students/${sid}/teachers`, { headers }).catch(() => null),
+                fetch(`/api/announcements/role/student`, { headers }).catch(() => null)
+            ]);
+
+            // A. প্রোফাইল আপডেট
+            if (pRes && pRes.ok) {
+                const p = await pRes.json();
+                document.getElementById('welcome-name').innerText = p.first_name || 'Student';
+                document.getElementById('drawer-name').innerText = `${p.first_name || ''} ${p.last_name || ''}`;
+                document.getElementById('drawer-email').innerText = p.email || 'N/A';
+                document.getElementById('header-email').innerText = p.email || 'N/A';
+                document.getElementById('student-id-top').innerText = `GR No: ${p.admission_id || sid}`;
+                document.getElementById('drawer-id').innerText = `GR No: ${p.admission_id || sid}`;
+                if (p.profile_image_path) {
+                    const photoPath = p.profile_image_path.startsWith('http') ? p.profile_image_path : p.profile_image_path;
+                    document.getElementById('student-photo').src = photoPath;
+                    document.getElementById('drawer-photo').src = photoPath;
+                }
             }
 
-            const hr = new Date().getHours();
-            const greetingTxt = document.getElementById('greeting-txt');
-            if(greetingTxt) {
-                if(hr < 12) greetingTxt.innerText = "Suprabhat / Good Morning,";
-                else if(hr < 18) greetingTxt.innerText = "Good Afternoon,";
-                else greetingTxt.innerText = "Good Evening,";
+            // B. ফি বা ফিন্যান্স আপডেট
+            if (fRes && fRes.ok) {
+                const f = await fRes.json();
+                document.getElementById('finance-content').innerHTML = `
+                    <div class="col-4 border-end"><small class="text-muted d-block">Pending</small><span class="fw-bold text-danger">₹${f.total_billed || 0}</span></div>
+                    <div class="col-4 border-end"><small class="text-muted d-block">Paid</small><span class="fw-bold text-success">₹${f.total_paid || 0}</span></div>
+                    <div class="col-4"><small class="text-muted d-block">Balance</small><span class="fw-bold text-dark">₹${f.balance_due || 0}</span></div>
+                `;
             }
 
-            try {
-                const token = localStorage.getItem('erp-token');
-                const headers = { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
-
-                const [pRes, fRes, tRes, nRes] = await Promise.all([
-                    fetch(`/api/students/${sid}`, { headers }).catch(e => null),
-                    fetch(`/api/students/${sid}/fees`, { headers }).catch(e => null),
-                    fetch(`/api/students/${sid}/teachers`, { headers }).catch(e => null),
-                    fetch(`/api/announcements/role/student`, { headers }).catch(e => null)
-                ]);
-
-                // Update Profile Info
-                if (pRes && pRes.ok) {
-                    const p = await pRes.json();
-                    document.getElementById('welcome-name').innerText = p.first_name || 'Student';
-                    document.getElementById('drawer-name').innerText = `${p.first_name || ''} ${p.last_name || ''}`;
-                    document.getElementById('drawer-email').innerText = p.email || 'N/A';
-                    document.getElementById('header-email').innerText = p.email || 'N/A';
-                    document.getElementById('student-id-top').innerText = `GR No: ${p.admission_id || sid}`;
-                    document.getElementById('drawer-id').innerText = `GR No: ${p.admission_id || sid}`;
-                    if (p.profile_image_path) {
-                        document.getElementById('student-photo').src = p.profile_image_path;
-                        document.getElementById('drawer-photo').src = p.profile_image_path;
-                    }
+            // C. টিচার্স লিস্ট আপডেট
+            if (tRes && tRes.ok) {
+                const t = await tRes.json();
+                const teacherContainer = document.getElementById('my-teachers-list');
+                if (t && t.length > 0) {
+                    teacherContainer.innerHTML = t.map(i => `
+                        <div class="teacher-card text-center shadow-sm">
+                            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(i.full_name)}&background=f1f5f9&color=6366f1&bold=true" class="rounded-circle mb-2 shadow-sm" style="width:55px; height:55px; object-fit:cover; border: 2px solid white;">
+                            <div class="small fw-extrabold text-truncate">${i.full_name}</div>
+                            <div class="text-muted" style="font-size: 10px; font-weight:700">${i.subject_name || 'Teacher'}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    teacherContainer.innerHTML = '<div class="small text-muted p-2">No teachers assigned.</div>';
                 }
+            }
 
-                // Update Fee Section (Indian Rupee Symbol)
-                if (fRes && fRes.ok) {
-                    const f = await fRes.json();
-                    document.getElementById('finance-content').innerHTML = `
-                        <div class="col-4 border-end"><small class="text-muted d-block">Pending</small><span class="fw-bold text-danger">₹${f.total_billed || 0}</span></div>
-                        <div class="col-4 border-end"><small class="text-muted d-block">Paid</small><span class="fw-bold text-success">₹${f.total_paid || 0}</span></div>
-                        <div class="col-4"><small class="text-muted d-block">Balance</small><span class="fw-bold text-dark">₹${f.balance_due || 0}</span></div>
-                    `;
-                }
-
-                // Update Teachers
-                if (tRes && tRes.ok) {
-                    const t = await tRes.json();
-                    const teacherContainer = document.getElementById('my-teachers-list');
-                    if (t && t.length > 0) {
-                        teacherContainer.innerHTML = t.map(i => `
-                            <div class="teacher-card text-center shadow-sm">
-                                <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(i.full_name)}&background=f1f5f9&color=6366f1&bold=true" class="rounded-circle mb-2 shadow-sm" style="width:55px; height:55px; object-fit:cover; border: 2px solid white;">
-                                <div class="small fw-extrabold text-truncate">${i.full_name}</div>
-                                <div class="text-muted" style="font-size: 10px; font-weight:700">${i.subject_name || 'Teacher'}</div>
+            // D. নোটিশ বোর্ড আপডেট
+            if (nRes && nRes.ok) {
+                const n = await nRes.json();
+                const noticeContainer = document.getElementById('notice-board-list');
+                if (n && n.length > 0) {
+                    noticeContainer.innerHTML = n.slice(0, 3).map(i => `
+                        <div class="d-flex gap-3 mb-3 border-bottom border-light pb-2">
+                            <div class="bg-primary bg-opacity-10 text-primary p-2 rounded-3 d-flex align-items-center justify-content-center" style="width:40px; height:40px; min-width:40px">
+                                <i class="fas fa-bolt-lightning" style="font-size: 14px;"></i>
                             </div>
-                        `).join('');
-                    } else {
-                        teacherContainer.innerHTML = '<div class="small text-muted p-2">No data found.</div>';
-                    }
-                }
-
-                // Update Notice Board
-                if (nRes && nRes.ok) {
-                    const n = await nRes.json();
-                    const noticeContainer = document.getElementById('notice-board-list');
-                    if (n && n.length > 0) {
-                        noticeContainer.innerHTML = n.slice(0, 3).map(i => `
-                            <div class="d-flex gap-3 mb-3 border-bottom border-light pb-2">
-                                <div class="bg-primary bg-opacity-10 text-primary p-2 rounded-3 d-flex align-items-center justify-content-center" style="width:40px; height:40px; min-width:40px">
-                                    <i class="fas fa-bolt-lightning" style="font-size: 14px;"></i>
-                                </div>
-                                <div style="flex:1">
-                                    <div class="fw-bold text-dark mb-0" style="font-size:13px; line-height:1.2">${i.title}</div>
-                                    <small class="text-muted" style="font-size:10px">${new Date(i.created_at).toLocaleDateString('en-IN')}</small>
-                                </div>
+                            <div style="flex:1">
+                                <div class="fw-bold text-dark mb-0" style="font-size:13px; line-height:1.2">${i.title}</div>
+                                <small class="text-muted" style="font-size:10px">${new Date(i.created_at).toLocaleDateString('en-IN')}</small>
                             </div>
-                        `).join('');
-                    } else {
-                        noticeContainer.innerHTML = '<div class="text-center py-2">No active notices.</div>';
-                    }
+                        </div>
+                    `).join('');
+                } else {
+                    noticeContainer.innerHTML = '<div class="text-center py-2">No active notices.</div>';
                 }
-
-            } catch (err) { 
-                console.error("Portal Init Error:", err); 
-            } finally {
-                if(ptr) setTimeout(() => { ptr.style.display = 'none'; }, 600);
             }
+
+            // ব্যাজ আপডেট কল
+            updateMessagingBadge();
+
+        } catch (err) { 
+            console.error("Portal Init Error:", err); 
+        } finally {
+            if(ptr) setTimeout(() => { ptr.style.display = 'none'; }, 600);
         }
-        document.addEventListener('DOMContentLoaded', init);
-    </script>
+    }
+
+    // --- 6. Event Listeners & Intervals ---
+    document.addEventListener('DOMContentLoaded', () => {
+        init();
+        updateClock();
+        checkStatus();
+    });
+
+    setInterval(updateClock, 1000);
+    setInterval(updateMessagingBadge, 30000); // প্রতি ৩০ সেকেন্ডে মেসেজ চেক করবে
+    window.addEventListener('online', checkStatus);
+    window.addEventListener('offline', checkStatus);
+
+</script>
 </body>
 </html>

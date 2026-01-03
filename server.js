@@ -143,38 +143,78 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 
 // ===================================
-// 3. REAL-TIME SOCKET LOGIC
+// 3. REAL-TIME SOCKET LOGIC (ADVANCED)
 // ===================================
 io.on('connection', (socket) => {
-    socket.on('join_conversation', (conversationId) => { socket.join(conversationId); });
-    socket.on('leave_conversation', (conversationId) => { socket.leave(conversationId); });
+    console.log('⚡ User Connected:', socket.id);
 
+    // 1. Join a specific chat room
+    socket.on('join_conversation', (conversationId) => { 
+        socket.join(conversationId); 
+        console.log(`User joined room: ${conversationId}`);
+    });
+
+    // 2. Leave a specific chat room
+    socket.on('leave_conversation', (conversationId) => { 
+        socket.leave(conversationId); 
+        console.log(`User left room: ${conversationId}`);
+    });
+
+    // 3. Typing Indicator Logic
+    socket.on('typing', (data) => {
+        // Expected data: { conversationId, senderName }
+        socket.to(data.conversationId).emit('user_typing', data);
+    });
+
+    socket.on('stop_typing', (conversationId) => {
+        socket.to(conversationId).emit('user_stop_typing');
+    });
+
+    // 4. Send Message (Supports Text, Voice, Image)
     socket.on('new_message', async (message) => {
-        const { conversationId, senderId, content } = message;
-        if (!conversationId || !senderId || !content) return; 
+        const { conversationId, senderId, content, message_type, file_url } = message;
+        
+        // Basic validation
+        if (!conversationId || !senderId) return; 
 
         try {
+            // Save message to database with type and file URL
             const saveResult = await pool.query(
-                `INSERT INTO messages (conversation_id, sender_id, content) 
-                 VALUES ($1, $2, $3) RETURNING conversation_id, sender_id, content, created_at, id;`,
-                [conversationId, senderId, content]
+                `INSERT INTO messages (conversation_id, sender_id, content, message_type, file_url) 
+                 VALUES ($1, $2, $3, $4, $5) 
+                 RETURNING *;`,
+                [conversationId, senderId, content || '', message_type || 'text', file_url || null]
             );
             const savedMessage = saveResult.rows[0];
 
-            await pool.query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [conversationId]);
+            // Update the 'last_message_at' timestamp in conversations table
+            await pool.query(
+                `UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, 
+                [conversationId]
+            );
 
+            // Retrieve sender's name for real-time display
             const userResult = await pool.query('SELECT full_name FROM users WHERE id = $1', [senderId]);
             const senderName = userResult.rows[0]?.full_name || 'Unknown User';
 
+            // Broadcast the message to everyone in the room
             io.to(conversationId).emit('message_received', {
                 ...savedMessage,
                 timestamp: savedMessage.created_at,
                 sender_name: senderName
             });
+
         } catch (error) {
-            console.error('Socket.io DB Error:', error);
-            socket.emit('message_error', { conversationId, message: 'Failed to send message.' });
+            console.error('🚀 Socket.io Database Error:', error);
+            socket.emit('message_error', { 
+                conversationId, 
+                message: 'Failed to deliver message. Please try again.' 
+            });
         }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('❌ User Disconnected');
     });
 });
 

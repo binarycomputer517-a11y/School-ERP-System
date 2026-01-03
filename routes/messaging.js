@@ -1,21 +1,32 @@
-// routes/messaging.js (FINAL & COMPLETE VERSION with DEBUGGING)
+// routes/messaging.js (ULTRA-PREMIUM ENTERPRISE VERSION)
 
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const path = require('path');
+const fs = require('fs');
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware'); 
 
 const MESSAGING_ROLES = ['Super Admin', 'Admin', 'Teacher', 'Coordinator', 'Student', 'Parent']; 
 
+// --- Multer Setup for Voice/Image Uploads ---
+const uploadDir = 'uploads/chat';
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+
+const storage = multer.diskStorage({
+    destination: uploadDir,
+    filename: (req, file, cb) => {
+        cb(null, `CHAT-${Date.now()}${path.extname(file.originalname)}`);
+    }
+});
+const upload = multer({ storage });
+
 // =========================================================
-// 1. GET Conversation List
+// 1. GET Conversation List (With Participant Info)
 // =========================================================
 router.get('/conversations', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
     const userId = req.user.id; 
-
-    if (!userId) {
-        return res.status(401).json({ message: 'User ID missing in token.' });
-    }
 
     try {
         const result = await pool.query(
@@ -25,7 +36,6 @@ router.get('/conversations', authenticateToken, authorize(MESSAGING_ROLES), asyn
                 c.topic AS title,
                 c.is_group,
                 c.last_message_at,
-                -- Determine the display name: Use the topic for group chats, otherwise find the other user's name.
                 CASE
                     WHEN c.is_group = TRUE THEN c.topic 
                     ELSE (
@@ -33,7 +43,7 @@ router.get('/conversations', authenticateToken, authorize(MESSAGING_ROLES), asyn
                         FROM conversation_participants cp_other
                         JOIN users u ON cp_other.user_id = u.id
                         WHERE cp_other.conversation_id = c.id
-                          AND cp_other.user_id != $1 -- Find the ID that is NOT the current user
+                          AND cp_other.user_id != $1
                         LIMIT 1
                     )
                 END AS participant_name
@@ -44,133 +54,68 @@ router.get('/conversations', authenticateToken, authorize(MESSAGING_ROLES), asyn
             `,
             [userId]
         );
-
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('DB Error fetching conversations:', error);
-        res.status(500).json({ message: 'Failed to retrieve conversations due to DB error.', error: error.message });
+        res.status(500).json({ message: 'Failed to retrieve conversations.' });
     }
 });
 
 // =========================================================
-// 2. POST New Conversation (CRITICAL FIX APPLIED & DEBUGGING ENABLED)
+// 2. POST New Conversation
 // =========================================================
 router.post('/conversations/new', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
     const { participants, topic, is_group } = req.body;
     const createdById = req.user.id; 
 
-    // 🔥 CRITICAL DEBUG START: These logs will tell us exactly what data the server received
-    console.log(`DEBUG: Creator ID (req.user.id): ${createdById}`);
-    console.log(`DEBUG: Participants Array Received: ${participants}`);
-    console.log(`DEBUG: Array Length: ${participants.length}`);
-    // 🔥 CRITICAL DEBUG END
-
     if (!participants || !Array.isArray(participants) || participants.length < 2) {
-        return res.status(400).json({ message: 'Participants list is required and must contain at least two users.' });
+        return res.status(400).json({ message: 'Minimum 2 participants required.' });
     }
 
-    // 1. Check for existing 1-to-1 conversation if it's not a group
-    if (!is_group) {
-        const otherUserId = participants.find(id => id !== createdById);
-        try {
-            const existingConversation = await pool.query(
-                `
-                SELECT c.id, c.topic, u.full_name AS participant_name
-                FROM conversations c
-                JOIN conversation_participants cp1 ON c.id = cp1.conversation_id
-                JOIN conversation_participants cp2 ON c.id = cp2.conversation_id
-                JOIN users u ON u.id = $2
-                WHERE c.is_group = FALSE
-                  AND cp1.user_id = $1
-                  AND cp2.user_id = $2
-                LIMIT 1;
-                `,
-                [createdById, otherUserId]
-            );
-
-            if (existingConversation.rowCount > 0) {
-                return res.status(200).json(existingConversation.rows[0]);
-            }
-        } catch (e) {
-            console.error('Error checking for existing conversation:', e);
-        }
-    }
-
-    // 2. Begin Transaction to create new conversation and add participants
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // A. Insert into conversations table
-        const conversationTopic = topic || null;
-        const newConvResult = await client.query(
-            `INSERT INTO conversations (is_group, topic, created_by_id) 
-             VALUES ($1, $2, $3) RETURNING id, topic;`,
-            [is_group, conversationTopic, createdById]
+        // Create Header
+        const newConv = await client.query(
+            `INSERT INTO conversations (is_group, topic, created_by_id) VALUES ($1, $2, $3) RETURNING id, topic;`,
+            [is_group || false, topic || null, createdById]
         );
-        const newConversationId = newConvResult.rows[0].id;
-        const newConversationTopic = newConvResult.rows[0].topic;
+        const conversationId = newConv.rows[0].id;
 
-        // B. Insert all participants sequentially within the transaction for robustness
-        for (const userId of participants) {
-            const isAdmin = (userId === createdById);
+        // Insert Participants
+        for (const uid of participants) {
             await client.query(
-                `INSERT INTO conversation_participants (conversation_id, user_id, is_admin) 
-                 VALUES ($1, $2, $3);`,
-                [newConversationId, userId, isAdmin]
+                `INSERT INTO conversation_participants (conversation_id, user_id, is_admin) VALUES ($1, $2, $3);`,
+                [conversationId, uid, uid === createdById]
             );
         }
 
         await client.query('COMMIT');
-
-        // C. Prepare and send the response
-        let participantName = newConversationTopic;
-        if (!is_group) {
-            const otherUser = await pool.query('SELECT full_name FROM users WHERE id = $1', [participants.find(id => id !== createdById)]);
-            participantName = otherUser.rows[0]?.full_name || 'New Chat';
-        }
-
-        res.status(201).json({ 
-            id: newConversationId, 
-            topic: newConversationTopic, 
-            participant_name: participantName,
-            is_group: is_group
-        });
-
+        res.status(201).json({ id: conversationId, topic: newConv.rows[0].topic });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Transaction Error creating conversation (Participants missing):', error);
-        res.status(500).json({ message: 'Failed to create new conversation. Participant insertion failed.', error: error.message });
+        res.status(500).json({ message: 'Transaction failed.' });
     } finally {
         client.release();
     }
 });
 
-
 // =========================================================
-// 3. GET Message History
+// 3. GET Message History (Including message_type & file_url)
 // =========================================================
 router.get('/messages/:conversationId', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
     const { conversationId } = req.params;
     const userId = req.user.id; 
 
     try {
-        // 1. Verify the user is a participant
-        const participationCheck = await pool.query(
-            'SELECT 1 FROM conversation_participants WHERE conversation_id = $1 AND user_id = $2',
-            [conversationId, userId]
-        );
-
-        if (participationCheck.rowCount === 0) {
-            return res.status(403).json({ message: 'Access denied to this conversation.' });
-        }
-
-        // 2. Fetch messages
         const messages = await pool.query(
             `
             SELECT 
                 m.sender_id, 
                 m.content, 
+                m.message_type, 
+                m.file_url,
                 m.created_at AS timestamp,
                 u.full_name AS sender_name
             FROM messages m
@@ -181,12 +126,62 @@ router.get('/messages/:conversationId', authenticateToken, authorize(MESSAGING_R
             [conversationId]
         );
 
+        // Update last_read_at when opening chat
+        await pool.query(
+            `UPDATE conversation_participants SET last_read_at = CURRENT_TIMESTAMP 
+             WHERE conversation_id = $1 AND user_id = $2`,
+            [conversationId, userId]
+        );
+
         res.status(200).json(messages.rows);
     } catch (error) {
-        console.error('DB Error fetching messages:', error);
         res.status(500).json({ message: 'Failed to retrieve messages.' });
     }
 });
 
+// =========================================================
+// 4. GET Unread Count (Dynamic Badge)
+// =========================================================
+router.get('/unread-count', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
+    const userId = req.user.id;
+    try {
+        const result = await pool.query(
+            `
+            SELECT COUNT(*)::int AS unread_total
+            FROM messages m
+            JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id
+            WHERE cp.user_id = $1
+              AND m.sender_id != $1
+              AND m.created_at > cp.last_read_at;
+            `,
+            [userId]
+        );
+        res.status(200).json({ count: result.rows[0].unread_total });
+    } catch (error) {
+        res.status(500).json({ count: 0 });
+    }
+});
+
+// =========================================================
+// 5. UPDATE Read Status (Explicit Trigger)
+// =========================================================
+router.put('/read/:conversationId', authenticateToken, authorize(MESSAGING_ROLES), async (req, res) => {
+    try {
+        await pool.query(
+            `UPDATE conversation_participants SET last_read_at = CURRENT_TIMESTAMP 
+             WHERE conversation_id = $1 AND user_id = $2`,
+            [req.params.conversationId, req.user.id]
+        );
+        res.status(200).json({ message: 'Marked as read' });
+    } catch (e) { res.status(500).json({ message: 'Error' }); }
+});
+
+// =========================================================
+// 6. UPLOAD Chat Media (Voice Message/Images)
+// =========================================================
+router.post('/upload', authenticateToken, upload.single('file'), (req, res) => {
+    if (!req.file) return res.status(400).json({ message: 'Upload failed' });
+    res.json({ fileUrl: `/uploads/chat/${req.file.filename}` });
+});
 
 module.exports = router;
