@@ -306,53 +306,52 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
         await client.query('BEGIN');
 
         // 1. Fetch Student, Structure, Duration AND Assignments
-        const sRes = await client.query(`
-            SELECT 
-                s.student_id, 
-                u.username, 
-                s.roll_number,
-                c.course_name, 
-                b.batch_name,
-                
-                -- Fee Structure Info
-                fs.id AS fee_structure_id,
-                fs.structure_name,
-                COALESCE(fs.course_duration_months, 12) AS duration,
-                COALESCE(fs.tuition_fee, 0) AS monthly_tuition,
-                COALESCE(fs.admission_fee, 0) AS admission,
-                COALESCE(fs.registration_fee, 0) AS registration,
-                COALESCE(fs.examination_fee, 0) AS exam,
-                COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
-                COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
+        // --- শুধুমাত্র SQL Query এবং Table Update অংশ ---
 
-                -- Transport Info (Checking is_active and taking fee from assignment)
-                ta.monthly_fee AS transport_assigned_fee,
-                r.monthly_fee AS route_base_fee,
-                r.route_name,
-                ta.is_active AS transport_active,
+const sRes = await client.query(`
+    SELECT 
+        s.student_id, 
+        u.username, 
+        s.roll_number,
+        c.course_name, 
+        b.batch_name,
+        
+        -- Fee Structure Info (Master Data)
+        fs.id AS fee_structure_id,
+        fs.structure_name,
+        COALESCE(fs.course_duration_months, 12) AS duration,
+        COALESCE(fs.admission_fee, 0) AS admission,
+        COALESCE(fs.registration_fee, 0) AS registration,
+        COALESCE(fs.examination_fee, 0) AS exam,
+        COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
+        COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
 
-                -- Hostel Info
-                hr.room_fee AS hostel_monthly_rate,
-                hr.rate_name AS hostel_room_name
+        -- Transport Assignments (Fixed Join: bus_route_id)
+        r.route_name,
+        ta.is_active AS transport_active,
 
-            FROM ${DB.STUDENTS} s 
-            JOIN ${DB.USERS} u ON s.user_id=u.id 
-            LEFT JOIN ${DB.COURSES} c ON s.course_id=c.id 
-            LEFT JOIN ${DB.BATCHES} b ON s.batch_id = b.id
-            
-            -- Link Fee Structure
-            LEFT JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
-            
-            -- Link Transport 
-            LEFT JOIN student_transport_assignments ta ON s.student_id = ta.student_id AND ta.is_active = TRUE
-            LEFT JOIN ${DB.ROUTES} r ON ta.route_id = r.id
+        -- Hostel Assignments (Fixed Column: room_fee)
+        hr.room_fee AS hostel_monthly_rate,
+        hr.rate_name AS hostel_room_name
 
-            -- Link Hostel
-            LEFT JOIN student_hostel_assignments ha ON s.student_id = ha.student_id
-            LEFT JOIN ${DB.HOSTEL} hr ON ha.hostel_rate_id = hr.id
+    FROM ${DB.STUDENTS} s 
+    JOIN ${DB.USERS} u ON s.user_id=u.id 
+    LEFT JOIN ${DB.COURSES} c ON s.course_id=c.id 
+    LEFT JOIN ${DB.BATCHES} b ON s.batch_id = b.id
+    
+    -- Master Fee Structure Link
+    LEFT JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
+    
+    -- Transport Link (corrected to bus_route_id)
+    LEFT JOIN student_transport_assignments ta ON s.student_id = ta.student_id AND ta.is_active = TRUE
+    LEFT JOIN ${DB.ROUTES} r ON ta.bus_route_id = r.id
 
-            WHERE s.student_id=$1::uuid
-        `, [studentId]);
+    -- Hostel Link (corrected to use hostel_rates hr)
+    LEFT JOIN student_hostel_assignments ha ON s.student_id = ha.student_id
+    LEFT JOIN ${DB.HOSTEL} hr ON ha.hostel_rate_id = hr.id
+
+    WHERE s.student_id=$1::uuid
+`, [studentId]);
 
         if (!sRes.rows[0]) {
             await client.query('ROLLBACK');
