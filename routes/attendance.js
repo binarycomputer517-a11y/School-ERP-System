@@ -384,7 +384,7 @@ router.delete('/:attendanceId', authenticateToken, authorize(['Super Admin', 'Ad
 router.get('/departments', authenticateToken, async (req, res) => {
     try {
         // Query changed to select from the dedicated HR table for Departments
-        const query = `SELECT id, name FROM hr_departments ORDER BY name;`; 
+        const query = `SELECT id, department_name AS name FROM hr_departments ORDER BY department_name;`;
         const { rows } = await pool.query(query);
         res.status(200).json(rows);
     } catch (err) {

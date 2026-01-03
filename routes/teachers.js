@@ -80,7 +80,7 @@ router.get('/me/profile', authenticateToken, authorize(['Teacher']), async (req,
                 t.phone_number, t.date_of_birth, t.hire_date, t.address,
                 t.profile_image_path, 
                 u.username, u.role, u.id AS user_id, u.created_at,
-                hd.name AS department_name,
+                hd.department_name,
                 b.branch_name
             FROM ${TEACHERS_TABLE} t
             JOIN ${USERS_TABLE} u ON t.user_id = u.id
@@ -111,7 +111,7 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
                 t.phone_number, t.date_of_birth, t.hire_date, t.is_active, t.address,
                 t.department_id, t.profile_image_path, 
                 u.username, u.role, u.id AS user_id,
-                hd.name AS department_name, 
+                hd.department_name, 
                 hd.description AS department_description, 
                 b.branch_name
             FROM ${TEACHERS_TABLE} t
@@ -208,7 +208,7 @@ router.get('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
             SELECT 
                 t.*,
                 u.username, u.role, 
-                hd.name AS department_name 
+                hd.department_name
             FROM ${TEACHERS_TABLE} t
             LEFT JOIN ${USERS_TABLE} u ON t.user_id = u.id
             LEFT JOIN ${DEPARTMENTS_TABLE} hd ON t.department_id = hd.id
