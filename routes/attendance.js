@@ -168,16 +168,24 @@ router.get('/report/consolidated', authenticateToken, authorize(REPORT_VIEW_ROLE
 });
 
 // =================================================================
-// 4. INDIVIDUAL USER REPORT (OR Logic Fix)
+// 4. INDIVIDUAL USER REPORT (Full & Final Optimized Version)
 // =================================================================
 router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLES), async (req, res) => {
     const targetUserId = req.params.userId; 
     const { subject_id, start_date, end_date } = req.query;
     
+    // রোলের নাম ছোট হাতের অক্ষরে রূপান্তর করে চেক করা (Case-insensitive support)
+    const userRole = req.user.role ? req.user.role.toLowerCase() : '';
+    
+    // ইউজার কি নিজের রেকর্ড দেখছে নাকি অ্যাডমিন হিসেবে অন্যের রেকর্ড দেখছে?
     const isSelf = String(req.user.id) === targetUserId;
-    const canViewOthers = ['super admin', 'admin', 'teacher'].includes(req.user.role);
-    if (!isSelf && !canViewOthers) return res.status(403).json({ message: 'Unauthorized' });
+    const canViewOthers = ['super admin', 'admin', 'teacher', 'coordinator'].includes(userRole);
+
+    if (!isSelf && !canViewOthers) {
+        return res.status(403).json({ message: 'Forbidden: আপনি শুধুমাত্র নিজের রেকর্ড দেখার অনুমতিপ্রাপ্ত।' });
+    }
       
+    // ডাইনামিক কুয়েরি তৈরি: OR Logic ব্যবহার করে user_id এবং profile ID চেক করা
     let query = `
         SELECT a.id, a.attendance_date, a.status, a.remarks, a.mark_method, 
                COALESCE(s.subject_name, 'General') as subject_name 
@@ -187,16 +195,35 @@ router.get('/report/user/:userId', authenticateToken, authorize(USER_REPORT_ROLE
     `;
     
     const params = [targetUserId];
-    if (subject_id && subject_id !== 'all') { params.push(subject_id); query += ` AND a.subject_id = $${params.length}::uuid`; }
-    if (start_date) { params.push(start_date); query += ` AND a.attendance_date >= $${params.length}`; }
-    if (end_date) { params.push(end_date); query += ` AND a.attendance_date <= $${params.length}`; }
     
+    // সাবজেক্ট ফিল্টার (যদি 'all' না হয় এবং বৈধ আইডি থাকে)
+    if (subject_id && subject_id !== 'all' && subject_id !== '' && subject_id !== 'null') { 
+        params.push(subject_id); 
+        query += ` AND a.subject_id = $${params.length}::uuid`; 
+    }
+    
+    // শুরুর তারিখ ফিল্টার
+    if (start_date && start_date !== '') { 
+        params.push(start_date); 
+        query += ` AND a.attendance_date >= $${params.length}`; 
+    }
+    
+    // শেষ তারিখ ফিল্টার
+    if (end_date && end_date !== '') { 
+        params.push(end_date); 
+        query += ` AND a.attendance_date <= $${params.length}`; 
+    }
+    
+    // তারিখ অনুযায়ী ডিসেন্ডিং অর্ডারে সাজানো
     query += ' ORDER BY a.attendance_date DESC;';
 
     try {
         const { rows } = await pool.query(query, params);
         res.status(200).json(rows);
-    } catch (err) { res.status(500).json({ error: err.message }); }
+    } catch (err) {
+        console.error('Individual Report Fetch Error:', err.message);
+        res.status(500).json({ error: 'রিপোর্ট জেনারেট করতে সমস্যা হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।' });
+    }
 });
 
 // =================================================================
