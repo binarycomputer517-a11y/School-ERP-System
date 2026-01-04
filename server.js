@@ -143,26 +143,40 @@ app.get('/favicon.ico', (req, res) => res.status(204).end());
 
 
 // ===================================
-// 3. REAL-TIME SOCKET LOGIC (ADVANCED)
+// 3. REAL-TIME SOCKET LOGIC (ENTERPRISE MASTER)
 // ===================================
 io.on('connection', (socket) => {
     console.log('⚡ User Connected:', socket.id);
 
-    // 1. Join a specific chat room
-    socket.on('join_conversation', (conversationId) => { 
-        socket.join(conversationId); 
-        console.log(`User joined room: ${conversationId}`);
+    /**
+     * A. INITIALIZATION & PRIVATE ROOMS
+     * Links the socket to the user's specific UUID for targeted pings
+     */
+    socket.on('join_user_room', (userId) => {
+        if (!userId) return;
+        socket.join(`user_${userId}`);
+        console.log(`📡 Private Link: user_${userId}`);
     });
 
-    // 2. Leave a specific chat room
+    /**
+     * B. CONVERSATION FLOW
+     */
+    socket.on('join_conversation', (conversationId) => { 
+        if (!conversationId) return;
+        socket.join(conversationId); 
+        console.log(`👥 User joined conversation: ${conversationId}`);
+    });
+
     socket.on('leave_conversation', (conversationId) => { 
         socket.leave(conversationId); 
-        console.log(`User left room: ${conversationId}`);
+        console.log(`🏃 User left conversation: ${conversationId}`);
     });
 
-    // 3. Typing Indicator Logic
+    /**
+     * C. USER INTERACTION (Typing & Read)
+     */
     socket.on('typing', (data) => {
-        // Expected data: { conversationId, senderName }
+        // data: { conversationId, senderName }
         socket.to(data.conversationId).emit('user_typing', data);
     });
 
@@ -170,46 +184,57 @@ io.on('connection', (socket) => {
         socket.to(conversationId).emit('user_stop_typing');
     });
 
-    // 4. Send Message (Supports Text, Voice, Image)
+    socket.on('mark_as_read', (data) => {
+        const { conversationId, userId } = data;
+        // Immediate UI sync for other participants currently in the chat
+        socket.to(conversationId).emit('messages_read_sync', { conversationId, userId });
+    });
+
+    /**
+     * D. MASTER MESSAGE DISPATCHER
+     */
     socket.on('new_message', async (message) => {
         const { conversationId, senderId, content, message_type, file_url } = message;
-        
-        // Basic validation
         if (!conversationId || !senderId) return; 
 
         try {
-            // Save message to database with type and file URL
+            // 1. Database Persistence
             const saveResult = await pool.query(
                 `INSERT INTO messages (conversation_id, sender_id, content, message_type, file_url) 
-                 VALUES ($1, $2, $3, $4, $5) 
-                 RETURNING *;`,
+                 VALUES ($1, $2, $3, $4, $5) RETURNING *;`,
                 [conversationId, senderId, content || '', message_type || 'text', file_url || null]
             );
             const savedMessage = saveResult.rows[0];
 
-            // Update the 'last_message_at' timestamp in conversations table
-            await pool.query(
-                `UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, 
-                [conversationId]
+            // 2. Refresh Conversation Sorting
+            await pool.query(`UPDATE conversations SET last_message_at = NOW() WHERE id = $1`, [conversationId]);
+
+            // 3. Fetch Identity for Display
+            const userResult = await pool.query('SELECT full_name FROM users WHERE id = $1', [senderId]);
+            const senderName = userResult.rows[0]?.full_name || 'User';
+
+            const broadcastData = { ...savedMessage, timestamp: savedMessage.created_at, sender_name: senderName };
+
+            // 4. In-Chat Broadcast (Real-time view)
+            io.to(conversationId).emit('message_received', broadcastData);
+
+            // 5. Cross-Platform Notifications (To private rooms of other participants)
+            const participants = await pool.query(
+                `SELECT user_id FROM conversation_participants WHERE conversation_id = $1 AND user_id != $2`,
+                [conversationId, senderId]
             );
 
-            // Retrieve sender's name for real-time display
-            const userResult = await pool.query('SELECT full_name FROM users WHERE id = $1', [senderId]);
-            const senderName = userResult.rows[0]?.full_name || 'Unknown User';
-
-            // Broadcast the message to everyone in the room
-            io.to(conversationId).emit('message_received', {
-                ...savedMessage,
-                timestamp: savedMessage.created_at,
-                sender_name: senderName
+            participants.rows.forEach(p => {
+                io.to(`user_${p.user_id}`).emit('global_unread_update', {
+                    conversationId,
+                    senderName,
+                    preview: content ? content.substring(0, 30) + "..." : "Sent a file"
+                });
             });
 
         } catch (error) {
-            console.error('🚀 Socket.io Database Error:', error);
-            socket.emit('message_error', { 
-                conversationId, 
-                message: 'Failed to deliver message. Please try again.' 
-            });
+            console.error('🚀 Socket Error:', error);
+            socket.emit('message_error', { message: 'Database sync failed.' });
         }
     });
 
@@ -217,6 +242,7 @@ io.on('connection', (socket) => {
         console.log('❌ User Disconnected');
     });
 });
+
 
 // ===================================
 // 4. API ROUTES

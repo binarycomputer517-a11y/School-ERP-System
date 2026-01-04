@@ -13,15 +13,26 @@
             --bg-body: #f8fafc; --whatsapp-bg: #efe7dd;
             --bubble-sent: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
             --bubble-received: #ffffff; --glass: rgba(255, 255, 255, 0.85);
+            --text-main: #1e293b;
         }
 
-        body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; background: var(--bg-body); height: 100vh; overflow: hidden; position: fixed; }
-        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-body: #0f172a;
+                --bubble-received: #1e293b;
+                --text-main: #f8fafc;
+                --glass: rgba(15, 23, 42, 0.85);
+            }
+        }
 
-        .chat-container { display: flex; height: 100vh; width: 100vw; background: white; position: relative; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; margin: 0; background: var(--bg-body); height: 100vh; overflow: hidden; position: fixed; color: var(--text-main); }
+        @keyframes popIn { 0% { transform: scale(0.8); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .chat-container { display: flex; height: 100vh; width: 100vw; background: var(--bg-body); position: relative; }
 
         /* --- Inbox List --- */
-        .conversation-list { flex: 1; background: #fff; display: flex; flex-direction: column; z-index: 10; border-right: 1px solid #f1f5f9; }
+        .conversation-list { flex: 1; background: var(--bg-card, #fff); display: flex; flex-direction: column; z-index: 10; border-right: 1px solid #f1f5f9; }
         .conv-header { padding: 30px 20px 20px; border-bottom: 1px solid #f1f5f9; }
         .conv-header h1 { font-size: 1.8rem; font-weight: 800; margin-bottom: 15px; letter-spacing: -1px; }
 
@@ -30,7 +41,7 @@
 
         #conversationList { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
         .conv-item { padding: 15px 20px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #f8fafc; transition: 0.2s; cursor: pointer; position: relative; }
-        .conv-item:active { background: #f1f5f9; }
+        .conv-item.active { background: #f1f5f9; }
         .unread-dot { width: 12px; height: 12px; background: var(--accent); border-radius: 50%; border: 2px solid white; position: absolute; right: 20px; top: 50%; transform: translateY(-50%); display: none; }
 
         .avatar-box { position: relative; width: 56px; height: 56px; }
@@ -47,17 +58,26 @@
         .date-divider { align-self: center; background: rgba(0,0,0,0.15); color: #444; padding: 6px 16px; border-radius: 20px; font-size: 0.7rem; font-weight: 800; margin: 10px 0; text-transform: uppercase; letter-spacing: 0.5px; }
 
         .bubble { max-width: 80%; padding: 12px 16px; font-size: 0.95rem; line-height: 1.5; position: relative; animation: popIn 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+        .bubble.highlight { outline: 3px solid var(--primary); transform: scale(1.02); }
         .sent { align-self: flex-end; background: var(--bubble-sent); color: white; border-radius: 20px 20px 4px 20px; }
-        .received { align-self: flex-start; background: var(--bubble-received); color: #1e293b; border-radius: 20px 20px 20px 4px; }
+        .received { align-self: flex-start; background: var(--bubble-received); color: var(--text-main); border-radius: 20px 20px 20px 4px; }
         
         .bubble-meta { font-size: 0.65rem; margin-top: 5px; display: flex; align-items: center; gap: 4px; justify-content: flex-end; opacity: 0.7; }
         .typing-box { font-size: 0.75rem; color: #64748b; padding: 10px 25px; display: none; font-style: italic; font-weight: 600; }
 
+        /* AI Panel */
+        .ai-panel { position: absolute; bottom: 0; left: 0; right: 0; background: var(--bg-card, #fff); border-top-left-radius: 25px; border-top-right-radius: 25px; padding: 25px; z-index: 100; box-shadow: 0 -10px 40px rgba(0,0,0,0.15); display: none; animation: slideUp 0.3s ease-out; }
+        .ai-panel.active { display: block; }
+
+        /* Lightbox */
+        .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; z-index: 2000; justify-content: center; align-items: center; }
+        .lightbox img { max-width: 95%; max-height: 80%; border-radius: 12px; }
+
         /* --- Footer --- */
-        .chat-input-bar { padding: 10px 20px; background: white; display: flex; align-items: center; gap: 12px; border-top: 1px solid #f1f5f9; padding-bottom: calc(15px + env(safe-area-inset-bottom)); }
+        .chat-input-bar { padding: 10px 20px; background: var(--bg-card, #fff); display: flex; align-items: center; gap: 12px; border-top: 1px solid #f1f5f9; padding-bottom: calc(15px + env(safe-area-inset-bottom)); }
         .pill-wrapper { flex: 1; background: #f1f5f9; border-radius: 25px; padding: 8px 18px; display: flex; align-items: center; border: 1.5px solid transparent; transition: 0.3s; }
         .pill-wrapper:focus-within { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
-        .pill-wrapper input { border: none; background: transparent; flex: 1; padding: 5px; outline: none; font-size: 1rem; color: var(--text-main); }
+        .pill-wrapper input { border: none; background: transparent; flex: 1; padding: 5px; outline: none; font-size: 1rem; color: #1e293b; }
         
         .btn-circle { width: 45px; height: 45px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: 0.2s; }
         .send-btn { background: var(--primary); color: white; }
@@ -73,17 +93,20 @@
     <div class="chat-container">
         <div class="conversation-list">
             <div class="conv-header">
-                <div class="d-flex justify-content-between align-items-center">
+                <div style="display:flex; justify-content:space-between; align-items:center">
+                    <a href="/student-dashboard.html" style="color: var(--primary); text-decoration:none">
+                        <i class="fas fa-home fa-lg"></i>
+                    </a>
                     <h1>Portal Inbox</h1>
                     <i class="fas fa-plus-circle text-primary fa-lg"></i>
                 </div>
                 <div class="search-box">
                     <i class="fas fa-search opacity-50"></i>
-                    <input type="text" placeholder="Search students or teachers..." id="listSearch">
+                    <input type="text" placeholder="Search..." id="listSearch">
                 </div>
             </div>
             <div id="conversationList">
-                <div class="p-5 text-center text-muted"><i class="fas fa-circle-notch fa-spin"></i> Initializing Secure Link...</div>
+                <div class="p-5 text-center text-muted"><i class="fas fa-circle-notch fa-spin"></i> Initializing...</div>
             </div>
         </div>
 
@@ -92,12 +115,33 @@
                 <i class="fas fa-chevron-left fa-lg" onclick="handleBack()" style="padding:12px; cursor:pointer;"></i>
                 <div class="avatar" id="activeAvatar" style="width:42px; height:42px; border-radius:14px; font-size: 1.1rem;">?</div>
                 <div style="flex:1">
-                    <h4 id="activeChatName" style="margin:0; font-size: 1.1rem; font-weight: 800;">Connection...</h4>
-                    <small id="statusLine" style="color:#22c55e; font-weight: 700; font-size: 0.75rem;"><i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i> Online Now</small>
+                    <h4 id="activeChatName" style="margin:0; font-size: 1.1rem; font-weight: 800;">...</h4>
+                    <small id="statusLine" style="color:#22c55e; font-weight: 700; font-size: 0.75rem;"><i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i> Active</small>
+                </div>
+                <div style="display:flex; gap: 15px;">
+                    <i class="fas fa-search opacity-50" id="localSearchBtn" style="cursor:pointer"></i>
+                    <i class="fas fa-wand-magic-sparkles text-primary" onclick="toggleAISummary()" style="cursor:pointer"></i>
                 </div>
             </div>
 
+            <div id="localSearchContainer" style="display:none; padding:10px; background: var(--glass); backdrop-filter: blur(10px); border-bottom: 1px solid #eee;">
+                <input type="text" id="chatInnerSearch" placeholder="Find in chat..." style="width:90%; padding:8px; border:none; outline:none; background:transparent;">
+                <i class="fas fa-times" onclick="toggleLocalSearch()"></i>
+            </div>
+
             <div class="messages-viewport" id="messageDisplay"></div>
+
+            <div class="ai-panel" id="aiSummaryPanel">
+                <div style="display:flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3 style="margin:0"><i class="fas fa-robot"></i> AI Summary</h3>
+                    <i class="fas fa-times" onclick="toggleAISummary()" style="cursor:pointer"></i>
+                </div>
+                <div id="aiContent" style="font-size: 0.9rem; color: #475569; line-height: 1.6;">
+                    Processing...
+                </div>
+                <button onclick="toggleAISummary()" style="width:100%; margin-top:20px; padding:12px; border-radius:12px; border:none; background:var(--primary); color:white; font-weight:700;">Close</button>
+            </div>
+
             <div class="typing-box" id="typing">someone is typing...</div>
 
             <form class="chat-input-bar" id="chatForm">
@@ -105,14 +149,18 @@
                 <i class="fas fa-paperclip opacity-50 fa-lg" onclick="document.getElementById('imageInput').click()" style="cursor:pointer"></i>
                 
                 <div class="pill-wrapper">
-                    <input type="text" id="messageInput" placeholder="Message..." autocomplete="off">
+                    <input type="text" id="messageInput" placeholder="Type message..." autocomplete="off">
                     <i class="fas fa-microphone-alt opacity-50 fa-lg" id="micBtn" style="cursor:pointer"></i>
                 </div>
-                <button type="submit" class="btn-circle send-btn" id="sendMessageBtn">
+                <button type="submit" class="btn-circle send-btn">
                     <i class="fas fa-arrow-up fa-lg"></i>
                 </button>
             </form>
         </div>
+    </div>
+
+    <div class="lightbox" id="lightbox" onclick="this.style.display='none'">
+        <img id="zoomImg" src="">
     </div>
 
     <audio id="popSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
@@ -132,24 +180,55 @@
 
     if(!token) window.location.href = '/login.html';
     
-    // Decode user info
     try {
         user = JSON.parse(atob(token.split('.')[1]));
     } catch(e) { window.location.href = '/login.html'; }
 
-    // --- 1. DATA SYNC ENGINE ---
+    // --- 1. SOCKET CORE ---
+    socket.on('connect', () => {
+        socket.emit('join_user_room', user.id); // সার্ভারে প্রাইভেট নোটিফিকেশন রুম জয়েন
+    });
+
+    socket.on('message_received', msg => {
+        if(msg.conversation_id === convId) {
+            pushBubble(msg, msg.sender_id === user.id);
+            popSound.play().catch(()=>{});
+            // রিয়েল-টাইম রিড সিঙ্ক
+            fetch(`/api/messaging/read/${convId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+            socket.emit('mark_as_read', { conversationId: convId, userId: user.id });
+        } else {
+            const dot = document.querySelector(`#conv-${msg.conversation_id} .unread-dot`);
+            if(dot) dot.style.display = 'block';
+            popSound.play().catch(()=>{});
+        }
+    });
+
+    socket.on('messages_read_sync', (data) => {
+        if (data.conversationId === convId) {
+            document.querySelectorAll('.fa-check-double').forEach(i => i.style.color = '#34b7f1');
+        }
+    });
+
+    socket.on('global_unread_update', (data) => {
+        const dot = document.querySelector(`#conv-${data.conversationId} .unread-dot`);
+        if(dot) dot.style.display = 'block';
+    });
+
+    socket.on('user_typing', data => { if(data.conversationId === convId) document.getElementById('typing').style.display = 'block'; });
+    socket.on('user_stop_typing', () => { document.getElementById('typing').style.display = 'none'; });
+
+    // --- 2. UI ENGINE ---
     async function syncInbox() {
         try {
             const res = await fetch('/api/messaging/conversations', { headers: { 'Authorization': `Bearer ${token}` } });
             const data = await res.json();
             renderList(data);
-            socket.emit('join_user', user.id); 
         } catch (e) { console.error("Sync Failed", e); }
     }
 
     function renderList(list) {
         document.getElementById('conversationList').innerHTML = list.map(c => {
-            const name = c.participant_name || "User";
+            const name = c.participant_name || "Unknown";
             const color = getAvatarColor(name);
             return `
                 <div class="conv-item" id="conv-${c.id}" onclick="openFullChat('${c.id}', '${name}', '${color}')">
@@ -157,15 +236,13 @@
                         <div class="avatar" style="background:${color}">${name[0]}</div>
                     </div>
                     <div style="flex:1">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <strong style="font-size:1.05rem">${name}</strong>
-                            <small style="opacity:0.5; font-size:0.65rem">${c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</small>
+                        <div style="display:flex; justify-content:space-between; align-items:center">
+                            <strong>${name}</strong>
+                            <small style="opacity:0.5">${c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</small>
                         </div>
-                        <div style="font-size:0.8rem; color:#64748b; margin-top:3px; display:flex; justify-content:space-between;">
-                            <span>${c.is_group ? 'Group Chat' : 'Active Conversation'}</span>
-                        </div>
+                        <div style="font-size:0.8rem; color:#64748b; margin-top:3px">${c.is_group ? 'Group' : 'Direct'} Message</div>
                     </div>
-                    <div class="unread-dot"></div>
+                    <div class="unread-dot" ${c.unread_count > 0 ? 'style="display:block"' : ''}></div>
                 </div>`;
         }).join('');
     }
@@ -176,7 +253,52 @@
         return colors[Math.abs(h) % colors.length];
     }
 
-    // --- 2. MULTIMEDIA UPLOAD LOGIC ---
+    // --- 3. MESSAGING ---
+    function sendProtocolMsg(text, type = 'text', fileUrl = null) {
+        if(!convId) return;
+        const msg = { conversationId: convId, senderId: user.id, content: text, message_type: type, file_url: fileUrl };
+        pushBubble(msg, true);
+        socket.emit('new_message', msg);
+    }
+
+    document.getElementById('chatForm').onsubmit = (e) => {
+        e.preventDefault();
+        const input = document.getElementById('messageInput');
+        if(!input.value.trim()) return;
+        sendProtocolMsg(input.value.trim());
+        input.value = '';
+        input.focus(); // কিবোর্ড ধরে রাখা
+        socket.emit('stop_typing', convId);
+    };
+
+    document.getElementById('messageInput').oninput = () => {
+        socket.emit('typing', { conversationId: convId, senderName: user.full_name });
+        clearTimeout(typingTimeout);
+        typingTimeout = setTimeout(() => socket.emit('stop_typing', convId), 2000);
+    };
+
+    // --- 4. RENDER BUBBLES ---
+    function pushBubble(m, isMe) {
+        const display = document.getElementById('messageDisplay');
+        let body = m.content;
+        
+        if(m.message_type === 'voice') {
+            body = `<div class="voice-bubble" onclick="handleAudio('${m.file_url}', this)">
+                        <i class="fas fa-play-circle"></i> <strong>Voice Note</strong>
+                    </div>`;
+        } else if(m.message_type === 'image') {
+            body = `<img src="${m.file_url}" style="width:100%; border-radius:12px; cursor:zoom-in;" onclick="zoomImage('${m.file_url}')">`;
+        }
+
+        const div = document.createElement('div');
+        div.className = `bubble ${isMe ? 'sent' : 'received'}`;
+        const time = new Date(m.timestamp || m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+        div.innerHTML = `${body} <div class="bubble-meta">${time} ${isMe ? '<i class="fas fa-check-double" style="color:#34b7f1"></i>' : ''}</div>`;
+        display.appendChild(div);
+        display.scrollTop = display.scrollHeight;
+    }
+
+    // --- 5. MEDIA HELPERS ---
     async function uploadToCloud(file) {
         const formData = new FormData();
         formData.append('file', file);
@@ -185,12 +307,9 @@
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
         });
-        if(!res.ok) throw new Error("Server Reject");
-        const data = await res.json();
-        return data.fileUrl;
+        return (await res.json()).fileUrl;
     }
 
-    // --- 3. ADVANCED VOICE ENGINE ---
     const micBtn = document.getElementById('micBtn');
     micBtn.onpointerdown = async (e) => {
         e.preventDefault();
@@ -207,93 +326,30 @@
             mediaRecorder.start();
             micBtn.classList.add('recording-active');
             if(window.navigator.vibrate) window.navigator.vibrate(40);
-        } catch (err) { alert("Enable Microphone Permissions"); }
+        } catch (err) { alert("Mic required"); }
     };
     micBtn.onpointerup = () => { if(mediaRecorder) { mediaRecorder.stop(); micBtn.classList.remove('recording-active'); } };
 
-    // --- 4. IMAGE UPLOAD HANDLER ---
     document.getElementById('imageInput').onchange = async (e) => {
         const file = e.target.files[0];
-        if(!file) return;
-        try {
-            const url = await uploadToCloud(file);
-            sendProtocolMsg('📷 Photo', 'image', url);
-        } catch(err) { alert("Upload Failed"); }
+        if(file) sendProtocolMsg('📷 Photo', 'image', await uploadToCloud(file));
     };
-
-    // --- 5. REAL-TIME MESSAGING ---
-    function sendProtocolMsg(text, type = 'text', fileUrl = null) {
-        if(!convId) return;
-        const msg = { conversationId: convId, senderId: user.id, content: text, message_type: type, file_url: fileUrl, timestamp: new Date().toISOString() };
-        pushBubble(msg, true);
-        socket.emit('new_message', msg);
-    }
-
-    document.getElementById('chatForm').onsubmit = (e) => {
-        e.preventDefault();
-        const input = document.getElementById('messageInput');
-        if(!input.value.trim()) return;
-        sendProtocolMsg(input.value.trim());
-        input.value = '';
-        socket.emit('stop_typing', convId);
-    };
-
-    socket.on('message_received', msg => {
-        if(msg.conversation_id === convId) {
-            pushBubble(msg, msg.sender_id === user.id);
-            popSound.play().catch(()=>{});
-            // Mark as Read in Background
-            fetch(`/api/messaging/read/${convId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
-        } else {
-            const dot = document.querySelector(`#conv-${msg.conversation_id} .unread-dot`);
-            if(dot) dot.style.display = 'block';
-            popSound.play().catch(()=>{});
-        }
-    });
-
-    // Real-time Typing Handlers
-    socket.on('user_typing', data => { if(data.conversationId === convId) document.getElementById('typing').style.display = 'block'; });
-    socket.on('user_stop_typing', () => { document.getElementById('typing').style.display = 'none'; });
-
-    document.getElementById('messageInput').oninput = () => {
-        socket.emit('typing', { conversationId: convId, senderName: user.full_name });
-        clearTimeout(typingTimeout);
-        typingTimeout = setTimeout(() => socket.emit('stop_typing', convId), 2500);
-    };
-
-    // --- 6. RENDER ENGINE ---
-    function pushBubble(m, isMe) {
-        const display = document.getElementById('messageDisplay');
-        let body = m.content;
-        
-        if(m.message_type === 'voice') {
-            body = `<div class="voice-bubble" onclick="handleAudio('${m.file_url}', this)">
-                        <i class="fas fa-play-circle"></i> <strong>Voice Note</strong>
-                    </div>`;
-        } else if(m.message_type === 'image') {
-            body = `<img src="${m.file_url}" style="width:100%; border-radius:12px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);" onclick="window.open('${m.file_url}')">`;
-        }
-
-        const div = document.createElement('div');
-        div.className = `bubble ${isMe ? 'sent' : 'received'}`;
-        const time = new Date(m.timestamp || m.created_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-        div.innerHTML = `${body} <div class="bubble-meta">${time} ${isMe ? '<i class="fas fa-check-double" style="color:#34b7f1"></i>' : ''}</div>`;
-        display.appendChild(div);
-        display.scrollTop = display.scrollHeight;
-    }
 
     function handleAudio(url, el) {
-        if(currentAudio) { currentAudio.pause(); currentAudio = null; }
+        if(currentAudio) currentAudio.pause();
         const icon = el.querySelector('i');
-        const oldClass = icon.className;
         icon.className = 'fas fa-spinner fa-spin';
         currentAudio = new Audio(url);
-        currentAudio.play().then(() => icon.className = 'fas fa-pause-circle')
-        .catch(e => { icon.className = oldClass; alert("Audio format not supported on this device."); });
+        currentAudio.play().then(() => icon.className = 'fas fa-pause-circle');
         currentAudio.onended = () => icon.className = 'fas fa-play-circle';
     }
 
-    // --- 7. NAVIGATION ---
+    function zoomImage(url) {
+        document.getElementById('zoomImg').src = url;
+        document.getElementById('lightbox').style.display = 'flex';
+    }
+
+    // --- 6. NAVIGATION ---
     async function openFullChat(id, name, color) {
         convId = id;
         document.getElementById('activeChatName').innerText = name;
@@ -301,17 +357,14 @@
         av.style.background = color; av.innerText = name[0];
         document.getElementById('chatAreaWrapper').classList.add('active');
         
-        // UI Clean
-        const dot = document.querySelector(`#conv-${id} .unread-dot`);
-        if(dot) dot.style.display = 'none';
-        
-        // Mark Read API
+        // রিড স্ট্যাটাস আপডেট
         fetch(`/api/messaging/read/${id}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
+        socket.emit('mark_as_read', { conversationId: id, userId: user.id });
 
         const res = await fetch(`/api/messaging/messages/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
         const msgs = await res.json();
         const display = document.getElementById('messageDisplay');
-        display.innerHTML = '<div class="date-divider">Start of Secure Conversation</div>';
+        display.innerHTML = '<div class="date-divider">Today</div>';
         msgs.forEach(m => pushBubble(m, m.sender_id === user.id));
         
         socket.emit('join_conversation', id);
@@ -324,13 +377,31 @@
         convId = null;
         syncInbox();
     }
-    
+
     window.onpopstate = () => handleBack();
 
-    // Search Filter
-    document.getElementById('listSearch').oninput = (e) => {
-        const val = e.target.value.toLowerCase();
-        document.querySelectorAll('.conv-item').forEach(i => i.style.display = i.innerText.toLowerCase().includes(val) ? 'flex' : 'none');
+    function toggleAISummary() {
+        const panel = document.getElementById('aiSummaryPanel');
+        panel.classList.toggle('active');
+        if(panel.classList.contains('active')) {
+            fetch(`/api/messaging/ai-summary/${convId}`, { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(r => r.json()).then(d => {
+                document.getElementById('aiContent').innerHTML = `<b>Summary:</b> ${d.summary}<br><b>Sentiment:</b> ${d.sentiment}`;
+            });
+        }
+    }
+
+    function toggleLocalSearch() {
+        const bar = document.getElementById('localSearchContainer');
+        bar.style.display = bar.style.display === 'none' ? 'flex' : 'none';
+        if(bar.style.display === 'flex') document.getElementById('chatInnerSearch').focus();
+    }
+
+    document.getElementById('chatInnerSearch').oninput = (e) => {
+        const term = e.target.value.toLowerCase();
+        document.querySelectorAll('.bubble').forEach(b => {
+            b.classList.toggle('highlight', term.length > 2 && b.innerText.toLowerCase().includes(term));
+        });
     };
 
     syncInbox();
