@@ -3,257 +3,218 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>My Class Students</title>
+    <title>My Class Students | Elite ERP</title>
+    
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
     <style>
-        body { font-family: 'Poppins', sans-serif; background-color: #f0f2f8; font-size: 14px; }
-        .container { max-width: 1000px; margin: 30px auto; padding: 30px; background-color: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
-        h1 { color: #5e35b1; margin-bottom: 25px; border-bottom: 2px solid #5e35b1; padding-bottom: 10px; }
-        .dashboard-link { display: inline-block; margin-bottom: 20px; color: #005a9c; text-decoration: none; font-weight: bold; }
-        .table thead th { background-color: #5e35b1; color: white; vertical-align: middle; }
-        .table tbody td { vertical-align: middle; }
-        .student-name { font-weight: 600; }
-        .batch-info { font-size: 0.9em; color: #6c757d; }
-        .action-button { margin: 2px; }
+        :root { --primary: #5e35b1; --secondary: #005a9c; --bg: #f4f7fe; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg); color: #1e293b; font-size: 14px; }
+        
+        .container { max-width: 1100px; margin: 30px auto; padding: 30px; background: #fff; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        
+        h1 { color: var(--primary); font-weight: 800; margin-bottom: 25px; border-bottom: 3px solid #eee; padding-bottom: 15px; display: flex; align-items: center; gap: 12px; }
+        
+        .dashboard-link { color: var(--secondary); text-decoration: none; font-weight: 700; transition: 0.3s; }
+        .dashboard-link:hover { opacity: 0.7; transform: translateX(-5px); }
+
+        /* Filter Section Styling */
         #filter-section {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #f8f9fa;
-            border-radius: 8px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px; margin-bottom: 25px; padding: 20px; background: #f8fafc; border-radius: 15px; border: 1px solid #e2e8f0;
         }
-        #filter-section select { padding: 8px; border: 1px solid #aaa; }
-        #loading-indicator { text-align: center; padding: 20px; font-style: italic; color: #6c757d; }
+        .form-select { border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 500; }
+
+        /* Table Styling */
+        .table-responsive { border-radius: 15px; overflow: hidden; border: 1px solid #e2e8f0; }
+        .table thead th { background-color: var(--primary); color: white; border: none; padding: 15px; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
+        .table tbody td { padding: 15px; vertical-align: middle; border-color: #f1f5f9; }
+        
+        .student-name { font-weight: 700; color: #1e293b; font-size: 15px; }
+        .batch-info { font-size: 12px; color: #64748b; font-weight: 500; }
+        
+        .action-button { width: 35px; height: 35px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; transition: 0.3s; }
+        .action-button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        #loading-indicator { font-weight: 600; color: var(--primary); }
     </style>
 </head>
 <body>
     <div class="container">
-        <a href="/teacher-dashboard.html" class="dashboard-link">← Back to Dashboard</a>
-        <h1 id="page-header">Students Assigned to My Classes</h1>
+        <a href="/teacher-dashboard.html" class="dashboard-link mb-3 d-inline-block">
+            <i class="fas fa-chevron-left me-2"></i>Back to Dashboard
+        </a>
+        
+        <h1><i class="fas fa-user-graduate"></i> Students Assigned to My Classes</h1>
 
         <div id="filter-section">
-            <select id="courseSelect" class="form-select">
-                <option value="">Filter by Course</option>
-            </select>
-            <select id="batchSelect" class="form-select" disabled>
-                <option value="">Filter by Batch</option>
-            </select>
-            <select id="subjectSelect" class="form-select" disabled>
-                <option value="">Filter by Subject</option>
-            </select>
+            <div>
+                <label class="form-label fw-bold small text-muted">Course</label>
+                <select id="courseSelect" class="form-select" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="form-label fw-bold small text-muted">Batch</label>
+                <select id="batchSelect" class="form-select" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="form-label fw-bold small text-muted">Subject</label>
+                <select id="subjectSelect" class="form-select" onchange="applyFilters()"></select>
+            </div>
         </div>
 
-        <p id="loading-indicator">Loading student list...</p>
-        <p id="error-message" class="text-danger mt-3" style="display: none;"></p>
+        <div id="loading-indicator" class="text-center p-5">
+            <div class="spinner-border spinner-border-sm me-2"></div> Fetching roster from server...
+        </div>
         
-        <div class="table-responsive">
-            <table class="table table-bordered table-striped" style="display: none;">
+        <p id="error-message" class="alert alert-danger" style="display: none; border-radius: 12px;"></p>
+        
+        <div class="table-responsive shadow-sm">
+            <table class="table table-hover mb-0" style="display: none;" id="student-table">
                 <thead>
                     <tr>
-                        <th>#</th>
-                        <th>Student Name</th>
-                        <th>Course / Batch</th>
+                        <th width="60">#</th>
+                        <th>Student Details</th>
+                        <th>Class Context</th>
                         <th>Roll No.</th>
-                        <th>Subject</th>
-                        <th>Actions</th>
+                        <th>Assigned Subject</th>
+                        <th width="120">Actions</th>
                     </tr>
                 </thead>
-                <tbody id="student-list-body">
-                </tbody>
+                <tbody id="student-list-body"></tbody>
             </table>
         </div>
     </div>
+
+    
 
     <script>
         const API_BASE_URL = '/api';
         const TOKEN = localStorage.getItem('erp-token');
         const USER_ROLE = localStorage.getItem('user-role');
+        
         const studentListBody = document.getElementById('student-list-body');
         const loadingIndicator = document.getElementById('loading-indicator');
-        const studentTable = document.querySelector('.table');
+        const studentTable = document.getElementById('student-table');
         const errorMessage = document.getElementById('error-message');
         
-        // Filter elements
         const courseSelect = document.getElementById('courseSelect');
         const batchSelect = document.getElementById('batchSelect');
         const subjectSelect = document.getElementById('subjectSelect');
 
-        let allStudents = []; // Store the full list of students
+        let allStudents = [];
 
-        // --- Core Fetch Function ---
-        async function fetchData(endpoint) {
-            errorMessage.style.display = 'none';
+        async function loadAllData() {
+            // সিকিউরিটি চেক
+            if (!TOKEN || USER_ROLE !== 'Teacher') {
+                window.location.href = '/login.html';
+                return;
+            }
+
             try {
-                const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+                // আপনার সার্ভার লগ অনুযায়ী এন্ডপয়েন্ট: /api/teachers/me/students
+                const response = await fetch(`${API_BASE_URL}/teachers/me/students`, {
                     headers: { 'Authorization': `Bearer ${TOKEN}` }
                 });
 
-                if (response.status === 404) {
-                    return []; // Return empty array if no students found (e.g., /my-students 404)
+                if (!response.ok) throw new Error("Failed to fetch student data");
+
+                const data = await response.json();
+                loadingIndicator.style.display = 'none';
+
+                if (data && data.length > 0) {
+                    allStudents = data;
+                    populateFilters(data);
+                    renderStudents(data);
+                    studentTable.style.display = 'table';
+                } else {
+                    showError("No students found in your assigned classes.");
                 }
-                if (!response.ok) {
-                    const errorDetails = await response.json().catch(() => ({ message: `HTTP Error ${response.status}` }));
-                    throw new Error(errorDetails.message);
-                }
-                return await response.json();
             } catch (error) {
-                console.error('API Fetch Error:', error);
-                errorMessage.textContent = `Error loading data: ${error.message}.`;
-                errorMessage.style.display = 'block';
-                return null;
+                showError(error.message);
             }
         }
-
-        // --- Data Load Functions ---
-
-        async function loadAllData() {
-            if (USER_ROLE !== 'Teacher') {
-                showError("Access Denied: This page is for Teachers only.");
-                return;
-            }
-            if (!TOKEN) {
-                showError("Authentication required. Please log in.");
-                return;
-            }
-
-            loadingIndicator.style.display = 'block';
-            studentTable.style.display = 'none';
-
-            // The main API call to fetch all students assigned to the current teacher
-            // This API should return an array of student objects, with their associated course/batch/subject details.
-            // Example route: /api/teachers/my-students or /api/teachers/me/students
-            const studentData = await fetchData('/teachers/me/students'); 
-
-            loadingIndicator.style.display = 'none';
-
-            if (studentData && studentData.length > 0) {
-                allStudents = studentData;
-                populateFilters(studentData);
-                applyFilters(); // Display all students initially
-            } else {
-                showError("No students are currently assigned to your classes.");
-            }
-        }
-
-        // --- Filter Functions ---
 
         function populateFilters(students) {
-            // 1. Get unique Course/Batch/Subject data from the student list
-            const uniqueCourses = {};
-            const uniqueBatches = {};
-            const uniqueSubjects = {};
+            const filters = { course: new Set(), batch: new Set(), subject: new Set() };
             
             students.forEach(s => {
-                if (s.course_id) uniqueCourses[s.course_id] = s.course_name;
-                if (s.batch_id) uniqueBatches[s.batch_id] = s.batch_name;
-                if (s.subject_id) uniqueSubjects[s.subject_id] = s.subject_name;
-            });
-            
-            // 2. Populate Course Select
-            courseSelect.innerHTML = '<option value="">Filter by Course</option>';
-            Object.keys(uniqueCourses).forEach(id => {
-                courseSelect.innerHTML += `<option value="${id}">${uniqueCourses[id]}</option>`;
+                if(s.course_name) filters.course.add(JSON.stringify({id: s.course_id, name: s.course_name}));
+                if(s.batch_name) filters.batch.add(JSON.stringify({id: s.batch_id, name: s.batch_name}));
+                if(s.subject_name) filters.subject.add(JSON.stringify({id: s.subject_id, name: s.subject_name}));
             });
 
-            // 3. Populate Batch/Subject Select (Initially disabled/hidden, will be updated based on Course)
-            batchSelect.innerHTML = '<option value="">Filter by Batch</option>';
-            subjectSelect.innerHTML = '<option value="">Filter by Subject</option>';
+            const renderOption = (set, element, label) => {
+                element.innerHTML = `<option value="">All ${label}</option>`;
+                [...set].forEach(item => {
+                    const obj = JSON.parse(item);
+                    element.innerHTML += `<option value="${obj.id}">${obj.name}</option>`;
+                });
+            };
 
-            batchSelect.disabled = false;
-            subjectSelect.disabled = false;
+            renderOption(filters.course, courseSelect, 'Courses');
+            renderOption(filters.batch, batchSelect, 'Batches');
+            renderOption(filters.subject, subjectSelect, 'Subjects');
         }
 
         function applyFilters() {
-            const selectedCourse = courseSelect.value;
-            const selectedBatch = batchSelect.value;
-            const selectedSubject = subjectSelect.value;
-            let filteredStudents = allStudents;
+            const cVal = courseSelect.value;
+            const bVal = batchSelect.value;
+            const sVal = subjectSelect.value;
 
-            // Apply filters sequentially
-            if (selectedCourse) {
-                filteredStudents = filteredStudents.filter(s => s.course_id === selectedCourse);
-            }
-            if (selectedBatch) {
-                filteredStudents = filteredStudents.filter(s => s.batch_id === selectedBatch);
-            }
-            if (selectedSubject) {
-                filteredStudents = filteredStudents.filter(s => s.subject_id === selectedSubject);
-            }
+            const filtered = allStudents.filter(s => {
+                return (!cVal || s.course_id === cVal) &&
+                       (!bVal || s.batch_id === bVal) &&
+                       (!sVal || s.subject_id === sVal);
+            });
 
-            renderStudents(filteredStudents);
+            renderStudents(filtered);
         }
-
-        // --- Rendering Function ---
 
         function renderStudents(students) {
             studentListBody.innerHTML = '';
-            
-            if (students.length === 0) {
-                studentTable.style.display = 'none';
-                showError("No students match the current filter criteria.");
-                return;
-            }
-
             students.forEach((s, index) => {
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td>${index + 1}</td>
+                    <td class="fw-bold text-muted">${index + 1}</td>
                     <td>
-                        <span class="student-name">${s.student_full_name || 'N/A'}</span><br>
-                        <span class="batch-info">${s.email || ''}</span>
+                        <div class="student-name">${s.student_full_name}</div>
+                        <div class="batch-info"><i class="far fa-envelope me-1"></i>${s.email || 'No email'}</div>
                     </td>
-                    <td>${s.course_name || 'N/A'} / ${s.batch_name || 'N/A'}</td>
-                    <td>${s.roll_number || '-'}</td>
-                    <td>${s.subject_name || 'N/A'}</td>
+                    <td><span class="badge bg-light text-dark border">${s.course_name}</span><br><small class="fw-bold text-primary">${s.batch_name}</small></td>
+                    <td class="fw-bold text-secondary">${s.roll_number || 'N/A'}</td>
+                    <td class="text-primary fw-bold">${s.subject_name}</td>
                     <td>
-                        <button class="btn btn-sm btn-info action-button" 
-                                onclick="viewStudentProfile('${s.student_user_id}')"
-                                title="View Profile">
-                            <i class="fas fa-user"></i>
+                        <button class="btn btn-info action-button text-white" onclick="viewStudent('${s.student_user_id}')" title="Profile">
+                            <i class="fas fa-user-circle"></i>
                         </button>
-                        <button class="btn btn-sm btn-warning action-button" 
-                                onclick="markAttendanceForStudent('${s.student_user_id}', '${s.course_id}', '${s.batch_id}')"
-                                title="Mark Attendance">
-                            <i class="fas fa-clipboard-check"></i>
+                        <button class="btn btn-warning action-button text-white" onclick="takeAttendance('${s.course_id}', '${s.batch_id}')" title="Attendance">
+                            <i class="fas fa-calendar-check"></i>
                         </button>
                     </td>
                 `;
                 studentListBody.appendChild(row);
             });
-            studentTable.style.display = 'table';
-            errorMessage.style.display = 'none';
         }
 
-        // --- Action Handlers ---
-
-        function viewStudentProfile(studentUserId) {
-            // Redirects to a student profile view page, passing the user ID
-            window.location.href = `/student-profile-view.html?id=${studentUserId}`;
+        function takeAttendance(cId, bId) {
+            // সরাসরি take-attendance.html এ রিডাইরেক্ট করবে
+            window.location.href = `/take-attendance.html?course=${cId}&batch=${bId}`;
         }
 
-        function markAttendanceForStudent(studentUserId, courseId, batchId) {
-            // Redirects to a mass attendance page, pre-filtered by course/batch
-            window.location.href = `/manage-attendance.html?course=${courseId}&batch=${batchId}`;
+        function viewStudent(id) {
+            window.location.href = `/student-profile-view.html?id=${id}`;
         }
 
-        function showError(message) {
+        function showError(msg) {
             loadingIndicator.style.display = 'none';
-            errorMessage.textContent = message;
+            errorMessage.textContent = msg;
             errorMessage.style.display = 'block';
-            studentTable.style.display = 'none';
         }
 
-        // --- Event Listeners ---
-        courseSelect.addEventListener('change', applyFilters);
-        batchSelect.addEventListener('change', applyFilters);
-        subjectSelect.addEventListener('change', applyFilters);
-
-        // --- Initialization ---
         document.addEventListener('DOMContentLoaded', loadAllData);
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>
