@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>BCSM Messenger Ultra | Enterprise Edition</title>
+    <title>BCSM Messenger Ultra | Student Edition</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
@@ -69,12 +69,15 @@
         .ai-panel { position: absolute; bottom: 0; left: 0; right: 0; background: var(--bg-card, #fff); border-top-left-radius: 25px; border-top-right-radius: 25px; padding: 25px; z-index: 100; box-shadow: 0 -10px 40px rgba(0,0,0,0.15); display: none; animation: slideUp 0.3s ease-out; }
         .ai-panel.active { display: block; }
 
+        /* Emoji Picker Container */
+        #emojiPickerContainer { position: absolute; bottom: 85px; left: 20px; z-index: 1000; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.1); border-radius: 15px; overflow: hidden; }
+
         /* Lightbox */
         .lightbox { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); display: none; z-index: 2000; justify-content: center; align-items: center; }
         .lightbox img { max-width: 95%; max-height: 80%; border-radius: 12px; }
 
         /* --- Footer --- */
-        .chat-input-bar { padding: 10px 20px; background: var(--bg-card, #fff); display: flex; align-items: center; gap: 12px; border-top: 1px solid #f1f5f9; padding-bottom: calc(15px + env(safe-area-inset-bottom)); }
+        .chat-input-bar { padding: 10px 20px; background: var(--bg-card, #fff); display: flex; align-items: center; gap: 12px; border-top: 1px solid #f1f5f9; padding-bottom: calc(15px + env(safe-area-inset-bottom)); position: relative; }
         .pill-wrapper { flex: 1; background: #f1f5f9; border-radius: 25px; padding: 8px 18px; display: flex; align-items: center; border: 1.5px solid transparent; transition: 0.3s; }
         .pill-wrapper:focus-within { border-color: var(--primary); background: #fff; box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1); }
         .pill-wrapper input { border: none; background: transparent; flex: 1; padding: 5px; outline: none; font-size: 1rem; color: #1e293b; }
@@ -97,12 +100,12 @@
                     <a href="/student-dashboard.html" style="color: var(--primary); text-decoration:none">
                         <i class="fas fa-home fa-lg"></i>
                     </a>
-                    <h1>Portal Inbox</h1>
+                    <h1>Student Inbox</h1>
                     <i class="fas fa-plus-circle text-primary fa-lg"></i>
                 </div>
                 <div class="search-box">
                     <i class="fas fa-search opacity-50"></i>
-                    <input type="text" placeholder="Search..." id="listSearch">
+                    <input type="text" placeholder="Search chats..." id="listSearch">
                 </div>
             </div>
             <div id="conversationList">
@@ -119,14 +122,14 @@
                     <small id="statusLine" style="color:#22c55e; font-weight: 700; font-size: 0.75rem;"><i class="fas fa-circle" style="font-size: 6px; vertical-align: middle;"></i> Active</small>
                 </div>
                 <div style="display:flex; gap: 15px;">
-                    <i class="fas fa-search opacity-50" id="localSearchBtn" style="cursor:pointer"></i>
+                    <i class="fas fa-search opacity-50" id="localSearchBtn" style="cursor:pointer" onclick="toggleLocalSearch()"></i>
                     <i class="fas fa-wand-magic-sparkles text-primary" onclick="toggleAISummary()" style="cursor:pointer"></i>
                 </div>
             </div>
 
             <div id="localSearchContainer" style="display:none; padding:10px; background: var(--glass); backdrop-filter: blur(10px); border-bottom: 1px solid #eee;">
                 <input type="text" id="chatInnerSearch" placeholder="Find in chat..." style="width:90%; padding:8px; border:none; outline:none; background:transparent;">
-                <i class="fas fa-times" onclick="toggleLocalSearch()"></i>
+                <i class="fas fa-times" onclick="toggleLocalSearch()" style="cursor:pointer"></i>
             </div>
 
             <div class="messages-viewport" id="messageDisplay"></div>
@@ -137,19 +140,22 @@
                     <i class="fas fa-times" onclick="toggleAISummary()" style="cursor:pointer"></i>
                 </div>
                 <div id="aiContent" style="font-size: 0.9rem; color: #475569; line-height: 1.6;">
-                    Processing...
+                    Processing context...
                 </div>
                 <button onclick="toggleAISummary()" style="width:100%; margin-top:20px; padding:12px; border-radius:12px; border:none; background:var(--primary); color:white; font-weight:700;">Close</button>
             </div>
 
             <div class="typing-box" id="typing">someone is typing...</div>
 
+            <div id="emojiPickerContainer"></div>
+
             <form class="chat-input-bar" id="chatForm">
                 <input type="file" id="imageInput" accept="image/*" style="display:none">
                 <i class="fas fa-paperclip opacity-50 fa-lg" onclick="document.getElementById('imageInput').click()" style="cursor:pointer"></i>
                 
                 <div class="pill-wrapper">
-                    <input type="text" id="messageInput" placeholder="Type message..." autocomplete="off">
+                    <i class="far fa-smile opacity-50 fa-lg me-2" id="emojiBtn" style="cursor:pointer"></i>
+                    <input type="text" id="messageInput" placeholder="Write a message..." autocomplete="off">
                     <i class="fas fa-microphone-alt opacity-50 fa-lg" id="micBtn" style="cursor:pointer"></i>
                 </div>
                 <button type="submit" class="btn-circle send-btn">
@@ -166,6 +172,8 @@
     <audio id="popSound" src="https://assets.mixkit.co/active_storage/sfx/2354/2354-preview.mp3"></audio>
 
     <script src="/socket.io/socket.io.js"></script> 
+    <script src="https://cdn.jsdelivr.net/npm/picmo@latest/dist/umd/index.js"></script>
+
     <script>
     let convId = null;
     let user = null;
@@ -184,16 +192,40 @@
         user = JSON.parse(atob(token.split('.')[1]));
     } catch(e) { window.location.href = '/login.html'; }
 
-    // --- 1. SOCKET CORE ---
+    // --- 1. EMOJI PICKER ENGINE ---
+    const emojiBtn = document.getElementById('emojiBtn');
+    const emojiPickerContainer = document.getElementById('emojiPickerContainer');
+    const messageInput = document.getElementById('messageInput');
+
+    const picker = picmo.createPicker({
+        rootElement: emojiPickerContainer
+    });
+
+    emojiBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        emojiPickerContainer.style.display = emojiPickerContainer.style.display === 'none' ? 'block' : 'none';
+    });
+
+    picker.addEventListener('emoji:select', (selection) => {
+        messageInput.value += selection.emoji;
+        messageInput.focus();
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!emojiPickerContainer.contains(e.target) && e.target !== emojiBtn) {
+            emojiPickerContainer.style.display = 'none';
+        }
+    });
+
+    // --- 2. SOCKET CORE ---
     socket.on('connect', () => {
-        socket.emit('join_user_room', user.id); // সার্ভারে প্রাইভেট নোটিফিকেশন রুম জয়েন
+        socket.emit('join_user_room', user.id);
     });
 
     socket.on('message_received', msg => {
         if(msg.conversation_id === convId) {
             pushBubble(msg, msg.sender_id === user.id);
             popSound.play().catch(()=>{});
-            // রিয়েল-টাইম রিড সিঙ্ক
             fetch(`/api/messaging/read/${convId}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
             socket.emit('mark_as_read', { conversationId: convId, userId: user.id });
         } else {
@@ -209,15 +241,10 @@
         }
     });
 
-    socket.on('global_unread_update', (data) => {
-        const dot = document.querySelector(`#conv-${data.conversationId} .unread-dot`);
-        if(dot) dot.style.display = 'block';
-    });
-
     socket.on('user_typing', data => { if(data.conversationId === convId) document.getElementById('typing').style.display = 'block'; });
     socket.on('user_stop_typing', () => { document.getElementById('typing').style.display = 'none'; });
 
-    // --- 2. UI ENGINE ---
+    // --- 3. UI ENGINE ---
     async function syncInbox() {
         try {
             const res = await fetch('/api/messaging/conversations', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -227,7 +254,12 @@
     }
 
     function renderList(list) {
-        document.getElementById('conversationList').innerHTML = list.map(c => {
+        const displayList = document.getElementById('conversationList');
+        if (list.length === 0) {
+            displayList.innerHTML = '<div class="p-5 text-center text-muted">No messages found</div>';
+            return;
+        }
+        displayList.innerHTML = list.map(c => {
             const name = c.participant_name || "Unknown";
             const color = getAvatarColor(name);
             return `
@@ -240,7 +272,7 @@
                             <strong>${name}</strong>
                             <small style="opacity:0.5">${c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : ''}</small>
                         </div>
-                        <div style="font-size:0.8rem; color:#64748b; margin-top:3px">${c.is_group ? 'Group' : 'Direct'} Message</div>
+                        <div style="font-size:0.8rem; color:#64748b; margin-top:3px">${c.is_group ? 'Group Notice' : 'Staff Chat'}</div>
                     </div>
                     <div class="unread-dot" ${c.unread_count > 0 ? 'style="display:block"' : ''}></div>
                 </div>`;
@@ -253,7 +285,7 @@
         return colors[Math.abs(h) % colors.length];
     }
 
-    // --- 3. MESSAGING ---
+    // --- 4. MESSAGING ---
     function sendProtocolMsg(text, type = 'text', fileUrl = null) {
         if(!convId) return;
         const msg = { conversationId: convId, senderId: user.id, content: text, message_type: type, file_url: fileUrl };
@@ -263,28 +295,27 @@
 
     document.getElementById('chatForm').onsubmit = (e) => {
         e.preventDefault();
-        const input = document.getElementById('messageInput');
-        if(!input.value.trim()) return;
-        sendProtocolMsg(input.value.trim());
-        input.value = '';
-        input.focus(); // কিবোর্ড ধরে রাখা
+        if(!messageInput.value.trim()) return;
+        sendProtocolMsg(messageInput.value.trim());
+        messageInput.value = '';
+        messageInput.focus();
         socket.emit('stop_typing', convId);
+        emojiPickerContainer.style.display = 'none';
     };
 
-    document.getElementById('messageInput').oninput = () => {
+    messageInput.oninput = () => {
         socket.emit('typing', { conversationId: convId, senderName: user.full_name });
         clearTimeout(typingTimeout);
         typingTimeout = setTimeout(() => socket.emit('stop_typing', convId), 2000);
     };
 
-    // --- 4. RENDER BUBBLES ---
     function pushBubble(m, isMe) {
         const display = document.getElementById('messageDisplay');
         let body = m.content;
         
         if(m.message_type === 'voice') {
             body = `<div class="voice-bubble" onclick="handleAudio('${m.file_url}', this)">
-                        <i class="fas fa-play-circle"></i> <strong>Voice Note</strong>
+                        <i class="fas fa-play-circle"></i> <strong>Voice Message</strong>
                     </div>`;
         } else if(m.message_type === 'image') {
             body = `<img src="${m.file_url}" style="width:100%; border-radius:12px; cursor:zoom-in;" onclick="zoomImage('${m.file_url}')">`;
@@ -307,7 +338,8 @@
             headers: { 'Authorization': `Bearer ${token}` },
             body: formData
         });
-        return (await res.json()).fileUrl;
+        const data = await res.json();
+        return data.fileUrl;
     }
 
     const micBtn = document.getElementById('micBtn');
@@ -321,23 +353,26 @@
             mediaRecorder.onstop = async () => {
                 const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
                 const url = await uploadToCloud(audioBlob);
-                sendProtocolMsg('🎤 Voice Note', 'voice', url);
+                sendProtocolMsg('🎤 Voice Message', 'voice', url);
             };
             mediaRecorder.start();
             micBtn.classList.add('recording-active');
-            if(window.navigator.vibrate) window.navigator.vibrate(40);
-        } catch (err) { alert("Mic required"); }
+        } catch (err) { alert("Mic required for voice notes"); }
     };
     micBtn.onpointerup = () => { if(mediaRecorder) { mediaRecorder.stop(); micBtn.classList.remove('recording-active'); } };
 
     document.getElementById('imageInput').onchange = async (e) => {
         const file = e.target.files[0];
-        if(file) sendProtocolMsg('📷 Photo', 'image', await uploadToCloud(file));
+        if(file) {
+            const url = await uploadToCloud(file);
+            sendProtocolMsg('📷 Photo', 'image', url);
+        }
     };
 
     function handleAudio(url, el) {
         if(currentAudio) currentAudio.pause();
         const icon = el.querySelector('i');
+        const originalClass = icon.className;
         icon.className = 'fas fa-spinner fa-spin';
         currentAudio = new Audio(url);
         currentAudio.play().then(() => icon.className = 'fas fa-pause-circle');
@@ -349,7 +384,7 @@
         document.getElementById('lightbox').style.display = 'flex';
     }
 
-    // --- 6. NAVIGATION ---
+    // --- 6. NAVIGATION & SEARCH ---
     async function openFullChat(id, name, color) {
         convId = id;
         document.getElementById('activeChatName').innerText = name;
@@ -357,14 +392,13 @@
         av.style.background = color; av.innerText = name[0];
         document.getElementById('chatAreaWrapper').classList.add('active');
         
-        // রিড স্ট্যাটাস আপডেট
         fetch(`/api/messaging/read/${id}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${token}` } });
         socket.emit('mark_as_read', { conversationId: id, userId: user.id });
 
         const res = await fetch(`/api/messaging/messages/${id}`, { headers: { 'Authorization': `Bearer ${token}` } });
         const msgs = await res.json();
         const display = document.getElementById('messageDisplay');
-        display.innerHTML = '<div class="date-divider">Today</div>';
+        display.innerHTML = '<div class="date-divider">Chat History</div>';
         msgs.forEach(m => pushBubble(m, m.sender_id === user.id));
         
         socket.emit('join_conversation', id);
@@ -375,6 +409,7 @@
         document.getElementById('chatAreaWrapper').classList.remove('active'); 
         if(convId) socket.emit('leave_conversation', convId);
         convId = null;
+        emojiPickerContainer.style.display = 'none';
         syncInbox();
     }
 
@@ -384,10 +419,11 @@
         const panel = document.getElementById('aiSummaryPanel');
         panel.classList.toggle('active');
         if(panel.classList.contains('active')) {
+            document.getElementById('aiContent').innerText = "Analyzing recent messages...";
             fetch(`/api/messaging/ai-summary/${convId}`, { headers: { 'Authorization': `Bearer ${token}` } })
             .then(r => r.json()).then(d => {
-                document.getElementById('aiContent').innerHTML = `<b>Summary:</b> ${d.summary}<br><b>Sentiment:</b> ${d.sentiment}`;
-            });
+                document.getElementById('aiContent').innerHTML = `<b>Executive Summary:</b><br>${d.summary}<br><br><b>Context Status:</b> ${d.sentiment}`;
+            }).catch(() => { document.getElementById('aiContent').innerText = "AI summary engine busy. Try again later."; });
         }
     }
 
@@ -401,6 +437,15 @@
         const term = e.target.value.toLowerCase();
         document.querySelectorAll('.bubble').forEach(b => {
             b.classList.toggle('highlight', term.length > 2 && b.innerText.toLowerCase().includes(term));
+        });
+    };
+
+    // Inbox Search
+    document.getElementById('listSearch').oninput = (e) => {
+        const term = e.target.value.toLowerCase();
+        document.querySelectorAll('.conv-item').forEach(item => {
+            const name = item.querySelector('strong').innerText.toLowerCase();
+            item.style.display = name.includes(term) ? 'flex' : 'none';
         });
     };
 

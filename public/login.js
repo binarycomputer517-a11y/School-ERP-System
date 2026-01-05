@@ -35,23 +35,25 @@ document.getElementById('login-form').addEventListener('submit', async function(
             localStorage.setItem('user-role', data.role);
             localStorage.setItem('username', data.username || username);
             
-            // --- B. Identifier Synchronization ---
+            // --- B. Primary User ID Synchronization ---
             const userId = data['user-id'] || data.userId || data.id;
             if (userId) localStorage.setItem('profile-id', userId);
 
             // --- C. Role-Specific Identifiers (Reference Linking) ---
+            // Clear old reference data first to prevent cross-account issues
+            localStorage.removeItem('student_id');
+            localStorage.removeItem('driver_id');
+            localStorage.removeItem('user-reference-id');
+
             if (data.role === 'Student' && data.student_id) {
                 localStorage.setItem('student_id', data.student_id); 
                 localStorage.setItem('user-reference-id', data.student_id); 
-            } else if (data.role === 'Driver' && data.driver_id) {
-                // Link Driver ID for transport module lookups
+                console.log("Student Profile Linked:", data.student_id);
+            } 
+            else if (data.role === 'Driver' && data.driver_id) {
                 localStorage.setItem('driver_id', data.driver_id);
+                localStorage.setItem('user-reference-id', data.driver_id);
                 console.log("Driver reference linked:", data.driver_id);
-            } else {
-                // Cleanup cross-role data
-                localStorage.removeItem('student_id');
-                localStorage.removeItem('driver_id');
-                localStorage.removeItem('user-reference-id');
             }
 
             // --- D. Global Config & Branching ---
@@ -60,9 +62,11 @@ document.getElementById('login-form').addEventListener('submit', async function(
             }
             localStorage.setItem('active_branch_id', data.userBranchId || '');
 
-            // --- E. Role-Based Redirection (FULL & FINAL) ---
+            // --- E. Role-Based Redirection (OPTIMIZED) ---
             const role = data.role;
-            if (['Admin', 'Super Admin', 'HR', 'Accountant'].includes(role)) {
+            const adminRoles = ['Admin', 'Super Admin', 'HR', 'Accountant', 'Coordinator'];
+            
+            if (adminRoles.includes(role)) {
                 window.location.href = '/admin-dashboard.html';
             } 
             else if (role === 'Student') {
@@ -72,8 +76,10 @@ document.getElementById('login-form').addEventListener('submit', async function(
                 window.location.href = '/teacher-dashboard.html'; 
             } 
             else if (role === 'Driver') {
-                // REDIRECT TO DRIVER DASHBOARD
                 window.location.href = '/driver-dashboard.html'; 
+            }
+            else if (role === 'Parent') {
+                window.location.href = '/parent-dashboard.html';
             }
             else {
                 window.location.href = '/dashboard.html'; 
@@ -88,6 +94,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorMsg.style.color = '#ef4444';
         errorMsg.textContent = err.message;
         
+        // Re-enable button on failure
         loginButton.disabled = false;
         loginButton.textContent = 'Login';
     }

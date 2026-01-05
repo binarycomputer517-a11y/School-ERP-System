@@ -31,7 +31,7 @@ const SQL_MAX_MARKS = `
  */
 
 // Create Quiz
-router.post('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.post('/quizzes', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { title, subject_id, course_id, time_limit, max_marks, assessment_type, status, start_time, end_time } = req.body;
     try {
         const safeSubjectId = isValidUUID(subject_id) ? subject_id : null;
@@ -56,14 +56,13 @@ router.post('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), asyn
     }
 });
 
-// List All Quizzes (Admin View) - UPDATED
-router.get('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+// List All Quizzes (Admin View) - UPDATED with Super Admin permission
+router.get('/quizzes', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     try {
         const { course_id, subject_id } = req.query;
         let filterClause = '';
         const params = [];
 
-        // ডাইনামিক ফিল্টারিং হ্যান্ডেল করা
         if (isValidUUID(course_id)) {
             params.push(course_id);
             filterClause += ` AND oq.course_id = $${params.length}`;
@@ -80,14 +79,14 @@ router.get('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), async
                 oq.assessment_type,
                 oq.course_id,
                 oq.subject_id,
-                oq.time_limit, -- ডাটাবেস কলাম রিনেম অনুযায়ী আপডেট করা হয়েছে
+                oq.time_limit,
                 oq.status,
                 oq.available_from,
                 oq.available_to,
                 oq.created_at,
                 c.course_name, 
                 s.subject_name,
-                s.subject_code, -- সাবজেক্ট কোড এখন টেবিল থেকে আসবে
+                s.subject_code,
                 (SELECT COUNT(*) FROM quiz_question_links l WHERE l.quiz_id = oq.id) as total_questions,
                 ${SQL_MAX_MARKS} as dynamic_max_marks
             FROM online_quizzes oq
@@ -105,7 +104,7 @@ router.get('/quizzes', authenticateToken, authorize(['Admin', 'Teacher']), async
 });
 
 // Update Quiz
-router.put('/quizzes/:id', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.put('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { id } = req.params;
     const { title, subject_id, course_id, time_limit, max_marks, status, assessment_type, start_time, end_time } = req.body;
     try {
@@ -140,12 +139,12 @@ router.put('/quizzes/:id', authenticateToken, authorize(['Admin', 'Teacher']), a
 });
 
 // Delete Quiz
-router.delete('/quizzes/:id', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.delete('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { id } = req.params;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        await client.query('DELETE FROM quiz_question_links WHERE quiz_id::text = $1', [id]); // Clean links first
+        await client.query('DELETE FROM quiz_question_links WHERE quiz_id::text = $1', [id]); 
         const result = await client.query('DELETE FROM online_quizzes WHERE id::text = $1', [id]);
         if (result.rowCount === 0) {
             await client.query('ROLLBACK');
@@ -225,7 +224,6 @@ router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
         );
         if (checkAttempt.rowCount > 0) return res.status(403).json({ message: 'You have already completed this exam' });
 
-        // SECURITY: Correct Options REMOVED from selection
         const questionsRes = await pool.query(
             `SELECT q.question_id, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.marks 
              FROM quiz_questions q
@@ -352,7 +350,7 @@ router.get('/results/:quizId', authenticateToken, async (req, res) => {
 });
 
 // Admin: View all attempts for a quiz
-router.get('/admin/quiz-attempts/:quizId', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.get('/admin/quiz-attempts/:quizId', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { quizId } = req.params;
     try {
         const query = `
@@ -375,10 +373,9 @@ router.get('/admin/quiz-attempts/:quizId', authenticateToken, authorize(['Admin'
 });
 
 // Admin: View Specific Attempt Details (The Marksheet)
-router.get('/admin/attempt/:attemptId', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.get('/admin/attempt/:attemptId', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { attemptId } = req.params;
     try {
-        // 1. Fetch the attempt summary
         const summaryQuery = `
             SELECT sea.*, oq.title, 
                    COALESCE((SELECT SUM(q.marks) FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = oq.id), 0) as max_marks,
@@ -391,15 +388,11 @@ router.get('/admin/attempt/:attemptId', authenticateToken, authorize(['Admin', '
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
             LEFT JOIN subjects sub ON oq.subject_id = sub.id
-            WHERE sea.attempt_id::text = $1`; // Added ::text to handle various ID formats
+            WHERE sea.attempt_id::text = $1`;
 
         const summary = await pool.query(summaryQuery, [attemptId]);
+        if (summary.rowCount === 0) return res.status(404).json({ message: 'Attempt record not found' });
 
-        if (summary.rowCount === 0) {
-            return res.status(404).json({ message: 'Attempt record not found in database' });
-        }
-
-        // 2. Fetch individual question results for this attempt
         const detailsQuery = `
             SELECT r.*, q.question_text, q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option, q.marks 
             FROM student_quiz_results r 
@@ -408,22 +401,20 @@ router.get('/admin/attempt/:attemptId', authenticateToken, authorize(['Admin', '
 
         const details = await pool.query(detailsQuery, [attemptId]);
 
-        res.json({ 
-            summary: summary.rows[0], 
-            details: details.rows 
-        });
+        res.json({ summary: summary.rows[0], details: details.rows });
     } catch (err) { 
         console.error("Admin Marksheet Fetch Error:", err);
         res.status(500).json({ message: "Internal Server Error: " + err.message }); 
     }
 });
+
 /** =================================================================
  * SECTION 3: QUESTION BANK & LINKING (Admin/Teacher Access)
  * =================================================================
  */
 
 // Upload CSV Questions
-router.post('/question-bank/upload-csv', authenticateToken, authorize(['Admin', 'Teacher']), upload.single('file'), async (req, res) => {
+router.post('/question-bank/upload-csv', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), upload.single('file'), async (req, res) => {
     const results = [];
     if (!req.file) return res.status(400).json({ message: 'No file uploaded.' });
 
@@ -447,36 +438,32 @@ router.post('/question-bank/upload-csv', authenticateToken, authorize(['Admin', 
                     }
                 }
                 await client.query('COMMIT');
-                // Cleanup temp file
                 if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-                
                 res.json({ success: true, message: `${count} questions imported!` });
             } catch (err) {
                 await client.query('ROLLBACK');
-                // Cleanup temp file
                 if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
-                
                 console.error(err);
                 res.status(500).json({ message: 'CSV Error' });
             } finally { client.release(); }
         });
 });
 
-router.get('/question-bank', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.get('/question-bank', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     try {
         const result = await pool.query('SELECT * FROM quiz_questions ORDER BY question_id DESC');
         res.json(result.rows);
     } catch (e) { res.status(500).json({message: "Error loading questions"}); }
 });
 
-router.get('/quizzes/:quizId/links', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.get('/quizzes/:quizId/links', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     try {
         const result = await pool.query(`SELECT q.*, l.question_order FROM quiz_questions q JOIN quiz_question_links l ON q.question_id = l.question_id WHERE l.quiz_id = $1 ORDER BY l.question_order ASC`, [req.params.quizId]);
         res.json(result.rows);
     } catch (e) { res.status(500).json({message: "Error loading links"}); }
 });
 
-router.put('/quizzes/:quizId/link-questions', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.put('/quizzes/:quizId/link-questions', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { quizId } = req.params;
     const { questionIds } = req.body; 
     const client = await pool.connect();
@@ -496,7 +483,7 @@ router.put('/quizzes/:quizId/link-questions', authenticateToken, authorize(['Adm
     } finally { client.release(); }
 });
 
-router.post('/questions', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.post('/questions', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { question_text, subject_id, correct_option, marks, option_a, option_b, option_c, option_d } = req.body;
     try {
         const result = await pool.query(
@@ -507,8 +494,8 @@ router.post('/questions', authenticateToken, authorize(['Admin', 'Teacher']), as
     } catch (e) { res.status(500).json({ message: 'Add Error' }); }
 });
 
-// JSON Import (Alternative to CSV)
-router.post('/question-bank/import', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+// JSON Import
+router.post('/question-bank/import', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     const { questions } = req.body;
     if (!questions || !Array.isArray(questions)) return res.status(400).json({ message: 'No questions provided' });
     
@@ -530,7 +517,7 @@ router.post('/question-bank/import', authenticateToken, authorize(['Admin', 'Tea
     } finally { client.release(); }
 });
 
-router.delete('/attempts/:attemptId', authenticateToken, authorize(['Admin', 'Teacher']), async (req, res) => {
+router.delete('/attempts/:attemptId', authenticateToken, authorize(['Super Admin', 'Admin', 'Teacher']), async (req, res) => {
     try {
         await pool.query('DELETE FROM student_quiz_results WHERE attempt_id = $1', [req.params.attemptId]);
         await pool.query('DELETE FROM student_exam_attempts WHERE attempt_id = $1', [req.params.attemptId]);
@@ -538,14 +525,10 @@ router.delete('/attempts/:attemptId', authenticateToken, authorize(['Admin', 'Te
     } catch (e) { res.status(500).json({ message: 'Delete Error' }); }
 });
 
-// ==========================================
-// GET: Consolidated Report Card (FINAL ALL-IN-ONE FIX)
-// ==========================================
+// Consolidated Report Card
 router.get('/student/consolidated-report', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
-
-        // 1. Get Student Info
         const studentQuery = `
             SELECT s.first_name, s.last_name, s.roll_number, s.profile_image_path,
                    c.course_name, b.batch_name, s.student_id 
@@ -555,91 +538,51 @@ router.get('/student/consolidated-report', authenticateToken, async (req, res) =
             WHERE s.user_id::text = $1`;
         
         const studentRes = await pool.query(studentQuery, [userId]);
-        
-        if (studentRes.rows.length === 0) {
-            return res.status(404).json({ message: "Student profile not found" });
-        }
+        if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student profile not found" });
 
         const studentData = studentRes.rows[0];
         const studentId = studentData.student_id;
 
-        // 2. Fetch All Exam Results
         const resultsQuery = `
-            SELECT 
-                sub.subject_code,
-                sub.subject_name,
-                oq.title AS exam_title,
-                
-                -- Dynamic Max Marks (sum of linked questions)
-                ${SQL_MAX_MARKS} as max_marks,
-
-                -- Obtained Score
-                COALESCE(sea.total_score, 0) as total_score,
-                sea.end_time
+            SELECT sub.subject_code, sub.subject_name, oq.title AS exam_title,
+                   ${SQL_MAX_MARKS} as max_marks,
+                   COALESCE(sea.total_score, 0) as total_score, sea.end_time
             FROM student_exam_attempts sea
             JOIN online_quizzes oq ON sea.quiz_id = oq.id
             LEFT JOIN subjects sub ON oq.subject_id = sub.id
-            WHERE sea.student_id = $1 
-            AND sea.end_time IS NOT NULL
+            WHERE sea.student_id = $1 AND sea.end_time IS NOT NULL
             ORDER BY sea.end_time DESC`;
 
         const resultsRes = await pool.query(resultsQuery, [studentId]);
-
-        res.json({
-            student: studentData,
-            results: resultsRes.rows 
-        });
-
+        res.json({ student: studentData, results: resultsRes.rows });
     } catch (err) {
         console.error("Consolidated Report Error:", err);
         res.status(500).json({ message: "Server Error generating transcript" });
     }
 });
 
-// ==========================================
-// GET: Student Exam Schedule (For Admit Card)
-// ==========================================
+// Student Exam Schedule
 router.get('/student/schedule', authenticateToken, async (req, res) => {
     try {
         const userId = req.user.id;
-
-        // 1. Get Student's Course Info
-        const studentRes = await pool.query(
-            `SELECT course_id FROM students WHERE user_id::text = $1`, 
-            [userId]
-        );
-
-        if (studentRes.rowCount === 0) {
-            return res.status(404).json({ message: "Student profile not found" });
-        }
+        const studentRes = await pool.query(`SELECT course_id FROM students WHERE user_id::text = $1`, [userId]);
+        if (studentRes.rowCount === 0) return res.status(404).json({ message: "Student profile not found" });
 
         const { course_id } = studentRes.rows[0];
-
-        // 2. Fetch Published Exams for this Course
         const query = `
-            SELECT 
-                oq.id,
-                oq.title,
-                oq.assessment_type,
-                oq.time_limit,
-                oq.available_from,
-                oq.available_to,
-                s.subject_name,
-                s.subject_code,
-                oq.id as assessment_code
+            SELECT oq.id, oq.title, oq.assessment_type, oq.time_limit, oq.available_from, oq.available_to,
+                s.subject_name, s.subject_code, oq.id as assessment_code
             FROM online_quizzes oq
             LEFT JOIN subjects s ON oq.subject_id = s.id
-            WHERE oq.course_id = $1 
-            AND oq.status = 'Published'
+            WHERE oq.course_id = $1 AND oq.status = 'Published'
             ORDER BY oq.available_from ASC`;
 
         const scheduleRes = await pool.query(query, [course_id]);
-        
         res.json(scheduleRes.rows);
-
     } catch (err) {
         console.error("Schedule Fetch Error:", err);
         res.status(500).json({ message: "Error fetching schedule" });
     }
 });
+
 module.exports = router;

@@ -20,16 +20,16 @@ function authenticateToken(req, res, next) {
 
     if (token == null) {
         // 401: Unauthorized - No token provided
-        return res.sendStatus(401); 
+        return res.status(401).json({ message: 'Unauthorized: No token provided' }); 
     }
 
     // 3. VERIFY TOKEN USING THE CENTRAL SECRET
-    // We use the imported 'secret' variable instead of process.env directly
     jwt.verify(token, secret, (err, user) => {
         if (err) {
             console.error("Token Verification Failed:", err.message);
-            // Token is invalid, expired, or malformed
-            return res.sendStatus(403); // 403: Forbidden
+            // Handle specific errors like expired tokens
+            const message = err.name === 'TokenExpiredError' ? 'Forbidden: Token expired' : 'Forbidden: Invalid token';
+            return res.status(403).json({ message: message });
         }
         
         // user.id is the UUID from users.id (The actual primary key)
@@ -68,26 +68,30 @@ function authenticateToken(req, res, next) {
  * Middleware factory to authorize users based on roles.
  */
 function authorize(roles = []) {
-    if (typeof roles === 'string') {
-        roles = [roles];
-    }
+    // Convert single string role to array
+    const rolesArray = typeof roles === 'string' ? [roles] : roles;
 
     // Convert the list of required roles to lowercase for comparison
-    const allowedRoles = roles.map(r => r.toLowerCase());
+    const allowedRoles = rolesArray.map(r => r.toLowerCase());
 
     return (req, res, next) => {
-        // Ensure user data and role exist (req.user.role is already lowercase)
+        // Ensure user data and role exist (req.user.role is already normalized in authenticateToken)
         if (!req.user || !req.user.role) {
              return res.status(403).json({ message: 'Forbidden: Authentication failed during token verification.' });
         }
 
         // Check if the lowercase user role is included in the lowercase allowed list
-        if (!allowedRoles.length || allowedRoles.includes(req.user.role)) {
+        // If allowedRoles is empty, it means any authenticated user can access
+        if (allowedRoles.length === 0 || allowedRoles.includes(req.user.role)) {
             // User has the required role, proceed.
             next();
         } else {
             // User does not have permission, deny access.
-            return res.status(403).json({ message: 'Forbidden: You do not have permission to perform this action.' });
+            console.warn(`Access denied for role: ${req.user.role}. Required roles: ${allowedRoles.join(', ')}`);
+            return res.status(403).json({ 
+                message: 'Forbidden: You do not have permission to perform this action.',
+                requiredRoles: rolesArray 
+            });
         }
     };
 }

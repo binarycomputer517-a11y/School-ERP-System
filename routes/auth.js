@@ -10,7 +10,8 @@ const { sendPasswordResetEmail } = require('../utils/notificationService');
 const moment = require('moment'); 
 
 // --- Configuration Constants ---
-const JWT_SECRET = process.env.JWT_SECRET;
+// Ensure JWT_SECRET is loaded from env, provide a fallback only for development
+const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only';
 const USERS_TABLE = 'users';
 
 // Helper: Finds user by username or email and verifies password (UNCHANGED)
@@ -34,6 +35,10 @@ router.post('/login', async (req, res) => {
     const loginInput = req.body.username || req.body.email; 
     const password = req.body.password;
     
+    if (!loginInput || !password) {
+        return res.status(400).json({ message: 'Username/Email and password are required.' });
+    }
+
     try {
         const user = await findUserAndVerifyPassword(loginInput, password);
 
@@ -50,7 +55,6 @@ router.post('/login', async (req, res) => {
             // If found, use the student_id (which is the UUID of the student record)
             studentProfileId = studentRes.rows[0]?.student_id || null;
             
-            // NOTE: If studentProfileId is null here, the student profile is incomplete.
             if (!studentProfileId) {
                  console.warn(`Student login success but no student_id found for user ${user.id}`);
             }
@@ -67,17 +71,17 @@ router.post('/login', async (req, res) => {
         
         // --- Generate Token ---
         const tokenPayload = { 
-            id: user.id, // The user's UUID
+            id: user.id, // The user's entry UUID in users table
             role: user.role, 
             branch_id: user.branch_id,
-            
             // ✅ FIX 1: Add the actual studentProfileId to the JWT payload
             ...(user.role === 'Student' && { 
                 student_id: studentProfileId
             }),
         };
         
-        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' }); // 30 days is kept as is.
+        // JWT expires in 30 days
+        const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' }); 
 
         // --- Send Response ---
         const responsePayload = {
@@ -87,12 +91,13 @@ router.post('/login', async (req, res) => {
             'user-id': user.id, 
             userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',
-            
             // ✅ FIX 2: Send the student_id in the response body for localStorage setting
-            student_id: studentProfileId // Will be null if role != Student or profile incomplete
+            student_id: studentProfileId 
         };
 
+        // Update last login timestamp
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
+        
         return res.status(200).json(responsePayload);
         
     } catch (error) {
@@ -102,17 +107,20 @@ router.post('/login', async (req, res) => {
 });
 
 // =================================================================
-// 2. USER REGISTRATION ROUTE (Placeholder - UNCHANGED)
+// 2. USER REGISTRATION ROUTE
 // =================================================================
 router.post('/register', async (req, res) => {
     const { username, password, role, email } = req.body;
-// ... (UNCHANGED) ...
-    if (!username || !password || !role) return res.status(400).json({ message: 'Missing required fields.' });
+
+    if (!username || !password || !role) {
+        return res.status(400).json({ message: 'Missing required fields.' });
+    }
 
     try {
         const saltRounds = parseInt(process.env.SALT_ROUNDS || 10);
         const passwordHash = await bcrypt.hash(password, saltRounds);
         
+        // Default Branch Assignment
         const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
 
         const query = `
@@ -131,12 +139,11 @@ router.post('/register', async (req, res) => {
 });
 
 // =================================================================
-// 3. FORGOT PASSWORD (POST /api/auth/forgot-password - UNCHANGED)
+// 3. FORGOT PASSWORD (POST /api/auth/forgot-password)
 // =================================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
-// ... (UNCHANGED) ...
-    const FRONTEND_URL = 'http://localhost:3005'; 
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3005'; 
     const TOKEN_EXPIRY_MINUTES = 60; 
 
     if (!email) return res.status(400).json({ message: 'Email address is required.' });
@@ -149,11 +156,12 @@ router.post('/forgot-password', async (req, res) => {
         const user = result.rows[0];
 
         if (!user) {
+            // Security: Don't reveal if email exists
             await client.query('COMMIT');
             return res.json({ message: 'If a matching account was found, a password reset link has been sent to the associated email address.' });
         }
 
-        // 2. Use JWT for built-in expiry check
+        // 2. JWT Reset Token
         const resetToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' }); 
         const expiryTime = moment().add(TOKEN_EXPIRY_MINUTES, 'minutes').toISOString();
 
@@ -163,7 +171,7 @@ router.post('/forgot-password', async (req, res) => {
             [resetToken, expiryTime, user.id]
         );
         
-        // 4. Send Email
+        // 4. Dispatch Email
         const resetURL = `${FRONTEND_URL}/reset-password.html?token=${resetToken}`;
         await sendPasswordResetEmail(user.email, resetURL); 
         
@@ -173,18 +181,17 @@ router.post('/forgot-password', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Forgot Password Server Error:', err);
-        return res.status(500).json({ message: 'An internal error occurred during token generation or email dispatch.' });
+        return res.status(500).json({ message: 'An internal error occurred.' });
     } finally {
         client.release(); 
     }
 });
 
 // =================================================================
-// 4. RESET PASSWORD (POST /api/auth/reset-password - UNCHANGED)
+// 4. RESET PASSWORD (POST /api/auth/reset-password)
 // =================================================================
 router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body; 
-// ... (UNCHANGED) ...
     const client = await pool.connect();
 
     if (!token || !password) {
@@ -200,10 +207,10 @@ router.post('/reset-password', async (req, res) => {
             decoded = jwt.verify(token, JWT_SECRET); 
         } catch (jwtError) {
              await client.query('ROLLBACK');
-             return res.status(400).json({ message: 'Error: The password reset link has expired or is invalid. Please request a new link.' });
+             return res.status(400).json({ message: 'Error: The link has expired or is invalid.' });
         }
 
-        // 2. Find the user based on the DB check
+        // 2. Validate token against DB
         const userResult = await client.query(
             `SELECT id FROM ${USERS_TABLE} 
              WHERE reset_password_token = $1 AND id = $2::uuid`,
@@ -214,7 +221,7 @@ router.post('/reset-password', async (req, res) => {
 
         if (!user) {
             await client.query('ROLLBACK');
-            return res.status(400).json({ message: 'Invalid password reset link. Already used or revoked.' });
+            return res.status(400).json({ message: 'Invalid password reset link.' });
         }
         
         // 3. Hash New Password
@@ -229,10 +236,7 @@ router.post('/reset-password', async (req, res) => {
                  reset_token_expiry = NULL, 
                  updated_at = CURRENT_TIMESTAMP 
              WHERE id = $2::uuid
-        `, [
-            hashedPassword, 
-            user.id
-        ]);
+        `, [hashedPassword, user.id]);
 
         await client.query('COMMIT');
         res.json({ message: 'Password has been updated successfully.' });
@@ -240,15 +244,14 @@ router.post('/reset-password', async (req, res) => {
     } catch (err) {
         await client.query('ROLLBACK');
         console.error('Reset Password Server Error:', err);
-        res.status(500).json({ message: 'An internal error occurred during password update.' });
+        res.status(500).json({ message: 'Internal error occurred during update.' });
     } finally {
         client.release(); 
     }
 });
 
-
 // =================================================================
-// 5. VALIDATE TOKEN (PROFILE) (GET /api/auth/me - UNCHANGED)
+// 5. VALIDATE TOKEN (PROFILE) (GET /api/auth/me)
 // =================================================================
 router.get('/me', authenticateToken, async (req, res) => {
     try {
