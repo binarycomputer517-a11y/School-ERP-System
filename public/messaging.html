@@ -317,9 +317,10 @@
     <script src="js/messaging-client.js"></script> 
 
     <script>
-        const sidebar = document.getElementById('sidebar');
-        const mobileToggle = document.getElementById('mobileToggle');
-        const mediaSidebar = document.getElementById('mediaGallery');
+        // Use more specific names for local constants to avoid redeclaration issues with messaging-client.js
+        const sideMenu = document.getElementById('sidebar');
+        const sideMenuToggle = document.getElementById('mobileToggle');
+        const mediaSidePanel = document.getElementById('mediaGallery');
 
         // ✅ FIXED: Multi-Role Back Navigation Logic
         function handleRoleBasedBack() {
@@ -331,50 +332,55 @@
                 'Student': 'student-dashboard.html',
                 'Parent': 'parent-dashboard.html'
             };
-            // রোল খুঁজে না পেলে ডিফল্ট ড্যাশবোর্ডে পাঠাবে
+            // Redirect to appropriate dashboard or default
             const target = dashboardMap[userRole] || 'dashboard.html';
             window.location.href = target;
         }
 
         // ✅ FIXED: Mobile Navigation & Toggle Logic
-        if (mobileToggle) {
-            mobileToggle.addEventListener('click', (e) => {
+        if (sideMenuToggle) {
+            sideMenuToggle.addEventListener('click', (e) => {
                 e.stopPropagation();
-                sidebar.classList.toggle('active');
+                sideMenu.classList.toggle('active');
             });
         }
 
         function toggleMediaSidebar() {
-            mediaSidebar.classList.toggle('active');
+            if (mediaSidePanel) {
+                mediaSidePanel.classList.toggle('active');
+            }
         }
 
-        // চ্যাট লিস্টে ক্লিক করলে মোবাইল ভিউতে সাইডবার অটো বন্ধ হওয়া
+        // Close sidebar automatically when a chat is selected on mobile
         document.getElementById('conversationList').addEventListener('click', () => {
             if(window.innerWidth <= 768) {
-                sidebar.classList.remove('active');
+                sideMenu.classList.remove('active');
             }
-            // হেডার এলিমেন্ট শো করা
-            document.getElementById('header-user-pic').style.display = 'block';
-            document.getElementById('header-status').style.display = 'block';
-            document.getElementById('active-dot').style.display = 'block';
+            // Show header details upon selection
+            const pic = document.getElementById('header-user-pic');
+            const status = document.getElementById('header-status');
+            const dot = document.getElementById('active-dot');
+            if(pic) pic.style.display = 'block';
+            if(status) status.style.display = 'block';
+            if(dot) dot.style.display = 'block';
         });
 
-        // মডাল বন্ধের লজিক
+        // Modal closing logic
         document.getElementById('newConversationModal').addEventListener('click', function(e) {
             if (e.target === this) this.style.display = 'none';
         });
 
-        const closeBtn = document.querySelector('.close-btn');
-        if (closeBtn) {
-            closeBtn.onclick = () => {
+        const closeBtnNode = document.querySelector('.close-btn');
+        if (closeBtnNode) {
+            closeBtnNode.onclick = () => {
                 document.getElementById('newConversationModal').style.display = 'none';
             };
         }
 
-        // ইনবক্স সার্চ ফিল্টার
-        const chatSearchInput = document.getElementById('chatSearchInput');
-        if (chatSearchInput) {
-            chatSearchInput.oninput = (e) => {
+        // Inbox filter search logic
+        const inboxSearch = document.getElementById('chatSearchInput');
+        if (inboxSearch) {
+            inboxSearch.oninput = (e) => {
                 const term = e.target.value.toLowerCase();
                 const items = document.querySelectorAll('.conversation-item');
                 items.forEach(item => {
@@ -384,17 +390,19 @@
             };
         }
 
-        // রিপ্লাই প্রিভিউ বন্ধ করা
+        // Close preview for replies
         function cancelReply() {
-            const replyPreview = document.getElementById('replyPreview');
-            replyPreview.style.display = 'none';
+            const replyPrev = document.getElementById('replyPreview');
+            if (replyPrev) replyPrev.style.display = 'none';
             if (typeof replyingToId !== 'undefined') replyingToId = null;
         }
 
-        // স্ক্রিনের বাইরে ক্লিক করলে মোবাইল সাইডবার বন্ধ করা
+        // Close sidebar if user clicks outside of it on mobile
         document.addEventListener('click', (e) => {
-            if (window.innerWidth <= 768 && !sidebar.contains(e.target) && !mobileToggle.contains(e.target)) {
-                sidebar.classList.remove('active');
+            if (window.innerWidth <= 768 && sideMenu && sideMenuToggle) {
+                if (!sideMenu.contains(e.target) && !sideMenuToggle.contains(e.target)) {
+                    sideMenu.classList.remove('active');
+                }
             }
         });
     </script>
