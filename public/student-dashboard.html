@@ -485,8 +485,10 @@
                 if (res.ok) {
                     const notices = await res.json();
                     dot.style.display = (notices && notices.length > 0) ? 'block' : 'none';
+                    return notices;
                 }
             } catch (err) { console.warn("Could not sync notifications:", err); }
+            return [];
         }
 
         function initChart(labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May'], data = [30, 50, 40, 60, 55]) {
@@ -519,33 +521,21 @@
             });
         }
 
-        async function initPortal() {
-            const hr = new Date().getHours();
-            const greet = document.getElementById('greeting-txt');
-            if (greet) greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
-
+        /**
+         * AUTO REFRESH ENGINE
+         * This function handles updating the UI without a full reload.
+         * We split it from initPortal so it can be called repeatedly.
+         */
+        async function syncPortalData(isInitialLoad = false) {
             try {
-                const [pRes, fRes, tRes, nRes] = await Promise.all([
-                    window.authFetch(`/api/students/${sid}`),
+                // Fetch all dynamic parts in parallel
+                const [fRes, tRes, nRes] = await Promise.all([
                     window.authFetch(`/api/students/${sid}/fees`),
                     window.authFetch(`/api/students/${sid}/teachers`),
-                    window.authFetch(`/api/announcements/role/student`)
+                    checkAnnouncements() 
                 ]);
 
-                if (pRes?.ok) {
-                    const d = await pRes.json();
-                    document.getElementById('student-fullname').innerText = d.first_name || 'Student';
-                    document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
-                    document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
-                    document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
-                    document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
-                    document.getElementById('drawer-email').innerText = d.email || 'N/A';
-                    if (d.profile_image_path) {
-                        document.getElementById('header-pic').src = d.profile_image_path;
-                        document.getElementById('drawer-pic').src = d.profile_image_path;
-                    }
-                }
-
+                // 1. Update Fees
                 if (fRes?.ok) {
                     const f = await fRes.json();
                     const format = window.formatCurrency || ((val) => `₹${val}`);
@@ -559,6 +549,7 @@
                     `;
                 }
 
+                // 2. Update Teachers
                 if (tRes?.ok) {
                     const teachers = await tRes.json();
                     const container = document.getElementById('my-teachers-list');
@@ -575,33 +566,59 @@
                     }
                 }
 
-                if (nRes?.ok) {
-                    const notices = await nRes.json();
+                // 3. Update Notices (Only if nRes returned data from checkAnnouncements)
+                if (nRes && nRes.length > 0) {
                     const scroller = document.getElementById('notice-scroller');
-                    if (notices && notices.length > 0) {
-                        const noticeHtml = notices.map(n => {
-                            let iconClass = "text-primary";
-                            if(n.notice_type === 'Urgent') iconClass = "text-danger";
-                            if(n.notice_type === 'Event') iconClass = "text-success";
-
-                            return `
-                            <div class="notice-card">
-                                <i class="fas fa-bullhorn ${iconClass} mb-2"></i>
-                                <div class="fw-bold small text-truncate" style="color: #1e293b;">${n.title}</div>
-                                <div class="text-muted" style="font-size: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
-                                    ${n.content || 'New update available.'}
-                                </div>
+                    const noticeHtml = nRes.map(n => {
+                        let iconClass = "text-primary";
+                        if(n.notice_type === 'Urgent') iconClass = "text-danger";
+                        if(n.notice_type === 'Event') iconClass = "text-success";
+                        return `
+                        <div class="notice-card">
+                            <i class="fas fa-bullhorn ${iconClass} mb-2"></i>
+                            <div class="fw-bold small text-truncate" style="color: #1e293b;">${n.title}</div>
+                            <div class="text-muted" style="font-size: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">
+                                ${n.content || 'New update available.'}
                             </div>
-                        `}).join('');
-                        scroller.innerHTML = noticeHtml + noticeHtml; 
-                    } else {
-                        scroller.innerHTML = '<div class="notice-card"><div class="small">No new notices.</div></div>';
+                        </div>`;
+                    }).join('');
+                    scroller.innerHTML = noticeHtml + noticeHtml; 
+                } else if (nRes && nRes.length === 0) {
+                    document.getElementById('notice-scroller').innerHTML = '<div class="notice-card"><div class="small">No new notices.</div></div>';
+                }
+
+                updateMessagingBadge();
+
+            } catch (err) {
+                console.error("Background sync failed", err);
+            }
+        }
+
+        async function initPortal() {
+            const hr = new Date().getHours();
+            const greet = document.getElementById('greeting-txt');
+            if (greet) greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
+
+            try {
+                // Fetch static profile info once
+                const pRes = await window.authFetch(`/api/students/${sid}`);
+                if (pRes?.ok) {
+                    const d = await pRes.json();
+                    document.getElementById('student-fullname').innerText = d.first_name || 'Student';
+                    document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
+                    document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
+                    document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
+                    document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
+                    document.getElementById('drawer-email').innerText = d.email || 'N/A';
+                    if (d.profile_image_path) {
+                        document.getElementById('header-pic').src = d.profile_image_path;
+                        document.getElementById('drawer-pic').src = d.profile_image_path;
                     }
                 }
 
+                // Initial sync for dynamic data
+                await syncPortalData(true);
                 initChart();
-                updateMessagingBadge();
-                checkAnnouncements();
 
             } catch (err) { 
                 console.error("Initialization Error", err); 
@@ -618,8 +635,20 @@
             initPortal();
             updateClock();
             checkConnectivity();
+            
+            // UI Clocks (1 second)
             setInterval(updateClock, 1000);
+            
+            // Auto Refresh Dynamic Data (Every 60 seconds)
+            // This re-fetches fees, teachers, notices, and message counts
+            setInterval(() => {
+                console.log("Auto-refreshing portal data...");
+                syncPortalData();
+            }, 60000);
+
+            // Messaging specific check (Every 30 seconds for better responsiveness)
             setInterval(updateMessagingBadge, 30000);
+
             window.addEventListener('online', checkConnectivity);
             window.addEventListener('offline', checkConnectivity);
         });
