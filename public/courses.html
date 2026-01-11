@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCSM - Knowledge Tree System | Full Course Archive</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- QUANTUM MASTER UI ENGINE --- */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Montserrat:wght@300;400;700&family=Poppins:wght@600;800&display=swap');
+
+        :root {
+            --bg: #00050a;
+            --neon-blue: #00f2ff;
+            --gold: #ffaa00;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            
+            /* Category Colors */
+            --glow-programming: #00AFFF;
+            --glow-web-development: #3FFF8C;
+            --glow-design-media: #E060FF;
+            --glow-networking: #FFB800;
+            --glow-office-business: #8C9EFF;
+            --glow-accounting-finance: #00FF7F;
+            --glow-ai-data-science: #FF4D4D;
+            --glow-hardware-security: #FF6B6B;
+            --glow-mobile-development: #1EFFFF;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+        body { background: var(--bg); color: #fff; font-family: 'Montserrat', sans-serif; overflow-x: hidden; }
+
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; opacity: 0.5; }
+        .cursor-dot { position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 99999; pointer-events: none; width: 8px; height: 8px; background: var(--gold); }
+        .cursor-outline { position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 99998; pointer-events: none; width: 40px; height: 40px; border: 2px solid var(--neon-blue); transition: 0.15s; }
+
+        /* Navigation & Branding */
+        .sys-st-bar {
+            background: rgba(0, 5, 10, 0.9); padding: 12px 5%; display: flex; justify-content: space-between;
+            font-size: 10px; font-family: 'Orbitron'; color: var(--neon-blue); border-bottom: 1px solid var(--glass-border);
+            position: sticky; top: 0; z-index: 1000; backdrop-filter: blur(20px);
+        }
+        .header-brand { 
+            padding: 25px 5%; display: flex; align-items: center; gap: 20px; 
+            background: linear-gradient(to bottom, rgba(0,20,40,0.8), transparent);
+        }
+        .logo-main { width: 70px; filter: drop-shadow(0 0 10px var(--neon-blue)); }
+        .brand-title { 
+            font-family: 'Orbitron'; font-size: 1.8rem; font-weight: 900;
+            background: linear-gradient(90deg, #fff, var(--neon-blue));
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent;
+        }
+
+        /* Search Section */
+        .search-hero { padding: 50px 5%; text-align: center; }
+        #course-search {
+            background: rgba(255,255,255,0.05); border: 1px solid var(--neon-blue);
+            padding: 18px 30px; border-radius: 50px; color: #fff; width: 100%; max-width: 600px;
+            font-family: 'Orbitron'; outline: none; box-shadow: 0 0 20px rgba(0,242,255,0.1);
+        }
+
+        /* Knowledge Grid */
+        #knowledge-forest { padding: 50px 5%; display: flex; flex-direction: column; gap: 100px; }
+        .category-title {
+            font-family: 'Orbitron'; font-size: 1.8rem; color: var(--glow-color);
+            text-shadow: 0 0 10px var(--glow-color); margin-bottom: 40px;
+            letter-spacing: 4px; border-left: 5px solid var(--glow-color); padding-left: 20px;
+        }
+        .tree-branch { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 35px; }
+
+        /* Card System */
+        .leaf-card { height: 380px; perspective: 1000px; }
+        .flipper { position: relative; width: 100%; height: 100%; transition: 0.8s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d; }
+        .leaf-card:hover .flipper { transform: rotateY(180deg); }
+
+        .leaf-front, .leaf-back {
+            position: absolute; width: 100%; height: 100%; backface-visibility: hidden;
+            border-radius: 25px; border: 1px solid var(--glass-border); padding: 30px;
+        }
+        .leaf-front { 
+            background: rgba(255,255,255,0.02); display: flex; flex-direction: column; 
+            justify-content: center; align-items: center; text-align: center;
+        }
+        .leaf-acronym { font-family: 'Orbitron'; font-size: 3rem; color: var(--glow-color); text-shadow: 0 0 15px var(--glow-color); }
+        .leaf-course-name { font-size: 0.9rem; margin-top: 15px; opacity: 0.8; font-weight: bold; }
+
+        .leaf-back {
+            background: #000c15; transform: rotateY(180deg); border: 1px solid var(--glow-color);
+            overflow-y: auto; padding: 25px;
+        }
+        .back-title { font-family: 'Orbitron'; font-size: 1rem; color: var(--glow-color); border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 15px; }
+        .back-meta { font-size: 0.75rem; color: var(--gold); font-weight: bold; margin-bottom: 15px; display: flex; gap: 10px; }
+        .back-topics { font-size: 0.8rem; line-height: 1.6; color: #ccc; }
+        .back-topics ul { list-style: none; padding-top: 8px; }
+        .back-topics li::before { content: "⚡"; color: var(--glow-color); margin-right: 8px; font-size: 0.7rem; }
+
+        footer { background: #000; padding: 80px 5%; border-top: 4px solid var(--gold); display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 40px; }
+        .footer-col h3 { font-family: 'Orbitron'; color: var(--gold); font-size: 14px; margin-bottom: 25px; }
+        .footer-col li { list-style: none; font-size: 13px; margin-bottom: 12px; opacity: 0.6; }
+        .filtered-out { display: none !important; }
+    </style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+<div class="cursor-dot" id="cursor-dot"></div>
+<div class="cursor-outline" id="cursor-outline"></div>
+
+<div class="sys-st-bar">
+    <div>NODE: KNOWLEDGE_ARCHIVE_SYNC</div>
+    <div>IP: 192.168.1.101</div>
+    <div id="time">00:00:00</div>
+</div>
+
+<header class="header-brand">
+    <img src="https://bcsm.org.in/bcsmlogo.png" class="logo-main">
+    <div>
+        <h1 class="brand-title">BCSM® CORE DATABASE</h1>
+        <p style="font-size: 10px; letter-spacing: 5px; color: var(--gold); font-family: 'Orbitron';">SKILL INDIA MISSION PARTNER</p>
+    </div>
+</header>
+
+<div class="search-hero">
+    <input type="search" id="course-search" placeholder="SEARCH BY COURSE NAME OR CODE...">
+</div>
+
+<div id="knowledge-forest"></div>
+
+<footer>
+    <div class="footer-col">
+        <h2 style="font-family:'Orbitron'; color:#fff;">BCSM GLOBAL</h2>
+        <p style="font-size:12px; opacity:0.5; margin-top:10px;">Empowering Minds Byte by Byte Since 2007.</p>
+    </div>
+    <div class="footer-col">
+        <h3>ACADEMICS</h3>
+        <ul><li>DCA / ADCA</li><li>Python & Java</li><li>Cyber Security</li><li>Full Stack Web</li></ul>
+    </div>
+    <div class="footer-col">
+        <h3>SUPPORT</h3>
+        <ul><li>Certificate Verification</li><li>Center Login</li><li>E-Books Access</li></ul>
+    </div>
+</footer>
+
+<script>
+    // --- Data Management (All Courses Included) ---
+    const courses = {
+        'dca': { name: 'DCA - Diploma in Computer Application', category: 'Office & Business', code: 'B20071', duration: '6 Months', eligibility: '10th / 12th', topics: 'Fundamental, MS-DOS, Office, HTML, Internet' },
+        'cca': { name: 'CCA - Certificate in Computer Application', category: 'Office & Business', code: 'B20072', duration: '6 Months', eligibility: '10th / 12th', topics: 'Fundamentals, Office, HTML, Internet' },
+        'adca': { name: 'ADCA - Advanced Diploma in Computer Application', category: 'Programming', code: 'B20073', duration: '12 Months', eligibility: '10th / 12th', topics: 'Office, HTML, C, C++, Java, VB, SQL' },
+        'adoam': { name: 'ADOAM - Adv. Diploma in Office Automation', category: 'Office & Business', code: 'B20074', duration: '12 Months', eligibility: '10th / 12th', topics: 'Office, Graphics, Tally Prime, GST, IT' },
+        'cseh': { name: 'CSEH - Cybersecurity & Ethical Hacking', category: 'Hardware & Security', code: 'B20077', duration: '12 Months', eligibility: '10th / 12th', topics: 'Networking, Ethical Hacking, Cryptography, Cloud Security' },
+        'aimlit': { name: 'AIML-IT - AI & Machine Learning', category: 'AI & Data Science', code: 'B20080', duration: '12 Months', eligibility: '10th / 12th', topics: 'ML Algorithms, Neural Networks, Deep Learning, NLP' },
+        'cbad': { name: 'CBAD - Cloud Application Development', category: 'Web Development', code: 'B20082', duration: '12 Months', eligibility: '10th / 12th', topics: 'AWS, Azure, Microservices, CI/CD, Docker' },
+        'fsd': { name: 'FSD - Full Stack Development', category: 'Web Development', code: 'B20193', duration: '12 Months', eligibility: '10th / 12th', topics: 'React, Node.js, MongoDB, PostgreSQL, Express' },
+        'dgd': { name: 'DGD - Diploma in Game Development', category: 'Design & Media', code: 'B20194', duration: '12 Months', eligibility: '10th / 12th', topics: 'Unity, C#, 3D Modeling, Blender, Animation' },
+        'mdse': { name: 'MDSE - Masters Diploma in Software Engineering', category: 'Programming', code: 'B20195', duration: '18 Months', eligibility: 'Graduate', topics: 'Data Structures, Python, Java, Cloud, DevOps' },
+        'ccna': { name: 'CCNA - Cisco Certified Network Associate', category: 'Networking', code: 'B20101', duration: '6 Months', eligibility: '12th', topics: 'Networking, Routing, Switching, TCP/IP' },
+        'app': { name: 'APP - Advanced Python Programming', category: 'Programming', code: 'B20118', duration: '6 Months', eligibility: '12th', topics: 'OOP, Flask, Django, Algorithms, Data Analysis' },
+        'dfa': { name: 'DFA - Diploma in Financial Accounting', category: 'Accounting & Finance', code: 'B20126', duration: '12 Months', eligibility: '12th', topics: 'Tally, Cost Accounting, Taxation, GST' },
+        'flutter': { name: 'FLTR - Mobile Apps with Flutter', category: 'Mobile Development', code: 'B20203', duration: '6 Months', eligibility: '12th', topics: 'Dart, Widgets, State Management, Firebase' },
+        'bcf': { name: 'BCF - Blockchain & Crypto Finance', category: 'Accounting & Finance', code: 'B20216', duration: '6 Months', eligibility: '12th', topics: 'Blockchain, Crypto Trading, DeFi, Smart Contracts' }
+        // Note: আরও সব কোর্স একইভাবে লিস্টে থাকবে...
+    };
+
+    const forest = document.getElementById('knowledge-forest');
+    const coursesByCategory = {};
+    for (const id in courses) {
+        const cat = courses[id].category;
+        if (!coursesByCategory[cat]) coursesByCategory[cat] = [];
+        coursesByCategory[cat].push({ id, ...courses[id] });
+    }
+
+    const leafElements = new Map();
+    const treeElements = new Map();
+
+    for (const cat in coursesByCategory) {
+        const glow = getComputedStyle(document.documentElement).getPropertyValue(`--glow-${cat.toLowerCase().replace(/ & /g, '-').replace(/\s+/g, '-')}`).trim();
+        const tree = document.createElement('div');
+        tree.className = 'knowledge-tree';
+        tree.style.setProperty('--glow-color', glow);
+        treeElements.set(cat, tree);
+
+        tree.innerHTML = `<h2 class="category-title">${cat}</h2><div class="tree-branch"></div>`;
+        const branch = tree.querySelector('.tree-branch');
+
+        coursesByCategory[cat].forEach(course => {
+            const acronym = course.name.split(' - ')[0];
+            const fullName = course.name.split(' - ')[1];
+            const leaf = document.createElement('div');
+            leaf.className = 'leaf-card';
+            leaf.style.setProperty('--glow-color', glow);
+            leafElements.set(course.id, leaf);
+
+            leaf.innerHTML = `
+                <div class="flipper">
+                    <div class="leaf-front">
+                        <div class="leaf-acronym">${acronym}</div>
+                        <div class="leaf-course-name">${fullName}</div>
+                    </div>
+                    <div class="leaf-back">
+                        <h3 class="back-title">${course.name}</h3>
+                        <div class="back-meta"><span>${course.code}</span><span>${course.duration}</span></div>
+                        <div class="back-topics"><ul><li>${course.topics.split(', ').join('</li><li>')}</li></ul></div>
+                    </div>
+                </div>`;
+            branch.appendChild(leaf);
+        });
+        forest.appendChild(tree);
+    }
+
+    // --- Search & UI Scripts ---
+    document.getElementById('course-search').addEventListener('input', (e) => {
+        const term = e.target.value.toLowerCase();
+        for (const [id, el] of leafElements.entries()) {
+            const matches = courses[id].name.toLowerCase().includes(term) || courses[id].code.toLowerCase().includes(term);
+            el.classList.toggle('filtered-out', !matches);
+        }
+        for (const [cat, el] of treeElements.entries()) {
+            const hasVisible = el.querySelectorAll('.leaf-card:not(.filtered-out)').length > 0;
+            el.classList.toggle('filtered-out', !hasVisible);
+        }
+    });
+
+    setInterval(() => { document.getElementById('time').innerText = new Date().toLocaleTimeString(); }, 1000);
+
+    const canvas = document.getElementById('bg-canvas'); const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+    let particles = []; for(let i=0; i<80; i++) particles.push({x: Math.random()*canvas.width, y: Math.random()*canvas.height, sx: Math.random()-0.5, sy: Math.random()-0.5});
+    function animate() {
+        ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle="rgba(0, 242, 255, 0.3)";
+        particles.forEach(p => { p.x+=p.sx; p.y+=p.sy; if(p.x<0||p.x>canvas.width)p.sx*=-1; ctx.beginPath(); ctx.arc(p.x, p.y, 1.5, 0, Math.PI*2); ctx.fill(); });
+        requestAnimationFrame(animate);
+    }
+    animate();
+
+    window.addEventListener("mousemove", (e) => {
+        document.getElementById("cursor-dot").style.left = e.clientX + 'px';
+        document.getElementById("cursor-dot").style.top = e.clientY + 'px';
+        document.getElementById("cursor-outline").animate({ left: e.clientX + 'px', top: e.clientY + 'px' }, { duration: 500, fill: "forwards" });
+    });
+</script>
+</body>
+</html>

@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCSM GLOBAL® | The Final Master Build 2026</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- DYNAMIC FONT IMPORTS --- */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Montserrat:wght@100;300;400;600;800&family=Poppins:wght@300;400;600;700&display=swap');
+
+        /* --- ROOT QUANTUM VARIABLES --- */
+        :root {
+            --bg: #00050a;
+            --neon-blue: #00f2ff;
+            --gold: #ffaa00;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --neon-glow: 0 0 25px rgba(0, 242, 255, 0.6);
+            --cubic: cubic-bezier(0.7, 0, 0.3, 1);
+            --primary-accent: #008000; 
+        }
+
+        [data-theme="light"] {
+            --bg: #f4f9ff; --neon-blue: #0055ff; --gold: #8b6b00;
+            --glass: rgba(0, 0, 0, 0.04); --glass-border: rgba(0, 0, 0, 0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+        body { background: var(--bg); color: #fff; font-family: 'Poppins', sans-serif; overflow-x: hidden; scroll-behavior: smooth; }
+
+        /* --- KINETIC UI --- */
+        .cursor-dot { position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 99999; pointer-events: none; width: 10px; height: 10px; background: var(--gold); box-shadow: 0 0 15px var(--gold); }
+        .cursor-outline { position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 99998; pointer-events: none; width: 45px; height: 45px; border: 2px solid var(--neon-blue); transition: 0.4s var(--cubic); }
+
+        #bg-canvas { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; pointer-events: none; opacity: 0.5; }
+
+        /* --- BLUR ORBS --- */
+        .blur-circle { position: fixed; border-radius: 50%; filter: blur(120px); z-index: -1; opacity: 0.3; }
+        .circle-1 { width: 600px; height: 600px; background: var(--primary-accent); top: -150px; right: -100px; }
+        .circle-2 { width: 500px; height: 500px; background: var(--neon-blue); bottom: -100px; left: -100px; }
+
+        /* --- STATUS BAR --- */
+        .sys-st-bar {
+            background: rgba(0, 5, 10, 0.98); padding: 12px 5%; display: flex; justify-content: space-between;
+            font-size: 10px; font-weight: 800; border-bottom: 1px solid var(--glass-border);
+            position: sticky; top: 0; z-index: 10000; backdrop-filter: blur(40px);
+            font-family: 'Orbitron'; letter-spacing: 2px; color: var(--neon-blue);
+        }
+
+        /* --- HEADER & MARQUEE --- */
+        .header-brand { 
+            padding: 30px 5%; display: flex; align-items: center; gap: 40px; 
+            background: linear-gradient(135deg, rgba(0, 32, 64, 0.5), transparent);
+            position: sticky; top: 40px; z-index: 9999; backdrop-filter: blur(25px);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .logo-main { width: 110px; filter: drop-shadow(0 0 20px var(--neon-blue)); transition: 0.8s; }
+        .logo-main:hover { transform: rotateY(180deg); }
+        .brand-title { 
+            font-family: 'Orbitron', sans-serif; font-size: clamp(1.5rem, 4vw, 3rem); font-weight: 900; 
+            background: linear-gradient(90deg, #00ff00, var(--neon-blue), var(--gold)); 
+            -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; 
+            animation: flow 5s linear infinite; line-height: 1.1;
+        }
+        @keyframes flow { to { background-position: 200% center; } }
+        .reg-symbol { font-size: 1.2rem; vertical-align: super; -webkit-text-fill-color: var(--gold); }
+
+        .acc-strip { background: rgba(0,0,0,0.8); border-bottom: 2px solid var(--gold); padding: 15px 0; overflow: hidden; white-space: nowrap; }
+        .marquee-content { display: inline-block; animation: marqueeScroll 40s linear infinite; }
+        @keyframes marqueeScroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+        .acc-item { display: inline-block; font-size: 11px; font-weight: 900; color: var(--gold); letter-spacing: 2px; margin: 0 40px; text-transform: uppercase; font-family: 'Orbitron'; }
+
+        /* --- NAVIGATION --- */
+        nav { background: var(--glass); border-bottom: 1px solid var(--glass-border); position: sticky; top: 165px; z-index: 9998; backdrop-filter: blur(30px); }
+        .nav-list { display: flex; list-style: none; justify-content: center; }
+        .nav-node > a { display: block; padding: 20px 30px; color: #fff; text-decoration: none; font-size: 11px; font-weight: 800; font-family: 'Orbitron'; text-transform: uppercase; letter-spacing: 2px; }
+        .nav-node:hover > a { color: var(--neon-blue); text-shadow: var(--neon-glow); }
+
+        /* --- SECTIONS --- */
+        .hero { height: 80vh; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0 5%; }
+        .hero-glass { background: var(--glass); backdrop-filter: blur(20px); padding: 5rem 3rem; border-radius: 40px; border: 1px solid var(--glass-border); box-shadow: 0 20px 50px rgba(0,0,0,0.5); max-width: 1100px; }
+        
+        .container { width: 92%; max-width: 1400px; margin: auto; padding: 5rem 0; }
+        .section-title { text-align: center; margin-bottom: 5rem; font-size: 3.5rem; color: var(--gold); font-family: 'Orbitron'; letter-spacing: 15px; }
+
+        .benefit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 40px; }
+        .glass-card { background: rgba(255, 255, 255, 0.03); backdrop-filter: blur(15px); padding: 50px; border-radius: 40px; border: 1px solid var(--glass-border); transition: 0.5s var(--cubic); position: relative; overflow: hidden; }
+        .glass-card:hover { transform: translateY(-20px); border-color: var(--neon-blue); box-shadow: var(--neon-glow); }
+        .glass-card h4 { color: var(--gold); font-family: 'Orbitron'; margin-bottom: 20px; font-size: 1.5rem; }
+
+        .diagram-container { background: var(--glass); padding: 5rem; border-radius: 50px; margin: 6rem 0; text-align: center; border: 1px solid var(--neon-blue); }
+
+        /* --- FOOTER --- */
+        footer { background: #000; padding: 150px 5% 100px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 80px; border-top: 5px solid var(--gold); position: relative; }
+        .footer-col h3 { font-family: 'Orbitron'; color: var(--gold); margin-bottom: 40px; font-size: 20px; letter-spacing: 4px; }
+        .footer-col ul { list-style: none; }
+        .footer-col ul li { margin-bottom: 20px; font-size: 15px; opacity: 0.6; transition: 0.4s; }
+        .footer-col ul li:hover { opacity: 1; color: var(--neon-blue); padding-left: 10px; }
+
+        .copyright-bar { background: #000; padding: 40px 5%; text-align: center; border-top: 1px solid var(--glass-border); }
+
+        @media (max-width: 1024px) { footer { grid-template-columns: repeat(2, 1fr); } }
+        @media (max-width: 768px) { footer { grid-template-columns: 1fr; text-align: center; } .section-title { font-size: 2.2rem; } }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <div class="cursor-dot" id="cursor-dot"></div>
+    <div class="cursor-outline" id="cursor-outline"></div>
+    <div class="blur-circle circle-1"></div>
+    <div class="blur-circle circle-2"></div>
+
+    <div class="sys-st-bar">
+        <div><i class="fas fa-satellite-dish"></i> COORD: <span id="loc">SYNCING...</span></div>
+        <div><i class="fas fa-microchip"></i> NODE_ID: BCSM-2026-X</div>
+        <div><i class="fas fa-atom"></i> REAL_TIME: <span id="time">00:00:00</span></div>
+    </div>
+
+    <header class="header-brand">
+        <img src="bcsmlogo.png" alt="BCSM" class="logo-main">
+        <div class="brand-text-box">
+            <h1 class="brand-title">BINARY COMPUTER SAKSHARTA MISSION<span class="reg-symbol">®</span></h1>
+            <p style="color:var(--gold); font-family:'Orbitron'; font-size:12px; letter-spacing:8px;">Where Technology Blooms</p>
+        </div>
+    </header>
+
+    <div class="acc-strip">
+        <div class="marquee-content" id="acc-list">
+            </div>
+    </div>
+
+    <nav>
+        <ul class="nav-list">
+            <li class="nav-node"><a href="#">Home Hub</a></li>
+            <li class="nav-node"><a href="#Rural">Rural Innovation</a></li>
+            <li class="nav-node"><a href="#Urban">Urban Pro</a></li>
+            <li class="nav-node"><a href="#Admission">Enrollment</a></li>
+            <li class="nav-node"><a href="#">Alumni Grid</a></li>
+        </ul>
+    </nav>
+
+    <section class="hero">
+        <div class="hero-glass">
+            <h1>CULTIVATING DIGITAL EXCELLENCE</h1>
+            <p style="font-size: 1.2rem; max-width: 850px; margin: auto; opacity: 0.8; line-height: 1.8;">
+                Democratizing high-end technology from rural roots to urban mastery. 
+                Initialize your professional journey in AI, Robotics, and Advanced IT.
+            </p>
+            <a href="#Admission" class="cta-button" style="text-decoration:none; color:#fff; display:inline-block; padding: 20px 50px; background: var(--primary-accent); border-radius:50px; margin-top:30px; font-family:'Orbitron';">Initialize Enrollment</a>
+        </div>
+    </section>
+
+    <main class="container">
+        
+        <div id="Rural">
+            <h2 class="section-title">Rural Innovation Hub</h2>
+            <div class="benefit-grid">
+                <div class="glass-card"><h4>Affordable Fees</h4><p>Democratizing education with low-cost structures for inclusive growth.</p></div>
+                <div class="glass-card"><h4>Regional Centers</h4><p>Physical learning hubs strategically placed within rural communities.</p></div>
+                <div class="glass-card"><h4>Mother Tongue</h4><p>Instruction in vernacular languages to ensure no student is left behind.</p></div>
+                <div class="glass-card"><h4>Agri-Tech</h4><p>Harnessing digital tools for smarter farming and sustainable agriculture.</p></div>
+            </div>
+        </div>
+
+        <div class="diagram-container">
+            
+            <h2 style="color: var(--gold); font-family: 'Orbitron'; margin-top:30px;">Organizational Hierarchy</h2>
+            <p style="opacity: 0.7;">Centralized Excellence with Decentralized Execution.</p>
+        </div>
+
+        <div id="Urban" style="margin-top: 10rem;">
+            <h2 class="section-title">Urban Professionalism</h2>
+            <div class="benefit-grid">
+                <div class="glass-card"><h4>AI & ML Nodes</h4><p>Neural networks, deep learning, and predictive data modeling.</p></div>
+                <div class="glass-card"><h4>Cyber Defense</h4><p>Ethical hacking, threat mitigation, and network defense strategies.</p></div>
+                <div class="glass-card"><h4>Blockchain</h4><p>Smart contract programming and decentralized application dev.</p></div>
+                <div class="glass-card"><h4>MNC Pipeline</h4><p>Direct recruitment partnerships with leading tech corporations.</p></div>
+            </div>
+        </div>
+
+        <div id="Admission" style="margin-top: 10rem;">
+            <h2 class="section-title">Admission Journey</h2>
+            <div class="diagram-container">
+                
+                <h3 style="font-family: 'Orbitron'; color: var(--neon-blue); margin-top:30px;">Seamless Enrollment Flow</h3>
+            </div>
+            <div class="benefit-grid">
+                <div class="glass-card"><h4>1. Application</h4><p>Submit digital credentials and course interests via the central portal.</p></div>
+                <div class="glass-card"><h4>2. Evaluation</h4><p>Aptitude mapping to place you in the optimal learning batch.</p></div>
+                <div class="glass-card"><h4>3. Onboarding</h4><p>Immediate access to the LMS, mentors, and global technical hub.</p></div>
+                <div class="glass-card"><h4>4. Graduation</h4><p>Industry-recognized certification and placement assistance nodes.</p></div>
+            </div>
+        </div>
+
+    </main>
+
+    <footer>
+        <div class="footer-col">
+            <img src="bcsmlogo.png" width="130" style="filter: drop-shadow(0 0 10px var(--neon-blue));">
+            <h2 style="font-family:'Orbitron'; font-size:22px; color:#fff; margin-top:20px;">BCSM GLOBAL</h2>
+            <p style="font-size:12px; opacity:0.5; margin-top:15px; line-height:1.8;">Leading digital transformation since 2007.</p>
+        </div>
+        <div class="footer-col">
+            <h3>ACADEMIC GRID</h3>
+            <ul><li>Neural AI & ML</li><li>Cyber Security Pro</li><li>Quantum Full Stack</li><li>Robotics Hub</li></ul>
+        </div>
+        <div class="footer-col">
+            <h3>USER GATEWAYS</h3>
+            <ul><li>Verification Unit</li><li>Student Terminal</li><li>Center Hub</li><li>Cloud LMS</li></ul>
+        </div>
+        <div class="footer-col">
+            <h3>COMMAND CENTER</h3>
+            <ul><li>HQ Node, India</li><li>Official Support</li><li>Legal Statutes</li><li>Privacy Control</li></ul>
+        </div>
+    </footer>
+
+    <div class="copyright-bar">
+        <p>COPYRIGHT © 2007-2026 <span style="color:var(--gold);">BINARY COMPUTER SAKSHARTA MISSION®</span> | ALL RIGHTS RESERVED.</p>
+    </div>
+
+    <script>
+        // Matrix Background
+        const canvas = document.getElementById('bg-canvas'); const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        let p = []; for(let i=0; i<100; i++) p.push({x:Math.random()*canvas.width, y:Math.random()*canvas.height, sx:Math.random()-0.5, sy:Math.random()-0.5});
+        function draw() { ctx.clearRect(0,0,canvas.width,canvas.height); ctx.fillStyle="rgba(0, 242, 255, 0.2)"; p.forEach(i => { i.x+=i.sx; i.y+=i.sy; if(i.x<0||i.x>canvas.width)i.sx*=-1; if(i.y<0||i.y>canvas.height)i.sy*=-1; ctx.beginPath(); ctx.arc(i.x, i.y, 1.5, 0, Math.PI*2); ctx.fill(); }); requestAnimationFrame(draw); }
+        draw();
+
+        // Kinetic Cursor Tracking
+        window.addEventListener("mousemove", (e) => {
+            const dot = document.getElementById("cursor-dot"); const outline = document.getElementById("cursor-outline");
+            dot.style.left = e.clientX + 'px'; dot.style.top = e.clientY + 'px';
+            outline.animate({ left: e.clientX + 'px', top: e.clientY + 'px' }, { duration: 600, fill: "forwards" });
+        });
+
+        // Marquee Restored
+        const accItems = ["Ministry of Corporate Affairs Registered", "ISO 9001:2015 Global Standard", "NSDC Official Partner", "Skill India Mission Hub", "Microsoft Academy Partner", "AWS Authorized Node"];
+        document.getElementById('acc-list').innerHTML = [...accItems, ...accItems].map(a => `<span class="acc-item">${a}</span>`).join('');
+
+        // Time and Location
+        function updateTime() { document.getElementById('time').innerText = new Date().toLocaleTimeString(); }
+        setInterval(updateTime, 1000); updateTime();
+        document.getElementById('loc').innerText = "23.5204° N, 87.3119° E";
+    </script>
+</body>
+</html>
