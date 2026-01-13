@@ -121,18 +121,33 @@ app.set('upload', multerInstance);
 // ===================================
 app.use(morgan('dev'));
 
-// ✅ UPDATED CORS CONFIGURATION
+// ✅ UPDATED & MOBILE-FRIENDLY CORS CONFIGURATION
+const allowedOrigins = [
+    'https://bcsm.org.in',       
+    'https://www.bcsm.org.in',
+    'https://portal.bcsm.org.in', 
+    'http://localhost:3000',
+    'http://localhost',           // অ্যান্ড্রয়েড এম্যুলেটরের জন্য
+    'capacitor://localhost'       // আইওএস/অ্যান্ড্রয়েড অ্যাপের জন্য
+];
+
 app.use(cors({
-    origin: [
-        'https://bcsm.org.in',       
-        'https://www.bcsm.org.in',
-        'https://portal.bcsm.org.in', 
-        'http://localhost:3000'      
-    ],
+    origin: function (origin, callback) {
+        // origin না থাকলেও এলাউ করবে (যেমন: মোবাইল অ্যাপ বা লোকাল রিকোয়েস্ট)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost')) {
+            callback(null, true);
+        } else {
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
     credentials: true, 
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+// বাকি মিডলওয়্যারগুলো আগের মতোই থাকবে
 app.use(express.json({ limit: '10mb', verify: (req, res, buf) => { req.rawBody = buf.toString(); } }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
