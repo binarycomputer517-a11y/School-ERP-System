@@ -9,7 +9,8 @@ const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 const moment = require('moment');
-const { v4: uuidv4 } = require('uuid');
+const uuid = require('uuid');
+const uuidv4 = uuid.v4;
 const PDFDocument = require('pdfkit');
 
 // --- Database Table Constants ---
