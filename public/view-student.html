@@ -3,16 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>View Student Profile</title>
+    <title>View Student Profile | ERP System</title>
     
     <script src="view-student.js" defer></script>
 
     <style>
         /* CLASSIC & PROFESSIONAL ERP STYLE */
         :root {
-            --primary-color: #005A9C; /* Institutional Blue */
-            --accent-color: #C0392B; /* Deep Red for accents/buttons */
-            --border-color: #333333; /* Dark Border */
+            --primary-color: #005A9C; 
+            --accent-color: #C0392B; 
+            --success-color: #27ae60; /* এক্টিভেশন বাটনের জন্য সবুজ রঙ */
+            --border-color: #333333; 
             --font-serif: 'Times New Roman', serif;
             --font-sans: Arial, sans-serif;
         }
@@ -50,30 +51,6 @@
             margin-bottom: 20px;
         }
 
-        fieldset {
-            border: 1px solid var(--border-color);
-            padding: 20px;
-            margin-bottom: 25px;
-            border-radius: 0;
-        }
-        
-        legend {
-            font-size: 1.25em;
-            font-weight: bold;
-            color: var(--primary-color);
-            padding: 0 10px;
-        }
-
-        /* Input Styling (for visual consistency, even if fields are display-only) */
-        input[type="text"], input[type="date"], input[type="email"], input[type="tel"], select, textarea {
-            width: 100%;
-            padding: 8px;
-            border: 1px solid #777;
-            border-radius: 0;
-            box-sizing: border-box;
-            font-family: var(--font-serif);
-        }
-        
         /* Button and Link Styling */
         button, .button, a.button {
             display: inline-block;
@@ -88,18 +65,24 @@
             box-shadow: 2px 2px 0 var(--border-color);
             transition: all 0.1s;
             margin-right: 10px;
+            font-size: 14px;
+        }
+
+        /* এক্টিভেশন বাটন স্টাইল */
+        #activateBtn {
+            background-color: var(--success-color);
         }
 
         button:hover, .button:hover, a.button:hover {
-            background-color: #a0281a;
             box-shadow: 1px 1px 0 var(--border-color);
             transform: translate(1px, 1px);
+            opacity: 0.9;
         }
         
-        /* View Profile Specific Styles */
         #studentProfileContainer {
             padding: 20px;
             background: #fdfdfd;
+            border: 1px solid #ddd;
         }
         
         .profile-card h3 {
@@ -117,8 +100,17 @@
         
         .profile-card strong {
             display: inline-block;
-            min-width: 150px;
+            min-width: 180px;
         }
+
+        .status-badge {
+            padding: 5px 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            border: 1px solid var(--border-color);
+        }
+        .status-active { background: #d4edda; color: #155724; }
+        .status-restricted { background: #f8d7da; color: #721c24; }
     </style>
 </head>
 <body>
@@ -126,7 +118,8 @@
         <header>
             <h1>Student Profile: <span id="studentFullName">Loading...</span></h1>
             <nav>
-                <a id="editStudentLink" href="edit-student.html?id=" class="button">Edit Profile</a>
+                <button id="activateBtn" style="display: none;">Unlock & Activate</button>
+                <a id="editStudentLink" href="#" class="button">Edit Profile</a>
                 <a href="/students-list.html" class="button">Back to List</a>
             </nav>
         </header>
@@ -137,21 +130,19 @@
 
         <template id="studentDataTemplate">
             <section class="profile-card">
-                <div class="profile-header">
-                    <h2 data-field="first_name"></h2>
-                    <h3 data-field="enrollment_no"></h3>
-                    <span data-field="is_active" class="status-badge"></span>
+                <div style="display: flex; justify-content: space-between; align-items: baseline;">
+                    <h2 data-field="first_name" style="margin:0;"></h2>
+                    <span id="paymentStatus" class="status-badge"></span>
                 </div>
+                <p><strong>Enrollment No:</strong> <span data-field="enrollment_no"></span></p>
                 
                 <hr>
 
                 <div class="profile-details">
                     <h3>Academic Details</h3>
-                    <p><strong>Admission ID:</strong> <span data-field="admission_id"></span></p>
                     <p><strong>Admission Date:</strong> <span data-field="admission_date"></span></p>
-                    <p><strong>Course ID:</strong> <span data-field="course_id"></span></p>
-                    <p><strong>Batch ID:</strong> <span data-field="batch_id"></span></p>
-                    <p><strong>Academic Session ID:</strong> <span data-field="academic_session_id"></span></p>
+                    <p><strong>Course/Class:</strong> <span data-field="course_id"></span></p>
+                    <p><strong>Batch:</strong> <span data-field="batch_id"></span></p>
                 </div>
 
                 <div class="profile-details">
@@ -159,23 +150,20 @@
                     <p><strong>Username:</strong> <span data-field="username"></span></p>
                     <p><strong>Email:</strong> <span data-field="email"></span></p>
                     <p><strong>Phone:</strong> <span data-field="phone_number"></span></p>
-                    <p><strong>DOB:</strong> <span data-field="dob"></span></p>
-                    <p><strong>Gender:</strong> <span data-field="gender"></span></p>
-                    <p><strong>Blood Group:</strong> <span data-field="blood_group"></span></p>
                     <p><strong>Address:</strong> <span data-field="permanent_address"></span></p>
                 </div>
                 
                 <div class="profile-details">
-                    <h3>Parent/Guardian Info</h3>
-                    <p><strong>Parent Name:</strong> <span data-field="parent_first_name"></span> <span data-field="parent_last_name"></span></p>
-                    <p><strong>Parent Email:</strong> <span data-field="parent_email"></span></p>
-                    <p><strong>Parent Phone:</strong> <span data-field="parent_phone_number"></span></p>
+                    <h3>Account Security</h3>
+                    <p><strong>Manual Access:</strong> <span data-field="is_active"></span></p>
+                    <p><strong>Payment Status:</strong> <span data-field="is_paid"></span></p>
                 </div>
             </section>
         </template>
 
-        <div id="errorMessage" style="color: red; display: none;"></div>
+        <div id="errorMessage" style="color: red; display: none; margin-top: 20px; font-weight: bold;"></div>
     </div>
+
     <script src="js/global-config.js"></script>
 </body>
 </html>

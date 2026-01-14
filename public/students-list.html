@@ -3,152 +3,202 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student List | BCSM</title>
+    <title>Student Management | ERP System</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-
     <link rel="stylesheet" href="css/style.css">
 
     <style>
-        /* Avatar Style */
+        :root {
+            --primary-indigo: #6366f1;
+            --success-green: #27ae60;
+            --danger-red: #e11d48;
+        }
+
+        body {
+            background-color: #f8fafc;
+            font-family: 'Inter', 'Montserrat', sans-serif;
+        }
+
+        /* Avatar Styling */
         .avatar-circle {
-            width: 35px;
-            height: 35px;
-            background-color: var(--primary-light);
-            color: var(--primary-dark);
+            width: 38px;
+            height: 38px;
+            background-color: #eef2ff;
+            color: var(--primary-indigo);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-weight: bold;
-            font-size: 0.9em;
+            font-weight: 700;
+            font-size: 0.85rem;
             border: 2px solid white;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        /* Compact Table Styles */
-        .table-glass th, .table-glass td {
-            padding: 8px 10px !important; /* Reduced Padding */
-            font-size: 0.85rem; /* Smaller Font */
+        /* ERP Table Styling */
+        .table-glass th {
+            background-color: #f1f5f9 !important;
+            color: #475569;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        .table-glass td {
+            padding: 10px 12px !important; 
+            font-size: 0.85rem; 
             vertical-align: middle;
-            white-space: nowrap; /* Prevent text wrapping */
+            color: #1e293b;
         }
 
-        /* Specific Column Widths to keep it tight */
-        .col-checkbox { width: 40px; }
-        .col-id { width: 100px; }
-        .col-contact { width: 110px; }
-        .col-fees { width: 120px; }
-        .col-status { width: 100px; }
-        .col-actions { width: 120px; text-align: center; }
-
-        /* Row Hover Effect */
-        .student-row:hover {
+        /* Quick Unlock Button */
+        .btn-unlock {
+            padding: 4px 10px;
+            font-size: 11px;
+            font-weight: 700;
+            background-color: var(--success-green);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 2px 4px rgba(39, 174, 96, 0.2);
+        }
+        
+        .btn-unlock:hover {
+            background-color: #219150;
             transform: translateY(-1px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
-            background: rgba(255,255,255,0.95) !important;
-            transition: all 0.2s ease;
-            z-index: 1;
-            position: relative;
+            box-shadow: 0 4px 6px rgba(39, 174, 96, 0.3);
+        }
+
+        .student-row:hover {
+            background-color: #f8fafc !important;
+        }
+
+        .glass-card {
+            background: white;
+            border-radius: 12px;
+            border: 1px solid #e2e8f0;
         }
     </style>
 </head>
 <body>
 
-<div class="container" style="max-width: 1400px; padding-top: 20px;">
+<div class="container-fluid px-4" style="max-width: 1600px; padding-top: 25px;">
     
-    <div class="d-flex justify-content-between align-items-center mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold text-dark mb-0 global-school-name fs-4"><i class="fas fa-user-graduate me-2"></i>Student Management</h2>
-            <p class="text-muted mb-0 small">View, Filter and Manage Student Records</p>
+            <h2 class="fw-bold text-dark mb-1 fs-4">
+                <i class="fas fa-user-graduate text-indigo me-2"></i>Student Records
+            </h2>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 small">
+                    <li class="breadcrumb-item"><a href="/admin-dashboard.html" class="text-decoration-none">Dashboard</a></li>
+                    <li class="breadcrumb-item active">Student Management</li>
+                </ol>
+            </nav>
         </div>
         <div class="d-flex gap-2">
-            <a href="/add-student.html" class="btn btn-sm btn-success rounded-pill shadow-sm px-3">
-                <i class="fas fa-plus me-1"></i> New Student
+            <a href="/add-student.html" class="btn btn-sm btn-primary rounded-3 px-3 shadow-sm">
+                <i class="fas fa-plus me-1"></i> Add Student
             </a>
-            <a href="/admin-dashboard.html" class="btn btn-sm btn-outline-dark rounded-pill px-3">
-                <i class="fas fa-home me-1"></i> Dashboard
-            </a>
+            <button id="generate-bulk-id-btn" class="btn btn-sm btn-outline-dark rounded-3 px-3" disabled>
+                <i class="fas fa-id-card me-1"></i> Bulk ID Cards
+            </button>
         </div>
     </div>
 
-    <div class="glass-card mb-3 p-3">
-        <div class="row g-2 align-items-end">
-            <div class="col-md-3">
-                <label class="form-label fw-bold small mb-1">Search</label>
-                <div class="input-group input-group-sm">
+    <div class="glass-card mb-4 p-3 shadow-sm">
+        <div class="row g-3 align-items-end">
+            <div class="col-lg-3 col-md-4">
+                <label class="form-label fw-bold small text-muted mb-1">Search Database</label>
+                <div class="input-group input-group-sm shadow-sm rounded-3">
                     <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" id="search-input" class="form-control border-start-0 ps-0" placeholder="Name, ID or Email...">
+                    <input type="text" id="search-input" class="form-control border-start-0 ps-1" placeholder="Search by name, ID or mobile...">
                 </div>
             </div>
 
-            <div class="col-md-2">
-                <label class="form-label fw-bold small mb-1">Course</label>
-                <select id="course-filter" class="form-select form-select-sm">
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1">Course/Class</label>
+                <select id="course-filter" class="form-select form-select-sm shadow-sm rounded-3">
                     <option value="">All Courses</option>
                 </select>
             </div>
 
-            <div class="col-md-2">
-                <label class="form-label fw-bold small mb-1">Batch</label>
-                <select id="batch-filter" class="form-select form-select-sm" disabled>
-                    <option value="">All Batches</option>
-                </select>
-            </div>
-
-            <div class="col-md-2">
-                <label class="form-label fw-bold small mb-1">Status</label>
-                <select id="status-filter" class="form-select form-select-sm">
+            <div class="col-lg-2 col-md-3">
+                <label class="form-label fw-bold small text-muted mb-1">Access Status</label>
+                <select id="status-filter" class="form-select form-select-sm shadow-sm rounded-3">
                     <option value="">All Status</option>
-                    <option value="Enrolled">Enrolled</option>
-                    <option value="Active">Active</option>
-                    <option value="Pending">Pending</option>
-                    <option value="Suspended">Suspended</option>
-                    <option value="Left">Left</option>
+                    <option value="active">Active (Unlocked)</option>
+                    <option value="expired">Restricted (Unpaid)</option>
+                    <option value="deactivated">Disabled</option>
                 </select>
             </div>
 
-            <div class="col-md-3 text-end">
-                <button id="generate-bulk-id-btn" class="btn btn-sm btn-primary w-100 rounded-pill shadow-sm" disabled>
-                    <i class="fas fa-id-card me-1"></i> Generate IDs (0)
-                </button>
+            <div class="col-lg-5 col-md-2 text-end">
+                <div id="data-status" class="small fw-semibold text-primary mb-2"></div>
             </div>
         </div>
     </div>
 
-    <div id="data-status" class="alert alert-info border-0 shadow-sm py-2 mb-3 small" style="display: none;">
-        <i class="fas fa-sync fa-spin me-2"></i> Loading data...
-    </div>
-
-    <div class="glass-card p-0 overflow-hidden">
+    <div class="glass-card overflow-hidden shadow-sm">
         <div class="table-responsive">
-            <table class="table table-sm table-glass table-hover mb-0" id="students-table">
+            <table class="table table-hover table-glass mb-0" id="students-table">
                 <thead>
                     <tr>
-                        <th class="text-center col-checkbox">
+                        <th class="text-center" style="width: 50px;">
                             <div class="form-check d-flex justify-content-center">
                                 <input class="form-check-input" type="checkbox" id="select-all-checkbox">
                             </div>
                         </th>
-                        <th class="col-id" data-sort="admission_id" style="cursor: pointer;">ID <i class="fas fa-sort small ms-1 text-muted"></i></th>
-                        <th data-sort="first_name" style="cursor: pointer;">Student Name <i class="fas fa-sort small ms-1 text-muted"></i></th>
-                        <th data-sort="course_name" style="cursor: pointer;">Course Info <i class="fas fa-sort small ms-1 text-muted"></i></th>
-                        <th class="col-contact" data-sort="phone_number">Contact</th>
-                        <th class="col-fees text-end" data-sort="total_fees_due" style="cursor: pointer;">Fees Due <i class="fas fa-sort small ms-1 text-muted"></i></th>
-                        <th class="col-status text-center" data-sort="status">Status</th>
-                        <th class="col-actions text-center">Actions</th>
+                        <th data-sort="admission_id" style="width: 120px;">Admission ID</th>
+                        <th data-sort="first_name">Student Profile</th>
+                        <th data-sort="course_name">Academic Info</th>
+                        <th style="width: 150px;">Contact No.</th>
+                        <th class="text-end" data-sort="total_fees_due" style="width: 140px;">Pending Fee</th>
+                        <th class="text-center" style="width: 160px;">Portal Access</th>
+                        <th class="text-center" style="width: 130px;">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="students-table-body">
-                    <tr><td colspan="8" class="text-center p-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Loading Student Records...</td></tr>
+                    <tr>
+                        <td colspan="8" class="text-center p-5 text-muted">
+                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                            Loading student database...
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
         
-        <div class="d-flex justify-content-between align-items-center p-2 border-top bg-light">
-            <span class="text-muted small ms-2" id="record-count">Showing 0 records</span>
+        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top bg-light">
+            <span class="text-muted small" id="record-count">Records: 0</span>
+            <div id="pagination-controls"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="unlockModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4">
+            <div class="modal-body text-center p-4">
+                <div class="mb-3">
+                    <i class="fas fa-check-circle text-success fa-3x"></i>
+                </div>
+                <h6 class="fw-bold mb-2">Verify Rs. 1,000 Payment?</h6>
+                <p class="text-muted small mb-4">
+                    Confirming will mark registration fee as paid and grant instant portal access to <span id="target-student" class="text-dark fw-bold"></span>.
+                </p>
+                <div class="d-grid gap-2">
+                    <button type="button" id="confirm-unlock-btn" class="btn btn-success fw-bold rounded-3">Confirm & Unlock</button>
+                    <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" data-bs-dismiss="modal">Cancel</button>
+                </div>
+            </div>
         </div>
     </div>
 </div>

@@ -595,47 +595,71 @@
         }
 
         async function initPortal() {
-            const hr = new Date().getHours();
-            const greet = document.getElementById('greeting-txt');
-            if (greet) greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
+    const hr = new Date().getHours();
+    const greet = document.getElementById('greeting-txt');
+    if (greet) {
+        greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
+    }
 
-            try {
-                // Fetch static profile info once
-                const pRes = await window.authFetch(`/api/students/${sid}`);
-                if (pRes?.ok) {
-                    const d = await pRes.json();
-                    document.getElementById('student-fullname').innerText = d.first_name || 'Student';
-                    document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
-                    document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
-                    document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
-                    document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
-                    document.getElementById('drawer-email').innerText = d.email || 'N/A';
+    try {
+        const pRes = await window.authFetch(`/api/students/${sid}`);
+        if (pRes?.ok) {
+            const d = await pRes.json();
 
-                    // --- ✅ ছবি লোড করার নতুন লজিক ---
-                    const headerPic = document.getElementById('header-pic');
-                    const drawerPic = document.getElementById('drawer-pic');
+            // --- 🛑 PAYMENT & ACCESS CONTROL LOGIC ---
+            // Registration fee threshold set to 1000
+            const totalPaid = parseFloat(d.total_paid || 0); 
+            const isPaid = totalPaid >= 1000; 
+            
+            // If the student has paid less than 1000, lock premium features
+            if (!isPaid) {
+                // Alert the user about the restriction
+                alert("Your profile is currently restricted. Please complete your 1,000 Rs registration fee to unlock all portal features.");
+                
+                // Disable specific grid items (e.g., Result, Certificate, Date Sheet)
+                document.querySelectorAll('.outside-item').forEach(btn => {
+                    const spanText = btn.querySelector('span').innerText.toLowerCase();
+                    const restrictedFeatures = ['result', 'certificate', 'date sheet', 'materials'];
                     
-                    // ডিফল্ট ছবি বা সার্ভারের ছবির পাথ সেট করা
-                    const photoUrl = d.profile_image_path || '/uploads/student_photos/default.jpg';
-                    headerPic.src = photoUrl;
-                    drawerPic.src = photoUrl;
-
-                    // যদি ছবি না পাওয়া যায় (404 Error), তবে এই অংশটি একটি চমৎকার Avatar জেনারেট করবে
-                    const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(d.first_name)}&background=6366f1&color=fff&bold=true`;
-                    
-                    headerPic.onerror = function() { this.src = fallback; };
-                    drawerPic.onerror = function() { this.src = fallback; };
-                }
-
-                // Initial sync for dynamic data
-                await syncPortalData(true);
-                initChart();
-
-            } catch (err) { 
-                console.error("Initialization Error", err); 
-                initChart();
+                    if (restrictedFeatures.includes(spanText)) {
+                        btn.style.opacity = '0.4';
+                        btn.style.filter = 'grayscale(100%)';
+                        btn.style.pointerEvents = 'none'; // Prevents clicking
+                        btn.title = "Payment Required";
+                    }
+                });
             }
+
+            // --- UPDATE STUDENT PROFILE DATA ---
+            document.getElementById('student-fullname').innerText = d.first_name || 'Student';
+            document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
+            document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
+            document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
+            document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
+            document.getElementById('drawer-email').innerText = d.email || 'N/A';
+
+            // PROFILE IMAGE & AVATAR FALLBACK
+            const headerPic = document.getElementById('header-pic');
+            const drawerPic = document.getElementById('drawer-pic');
+            const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(d.first_name)}&background=6366f1&color=fff&bold=true`;
+            
+            headerPic.src = d.profile_image_path || avatar;
+            drawerPic.src = d.profile_image_path || avatar;
+
+            // Handle broken image paths silently
+            headerPic.onerror = function() { this.src = avatar; };
+            drawerPic.onerror = function() { this.src = avatar; };
         }
+
+        // Sync dynamic data (Fees, Teachers, etc.)
+        await syncPortalData(true);
+        initChart();
+
+    } catch (err) { 
+        console.error("Portal Initialization Error:", err); 
+        initChart();
+    }
+}
 
 
         function logout() {

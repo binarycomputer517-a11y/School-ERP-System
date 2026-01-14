@@ -170,7 +170,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
 });
 
 /**
- * 2.2 FEE COLLECTION
+ * 2.2 FEE COLLECTION (With Auto-Activation Logic)
  */
 router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff', 'super admin']), async (req, res) => {
     const { student_id, amount_paid, payment_mode, notes } = req.body;
@@ -183,6 +183,7 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
     try {
         await client.query('BEGIN');
 
+        // 1. Fetch pending invoices
         const openInvoices = await client.query(`
             SELECT id, total_amount, paid_amount, (total_amount - paid_amount) AS balance_due
             FROM ${DB.INVOICES} WHERE student_id = $1::uuid AND status != 'Paid' AND status != 'Waived'
@@ -191,13 +192,14 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
 
         let totalDue = openInvoices.rows.reduce((acc, i) => acc + parseFloat(i.balance_due), 0);
         
-        if (totalDue <= 0) throw new Error("No pending dues.");
+        if (totalDue <= 0) throw new Error("No pending dues found for this student.");
         if (payAmount > (totalDue + 0.01)) throw new Error(`Overpayment detected. Total Due: ${totalDue.toFixed(2)}`);
 
         let remaining = payAmount;
         let paymentId = null;
         const batchRef = 'MANUAL-' + uuidv4().substring(0,8).toUpperCase();
 
+        // 2. Distribute payment across invoices
         for (const inv of openInvoices.rows) {
             if (remaining <= 0) break;
             const due = parseFloat(inv.balance_due);
@@ -219,14 +221,35 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
             }
         }
 
+        // --- 🛑 3. AUTO-ACTIVATION CHECK ---
+        // Calculate the new total paid amount for this student
+        const totalPaidRes = await client.query(`
+            SELECT COALESCE(SUM(amount), 0) as total_collected 
+            FROM ${DB.PAYMENTS} p
+            JOIN ${DB.INVOICES} i ON p.invoice_id = i.id
+            WHERE i.student_id = $1::uuid
+        `, [student_id]);
+
+        const totalCollected = parseFloat(totalPaidRes.rows[0].total_collected);
+
+        // If total payment is 1000 or more, activate the user account
+        if (totalCollected >= 1000) {
+            await client.query(`
+                UPDATE ${DB.USERS} 
+                SET status = 'active', is_paid = true 
+                WHERE id = (SELECT user_id FROM ${DB.STUDENTS} WHERE student_id = $1::uuid)
+            `, [student_id]);
+            console.log(`[Activation] Student ${student_id} activated. Total Paid: ${totalCollected}`);
+        }
+
         await client.query('COMMIT');
         res.status(201).json({ message: `Payment Recorded: ₹${payAmount}`, receipt_number: paymentId });
     } catch (error) {
         await client.query('ROLLBACK');
+        console.error("Collection Error:", error.message);
         res.status(400).json({ message: error.message || 'Payment Failed' });
     } finally { client.release(); }
 });
-
 /**
  * 2.3 REFUND MANAGEMENT
  */

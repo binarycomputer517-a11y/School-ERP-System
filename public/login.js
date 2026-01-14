@@ -1,3 +1,10 @@
+/**
+ * Student & Staff Login Handler
+ * ----------------------------
+ * Features: Role-based routing, Account Restriction Detection, 
+ * Payment Link Integration, and Session Synchronization.
+ */
+
 document.getElementById('login-form').addEventListener('submit', async function(event) {
     event.preventDefault();
 
@@ -7,7 +14,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
     const loginButton = document.getElementById('login-button');
 
     // 1. UI Feedback: Disable button and show loading state
-    errorMsg.textContent = '';
+    errorMsg.innerHTML = ''; 
     loginButton.disabled = true;
     loginButton.textContent = 'Authenticating...';
 
@@ -21,7 +28,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
         const data = await response.json();
 
-        // 3. Handle Errors
+        // 3. Handle Errors (Including Account Expiry/Restriction)
         if (!response.ok) {
             throw new Error(data.message || 'Login failed. Invalid credentials.');
         }
@@ -39,8 +46,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
             const userId = data['user-id'] || data.userId || data.id;
             if (userId) localStorage.setItem('profile-id', userId);
 
-            // --- C. Role-Specific Identifiers (Reference Linking) ---
-            // Clear old reference data first to prevent cross-account issues
+            // --- C. Role-Specific Identifiers ---
             localStorage.removeItem('student_id');
             localStorage.removeItem('driver_id');
             localStorage.removeItem('user-reference-id');
@@ -48,12 +54,10 @@ document.getElementById('login-form').addEventListener('submit', async function(
             if (data.role === 'Student' && data.student_id) {
                 localStorage.setItem('student_id', data.student_id); 
                 localStorage.setItem('user-reference-id', data.student_id); 
-                console.log("Student Profile Linked:", data.student_id);
             } 
             else if (data.role === 'Driver' && data.driver_id) {
                 localStorage.setItem('driver_id', data.driver_id);
                 localStorage.setItem('user-reference-id', data.driver_id);
-                console.log("Driver reference linked:", data.driver_id);
             }
 
             // --- D. Global Config & Branching ---
@@ -62,7 +66,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
             }
             localStorage.setItem('active_branch_id', data.userBranchId || '');
 
-            // --- E. Role-Based Redirection (OPTIMIZED) ---
+            // --- E. Role-Based Redirection ---
             const role = data.role;
             const adminRoles = ['Admin', 'Super Admin', 'HR', 'Accountant', 'Coordinator'];
             
@@ -78,9 +82,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
             else if (role === 'Driver') {
                 window.location.href = '/driver-dashboard.html'; 
             }
-            else if (role === 'Parent') {
-                window.location.href = '/parent-dashboard.html';
-            }
             else {
                 window.location.href = '/dashboard.html'; 
             }
@@ -92,9 +93,31 @@ document.getElementById('login-form').addEventListener('submit', async function(
     } catch (err) {
         console.error('Login Error:', err);
         errorMsg.style.color = '#ef4444';
-        errorMsg.textContent = err.message;
+
+        // --- 🛑 PROFILE RESTRICTION & PAYMENT ACTIVATION ---
+        // Matches the "Restricted" message from your backend
+        const isRestricted = err.message.toLowerCase().includes('restricted') || 
+                             err.message.toLowerCase().includes('expired');
+
+        if (isRestricted) {
+            errorMsg.innerHTML = `
+                <div style="background: #fff1f2; border: 1px solid #fecaca; padding: 15px; border-radius: 12px; margin-top: 15px; text-align: left; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);">
+                    <p style="color: #991b1b; font-size: 14px; margin-bottom: 6px; font-weight: 700;">
+                        <i class="fas fa-shield-alt me-2"></i> Access Restricted
+                    </p>
+                    <p style="color: #b91c1c; font-size: 13px; margin-bottom: 12px; line-height: 1.4;">
+                        ${err.message}
+                    </p>
+                    <a href="/pay-registration.html" 
+                       style="display: block; text-align: center; background: #6366f1; color: white; padding: 12px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; transition: 0.3s; box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);">
+                        <i class="fas fa-credit-card me-2"></i> Pay Rs. 1,000 to Unlock Profile
+                    </a>
+                </div>
+            `;
+        } else {
+            errorMsg.textContent = err.message;
+        }
         
-        // Re-enable button on failure
         loginButton.disabled = false;
         loginButton.textContent = 'Login';
     }
