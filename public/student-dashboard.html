@@ -610,10 +610,21 @@
                     document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
                     document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
                     document.getElementById('drawer-email').innerText = d.email || 'N/A';
-                    if (d.profile_image_path) {
-                        document.getElementById('header-pic').src = d.profile_image_path;
-                        document.getElementById('drawer-pic').src = d.profile_image_path;
-                    }
+
+                    // --- ✅ ছবি লোড করার নতুন লজিক ---
+                    const headerPic = document.getElementById('header-pic');
+                    const drawerPic = document.getElementById('drawer-pic');
+                    
+                    // ডিফল্ট ছবি বা সার্ভারের ছবির পাথ সেট করা
+                    const photoUrl = d.profile_image_path || '/uploads/student_photos/default.jpg';
+                    headerPic.src = photoUrl;
+                    drawerPic.src = photoUrl;
+
+                    // যদি ছবি না পাওয়া যায় (404 Error), তবে এই অংশটি একটি চমৎকার Avatar জেনারেট করবে
+                    const fallback = `https://ui-avatars.com/api/?name=${encodeURIComponent(d.first_name)}&background=6366f1&color=fff&bold=true`;
+                    
+                    headerPic.onerror = function() { this.src = fallback; };
+                    drawerPic.onerror = function() { this.src = fallback; };
                 }
 
                 // Initial sync for dynamic data
@@ -625,6 +636,7 @@
                 initChart();
             }
         }
+
 
         function logout() {
             localStorage.clear();
