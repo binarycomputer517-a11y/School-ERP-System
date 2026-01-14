@@ -10,22 +10,30 @@ const { sendPasswordResetEmail } = require('../utils/notificationService');
 const moment = require('moment'); 
 
 // --- Configuration Constants ---
-// Ensure JWT_SECRET is loaded from env, provide a fallback only for development
 const JWT_SECRET = process.env.JWT_SECRET || 'your_fallback_secret_for_dev_only';
 const USERS_TABLE = 'users';
 
-// Helper: Finds user by username or email and verifies password (UNCHANGED)
+/**
+ * Helper: Finds user by username or email and verifies password
+ * ✅ Updated to check for 'expired' status and 'is_active' flag
+ */
 async function findUserAndVerifyPassword(loginInput, password) {
     const userResult = await pool.query(
-        `SELECT id, username, password_hash, role, branch_id FROM ${USERS_TABLE} WHERE (username = $1 OR email = $1) AND is_active = TRUE`,
+        `SELECT id, username, password_hash, role, branch_id, status, is_active FROM ${USERS_TABLE} 
+         WHERE (username = $1 OR email = $1)`,
         [loginInput]
     );
 
     const user = userResult.rows[0];
-    if (!user) return null;
+    if (!user) return { error: 'Invalid username or password.' };
+
+    // ❌ চেক: যদি আইডি এক্সপায়ার হয়ে থাকে বা ইন-অ্যাক্টিভ থাকে
+    if (user.status === 'expired' || user.is_active === false) {
+        return { error: 'Your account has expired. Please complete payment within 24 hours of registration or contact admin.' };
+    }
     
     const passwordMatch = await bcrypt.compare(password, user.password_hash);
-    return passwordMatch ? user : null;
+    return passwordMatch ? { user } : { error: 'Invalid username or password.' };
 }
 
 // =================================================================
@@ -40,24 +48,23 @@ router.post('/login', async (req, res) => {
     }
 
     try {
-        const user = await findUserAndVerifyPassword(loginInput, password);
+        const result = await findUserAndVerifyPassword(loginInput, password);
 
-        if (!user) return res.status(401).json({ message: 'Invalid username or password.' });
+        // যদি হেল্পার ফাংশন কোনো এরর রিটার্ন করে (ভুল পাসওয়ার্ড বা এক্সপায়ার আইডি)
+        if (result.error) {
+            return res.status(403).json({ message: result.error });
+        }
+
+        const user = result.user;
+        let studentProfileId = null; 
         
-        let studentProfileId = null; // Variable to hold the actual student_id (UUID)
-        
-        // 🚀 CRITICAL FIX: Fetch Student's UUID from the students table
+        // Fetch Student's UUID from the students table
         if (user.role === 'Student') {
             const studentRes = await pool.query(
                 `SELECT student_id FROM students WHERE user_id = $1`, 
-                [user.id] // user.id is the UUID of the entry in the users table
+                [user.id]
             );
-            // If found, use the student_id (which is the UUID of the student record)
             studentProfileId = studentRes.rows[0]?.student_id || null;
-            
-            if (!studentProfileId) {
-                 console.warn(`Student login success but no student_id found for user ${user.id}`);
-            }
         }
         
         // --- Fetch Active Session ---
@@ -69,18 +76,16 @@ router.post('/login', async (req, res) => {
             console.warn("Active Session ID could not be retrieved.");
         }
         
-        // --- Generate Token ---
+        // --- Generate Token Payload ---
         const tokenPayload = { 
-            id: user.id, // The user's entry UUID in users table
+            id: user.id, 
             role: user.role, 
             branch_id: user.branch_id,
-            // ✅ FIX 1: Add the actual studentProfileId to the JWT payload
             ...(user.role === 'Student' && { 
                 student_id: studentProfileId
             }),
         };
         
-        // JWT expires in 30 days
         const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' }); 
 
         // --- Send Response ---
@@ -91,7 +96,6 @@ router.post('/login', async (req, res) => {
             'user-id': user.id, 
             userBranchId: user.branch_id || '',
             activeSessionId: activeSessionId || '',
-            // ✅ FIX 2: Send the student_id in the response body for localStorage setting
             student_id: studentProfileId 
         };
 
@@ -107,7 +111,7 @@ router.post('/login', async (req, res) => {
 });
 
 // =================================================================
-// 2. USER REGISTRATION ROUTE
+// 2. USER REGISTRATION ROUTE (POST /api/auth/register)
 // =================================================================
 router.post('/register', async (req, res) => {
     const { username, password, role, email } = req.body;
@@ -123,13 +127,21 @@ router.post('/register', async (req, res) => {
         // Default Branch Assignment
         const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
 
+        /**
+         * ✅ লজিক: নতুন স্টুডেন্ট রেজিস্ট্রেশনের সময়:
+         * status = 'active', is_paid = false
+         * এর ফলে cron job ২৪ ঘণ্টা পর এটিকে expired করতে পারবে যদি পেমেন্ট না হয়।
+         */
         const query = `
-            INSERT INTO ${USERS_TABLE} (username, email, password_hash, role, is_active, branch_id, created_at)
-            VALUES ($1, $2, $3, $4, TRUE, $5, CURRENT_TIMESTAMP)
+            INSERT INTO ${USERS_TABLE} (username, email, password_hash, role, is_active, status, is_paid, branch_id, created_at)
+            VALUES ($1, $2, $3, $4, TRUE, 'active', FALSE, $5, CURRENT_TIMESTAMP)
             RETURNING id, username, role;
         `;
         const { rows } = await pool.query(query, [username, email || null, passwordHash, role, defaultBranchId]);
-        res.status(201).json({ message: 'User successfully registered.', user: rows[0] });
+        res.status(201).json({ 
+            message: 'User registered. Please complete payment within 24 hours to keep the account active.', 
+            user: rows[0] 
+        });
 
     } catch (error) {
         if (error.code === '23505') return res.status(409).json({ message: 'Username or Email already exists.' });
@@ -143,7 +155,7 @@ router.post('/register', async (req, res) => {
 // =================================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
-    const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3005'; 
+    const FRONTEND_URL = process.env.FRONTEND_URL || 'https://portal.bcsm.org.in'; 
     const TOKEN_EXPIRY_MINUTES = 60; 
 
     if (!email) return res.status(400).json({ message: 'Email address is required.' });
@@ -156,22 +168,18 @@ router.post('/forgot-password', async (req, res) => {
         const user = result.rows[0];
 
         if (!user) {
-            // Security: Don't reveal if email exists
             await client.query('COMMIT');
-            return res.json({ message: 'If a matching account was found, a password reset link has been sent to the associated email address.' });
+            return res.json({ message: 'If a matching account was found, a reset link has been sent.' });
         }
 
-        // 2. JWT Reset Token
         const resetToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' }); 
         const expiryTime = moment().add(TOKEN_EXPIRY_MINUTES, 'minutes').toISOString();
 
-        // 3. Store Token in Database 
         await client.query(
             `UPDATE ${USERS_TABLE} SET reset_password_token = $1, reset_token_expiry = $2 WHERE id = $3::uuid`,
             [resetToken, expiryTime, user.id]
         );
         
-        // 4. Dispatch Email
         const resetURL = `${FRONTEND_URL}/reset-password.html?token=${resetToken}`;
         await sendPasswordResetEmail(user.email, resetURL); 
         
@@ -201,7 +209,6 @@ router.post('/reset-password', async (req, res) => {
     try {
         await client.query('BEGIN'); 
 
-        // 1. JWT Validation
         let decoded;
         try {
             decoded = jwt.verify(token, JWT_SECRET); 
@@ -210,7 +217,6 @@ router.post('/reset-password', async (req, res) => {
              return res.status(400).json({ message: 'Error: The link has expired or is invalid.' });
         }
 
-        // 2. Validate token against DB
         const userResult = await client.query(
             `SELECT id FROM ${USERS_TABLE} 
              WHERE reset_password_token = $1 AND id = $2::uuid`,
@@ -218,17 +224,14 @@ router.post('/reset-password', async (req, res) => {
         );
 
         const user = userResult.rows[0];
-
         if (!user) {
             await client.query('ROLLBACK');
             return res.status(400).json({ message: 'Invalid password reset link.' });
         }
         
-        // 3. Hash New Password
         const saltRounds = parseInt(process.env.SALT_ROUNDS || 10);
         const hashedPassword = await bcrypt.hash(password, saltRounds);
 
-        // 4. Update Password AND Revoke Token
         await client.query(`
             UPDATE ${USERS_TABLE} 
              SET password_hash = $1, 
@@ -255,7 +258,7 @@ router.post('/reset-password', async (req, res) => {
 // =================================================================
 router.get('/me', authenticateToken, async (req, res) => {
     try {
-        const user = await pool.query('SELECT id, username, role, email FROM users WHERE id = $1', [req.user.id]);
+        const user = await pool.query('SELECT id, username, role, email, status, is_active FROM users WHERE id = $1', [req.user.id]);
         if (user.rows.length === 0) return res.status(404).json({ message: 'User not found' });
         res.json({ user: user.rows[0] });
     } catch (err) {

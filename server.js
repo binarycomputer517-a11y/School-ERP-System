@@ -544,7 +544,54 @@ app.use((err, req, res, next) => {
 });
 
 // ===================================
-// 7. SERVER STARTUP
+// 7. CRON JOBS (Scheduled Tasks)
+// ===================================
+const cron = require('node-cron');
+
+/**
+ * 🛡️ AUTO-CLEANUP: প্রতি ঘণ্টার শুরুতে (0 মিনিটে) একবার এই চেকটি চলবে।
+ * এটি চেক করবে কোন স্টুডেন্ট রেজিস্ট্রেশনের ২৪ ঘণ্টার মধ্যে পেমেন্ট করেনি।
+ */
+cron.schedule('0 * * * *', async () => {
+    try {
+        console.log('--- 🛡️ Running Student Account Expiry Check ---');
+        
+        // বর্তমান সময় থেকে ২৪ ঘণ্টা আগের সময় হিসাব করা
+        const cutoffTime = new Date();
+        cutoffTime.setHours(cutoffTime.getHours() - 24);
+
+        /**
+         * লজিক: 
+         * ১. ইউজার রোল 'Student' হতে হবে।
+         * ২. রেজিস্ট্রেশন করার পর ২৪ ঘণ্টা পার হয়ে গেছে।
+         * ৩. এখনো পেমেন্ট করেনি (is_paid = false)।
+         * ৪. স্ট্যাটাস অলরেডি 'expired' নয়।
+         */
+        const updateQuery = `
+            UPDATE users 
+            SET status = 'expired', is_active = false
+            WHERE role = 'Student' 
+            AND is_paid = false 
+            AND status != 'expired'
+            AND created_at < $1
+        `;
+
+        const result = await pool.query(updateQuery, [cutoffTime]);
+        
+        if (result.rowCount > 0) {
+            console.log(`✅ Success: ${result.rowCount} জন স্টুডেন্টের আইডি মেয়াদ শেষ হওয়ায় বন্ধ করা হয়েছে।`);
+        } else {
+            console.log('ℹ️ No expired accounts found.');
+        }
+    } catch (err) {
+        console.error('❌ Cron Job Error:', err);
+    }
+});
+
+
+
+// ===================================
+// 8. SERVER STARTUP
 // ===================================
 async function startServer() {
     try {
