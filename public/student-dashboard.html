@@ -87,7 +87,14 @@
             70% { transform: scale(1.1); box-shadow: 0 0 0 10px rgba(244, 63, 94, 0); }
             100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 63, 94, 0); }
         }
-
+        @keyframes pulse-red {
+             0% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.7; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+            .pulse-animation {
+            animation: pulse-red 2s infinite ease-in-out;
+        }
         .fade-in { animation: fadeIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
 
         .shimmer {
@@ -350,6 +357,20 @@
         </div>
     </header>
 
+<div id="payment-warning-banner" class="container mt-3 fade-in" style="display: none;">
+    <div class="alert shadow-sm d-flex align-items-center gap-3" 
+         style="background: rgba(239, 68, 68, 0.1); backdrop-filter: blur(10px); border: 1px dashed var(--danger-red); border-radius: 20px; padding: 15px 20px;">
+        <div class="flex-shrink-0">
+            <i class="fas fa-lock-open text-danger fa-lg pulse-animation"></i>
+        </div>
+        <div class="flex-grow-1">
+            <h6 class="mb-0 fw-bold text-danger small">Action Required: Unlock Portal</h6>
+            <p class="mb-0 text-muted" style="font-size: 11px;">Please complete your ₹1,000 registration fee to access Results, Certificates, and Materials.</p>
+        </div>
+        <a href="/online-payment.html" class="btn btn-danger btn-sm rounded-pill fw-bold px-3 shadow-sm" style="font-size: 10px;">Pay Now</a>
+    </div>
+</div>
+
     <section class="notice-container fade-in">
         <div class="notice-wrapper" id="notice-scroller">
             <div class="notice-card"><i class="fas fa-bullhorn mb-2 text-primary"></i><div class="fw-bold small">Collecting Notices...</div><div class="text-muted" style="font-size: 10px;">Please wait...</div></div>
@@ -594,100 +615,132 @@
             }
         }
 
-        async function initPortal() {
-    const hr = new Date().getHours();
-    const greet = document.getElementById('greeting-txt');
-    if (greet) {
-        greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
-    }
+      async function initPortal() {
+        const hr = new Date().getHours();
+        const greet = document.getElementById('greeting-txt');
+        if (greet) {
+            greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
+        }
 
-    try {
-        const pRes = await window.authFetch(`/api/students/${sid}`);
-        if (pRes?.ok) {
-            const d = await pRes.json();
+        try {
+            const pRes = await window.authFetch(`/api/students/${sid}`);
+            if (pRes && pRes.ok) {
+                const d = await pRes.json();
 
-            // --- 🛑 PAYMENT & ACCESS CONTROL LOGIC ---
-            // Registration fee threshold set to 1000
-            const totalPaid = parseFloat(d.total_paid || 0); 
-            const isPaid = totalPaid >= 1000; 
-            
-            // If the student has paid less than 1000, lock premium features
-            if (!isPaid) {
-                // Alert the user about the restriction
-                alert("Your profile is currently restricted. Please complete your 1,000 Rs registration fee to unlock all portal features.");
+                // --- 🛑 PAYMENT & ACCESS CONTROL LOGIC ---
+                const totalPaid = parseFloat(d.total_paid || 0); 
+                const isPaid = totalPaid >= 1000; 
+                const warningBanner = document.getElementById('payment-warning-banner');
                 
-                // Disable specific grid items (e.g., Result, Certificate, Date Sheet)
-                document.querySelectorAll('.outside-item').forEach(btn => {
-                    const spanText = btn.querySelector('span').innerText.toLowerCase();
-                    const restrictedFeatures = ['result', 'certificate', 'date sheet', 'materials'];
+                if (!isPaid) {
+                    // ব্যানার দেখান
+                    if (warningBanner) warningBanner.style.display = 'block';
                     
-                    if (restrictedFeatures.includes(spanText)) {
-                        btn.style.opacity = '0.4';
-                        btn.style.filter = 'grayscale(100%)';
-                        btn.style.pointerEvents = 'none'; // Prevents clicking
-                        btn.title = "Payment Required";
+                    // প্রিমিয়াম ফিচারগুলো লক করুন
+                    document.querySelectorAll('.outside-item').forEach(btn => {
+                        const spanText = btn.querySelector('span').innerText.toLowerCase();
+                        const restrictedFeatures = ['result', 'certificate', 'date sheet', 'materials'];
+                        
+                        if (restrictedFeatures.includes(spanText)) {
+                            btn.style.opacity = '0.4';
+                            btn.style.filter = 'grayscale(100%)';
+                            btn.style.pointerEvents = 'none'; 
+                            btn.title = "Payment Required: ₹1,000";
+                        }
+                    });
+                } else {
+                    // ব্যানার হাইড করুন
+                    if (warningBanner) warningBanner.style.display = 'none';
+
+                    // --- 🎊 SUCCESS CELEBRATION (CONFETTI) ---
+                    const hasCelebrated = localStorage.getItem('portal_unlocked_celebration');
+                    if (!hasCelebrated && typeof confetti === 'function') {
+                        launchConfetti();
+                        localStorage.setItem('portal_unlocked_celebration', 'true');
                     }
-                });
+                }
+
+                // --- UPDATE STUDENT PROFILE DATA ---
+                if (document.getElementById('student-fullname')) 
+                    document.getElementById('student-fullname').innerText = d.first_name || 'Student';
+                
+                if (document.getElementById('drawer-name'))
+                    document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
+                
+                if (document.getElementById('badge-admission'))
+                    document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
+                
+                if (document.getElementById('badge-roll'))
+                    document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
+                
+                if (document.getElementById('drawer-id'))
+                    document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
+                
+                if (document.getElementById('drawer-email'))
+                    document.getElementById('drawer-email').innerText = d.email || 'N/A';
+
+                // PROFILE IMAGE & AVATAR FALLBACK
+                const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(d.first_name)}&background=6366f1&color=fff&bold=true`;
+                const headerPic = document.getElementById('header-pic');
+                const drawerPic = document.getElementById('drawer-pic');
+                
+                if (headerPic) {
+                    headerPic.src = d.profile_image_path || avatar;
+                    headerPic.onerror = function() { this.src = avatar; };
+                }
+                if (drawerPic) {
+                    drawerPic.src = d.profile_image_path || avatar;
+                    drawerPic.onerror = function() { this.src = avatar; };
+                }
             }
 
-            // --- UPDATE STUDENT PROFILE DATA ---
-            document.getElementById('student-fullname').innerText = d.first_name || 'Student';
-            document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
-            document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
-            document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
-            document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
-            document.getElementById('drawer-email').innerText = d.email || 'N/A';
+            // Sync dynamic data (Fees, Teachers, etc.)
+            await syncPortalData(true);
+            if (typeof initChart === 'function') initChart();
 
-            // PROFILE IMAGE & AVATAR FALLBACK
-            const headerPic = document.getElementById('header-pic');
-            const drawerPic = document.getElementById('drawer-pic');
-            const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(d.first_name)}&background=6366f1&color=fff&bold=true`;
-            
-            headerPic.src = d.profile_image_path || avatar;
-            drawerPic.src = d.profile_image_path || avatar;
-
-            // Handle broken image paths silently
-            headerPic.onerror = function() { this.src = avatar; };
-            drawerPic.onerror = function() { this.src = avatar; };
+        } catch (err) { 
+            console.error("Portal Initialization Error:", err); 
+            if (typeof initChart === 'function') initChart();
         }
-
-        // Sync dynamic data (Fees, Teachers, etc.)
-        await syncPortalData(true);
-        initChart();
-
-    } catch (err) { 
-        console.error("Portal Initialization Error:", err); 
-        initChart();
     }
-}
 
+    // --- HELPER FUNCTIONS ---
+    function launchConfetti() {
+        if (typeof confetti !== 'function') return;
+        const duration = 5 * 1000;
+        const animationEnd = Date.now() + duration;
+        const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 3000 };
 
-        function logout() {
-            localStorage.clear();
-            window.location.href = '/login.html';
-        }
+        const interval = setInterval(function() {
+            const timeLeft = animationEnd - Date.now();
+            if (timeLeft <= 0) return clearInterval(interval);
+            const particleCount = 50 * (timeLeft / duration);
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: Math.random() * (0.3 - 0.1) + 0.1, y: Math.random() - 0.2 } }));
+            confetti(Object.assign({}, defaults, { particleCount, origin: { x: Math.random() * (0.9 - 0.7) + 0.7, y: Math.random() - 0.2 } }));
+        }, 250);
+    }
 
-        document.addEventListener('DOMContentLoaded', () => {
-            initPortal();
-            updateClock();
-            checkConnectivity();
-            
-            // UI Clocks (1 second)
-            setInterval(updateClock, 1000);
-            
-            // Auto Refresh Dynamic Data (Every 60 seconds)
-            // This re-fetches fees, teachers, notices, and message counts
-            setInterval(() => {
-                console.log("Auto-refreshing portal data...");
-                syncPortalData();
-            }, 60000);
+    function logout() {
+        localStorage.clear();
+        window.location.href = '/login.html';
+    }
 
-            // Messaging specific check (Every 30 seconds for better responsiveness)
-            setInterval(updateMessagingBadge, 30000);
+    document.addEventListener('DOMContentLoaded', () => {
+        initPortal();
+        updateClock();
+        checkConnectivity();
+        
+        setInterval(updateClock, 1000);
+        setInterval(() => {
+            console.log("Auto-refreshing portal data...");
+            syncPortalData();
+        }, 60000);
+        setInterval(updateMessagingBadge, 30000);
 
-            window.addEventListener('online', checkConnectivity);
-            window.addEventListener('offline', checkConnectivity);
-        });
+        window.addEventListener('online', checkConnectivity);
+        window.addEventListener('offline', checkConnectivity);
+    });
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </body>
 </html>

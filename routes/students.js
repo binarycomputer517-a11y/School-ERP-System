@@ -235,8 +235,8 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
 });
 
 
-// =========================================================
-// 3. GET: Single Student Details (Smart Lookup) - COURSE NAME FIX APPLIED
+/// =========================================================
+// 3. GET: Single Student Details (Smart Lookup) - FIX: Added Total Paid Calculation
 // =========================================================
 router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const idParam = req.params.id;
@@ -250,7 +250,13 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
                 s.*, 
                 u.username, 
                 u.role,
-                c.course_name
+                c.course_name,
+                -- 🛑 গুরুত্বপূর্ণ ফিক্স: ইনভয়েস টেবিল থেকে মোট পেমেন্ট ক্যালকুলেট করা হচ্ছে
+                COALESCE((
+                    SELECT SUM(paid_amount) 
+                    FROM ${INVOICES_TABLE} 
+                    WHERE student_id = s.student_id AND status = 'Paid'
+                ), 0) as total_paid
             FROM ${STUDENTS_TABLE} s
             LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id 
