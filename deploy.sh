@@ -1,33 +1,41 @@
 #!/bin/bash
 
-# --- কনফিগারেশন ---
+# --- CONFIGURATION ---
 SERVER_USER="root"
 SERVER_IP="72.61.140.252"
-REMOTE_DEST="/var/www/html/public/"
+REMOTE_ROOT="/var/www/html"
+REMOTE_PUBLIC="$REMOTE_ROOT/public"
 
-echo "🚀 স্টুডেন্ট পোর্টাল ডেপ্লয়মেন্ট শুরু হচ্ছে..."
+echo "🚀 Starting Student Portal Deployment..."
 
-# ১. ফ্রন্টএন্ড ফাইল আপলোড (HTML, JS)
-echo "📦 ফ্রন্টএন্ড ফাইল পাঠানো হচ্ছে..."
-scp ./public/*.html ./public/*.js $SERVER_USER@$SERVER_IP:$REMOTE_DEST
+# 1. Sync Frontend Files (HTML)
+# Transfers core HTML files to the public directory
+echo "📦 Uploading HTML assets..."
+scp ./public/*.html $SERVER_USER@$SERVER_IP:$REMOTE_PUBLIC/
 
-# ২. ফোল্ডার সিঙ্ক (CSS & JS)
-echo "🎨 ডিজাইন ও লজিক আপডেট করা হচ্ছে..."
-scp -r ./public/css ./public/js $SERVER_USER@$SERVER_IP:$REMOTE_DEST
+# 2. Sync Directories (CSS, JS, & Global Config)
+# Ensures your latest branding and URL fixes are applied
+echo "🎨 Updating Design and Logic (CSS/JS)..."
+scp -r ./public/css ./public/js $SERVER_USER@$SERVER_IP:$REMOTE_PUBLIC/
 
-# ৩. ব্যাকএন্ড রুটস (Routes) আপডেট
-echo "🔙 ব্যাকএন্ড রুটস সিঙ্ক করা হচ্ছে..."
-scp -r ./routes $SERVER_USER@$SERVER_IP:/var/www/html/
+# 3. Update Backend Routes
+# Synchronizes the Node.js API logic
+echo "🔙 Syncing Backend Routes..."
+scp -r ./routes $SERVER_USER@$SERVER_IP:$REMOTE_ROOT/
 
-# ৪. সার্ভার রিস্টার্ট (PM2 ব্যবহার করে)
-echo "🔄 সার্ভার রিস্টার্ট করা হচ্ছে..."
+# 4. Server Restart via PM2
+# Restarts the application to apply backend changes
+echo "🔄 Restarting Server Services..."
 ssh $SERVER_USER@$SERVER_IP "pm2 restart all || systemctl restart node-app"
 
+# 5. Deployment Verification
 if [ $? -eq 0 ]; then
-    echo "----------------------------------------------"
-    echo "✅ মিশন সাকসেসফুল! ফাইল আপলোড ও সার্ভার রিস্টার্ট হয়েছে।"
-    echo "🌐 লাইভ দেখুন: http://$SERVER_IP/student-dashboard.html"
-    echo "----------------------------------------------"
+    echo "--------------------------------------------------------"
+    echo "✅ DEPLOYMENT SUCCESSFUL!"
+    echo "The branding fixes and URL slashes have been applied."
+    echo "🌐 View Live: https://portal.bcsm.org.in/login.html"
+    echo "--------------------------------------------------------"
 else
-    echo "❌ কিছু একটা ভুল হয়েছে! কানেকশন চেক করুন।"
+    echo "❌ DEPLOYMENT FAILED!"
+    echo "Please check your SSH connection or server permissions."
 fi

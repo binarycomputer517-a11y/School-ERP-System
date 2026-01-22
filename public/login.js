@@ -1,8 +1,8 @@
 /**
- * Student & Staff Login Handler
+ * Student & Staff Login Handler (Final Version)
  * ----------------------------
- * Features: Role-based routing, Account Restriction Detection, 
- * Payment Link Integration, and Session Synchronization.
+ * Features: Multi-branch Sync, Role-based routing, 
+ * Account Restriction Detection, and Payment Integration.
  */
 
 document.getElementById('login-form').addEventListener('submit', async function(event) {
@@ -13,7 +13,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
     const errorMsg = document.getElementById('error-msg');
     const loginButton = document.getElementById('login-button');
 
-    // 1. UI Feedback: Disable button and show loading state
+    // 1. UI Feedback
     errorMsg.innerHTML = ''; 
     loginButton.disabled = true;
     loginButton.textContent = 'Authenticating...';
@@ -28,7 +28,7 @@ document.getElementById('login-form').addEventListener('submit', async function(
 
         const data = await response.json();
 
-        // 3. Handle Errors (Including Account Expiry/Restriction)
+        // 3. Handle Errors
         if (!response.ok) {
             throw new Error(data.message || 'Login failed. Invalid credentials.');
         }
@@ -42,11 +42,17 @@ document.getElementById('login-form').addEventListener('submit', async function(
             localStorage.setItem('user-role', data.role);
             localStorage.setItem('username', data.username || username);
             
-            // --- B. Primary User ID Synchronization ---
+            // --- B. BRANCH SYNC (CRITICAL FIX FOR DASHBOARD STATS) ---
+            // 'user-branch-id' কী টি আপনার ড্যাশবোর্ডের জন্য অত্যাবশ্যক
+            const branchId = data.userBranchId || data.branch_id;
+            localStorage.setItem('user-branch-id', branchId || '');
+            localStorage.setItem('active_branch_id', branchId || '');
+
+            // --- C. Primary User ID Synchronization ---
             const userId = data['user-id'] || data.userId || data.id;
             if (userId) localStorage.setItem('profile-id', userId);
 
-            // --- C. Role-Specific Identifiers ---
+            // --- D. Role-Specific Identifiers ---
             localStorage.removeItem('student_id');
             localStorage.removeItem('driver_id');
             localStorage.removeItem('user-reference-id');
@@ -60,15 +66,14 @@ document.getElementById('login-form').addEventListener('submit', async function(
                 localStorage.setItem('user-reference-id', data.driver_id);
             }
 
-            // --- D. Global Config & Branching ---
+            // --- E. Global Config ---
             if (data.activeSessionId) {
                 localStorage.setItem('active_session_id', data.activeSessionId);
             }
-            localStorage.setItem('active_branch_id', data.userBranchId || '');
 
-            // --- E. Role-Based Redirection ---
+            // --- F. Role-Based Redirection ---
             const role = data.role;
-            const adminRoles = ['Admin', 'Super Admin', 'HR', 'Accountant', 'Coordinator'];
+            const adminRoles = ['Admin', 'Super Admin', 'HR', 'Accountant', 'Coordinator', 'Principal'];
             
             if (adminRoles.includes(role)) {
                 window.location.href = '/admin-dashboard.html';
@@ -95,7 +100,6 @@ document.getElementById('login-form').addEventListener('submit', async function(
         errorMsg.style.color = '#ef4444';
 
         // --- 🛑 PROFILE RESTRICTION & PAYMENT ACTIVATION ---
-        // Matches the "Restricted" message from your backend
         const isRestricted = err.message.toLowerCase().includes('restricted') || 
                              err.message.toLowerCase().includes('expired');
 

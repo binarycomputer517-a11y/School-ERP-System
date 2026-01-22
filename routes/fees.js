@@ -48,11 +48,14 @@ const generateInvoiceNumber = () => {
 // =========================================================
 
 /**
- * 2.1 FULL COURSE INVOICE GENERATION (One-Time based on Structure - BULK ADMIN TOOL)
- * FIX: Tuition Fee calculation removed.
+ * 2.1 BULK COURSE INVOICE GENERATION (Branch-Aware & Secure)
+ * @route   POST /api/finance/generate-structure-invoice
+ * @desc    Generates invoices for all active students in the Admin's branch
+ * @access  Private (Admin, Super Admin)
  */
 router.post('/generate-structure-invoice', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
     const adminId = req.user.id;
+    const adminBranchId = req.user.branch_id; // Securely identify Admin's branch scope
     const issueDate = moment().format('YYYY-MM-DD'); 
     const dueDate = moment().add(30, 'days').format('YYYY-MM-DD'); 
 
@@ -60,14 +63,13 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
     try {
         await client.query('BEGIN');
         
-        // 1. Fetch Students linked with Fee Structure
-        const studentsRes = await client.query(`
+        // 1. Fetch Students linked with Fee Structure, restricted to Admin's branch
+        let studentQuery = `
             SELECT 
-                s.student_id, 
+                s.student_id, s.branch_id,
                 u.username, 
                 fs.id AS fee_structure_id,
                 fs.structure_name,
-                COALESCE(fs.tuition_fee, 0) AS tuition_monthly,
                 COALESCE(fs.admission_fee, 0) AS admission,
                 COALESCE(fs.registration_fee, 0) AS registration,
                 COALESCE(fs.examination_fee, 0) AS exam,
@@ -77,15 +79,24 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
             FROM ${DB.STUDENTS} s
             JOIN ${DB.USERS} u ON s.user_id = u.id
             JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
-            WHERE u.is_active = TRUE;
-        `);
+            WHERE u.is_active = TRUE
+        `;
+
+        const params = [];
+        // 🛡️ BRANCH ISOLATION: Ensure data privacy between branches
+        if (req.user.role !== 'super admin' && adminBranchId) {
+            studentQuery += ` AND s.branch_id = $1::uuid`;
+            params.push(adminBranchId);
+        }
+
+        const studentsRes = await client.query(studentQuery, params);
 
         let generatedCount = 0;
         let skippedCount = 0;
 
         for (const student of studentsRes.rows) {
             
-            // 2. DUPLICATE CHECK
+            // 2. DUPLICATE CHECK: Avoid double-billing the same student for the same structure
             const checkDuplicate = await client.query(`
                 SELECT id FROM ${DB.INVOICES} 
                 WHERE student_id = $1::uuid AND fee_structure_id = $2::uuid
@@ -96,7 +107,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                 continue; 
             }
 
-            // 3. Calculate Grand Total & Prepare Items
+            // 3. Calculate Totals (Excluding Tuition per your requirements)
             let totalAmount = 0;
             const items = [];
             const duration = student.duration;
@@ -109,38 +120,29 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                 }
             };
             
-            // One-time fees
             addItem('Admission Fee', student.admission);
             addItem('Registration Fee', student.registration);
             addItem('Examination Fee', student.exam);
-
-            // ❌ Tuition Fee is REMOVED from calculation and item list
-            /*
-            if (student.tuition_monthly > 0) {
-                addItem(`Tuition Fee (${duration} Months)`, student.tuition_monthly * duration);
-            }
-            */
             
-            // Transport Fee is INCLUDED
             if (student.transport_struct_monthly > 0) {
                 addItem(`Transport Fee (${duration} Months)`, student.transport_struct_monthly * duration);
             }
             
-            // Hostel Fee is INCLUDED
             if (student.hostel_struct_monthly > 0) {
                 addItem(`Hostel Fee (${duration} Months)`, student.hostel_struct_monthly * duration);
             }
 
             if (totalAmount === 0) continue; 
 
-            // 4. Insert Invoice Header
+            // 4. INSERT INVOICE HEADER (Explicitly saving branch_id)
             const invRes = await client.query(`
                 INSERT INTO ${DB.INVOICES} 
-                (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
-                VALUES ($1::uuid, $2, $3::date, $4::date, $5, 'Pending', $6::uuid, $7::uuid) 
+                (student_id, branch_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
+                VALUES ($1::uuid, $2::uuid, $3, $4::date, $5::date, $6, 'Pending', $7::uuid, $8::uuid) 
                 RETURNING id;
             `, [
                 student.student_id, 
+                student.branch_id, // Stamping the invoice with the student's branch
                 generateInvoiceNumber(), 
                 issueDate, 
                 dueDate, 
@@ -151,7 +153,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
             
             const invoiceId = invRes.rows[0].id;
             
-            // 5. Insert Line Items
+            // 5. INSERT LINE ITEMS
             if (items.length > 0) {
                 const itemsValues = items.map(item => `('${invoiceId}', '${item.description.replace(/'/g, "''")}', ${item.amount})`).join(',');
                 await client.query(`INSERT INTO ${DB.ITEMS} (invoice_id, description, amount) VALUES ${itemsValues};`);
@@ -161,14 +163,17 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
         }
 
         await client.query('COMMIT');
-        res.status(201).json({ message: `Structure Generation Complete. Generated: ${generatedCount}, Skipped (Already Assigned): ${skippedCount}` });
+        res.status(201).json({ 
+            message: `Bulk Generation Complete.`, 
+            generated: generatedCount, 
+            skipped: skippedCount 
+        });
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error("Invoice Generation Error:", error);
-        res.status(500).json({ message: 'Failed to generate structure invoices.' });
+        console.error("Bulk Generation Error:", error);
+        res.status(500).json({ message: 'Failed to generate bulk invoices.' });
     } finally { client.release(); }
 });
-
 /**
  * 2.2 FEE COLLECTION (With Auto-Activation Logic)
  */
@@ -315,168 +320,119 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).json({ message: 'Error' }); }
 });
 
-/**
- * 3.2 SMART STUDENT DASHBOARD (Auto-Generate/Summary)
- * FIX: Tuition Fee calculation removed; Transport/Hostel mandatory fallback added.
- */
+//**
+ //* 3.2 SMART STUDENT DASHBOARD (Auto-Generate & Summary)
+ //* Updated to support direct branch_id storage for accurate branch-wise reporting.
+ //*/
 router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     const client = await pool.connect();
     try {
         const { studentId } = req.params;
         const adminId = req.user.id; 
+        const userBranchId = req.user.branch_id; // Fallback from Admin's token
+
         const issueDate = moment().format('YYYY-MM-DD');
         const dueDate = moment().add(30, 'days').format('YYYY-MM-DD');
 
         await client.query('BEGIN');
 
-        // 1. Fetch Student, Structure, Duration AND Assignments
-        // --- শুধুমাত্র SQL Query এবং Table Update অংশ ---
-
-const sRes = await client.query(`
-    SELECT 
-        s.student_id, 
-        u.username, 
-        s.roll_number,
-        c.course_name, 
-        b.batch_name,
-        
-        -- Fee Structure Info (Master Data)
-        fs.id AS fee_structure_id,
-        fs.structure_name,
-        COALESCE(fs.course_duration_months, 12) AS duration,
-        COALESCE(fs.admission_fee, 0) AS admission,
-        COALESCE(fs.registration_fee, 0) AS registration,
-        COALESCE(fs.examination_fee, 0) AS exam,
-        COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
-        COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
-
-        -- Transport Assignments (Fixed Join: bus_route_id)
-        r.route_name,
-        ta.is_active AS transport_active,
-
-        -- Hostel Assignments (Fixed Column: room_fee)
-        hr.room_fee AS hostel_monthly_rate,
-        hr.rate_name AS hostel_room_name
-
-    FROM ${DB.STUDENTS} s 
-    JOIN ${DB.USERS} u ON s.user_id=u.id 
-    LEFT JOIN ${DB.COURSES} c ON s.course_id=c.id 
-    LEFT JOIN ${DB.BATCHES} b ON s.batch_id = b.id
-    
-    -- Master Fee Structure Link
-    LEFT JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
-    
-    -- Transport Link (corrected to bus_route_id)
-    LEFT JOIN student_transport_assignments ta ON s.student_id = ta.student_id AND ta.is_active = TRUE
-    LEFT JOIN ${DB.ROUTES} r ON ta.bus_route_id = r.id
-
-    -- Hostel Link (corrected to use hostel_rates hr)
-    LEFT JOIN student_hostel_assignments ha ON s.student_id = ha.student_id
-    LEFT JOIN ${DB.HOSTEL} hr ON ha.hostel_rate_id = hr.id
-
-    WHERE s.student_id=$1::uuid
-`, [studentId]);
+        // 1. Fetch Student, Structure, Duration AND Assignments (Including branch_id)
+        const sRes = await client.query(`
+            SELECT 
+                s.student_id, u.username, s.roll_number, s.branch_id,
+                c.course_name, b.batch_name,
+                fs.id AS fee_structure_id, fs.structure_name,
+                COALESCE(fs.course_duration_months, 12) AS duration,
+                COALESCE(fs.admission_fee, 0) AS admission,
+                COALESCE(fs.registration_fee, 0) AS registration,
+                COALESCE(fs.examination_fee, 0) AS exam,
+                COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
+                COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
+                r.route_name,
+                ta.is_active AS transport_active,
+                hr.room_fee AS hostel_monthly_rate,
+                hr.rate_name AS hostel_room_name
+            FROM ${DB.STUDENTS} s 
+            JOIN ${DB.USERS} u ON s.user_id = u.id 
+            LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id 
+            LEFT JOIN ${DB.BATCHES} b ON s.batch_id = b.id
+            LEFT JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
+            LEFT JOIN student_transport_assignments ta ON s.student_id = ta.student_id AND ta.is_active = TRUE
+            LEFT JOIN ${DB.ROUTES} r ON ta.bus_route_id = r.id
+            LEFT JOIN student_hostel_assignments ha ON s.student_id = ha.student_id
+            LEFT JOIN ${DB.HOSTEL} hr ON ha.hostel_rate_id = hr.id
+            WHERE s.student_id = $1::uuid
+        `, [studentId]);
 
         if (!sRes.rows[0]) {
             await client.query('ROLLBACK');
-            return res.status(404).json({message: 'Student not found'});
+            return res.status(404).json({ message: 'Student not found' });
         }
         
         const student = sRes.rows[0];
 
         // 2. CHECK & AUTO-GENERATE INVOICE LOGIC
         if (student.fee_structure_id) {
-            
             const invCheck = await client.query(`
                 SELECT id FROM ${DB.INVOICES} 
                 WHERE student_id = $1::uuid AND fee_structure_id = $2::uuid
             `, [student.student_id, student.fee_structure_id]);
 
             if (invCheck.rowCount === 0) {
-                console.log(`Auto-generating invoice for ${student.username}...`);
-                
                 const duration = parseInt(student.duration);
 
-                // ❌ A. Base Course Fees - Set to 0 as Tuition is removed
-                const totalTuition = 0; 
-                
-                // B. Transport Calculation (Priority: Assigned Active > Structure Mandatory)
+                // Transport Calculation
                 let totalTransport = 0;
-                let transportMonthly = 0;
-                
                 if (student.transport_active) {
-                    transportMonthly = parseFloat(student.transport_assigned_fee) > 0 
-                        ? parseFloat(student.transport_assigned_fee) 
-                        : parseFloat(student.route_base_fee || 0);
-                    totalTransport = transportMonthly * duration;
-                } 
-                // CRITICAL FIX: Fallback to Structure Fee if Assignment is NOT Active but fee is MANDATORY
-                else if (parseFloat(student.transport_struct_monthly) > 0) { 
-                    transportMonthly = parseFloat(student.transport_struct_monthly);
-                    totalTransport = transportMonthly * duration;
+                    totalTransport = parseFloat(student.transport_struct_monthly || 0) * duration;
+                } else if (parseFloat(student.transport_struct_monthly) > 0) {
+                    totalTransport = parseFloat(student.transport_struct_monthly) * duration;
                 }
 
-                // C. Hostel Calculation (Priority: Assigned Rate > Structure Mandatory)
+                // Hostel Calculation
                 let totalHostel = 0;
-                let hostelMonthly = 0;
-                
-                if (student.hostel_monthly_rate) { // Use Assigned Rate
-                    hostelMonthly = parseFloat(student.hostel_monthly_rate);
-                } 
-                // CRITICAL FIX: Fallback to Structure Rate if Assignment is NOT found but fee is MANDATORY
-                else if (parseFloat(student.hostel_struct_monthly) > 0) { 
-                    hostelMonthly = parseFloat(student.hostel_struct_monthly);
-                }
-
-                if (hostelMonthly > 0) {
-                    totalHostel = hostelMonthly * duration;
+                let hostelRate = student.hostel_monthly_rate || student.hostel_struct_monthly;
+                if (parseFloat(hostelRate) > 0) {
+                    totalHostel = parseFloat(hostelRate) * duration;
                 }
 
                 // Grand Total
-                let totalAmount = 
-                    totalTuition + // totalTuition is 0
-                    totalTransport +
-                    totalHostel +
-                    parseFloat(student.admission) + 
-                    parseFloat(student.registration) + 
-                    parseFloat(student.exam);
+                let totalAmount = totalTransport + totalHostel +
+                    parseFloat(student.admission) + parseFloat(student.registration) + parseFloat(student.exam);
 
                 if (totalAmount > 0) {
-                    // Create Header
+                    // 🛡️ BRANCH SECURE INSERT: Storing branch_id directly in the invoice
                     const invRes = await client.query(`
                         INSERT INTO ${DB.INVOICES} 
-                        (student_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
-                        VALUES ($1::uuid, $2, $3, $4, $5, 'Pending', $6::uuid, $7::uuid) 
+                        (student_id, branch_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
+                        VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, 'Pending', $7::uuid, $8::uuid) 
                         RETURNING id;
-                    `, [student.student_id, generateInvoiceNumber(), issueDate, dueDate, totalAmount, adminId, student.fee_structure_id]);
+                    `, [
+                        student.student_id, 
+                        student.branch_id || userBranchId, // Enforce branch ID
+                        generateInvoiceNumber(), 
+                        issueDate, 
+                        dueDate, 
+                        totalAmount, 
+                        adminId, 
+                        student.fee_structure_id
+                    ]);
                     
                     const newInvId = invRes.rows[0].id;
 
-                    // Create Items List
+                    // Insert Line Items
                     const items = [
-                        // { d: `Tuition Fee (${duration} Months)`, a: totalTuition }, <-- REMOVED TUITION
                         { d: 'Admission Fee', a: student.admission },
                         { d: 'Registration Fee', a: student.registration },
                         { d: 'Examination Fee', a: student.exam }
                     ];
 
-                    if (totalTransport > 0) {
-                        items.push({ 
-                            d: `Transport Fee (${student.route_name || 'Mandatory'} - ${duration} Months)`, 
-                            a: totalTransport 
-                        });
-                    }
-
-                    if (totalHostel > 0) {
-                        items.push({ 
-                            d: `Hostel Fee (${student.hostel_room_name || 'Mandatory'} - ${duration} Months)`, 
-                            a: totalHostel 
-                        });
-                    }
+                    if (totalTransport > 0) items.push({ d: `Transport Fee (${duration} Months)`, a: totalTransport });
+                    if (totalHostel > 0) items.push({ d: `Hostel Fee (${duration} Months)`, a: totalHostel });
 
                     const finalItems = items.filter(i => parseFloat(i.a) > 0);
                     if (finalItems.length > 0) {
-                        const itemsValues = finalItems.map(i => `('${newInvId}', '${i.d}', ${i.a})`).join(',');
+                        const itemsValues = finalItems.map(i => `('${newInvId}', '${i.d.replace(/'/g, "''")}', ${i.a})`).join(',');
                         await client.query(`INSERT INTO ${DB.ITEMS} (invoice_id, description, amount) VALUES ${itemsValues};`);
                     }
                 }
@@ -485,53 +441,31 @@ const sRes = await client.query(`
 
         await client.query('COMMIT');
 
-        // 3. FETCH FINAL TOTALS
+        // 3. FETCH TOTALS & HISTORY
         const invoiceStats = await pool.query(`
-            SELECT 
-                COALESCE(SUM(total_amount), 0) AS total_invoiced,
-                COALESCE(SUM(paid_amount), 0) AS total_paid
-            FROM ${DB.INVOICES} 
-            WHERE student_id = $1::uuid AND status != 'Waived'
+            SELECT COALESCE(SUM(total_amount), 0) AS total_invoiced, COALESCE(SUM(paid_amount), 0) AS total_paid
+            FROM ${DB.INVOICES} WHERE student_id = $1::uuid AND status != 'Waived'
         `, [studentId]);
 
-        const totalFees = parseFloat(invoiceStats.rows[0].total_invoiced);
-        const totalPaid = parseFloat(invoiceStats.rows[0].total_paid);
-
-        // 4. Fetch Payment History
         const history = await pool.query(`
-            SELECT 
-                p.transaction_id AS receipt_number, 
-                p.amount AS amount_paid, 
-                p.payment_mode, 
-                p.payment_date, 
-                COALESCE(p.transaction_id, p.id::text) AS paymentId /* <--- FINAL FIX: Ensure one non-null text ID */
-            FROM ${DB.PAYMENTS} p 
-            JOIN ${DB.INVOICES} i ON p.invoice_id=i.id 
-            WHERE i.student_id=$1::uuid 
-            ORDER BY p.payment_date DESC
+            SELECT p.transaction_id AS receipt_number, p.amount AS amount_paid, p.payment_mode, p.payment_date 
+            FROM ${DB.PAYMENTS} p JOIN ${DB.INVOICES} i ON p.invoice_id = i.id 
+            WHERE i.student_id = $1::uuid ORDER BY p.payment_date DESC
         `, [studentId]);
 
-        // 5. Send Response
         res.json({
-            student_name: student.username,       
-            course_name: student.course_name || 'N/A',
-            roll_number: student.roll_number,
-            batch_name: student.batch_name || 'N/A',
-            
-            total_fees: totalFees,                
-            total_paid: totalPaid,                
-            balance: totalFees - totalPaid,       
-            
-            payments: history.rows                
+            student_name: student.username,
+            total_fees: parseFloat(invoiceStats.rows[0].total_invoiced),
+            total_paid: parseFloat(invoiceStats.rows[0].total_paid),
+            balance: parseFloat(invoiceStats.rows[0].total_invoiced) - parseFloat(invoiceStats.rows[0].total_paid),
+            payments: history.rows
         });
 
-    } catch (e) { 
+    } catch (error) { 
         await client.query('ROLLBACK');
-        console.error("Dashboard Error:", e);
-        res.status(500).json({ message: 'Failed to fetch student status' }); 
-    } finally {
-        client.release();
-    }
+        console.error("Dashboard Error:", error);
+        res.status(500).json({ message: 'Sync failed' }); 
+    } finally { client.release(); }
 });
 
 /**
@@ -774,35 +708,63 @@ router.post('/budget-target', authenticateToken, authorize(['admin', 'finance'])
 // SECTION 5: ANALYTICS & REPORTS
 // =========================================================
 
-// 5.1 GLOBAL TRANSACTION HISTORY
+/**
+ * 5.1 TRANSACTION HISTORY (Branch-Aware Version)
+ * @route   GET /api/finance/history
+ * @desc    Fetch payment logs with date filtering and multi-branch isolation
+ * @access  Private (Admin, Super Admin, Finance)
+ */
 router.get('/history', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
+    // 1. EXTRACTION: Identify the user's scope from the JWT token
+    const { branch_id, role } = req.user; 
+    
+    // 2. FILTERS: Default to current month if no dates are provided
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('month').format('YYYY-MM-DD');
     const end = endDate || moment().endOf('month').format('YYYY-MM-DD');
 
     try {
-        const query = `
+        // 3. BASE SQL: Joins Payments -> Invoices -> Students to reach the branch_id
+        let query = `
             SELECT 
                 p.id AS payment_id,  
                 p.transaction_id, 
                 p.amount, 
                 p.payment_date, 
                 p.payment_mode, 
-                u.username AS student_name
+                u.username AS student_name,
+                s.roll_number,
+                c.course_name
             FROM ${DB.PAYMENTS} p 
             JOIN ${DB.INVOICES} i ON p.invoice_id = i.id 
             JOIN ${DB.STUDENTS} s ON i.student_id = s.student_id 
             JOIN ${DB.USERS} u ON s.user_id = u.id
-            WHERE p.payment_date::date >= $1 AND p.payment_date::date <= $2 
-            ORDER BY p.payment_date DESC
+            LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id
+            WHERE p.payment_date::date >= $1 AND p.payment_date::date <= $2
         `;
+
+        const params = [start, end];
+
+        // 4. MULTI-TENANCY SECURITY: 
+        // If not a Super Admin, append a branch filter to isolate data.
+        if (role !== 'super admin' && branch_id) {
+            query += ` AND s.branch_id = $3::uuid`; 
+            params.push(branch_id);
+        }
+
+        query += ` ORDER BY p.payment_date DESC`;
         
-        const result = await pool.query(query, [start, end]);
+        const result = await pool.query(query, params);
+        
+        // 5. RESPONSE: Return rows or an empty array if no records found
         res.status(200).json(result.rows);
 
     } catch (error) { 
-        console.error("History Error:", error);
-        res.status(500).json({ message: 'Failed to fetch history.' }); 
+        console.error("History API Error:", error.message);
+        res.status(500).json({ 
+            message: 'Failed to fetch transaction history.',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+        }); 
     }
 });
 
@@ -904,25 +866,95 @@ router.get('/reports/revenue-forecast', authenticateToken, async (req, res) => {
         res.json(r.rows);
     } catch (e) { res.status(500).json({message: 'Error'}); }
 });
-
-// 5.6 DASHBOARD QUICK STATS 
+//**
+ //* 5.6 DASHBOARD QUICK STATS (Branch-Aware & Secure)
+ //*// ড্যাশবোর্ডে শুধু আপনার ব্রাঞ্চের বকেয়া টাকা দেখাবে
+ //*//
 router.get('/reports/dashboard-stats', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
+    const { branch_id, role } = req.user;
+
     try {
-        const query = `
+        let query = `
             SELECT 
-                COUNT(id) AS unpaid_count,
-                COALESCE(SUM(total_amount - paid_amount), 0) AS total_outstanding
-            FROM ${DB.INVOICES}
-            WHERE status != 'Paid' AND status != 'Waived'
+                COUNT(i.id)::int AS unpaid_count,
+                COALESCE(SUM(i.total_amount - i.paid_amount), 0)::float AS total_outstanding
+            FROM ${DB.INVOICES} i
+            JOIN ${DB.STUDENTS} s ON i.student_id = s.student_id
+            WHERE i.status NOT IN ('Paid', 'Waived')
         `;
-        const result = await pool.query(query);
-        res.json(result.rows[0]);
+
+        const params = [];
+        // 🛡️ ব্রাঞ্চ সিকিউরিটি ফিল্টার
+        if (role !== 'super admin' && branch_id) {
+            query += ` AND s.branch_id = $1::uuid`;
+            params.push(branch_id);
+        }
+
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows[0]);
     } catch (e) {
-        console.error(e);
-        res.status(500).json({ message: 'Stats error' });
+        console.error("Dashboard Stats Error:", e);
+        res.status(500).json({ message: 'Failed to fetch statistics.' });
     }
 });
+/**
+ * 5.8 DETAILED STUDENT DUES REPORT (Strict Branch Isolation)
+ * এই রিপোর্টটি এখন শুধু আপনার ব্রাঞ্চের (WB02) স্টুডেন্টদেরই দেখাবে
+ */
+router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
+    const { branch_id, role } = req.user;
+    const { course_id, search } = req.query;
 
+    try {
+        let query = `
+            SELECT 
+                s.student_id,
+                s.roll_number, 
+                u.username AS student_name, 
+                c.course_name,
+                COALESCE(SUM(i.total_amount), 0)::float AS total_billed,
+                COALESCE(SUM(i.paid_amount), 0)::float AS total_paid,
+                (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0))::float AS balance_due
+            FROM ${DB.STUDENTS} s
+            JOIN ${DB.USERS} u ON s.user_id = u.id
+            LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id
+            LEFT JOIN ${DB.INVOICES} i ON s.student_id = i.student_id AND i.status != 'Waived'
+            WHERE u.is_active = TRUE
+        `;
+
+        const params = [];
+        let paramIndex = 1;
+
+        // 🛡️ এটিই অন্য ব্রাঞ্চের স্টুডেন্টদের আসা আটকাবে
+        if (role !== 'super admin' && branch_id) {
+            query += ` AND s.branch_id = $${paramIndex++}::uuid`;
+            params.push(branch_id);
+        }
+
+        if (course_id && course_id !== 'all') {
+            query += ` AND s.course_id = $${paramIndex++}::uuid`;
+            params.push(course_id);
+        }
+
+        if (search) {
+            query += ` AND (LOWER(u.username) LIKE $${paramIndex} OR LOWER(s.roll_number) LIKE $${paramIndex})`;
+            params.push(`%${search.toLowerCase()}%`);
+            paramIndex++;
+        }
+
+        query += `
+            GROUP BY s.student_id, u.username, s.roll_number, c.course_name
+            HAVING (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) > 0
+            ORDER BY balance_due DESC
+        `;
+
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
+    } catch (error) {
+        console.error('Dues Report Error:', error);
+        res.status(500).json({ message: 'Internal Server Error' });
+    }
+});
 // 5.7 STUDENT LEDGER REPORT 
 router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     const { studentId } = req.params;
@@ -989,24 +1021,35 @@ router.get('/ledger/:studentId', authenticateToken, authorize(FEE_ROLES), async 
     }
 });
 
-// 5.8 DETAILED STUDENT DUES REPORT
+/**
+ * 5.8 DETAILED STUDENT DUES REPORT (Optimized & Branch Locked)
+ * @route   GET /api/finance/reports/student-dues
+ * @desc    Generates a list of students with outstanding balances, restricted by branch.
+ * @access  Private (Admin, Finance, Super Admin)
+ */
 router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
+    // 1. EXTRACTION: Get User's branch_id and role from the decoded JWT token
+    const { branch_id, role } = req.user;
     const { course_id, search } = req.query;
 
     try {
+        // 2. BASE SQL: Aggregates billing and payments using direct branch_id filtering from the Invoices table
         let query = `
             SELECT 
+                s.student_id,
                 s.roll_number, 
                 u.username AS student_name, 
                 c.course_name,
-                COALESCE(SUM(i.total_amount), 0) AS total_billed,
-                COALESCE(SUM(i.paid_amount), 0) AS total_paid,
-                (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) AS balance_due,
+                COALESCE(SUM(i.total_amount), 0)::float AS total_billed,
+                COALESCE(SUM(i.paid_amount), 0)::float AS total_paid,
+                (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0))::float AS balance_due,
                 MAX(p.payment_date) AS last_payment_date
             FROM ${DB.STUDENTS} s
             JOIN ${DB.USERS} u ON s.user_id = u.id
             LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id
-            LEFT JOIN ${DB.INVOICES} i ON s.student_id = i.student_id AND i.status != 'Waived'
+            -- Joining Invoices using the specific branch_id column confirmed in your schema
+            LEFT JOIN ${DB.INVOICES} i ON s.student_id = i.student_id 
+               AND i.status != 'Waived'
             LEFT JOIN ${DB.PAYMENTS} p ON i.id = p.invoice_id
             WHERE u.is_active = TRUE
         `;
@@ -1014,6 +1057,14 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
         const params = [];
         let paramIndex = 1;
 
+        // 3. 🛡️ SECURITY FILTER (Multi-Tenancy)
+        // This ensures a Branch Admin only sees invoices belonging to their specific branch_id.
+        if (role !== 'super admin' && branch_id) {
+            query += ` AND i.branch_id = $${paramIndex++}::uuid`;
+            params.push(branch_id);
+        }
+
+        // 4. OPTIONAL FILTERS: Course and Search
         if (course_id && course_id !== 'all') {
             query += ` AND s.course_id = $${paramIndex++}::uuid`;
             params.push(course_id);
@@ -1022,8 +1073,10 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
         if (search) {
             query += ` AND (LOWER(u.username) LIKE $${paramIndex} OR LOWER(s.roll_number) LIKE $${paramIndex})`;
             params.push(`%${search.toLowerCase()}%`);
+            paramIndex++;
         }
 
+        // 5. GROUPING & HAVING: Display only students with a balance greater than 0
         query += `
             GROUP BY s.student_id, u.username, s.roll_number, c.course_name
             HAVING (COALESCE(SUM(i.total_amount), 0) - COALESCE(SUM(i.paid_amount), 0)) > 0
@@ -1034,8 +1087,8 @@ router.get('/reports/student-dues', authenticateToken, authorize(['admin', 'fina
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('Dues Report Error:', error);
-        res.status(500).json({ message: 'Failed to generate dues report.' });
+        console.error('Database Report Error:', error.message);
+        res.status(500).json({ message: 'Failed to generate branch-specific dues report.' });
     }
 });
 
@@ -1110,10 +1163,19 @@ router.put('/waiver-requests/:requestId/status', authenticateToken, authorize(['
     } catch (e) { await client.query('ROLLBACK'); res.status(500).json({message: e.message}); } finally { client.release(); }
 });
 
-// 6.2 DEFAULTERS LIST
+/**
+ * 6.2 DEFAULTERS LIST (Branch-Aware Version)
+ * @route   GET /api/finance/defaulters
+ * @desc    Fetch a list of students with overdue invoices, isolated by branch
+ * @access  Private (Admin, Finance)
+ */
 router.get('/defaulters', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
+    // 1. EXTRACTION: Identify user scope from JWT
+    const { branch_id, role } = req.user;
+
     try {
-        const query = `
+        // 2. BASE SQL: Joins Students, Users, Courses, and Batches to provide a full profile
+        let query = `
             SELECT 
                 s.student_id, 
                 u.username AS student_name,      
@@ -1121,31 +1183,41 @@ router.get('/defaulters', authenticateToken, authorize(['admin', 'finance']), as
                 COALESCE(u.phone_number, 'N/A') AS parent_phone, 
                 c.course_name, 
                 b.batch_name,                    
-                COUNT(i.id) AS pending_invoices_count, 
-                SUM(i.total_amount - i.paid_amount) AS total_due
+                COUNT(i.id)::int AS pending_invoices_count, 
+                SUM(i.total_amount - i.paid_amount)::float AS total_due
             FROM ${DB.INVOICES} i
             JOIN ${DB.STUDENTS} s ON i.student_id = s.student_id
             JOIN ${DB.USERS} u ON s.user_id = u.id
             LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id
             LEFT JOIN ${DB.BATCHES} b ON s.batch_id = b.id
             WHERE i.status NOT IN ('Paid', 'Waived')
+        `;
+
+        const params = [];
+
+        // 3. MULTI-TENANCY SECURITY: Branch isolation
+        if (role !== 'super admin' && branch_id) {
+            query += ` AND s.branch_id = $1::uuid`;
+            params.push(branch_id);
+        }
+
+        // 4. GROUPING & PRIORITY: Group by student and sort by the highest debt first
+        query += `
             GROUP BY s.student_id, u.username, s.roll_number, u.phone_number, c.course_name, b.batch_name
             HAVING SUM(i.total_amount - i.paid_amount) > 0
             ORDER BY total_due DESC
         `;
         
-        const result = await pool.query(query);
+        const result = await pool.query(query, params);
         res.status(200).json(result.rows);
-    } catch (error) {
-        console.error('Defaulters Error:', error);
-        res.status(500).json({ message: 'Failed to fetch defaulters list.' });
-    }
-});
 
-router.post('/reminders/send', authenticateToken, async (req, res) => {
-    // Simulating SMS Gateway
-    const { students } = req.body;
-    res.json({ message: `Simulated SMS sent to ${students?.length || 0} students.` });
+    } catch (error) {
+        console.error('Defaulters List API Error:', error.message);
+        res.status(500).json({ 
+            message: 'Failed to fetch defaulters list.',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+        });
+    }
 });
 
 // 6.3 FINANCE AUDIT LOGS

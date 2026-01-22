@@ -20,16 +20,19 @@
     let captureInterval = null;
     const STABILITY_THRESHOLD = 15; 
 
-    // -----------------------------------------------------------
-    // --- 2. CORE API HANDLER ---
-    // -----------------------------------------------------------
-
     /**
      * Executes an authenticated fetch request to the backend API.
+     * Fixed to ensure proper Branch ID synchronization for all roles.
      */
     async function handleApi(endpoint, options = {}) {
         const AUTH_TOKEN = localStorage.getItem('erp-token');
-        const ACTIVE_BRANCH_ID = localStorage.getItem('active_branch_id');
+        
+        // --- 🛡️ SECURE BRANCH SELECTION ---
+        // Pick the branch ID assigned to the user, or the one selected in the switcher
+        const userBranch = localStorage.getItem('user-branch-id');
+        const activeBranch = localStorage.getItem('active_branch_id');
+        const targetBranch = (userBranch && userBranch !== 'null') ? userBranch : activeBranch;
+        
         const ACTIVE_SESSION_ID = localStorage.getItem('active_session_id');
 
         options.method = options.method || 'GET';
@@ -42,7 +45,8 @@
             ...options.headers,
             'Content-Type': 'application/json', 
             'Authorization': `Bearer ${AUTH_TOKEN}`,
-            'active-branch-id': ACTIVE_BRANCH_ID,
+            // Pass the identified branch ID to the backend
+            'active-branch-id': targetBranch,
             'active-session-id': ACTIVE_SESSION_ID
         };
         
@@ -616,7 +620,7 @@
         const formData = new FormData(form);
         const studentData = Object.fromEntries(formData.entries());
         delete studentData.confirm_password; 
-
+        studentData.branch_id = localStorage.getItem('user-branch-id') || localStorage.getItem('active_branch_id');
         // --- Data Cleanup and Nulling Empty Strings ---
         for (const key of Object.keys(studentData)) {
             if (studentData[key] === '' || studentData[key] === 'null' || studentData[key] === 'N/A') {

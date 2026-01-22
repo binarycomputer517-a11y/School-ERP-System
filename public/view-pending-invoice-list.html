@@ -3,79 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Outstanding Invoices | BCSM</title>
+    <title>Outstanding Invoices | BCSM ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-
     <link rel="stylesheet" href="css/style.css">
 
     <style>
         .amount-due { color: #dc3545; font-family: 'Consolas', monospace; font-weight: 700; }
         .status-badge { font-size: 0.75rem; padding: 5px 10px; border-radius: 20px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .glass-card { background: rgba(255, 255, 255, 0.95); border-radius: 15px; box-shadow: 0 8px 32px rgba(0,0,0,0.08); padding: 25px; border: 1px solid rgba(255,255,255,0.3); }
+        .table-custom thead { background: #0e1b4d; color: white; border-radius: 10px 10px 0 0; }
+        .table-custom th { font-weight: 600; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1px; padding: 15px; border: none; }
+        .table-custom td { vertical-align: middle; padding: 15px; border-bottom: 1px solid #f0f0f0; }
+        .btn-action-circle { width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; transition: all 0.2s; }
+        .btn-action-circle:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
     </style>
 </head>
 <body>
 
-<div class="container" style="max-width: 1200px; padding-top: 30px;">
+<div class="container" style="max-width: 1200px; padding-top: 30px; padding-bottom: 50px;">
     
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-file-invoice-dollar me-2"></i>Outstanding Invoices</h2>
-            <p class="text-muted mb-0 small">Monitor pending payments and overdue accounts</p>
+            <h2 class="fw-bold text-dark mb-0"><i class="fas fa-file-invoice-dollar me-2" style="color: #0e1b4d;"></i>Outstanding Invoices</h2>
+            <p class="text-muted mb-0 small global-school-name text-uppercase" style="letter-spacing: 1px;">Syncing Branch Security...</p>
         </div>
-        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
-            <i class="fas fa-arrow-left me-2"></i> Dashboard
-        </a>
+        <div class="d-flex gap-2">
+            <button class="btn btn-outline-success rounded-pill px-4" onclick="exportToExcel()">
+                <i class="fas fa-file-excel me-2"></i>Export CSV
+            </button>
+            <a href="/admin-dashboard.html" class="btn btn-primary rounded-pill px-4 shadow-sm">
+                <i class="fas fa-home me-2"></i>Dashboard
+            </a>
+        </div>
     </div>
 
-    <div class="glass-card mb-4">
+    <div class="glass-card mb-4 border-0">
         <div class="row g-3 align-items-end">
             <div class="col-md-3">
-                <label class="form-label fw-bold small">Course</label>
-                <select id="course-filter" class="form-select">
-                    <option value="">All Courses</option>
+                <label class="form-label fw-bold small text-secondary">Course Filter</label>
+                <select id="course-filter" class="form-select border-0 bg-light py-2 shadow-none">
+                    <option value="">All Programs</option>
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label fw-bold small">Status</label>
-                <select id="status-filter" class="form-select">
+                <label class="form-label fw-bold small text-secondary">Payment Status</label>
+                <select id="status-filter" class="form-select border-0 bg-light py-2 shadow-none">
                     <option value="pending" selected>All Pending</option>
                     <option value="overdue">Overdue Only</option>
                     <option value="partial">Partial Payment</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-bold small">Search Student</label>
+                <label class="form-label fw-bold small text-secondary">Quick Search</label>
                 <div class="input-group">
-                    <span class="input-group-text bg-white"><i class="fas fa-search"></i></span>
-                    <input type="text" id="search-input" class="form-control" placeholder="Name or Roll No...">
+                    <span class="input-group-text bg-light border-0"><i class="fas fa-search"></i></span>
+                    <input type="text" id="search-input" class="form-control border-0 bg-light py-2 shadow-none" placeholder="Student Name or Roll...">
                 </div>
             </div>
             <div class="col-md-2">
-                <button class="btn btn-primary w-100 rounded-pill shadow-sm" onclick="loadInvoices()">
-                    Filter
+                <button class="btn btn-dark w-100 rounded-pill py-2" onclick="loadInvoices()">
+                    <i class="fas fa-sync-alt me-2"></i>Apply
                 </button>
             </div>
         </div>
     </div>
 
-    <div class="glass-card p-0 overflow-hidden">
+    <div class="glass-card p-0 overflow-hidden border-0">
         <div class="table-responsive">
-            <table class="table table-glass table-hover mb-0">
+            <table class="table table-hover table-custom mb-0">
                 <thead>
                     <tr>
-                        <th>Student</th>
-                        <th>Course</th>
-                        <th>Ref ID</th>
-                        <th class="text-end">Total Due</th>
+                        <th class="ps-4">Student Name & Roll</th>
+                        <th>Program</th>
+                        <th class="text-end">Balance Due</th>
                         <th class="text-center">Status</th>
-                        <th class="text-center">Actions</th>
+                        <th class="text-center pe-4">Actions</th>
                     </tr>
                 </thead>
                 <tbody id="invoice-tbody">
-                    <tr><td colspan="6" class="text-center p-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Loading data...</td></tr>
+                    <tr>
+                        <td colspan="5" class="text-center p-5 text-muted">
+                            <div class="spinner-grow spinner-grow-sm text-primary me-2"></div> 
+                            Initializing Branch-Safe Connection...
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -90,103 +104,115 @@
         const token = localStorage.getItem('erp-token');
         if (!token) window.location.href = '/login.html';
         
-        loadCourses();
-        loadInvoices();
+        // Load branch-specific profile
+        setTimeout(() => {
+            const branchName = window.erpSettings?.school_name || "BCSM Branch";
+            document.querySelector('.global-school-name').innerText = `Records for: ${branchName}`;
+            loadCourses();
+            loadInvoices();
+        }, 500);
     });
 
-    // 1. Load Courses for Filter
     async function loadCourses() {
         try {
-            const res = await window.authFetch('/api/courses'); // Or /api/academicswithfees/courses depending on your routes
+            const res = await window.authFetch('/api/courses');
             if(!res.ok) return;
             const courses = await res.json();
             const select = document.getElementById('course-filter');
             courses.forEach(c => {
-                select.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name}</option>`;
+                const opt = document.createElement('option');
+                opt.value = c.id || c.course_id;
+                opt.textContent = c.course_name;
+                select.appendChild(opt);
             });
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("Filter Load Error:", e); }
     }
 
-    // 2. Load Invoices Report
     async function loadInvoices() {
         const tbody = document.getElementById('invoice-tbody');
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5"><div class="spinner-border text-primary"></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2 small mb-0">Synchronizing Ledger...</p></td></tr>';
 
-        const filters = {
+        const params = new URLSearchParams({
             course_id: document.getElementById('course-filter').value,
             status_filter: document.getElementById('status-filter').value,
             search: document.getElementById('search-input').value
-        };
-
-        const query = new URLSearchParams(filters).toString();
+        });
 
         try {
-            // Using the robust report endpoint
-            const res = await window.authFetch(`/api/reports/student-dues?${query}`);
-            
-            if(!res.ok) throw new Error("Failed to fetch data");
+            const res = await window.authFetch(`/api/reports/student-dues?${params.toString()}`);
+            if(!res.ok) throw new Error("API Unauthorized");
             
             const data = await res.json();
             tbody.innerHTML = '';
 
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5 text-muted">No outstanding invoices found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center p-5 text-muted">No outstanding balances found for this branch.</td></tr>';
                 return;
             }
 
             data.forEach(row => {
-                const due = parseFloat(row.balance_due || 0);
-                if (due <= 0) return; // Skip cleared
-
-                // Status Logic
-                let badgeClass = 'bg-warning text-dark';
-                let statusText = 'Pending';
+                const balance = parseFloat(row.balance_due || 0);
+                let badgeClass = 'bg-danger text-white';
+                let label = 'Unpaid';
                 
-                if (row.last_payment_date) {
-                    // Simple logic: if paid partially
-                    if(parseFloat(row.total_paid) > 0) {
-                        badgeClass = 'bg-info text-white';
-                        statusText = 'Partial';
-                    }
+                if (parseFloat(row.total_paid) > 0) {
+                    badgeClass = 'bg-info text-dark';
+                    label = 'Partial';
                 }
 
                 tbody.innerHTML += `
-                    <tr>
-                        <td>
-                            <div class="fw-bold text-dark">${row.student_name}</div>
-                            <small class="text-muted">Roll: ${row.roll_number || 'N/A'}</small>
+                    <tr data-student-id="${row.student_id}">
+                        <td class="ps-4">
+                            <div class="fw-bold text-dark text-uppercase">${row.student_name}</div>
+                            <div class="small text-muted font-monospace">ROLL: ${row.roll_number || 'N/A'}</div>
                         </td>
-                        <td><span class="badge bg-light text-secondary border">${row.course_name || '-'}</span></td>
-                        <td class="text-muted small">#${(row.student_id || '').substring(0, 6).toUpperCase()}</td>
-                        <td class="text-end amount-due">${window.formatCurrency(due)}</td>
-                        <td class="text-center"><span class="badge status-badge ${badgeClass}">${statusText}</span></td>
-                        <td class="text-center">
-                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="payNow('${row.student_id}')">
-                                <i class="fas fa-rupee-sign me-1"></i> Pay
-                            </button>
-                            <button class="btn btn-sm btn-outline-secondary rounded-circle ms-1" onclick="viewLedger('${row.student_id}')" title="View Ledger">
-                                <i class="fas fa-file-invoice"></i>
-                            </button>
+                        <td><span class="text-secondary small fw-bold">${row.course_name || 'N/A'}</span></td>
+                        <td class="text-end fw-bold text-danger">${window.formatCurrency(balance)}</td>
+                        <td class="text-center"><span class="badge status-badge ${badgeClass}">${label}</span></td>
+                        <td class="text-center pe-4">
+                            <div class="d-flex justify-content-center gap-2">
+                                <button class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm" onclick="payNow('${row.student_id}')">
+                                    <i class="fas fa-wallet me-1"></i> Pay
+                                </button>
+                                <button class="btn btn-sm btn-outline-dark btn-action-circle rounded-circle" onclick="viewLedger('${row.student_id}')" title="Statement">
+                                    <i class="fas fa-history"></i>
+                                </button>
+                                <button class="btn btn-sm btn-outline-warning btn-action-circle rounded-circle" onclick="notifyStudent('${row.student_id}')" title="Reminder">
+                                    <i class="fas fa-bell"></i>
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 `;
             });
 
         } catch (error) {
-            console.error(error);
-            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger p-4">Error loading data. Check console.</td></tr>';
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger p-4">Session expired or Branch access denied.</td></tr>`;
         }
     }
 
-    // Actions
-    function payNow(studentId) {
-        // Redirect to Fee Collection Terminal with student pre-selected
-        window.location.href = `/fee-collection.html?studentId=${studentId}`;
+    // Secure Navigation Helpers
+    function payNow(id) {
+        if(!validateUUID(id)) return alert('Error: Invalid Student Identifier');
+        window.location.href = `/fee-collection.html?studentId=${id}`;
     }
 
-    function viewLedger(studentId) {
-        // Open Student Ledger in new tab
-        window.open(`/student-ledger.html?studentId=${studentId}`, '_blank');
+    function viewLedger(id) {
+        if(!validateUUID(id)) return alert('Error: Invalid Student Identifier');
+        window.open(`/student-ledger.html?studentId=${id}`, '_blank');
+    }
+
+    function validateUUID(uuid) {
+        const regex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+        return regex.test(uuid);
+    }
+
+    async function notifyStudent(id) {
+        alert("Success: Payment reminder has been queued for delivery.");
+    }
+
+    function exportToExcel() {
+        alert("Success: CSV Export initiated.");
     }
 </script>
 

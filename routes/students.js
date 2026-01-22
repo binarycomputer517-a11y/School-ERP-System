@@ -72,35 +72,39 @@ function buildUpdateQuery(body, fieldDefinitions, updatedBy) {
 // =========================================================
 router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     try {
-        const query = `
+        const { branch_id, role } = req.user; // মিডলওয়্যার থেকে রোল এবং ব্রাঞ্চ আইডি নেওয়া হচ্ছে
+
+        let query = `
             SELECT 
                 s.student_id, s.admission_id, s.enrollment_no, s.first_name, s.last_name, 
-                s.email, s.phone_number, s.status, s.course_id, s.batch_id,
+                s.email, s.phone_number, s.status, s.course_id, s.batch_id, s.branch_id,
                 u.username, u.role, u.id AS user_id,
                 c.course_name, b.batch_name, br.branch_name,
-                
                 (
                     COALESCE(fs.admission_fee, 0) + COALESCE(fs.registration_fee, 0) + COALESCE(fs.examination_fee, 0)
                     +
-                    (
-                        (COALESCE(fs.transport_fee, 0) * COALESCE(fs.course_duration_months, 0)) 
-                        + 
-                        (COALESCE(fs.hostel_fee, 0) * COALESCE(fs.course_duration_months, 0))
-                    )
-                ) AS total_fees_due,
-                fs.structure_name AS fee_structure_name
-                
+                    ((COALESCE(fs.transport_fee, 0) * COALESCE(fs.course_duration_months, 0)) 
+                    + (COALESCE(fs.hostel_fee, 0) * COALESCE(fs.course_duration_months, 0)))
+                ) AS total_fees_due
             FROM ${STUDENTS_TABLE} s
             LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
             LEFT JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
             LEFT JOIN ${BRANCHES_TABLE} br ON s.branch_id = br.id
             LEFT JOIN ${FEE_STRUCTURES_TABLE} fs ON fs.course_id = s.course_id AND fs.batch_id = s.batch_id
-            
             WHERE u.deleted_at IS NULL
-            ORDER BY s.created_at DESC;
         `;
-        const result = await pool.query(query);
+
+        const queryParams = [];
+        // লজিক: যদি Super Admin না হয়, তবে শুধুমাত্র তার নিজস্ব ব্রাঞ্চের ডাটা দেখাবে
+        if (role !== 'super admin' && branch_id) {
+            query += ` AND s.branch_id = $1`;
+            queryParams.push(branch_id);
+        }
+
+        query += ` ORDER BY s.created_at DESC;`;
+
+        const result = await pool.query(query, queryParams);
         res.status(200).json(result.rows);
     } catch (error) {
         console.error('Error fetching students list:', error);

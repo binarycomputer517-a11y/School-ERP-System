@@ -8,25 +8,37 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
    <style>
-        /* --- CLASSIC DOCUMENT STYLES (Cleaned) --- */
+        /* --- CLASSIC DOCUMENT STYLES --- */
         body { font-family: 'Times New Roman', serif; background-color: #f8f8f8; color: #333; padding: 20px; }
         .dashboard-container { max-width: 1200px; margin: auto; padding: 40px; background-color: #ffffff; border: 2px solid #333; box-shadow: 4px 4px 0 #AAA; border-radius: 0; }
         h1 { color: #000; font-weight: bold; text-transform: uppercase; text-align: center; border-bottom: 4px double #000; padding-bottom: 10px; margin-bottom: 30px; font-size: 2em; }
         h2 { color: #005A9C; border-bottom: 1px solid #AAA; padding-bottom: 5px; margin-top: 30px; font-size: 1.4em; }
         
         /* Navigation & Buttons */
-        .top-right-nav { position: absolute; top: 25px; right: 30px; display: flex; gap: 15px; }
-        .top-right-nav a, .top-right-nav button { background-color: #f0f0f0; border: 1px solid #555; color: #333; padding: 6px 15px; border-radius: 0; box-shadow: 1px 1px 0 #000; text-decoration: none; }
+        .top-right-nav { position: absolute; top: 25px; right: 30px; display: flex; gap: 15px; align-items: center; }
+        .top-right-nav a, .top-right-nav button { background-color: #f0f0f0; border: 1px solid #555; color: #333; padding: 6px 15px; border-radius: 0; box-shadow: 1px 1px 0 #000; text-decoration: none; font-family: 'Poppins', sans-serif; font-size: 0.9em; }
         .top-right-nav a:hover, .top-right-nav button:hover { background-color: #ddd; transform: translate(-1px, -1px); }
+
+        /* Branch Switcher Style */
+        .branch-switcher-container { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #555; padding: 5px 10px; box-shadow: 1px 1px 0 #000; }
+        .branch-switcher-container label { font-weight: bold; font-size: 0.85em; color: #005A9C; }
+        #branch-select { border: none; outline: none; font-weight: 600; cursor: pointer; color: #333; background: transparent; }
+
+        /* Live Statistics Bar */
+        .live-stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
+        .stat-item { background: #fffcf0; border: 1px solid #d4a017; padding: 15px; text-align: center; box-shadow: 2px 2px 0 #d4a017; }
+        .stat-item h3 { margin: 0; font-size: 1.8em; color: #005A9C; }
+        .stat-item p { margin: 5px 0 0; font-weight: bold; text-transform: uppercase; font-size: 0.8em; color: #555; }
 
         /* Card Grid */
         .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; }
         .dashboard-card { 
             background: #fcfcfc; 
             border: 1px solid #ccc; 
-            border-left: 5px solid #C0392B; /* Accent Red */ 
+            border-left: 5px solid #C0392B; 
             border-radius: 4px; 
             padding: 15px; 
             display: flex; 
@@ -36,43 +48,66 @@
             text-decoration: none; 
             color: #333; 
             transition: all 0.2s; 
+            font-family: 'Poppins', sans-serif;
         }
-        .dashboard-card:hover { box-shadow: 2px 2px 0 #555; transform: translate(-2px, -2px); }
-        /* Icon Styling */
+        .dashboard-card:hover { box-shadow: 2px 2px 0 #555; transform: translate(-2px, -2px); background: #f0f7ff; }
         .dashboard-card .icon { font-size: 2em; color: #005A9C; margin-bottom: 5px; }
+        .dashboard-card span { font-weight: 500; font-size: 0.9em; text-align: center; }
     </style>
 </head>
 <body>
 <script>
-    // --- Authentication and Authorization Check ---
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
-    const username = localStorage.getItem('username'); // Assuming username is stored during login
+    const username = localStorage.getItem('username');
+    const userBranchId = localStorage.getItem('user-branch-id'); // Added for branch isolation
 
-    // Redirect if token is missing or user is not an Admin
     if (!token || (userRole !== 'Admin' && userRole !== 'Super Admin' && userRole !== 'Prime Admin')) {
         window.location.href = '/login.html';
     }
 
-    // --- Logout Function ---
     function logout() {
-        localStorage.removeItem('erp-token');
-        localStorage.removeItem('user-role');
-        localStorage.removeItem('username');
+        localStorage.clear();
         window.location.href = '/login.html';
     }
 </script>
 
     <div class="top-right-nav">
+        <div class="branch-switcher-container" id="branch-nav" style="display: none;">
+            <label><i class="fas fa-university"></i> BRANCH:</label>
+            <select id="branch-select" onchange="switchBranch(this.value)">
+                <option value="">Loading...</option>
+            </select>
+        </div>
         <a href="/register.html" id="register-link">👤 User Registration</a>
         <a href="/messaging.html" id="messaging-link">✉️ Messaging</a>
-        <button onclick="logout()">🚪 Logout</button> </div>
+        <button onclick="logout()">🚪 Logout</button>
+    </div>
 
     <main class="dashboard-container">
         <header class="header-card">
             <h1 id="welcome-message">Admin Dashboard</h1>
-            <p id="datetime"></p>
+            <p id="datetime" style="text-align:center; font-weight:bold; color:#666; margin-bottom: 20px;"></p>
         </header>
+
+        <div class="live-stats-bar">
+            <div class="stat-item">
+                <h3 id="stat-students">0</h3>
+                <p>Total Students</p>
+            </div>
+            <div class="stat-item">
+                <h3 id="stat-teachers">0</h3>
+                <p>Active Staff</p>
+            </div>
+            <div class="stat-item">
+                <h3 id="stat-revenue">₹0</h3>
+                <p>Fees Collected (MTD)</p>
+            </div>
+            <div class="stat-item">
+                <h3 id="stat-attendance">0%</h3>
+                <p>Avg. Attendance</p>
+            </div>
+        </div>
 
         <h2 class="category-header">Academic Management</h2>
         <div class="card-grid">
@@ -81,9 +116,7 @@
             <a href="/online-exam.html" class="dashboard-card"><span class="icon">💻</span><span>online Exam</span></a>
             <a href="/Academics-with-Fee-Management.html"class="dashboard-card"><span class="icon">🎓</span><span>Academics with Fess</span></a>
             <a href="/homework-assignments.html" class="dashboard-card"><span class="icon">📝</span><span>Homework</span></a>
-            
             <a href="/exam-management.html" class="dashboard-card"><span class="icon">💯</span><span>Exams</span></a>
-
             <a href="/manage-timetable.html" class="dashboard-card"><span class="icon">🕓</span><span>Timetable</span></a>
             <a href="/manage-books.html" class="dashboard-card"><span class="icon">📚</span><span>Library</span></a>
             <a href="/online-learning.html" class="dashboard-card"><span class="icon">🌐</span><span>Online Learning</span></a>
@@ -96,7 +129,6 @@
             <a href="/manage-leave.html" class="dashboard-card"><span class="icon">🗓️</span><span>Leave Management</span></a>
             <a href="/manage-payroll.html" class="dashboard-card"><span class="icon">💳</span><span>Payroll</span></a>
             <a href="/feedback.html" class="dashboard-card"><span class="icon">📢</span><span>Feedback</span></a>
-            
             <a href="/manage-admissions.html" class="dashboard-card"><span class="icon">📝</span><span>Admissions</span></a>
             <a href="/student-discipline.html" class="dashboard-card"><span class="icon">⚖️</span><span>Discipline</span></a>
         </div>
@@ -121,16 +153,12 @@
             <a href="/media-gallery.html" class="dashboard-card"><span class="icon">🖼️</span><span>Media Gallery</span></a>
         </div>
 
-        <h2 class="category-header">Governance & Support (Global Features)</h2>
-        <div class="card-grid">
+        <h2 class="category-header" id="global-gov-header" style="display: none;">Governance & Support (Global Features)</h2>
+        <div class="card-grid" id="global-gov-grid" style="display: none;">
             <a href="/manage-branches.html" class="dashboard-card" title="Global System/Branch Configuration (Super Admin)"><span class="icon">🏢</span><span>Branch Mgmt</span></a>
-            
             <a href="/system-logs.html" class="dashboard-card" title="Review Server, Security, and Access Logs"><span class="icon">⚙️</span><span>System Logs</span></a>
-            
             <a href="/backup-restore.html" class="dashboard-card" title="Backup and Disaster Recovery Operations"><span class="icon">💾</span><span>Backup/DR</span></a>
-            
             <a href="/compliance-management.html" class="dashboard-card" title="Manage Data Privacy and Regulatory Compliance"><span class="icon">📜</span><span>Compliance</span></a>
-
             <a href="/reports-analytics.html" class="dashboard-card"><span class="icon">📈</span><span>Reports & Analytics</span></a>
             <a href="/it-helpdesk.html" class="dashboard-card"><span class="icon">🖥️</span><span>IT Helpdesk</span></a>
             <a href="/visitor-log.html" class="dashboard-card"><span class="icon">🛡️</span><span>Visitor Log</span></a>
@@ -144,39 +172,97 @@
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            
-            // --- Dynamic Welcome Message and Clock ---
             const welcomeMessageEl = document.getElementById('welcome-message');
             const datetimeEl = document.getElementById('datetime');
-            
-            // Determine the username to use in the greeting
             const greetingName = username || 'Admin';
+
+            // Security Logic: Role-based UI Adjustments
+            const branchNav = document.getElementById('branch-nav');
+            const govHeader = document.getElementById('global-gov-header');
+            const govGrid = document.getElementById('global-gov-grid');
+
+            if (userRole === 'Super Admin') {
+                branchNav.style.display = 'flex';
+                govHeader.style.display = 'block';
+                govGrid.style.display = 'grid';
+                loadBranches();
+            } else {
+                // Branch Admin logic
+                localStorage.setItem('active_branch_id', userBranchId);
+                branchNav.style.display = 'none';
+                govHeader.style.display = 'none';
+                govGrid.style.display = 'none';
+            }
 
             function updateHeader() {
                 const now = new Date();
                 const hour = now.getHours();
-                
-                // Set Welcome Greeting
-                let greeting = 'Welcome';
-                if (hour < 12) {
-                    greeting = 'Good Morning ☀️';
-                } else if (hour < 17) {
-                    greeting = 'Good Afternoon 🌤️';
-                } else {
-                    greeting = 'Good Evening 🌙';
-                }
-                // Use the stored username for a personalized greeting
+                let greeting = (hour < 12) ? 'Good Morning ☀️' : (hour < 17) ? 'Good Afternoon 🌤️' : 'Good Evening 🌙';
                 welcomeMessageEl.textContent = `${greeting}, ${greetingName}`;
-
-                // Set Date and Time
                 const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit', timeZone: 'Asia/Kolkata' };
                 datetimeEl.textContent = now.toLocaleDateString('en-IN', options);
             }
             
             updateHeader(); 
-            setInterval(updateHeader, 1000); // Update the clock every second
+            setInterval(updateHeader, 1000);
 
+            // Fetch stats based on permissions
+            fetchLiveStats();
         });
+
+        // Load Branches for Switcher (Super Admin only)
+        async function loadBranches() {
+            try {
+                const res = await fetch('/api/branches', { headers: { 'Authorization': `Bearer ${token}` } });
+                const branches = await res.json();
+                const select = document.getElementById('branch-select');
+                const activeBranchId = localStorage.getItem('active_branch_id');
+                
+                select.innerHTML = branches.map(b => 
+                    `<option value="${b.id}" ${b.id === activeBranchId ? 'selected' : ''}>${b.branch_name}</option>`
+                ).join('');
+
+                if (!activeBranchId && branches.length > 0) {
+                    localStorage.setItem('active_branch_id', branches[0].id);
+                }
+            } catch (err) { console.error('Failed to load branches'); }
+        }
+
+        // Fetch Live Stats with UUID Null check
+        async function fetchLiveStats() {
+            let activeBranchId = localStorage.getItem('active_branch_id');
+            const myBranchId = localStorage.getItem('user-branch-id');
+            let targetId = (userRole === 'Super Admin') ? activeBranchId : myBranchId;
+
+            if (!targetId || targetId === 'null' || targetId === 'undefined') {
+                console.warn("Branch ID missing. Retrying...");
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/reports/stats?branch_id=${targetId}`, { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    document.getElementById('stat-students').textContent = data.students || 0;
+                    document.getElementById('stat-teachers').textContent = data.staff || 0;
+                    document.getElementById('stat-revenue').textContent = '₹' + (data.fees || 0).toLocaleString();
+                    document.getElementById('stat-attendance').textContent = (data.attendance || 0) + '%';
+                }
+            } catch (err) {
+                console.warn('Live stats API not reachable.');
+            }
+        }
+
+        // Branch Switcher Function
+        function switchBranch(branchId) {
+            if (userRole === 'Super Admin') {
+                localStorage.setItem('active_branch_id', branchId);
+                location.reload();
+            }
+        }
     </script>
     <script src="js/global-config.js"></script>
 </body>

@@ -152,38 +152,51 @@
         }
     }
 
-    /**
-     * APPLY BRANDING
-     */
-    function applyBranding(config) {
-        const root = document.documentElement;
+/**
+ * APPLY BRANDING (FIXED VERSION)
+ * Synchronizes school colors, name, and logo across the dashboard.
+ */
+function applyBranding(config) {
+    const root = document.documentElement;
 
-        if (config.theme_primary_color) root.style.setProperty('--primary-color', config.theme_primary_color);
-        if (config.theme_secondary_color) root.style.setProperty('--secondary-color', config.theme_secondary_color);
+    // 1. Set Custom Theme Colors
+    if (config.theme_primary_color) root.style.setProperty('--primary-color', config.theme_primary_color);
+    if (config.theme_secondary_color) root.style.setProperty('--secondary-color', config.theme_secondary_color);
 
-        const name = config.school_name || config.name;
-        document.querySelectorAll('.global-school-name, .school-name').forEach(el => el.innerText = name);
-        if(document.title === 'Document' || document.title.includes('ERP')) {
-             document.title = `${name} | Portal`;
-        }
-
-        // Logo Logic
-        let logoPath = config.school_logo_path || config.logo;
-        if (logoPath && !logoPath.startsWith('http') && !logoPath.startsWith('data:')) {
-            logoPath = `${API_BASE_URL}${logoPath}`;
-        }
-
-        document.querySelectorAll('.global-school-logo, .school-logo').forEach(img => {
-            img.src = logoPath;
-            img.onerror = () => { 
-                img.src = STATIC_CONFIG.DEFAULT_THEME.logo; 
-            };
-        });
-
-        updateFavicon(logoPath);
-        generateWatermark(name);
+    // 2. Update School Name in UI
+    const name = config.school_name || config.name || "Enterprise ERP";
+    document.querySelectorAll('.global-school-name, .school-name').forEach(el => el.innerText = name);
+    
+    // Update Browser Tab Title
+    if(document.title === 'Document' || document.title.includes('ERP')) {
+         document.title = `${name} | Portal`;
     }
 
+    // 3. --- LOGO LOGIC FIX (Critical Path Correction) ---
+    let logoPath = config.school_logo_path || config.logo;
+    
+    if (logoPath && !logoPath.startsWith('http') && !logoPath.startsWith('data:')) {
+        // Ensure there is exactly one '/' between the domain and the folder path
+        const baseUrl = API_BASE_URL.endsWith('/') ? API_BASE_URL : `${API_BASE_URL}/`;
+        const cleanPath = logoPath.startsWith('/') ? logoPath.substring(1) : logoPath;
+        
+        logoPath = `${baseUrl}${cleanPath}`;
+    }
+
+    // 4. Update All Logo Images
+    document.querySelectorAll('.global-school-logo, .school-logo').forEach(img => {
+        img.src = logoPath;
+        
+        // Fallback if the image fails to load
+        img.onerror = () => { 
+            img.src = 'https://placehold.co/100x100?text=ERP'; 
+        };
+    });
+
+    // 5. Update Favicon and Watermarks
+    updateFavicon(logoPath);
+    generateWatermark(name);
+}
     /**
      * APPLY IDENTITY
      */
