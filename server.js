@@ -121,30 +121,44 @@ app.set('upload', multerInstance);
 // ===================================
 app.use(morgan('dev'));
 
-// ✅ UPDATED & MOBILE-FRIENDLY CORS CONFIGURATION
+// ✅ UPDATED & ROBUST CORS CONFIGURATION
 const allowedOrigins = [
     'https://bcsm.org.in',       
     'https://www.bcsm.org.in',
     'https://portal.bcsm.org.in', 
+    'https://www.portal.bcsm.org.in', // Added to prevent www vs non-www mismatch
     'http://localhost:3000',
-    'http://localhost',           // অ্যান্ড্রয়েড এম্যুলেটরের জন্য
-    'capacitor://localhost'       // আইওএস/অ্যান্ড্রয়েড অ্যাপের জন্য
+    'http://localhost:3005',
+    'http://localhost',           
+    'capacitor://localhost'       
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // origin না থাকলেও এলাউ করবে (যেমন: মোবাইল অ্যাপ বা লোকাল রিকোয়েস্ট)
+        // 1. Allow if no origin (e.g., Mobile Apps, Server-to-Server or Postman)
         if (!origin) return callback(null, true);
         
-        if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost')) {
+        // 2. Check if origin is in the allowed list or is a localhost variation
+        const isAllowed = allowedOrigins.includes(origin) || 
+                          origin.startsWith('http://localhost') || 
+                          origin.startsWith('http://127.0.0.1');
+
+        if (isAllowed) {
             callback(null, true);
         } else {
+            console.error('🔥 CORS Blocked for Origin:', origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
     credentials: true, 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: [
+        'Content-Type', 
+        'Authorization', 
+        'X-Requested-With', 
+        'Accept', 
+        'Origin'
+    ]
 }));
 
 // বাকি মিডলওয়্যারগুলো আগের মতোই থাকবে

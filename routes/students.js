@@ -718,5 +718,28 @@ router.get('/:id/skills', authenticateToken, async (req, res) => {
     }
 });
 
+// =========================================================
+// 13. POST: Quick Unlock Portal Access
+// =========================================================
+router.post('/unlock', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ message: "Username is required." });
+
+    try {
+        const query = `
+            UPDATE ${USERS_TABLE} 
+            SET is_active = TRUE, status = 'active' 
+            WHERE username = $1 
+            RETURNING id;
+        `;
+        const result = await pool.query(query, [username]);
+        if (result.rowCount === 0) return res.status(404).json({ message: "User not found." });
+        
+        res.status(200).json({ message: "Student account unlocked successfully." });
+    } catch (error) {
+        console.error('Unlock Error:', error);
+        res.status(500).json({ message: "Failed to unlock portal access." });
+    }
+});
 
 module.exports = router;
