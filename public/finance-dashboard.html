@@ -21,7 +21,7 @@
         }
         
         /* Top Navigation */
-        .top-nav { text-align: right; margin-bottom: 10px; }
+        .top-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
         
         /* Headers */
         h1 { 
@@ -83,6 +83,9 @@
         
         button.logout-btn { background-color: #C0392B; }
         button.logout-btn:hover { background-color: #96281B; }
+        
+        button.btn-automation { background-color: #27AE60; width: 100%; margin-top: 10px; }
+        button.btn-report { background-color: #8E44AD; width: 100%; margin-top: 10px; }
 
         input { 
             width: 100%; padding: 8px; margin-top: 5px; box-sizing: border-box; 
@@ -95,6 +98,8 @@
         }
         .receipt-section label { font-weight: bold; font-size: 0.9em; }
 
+        .branch-badge { font-size: 0.75em; background: #333; color: #fff; padding: 3px 8px; font-weight: bold; }
+
         /* Responsive */
         @media (max-width: 768px) {
             .stats-grid, .dashboard-columns { grid-template-columns: 1fr; }
@@ -106,8 +111,11 @@
 <div class="container">
     
     <div class="top-nav">
-        <button onclick="window.location.href='/admin-dashboard.html'">Home</button>
-        <button class="logout-btn" onclick="window.location.href='/logout'">Logout</button>
+        <span id="branch-info" class="branch-badge">Loading Branch...</span>
+        <div>
+            <button onclick="window.location.href='/admin-dashboard.html'">Home</button>
+            <button class="logout-btn" onclick="handleLogout()">Logout</button>
+        </div>
     </div>
 
     <h1>Finance Dashboard</h1>
@@ -115,19 +123,19 @@
     <div class="stats-grid">
         <div class="stat-box">
             <div class="stat-label">Today's Revenue</div>
-            <div class="stat-value text-green" id="metric-today-revenue">...</div>
+            <div class="stat-value text-green" id="metric-today-revenue">₹0</div>
         </div>
         <div class="stat-box">
             <div class="stat-label">Month Collected</div>
-            <div class="stat-value text-blue" id="metric-mtd-collected">...</div>
+            <div class="stat-value text-blue" id="metric-mtd-collected">₹0</div>
         </div>
         <div class="stat-box">
             <div class="stat-label">Outstanding Dues</div>
-            <div class="stat-value text-red" id="metric-outstanding-dues">...</div>
+            <div class="stat-value text-red" id="metric-outstanding-dues">₹0</div>
         </div>
         <div class="stat-box">
             <div class="stat-label">Pending Invoices</div>
-            <div class="stat-value" id="metric-unpaid-invoices">...</div>
+            <div class="stat-value" id="metric-unpaid-invoices">0</div>
         </div>
     </div>
 
@@ -149,6 +157,13 @@
                         <button type="submit" style="margin-top: 5px;">Go</button>
                     </form>
                 </div>
+            </div>
+
+            <div class="card">
+                <h2>6. Automation Systems</h2>
+                <button class="btn-automation" id="test-email-btn" onclick="triggerTestEmail()">🚀 Send Test Email</button>
+                <button class="btn-report" id="manual-report-btn" onclick="triggerManualReport()">📊 Run Daily Excel Report</button>
+                <p style="font-size: 0.7em; color: #666; font-style: italic; margin-top: 10px;">*Scheduled reports are automatically emailed daily at 9:00 PM.</p>
             </div>
         </div>
 
@@ -188,13 +203,21 @@
     </div>
 </div>
 
+
+
 <script>
     const token = localStorage.getItem('erp-token');
-    // ✅ FIX: The backend is mapped to /api/finance, so we use that.
+    // ✅ The backend is mapped to /api/finance, so we use that.
     const API_BASE_URL = '/api/finance'; 
     
     // Auth Check
     if (!token) window.location.href = '/login.html';
+
+    // Set Branch Indicator
+    try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        document.getElementById('branch-info').innerText = payload.branch_id ? `Branch ID: ${payload.branch_id}` : "Super Admin Mode";
+    } catch(e) { console.error("Identity Error"); }
 
     // 1. Download Receipt Logic
     function downloadReceipt(txnId) {
@@ -203,30 +226,20 @@
         btn.innerText = '...';
         btn.disabled = true;
 
-        // ✅ FIX: Use API_BASE_URL
-        fetch(`${API_BASE_URL}/receipt/${txnId.trim()}`, {
-             headers: { 'Authorization': `Bearer ${token}` }
-        })
-        .then(res => res.ok ? res.blob() : Promise.reject('Receipt not found.'))
-        .then(blob => {
-            const url = window.URL.createObjectURL(blob);
-            window.open(url, '_blank', 'width=800,height=600');
-        })
-        .catch(err => alert(err))
-        .finally(() => {
-            btn.innerText = originalText;
-            btn.disabled = false;
-        });
+        // Redirect to PDF stream with token in query for browser download support
+        window.open(`${API_BASE_URL}/receipt/${txnId.trim()}?token=${token}`, '_blank');
+        
+        btn.innerText = originalText;
+        btn.disabled = false;
     }
 
-    // 2. Load Dashboard Stats
+    // 2. Load Dashboard Stats (Branch-Aware)
     async function loadStats() {
         const today = new Date().toISOString().split('T')[0];
         const firstDay = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
         
         try {
             // Revenue Today
-            // ✅ FIX: Use API_BASE_URL
             const tRes = await fetch(`${API_BASE_URL}/history?startDate=${today}&endDate=${today}`, { headers: { 'Authorization': `Bearer ${token}` }});
             if(tRes.ok) {
                 const data = await tRes.json();
@@ -235,7 +248,6 @@
             }
 
             // Month Revenue
-            // ✅ FIX: Use API_BASE_URL
             const mRes = await fetch(`${API_BASE_URL}/history?startDate=${firstDay}&endDate=${today}`, { headers: { 'Authorization': `Bearer ${token}` }});
             if(mRes.ok) {
                 const data = await mRes.json();
@@ -244,7 +256,6 @@
             }
 
             // Outstanding Dues
-            // ✅ FIX: Use API_BASE_URL
             const sRes = await fetch(`${API_BASE_URL}/reports/dashboard-stats`, { headers: { 'Authorization': `Bearer ${token}` }});
             if(sRes.ok) {
                 const stats = await sRes.json();
@@ -255,6 +266,44 @@
             console.error(e); 
             document.getElementById('metric-today-revenue').innerText = "Err";
         }
+    }
+
+    // 3. Automation Triggers
+    async function triggerTestEmail() {
+        const btn = document.getElementById('test-email-btn');
+        btn.innerText = "Sending...";
+        btn.disabled = true;
+        try {
+            const res = await fetch('/api/utils/test-email', { 
+                method: 'POST', 
+                headers: { 'Authorization': `Bearer ${token}` } 
+            });
+            const data = await res.json();
+            alert(data.message);
+        } catch(e) { alert("Email test failed. Check server logs."); }
+        btn.innerText = "🚀 Send Test Email";
+        btn.disabled = false;
+    }
+
+    async function triggerManualReport() {
+        if(!confirm("Are you sure you want to generate and email the daily Excel report now?")) return;
+        const btn = document.getElementById('manual-report-btn');
+        btn.innerText = "Generating...";
+        btn.disabled = true;
+        try {
+            const res = await fetch(`${API_BASE_URL}/trigger-daily-report`, { 
+                headers: { 'Authorization': `Bearer ${token}` } 
+            });
+            const data = await res.json();
+            alert(data.message);
+        } catch(e) { alert("Report generation failed."); }
+        btn.innerText = "📊 Run Daily Excel Report";
+        btn.disabled = false;
+    }
+
+    function handleLogout() {
+        localStorage.removeItem('erp-token');
+        window.location.href = '/login.html';
     }
 
     // Init

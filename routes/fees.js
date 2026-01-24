@@ -1669,75 +1669,121 @@ router.get('/receipt/:idOrTxn', async (req, res) => {
 
 /**
  * @route   GET /api/finance/receipt/:id
- * @desc    Fetch receipt data OR generate PDF based on query parameter
+ * @desc    Fetch receipt JSON for UI OR generate professional PDF for download
+ * @access  Protected (Supports Header Auth & Query Token for Downloads)
  */
 router.get('/receipt/:id', async (req, res) => {
-    // 1. Unified Authentication (Headers or Query for browser downloads)
+    // 1. Unified Authentication Logic
+    // Browser <a> tags cannot send headers, so we allow token via query string
     const token = req.headers.authorization?.split(' ')[1] || req.query.token;
-    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+    
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+    }
 
     try {
         const jwt = require('jsonwebtoken');
-        jwt.verify(token, process.env.JWT_SECRET);
+        // Verify token validity
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const requestBy = decoded.id;
 
         const { id } = req.params;
         
-        // 2. Prevent UUID Syntax Error: Detect ID type
+        // 2. Data Integrity: Detect if ID is a Database UUID or a Transaction String (Cashfree/Manual)
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
 
         const query = `
             SELECT 
                 fp.id, fp.transaction_id, fp.payment_date, fp.amount, fp.payment_mode,
                 s.first_name, s.last_name, s.enrollment_no, s.roll_number,
-                c.course_name,
+                c.course_name, b.batch_name,
                 si.invoice_number, 
                 si.title as fee_description
             FROM fee_payments fp
-            JOIN student_invoices si ON fp.invoice_id = si.id
+            JOIN student_invoices i ON fp.invoice_id = i.id
+            JOIN student_invoices si ON fp.invoice_id = si.id -- Double join for safety
             JOIN students s ON si.student_id = s.student_id
             LEFT JOIN courses c ON s.course_id = c.id
+            LEFT JOIN batches b ON s.batch_id = b.id
             WHERE ${isUUID ? 'fp.id = $1::uuid' : 'fp.transaction_id = $1'}
+            LIMIT 1
         `;
 
         const result = await pool.query(query, [id]);
-        if (result.rows.length === 0) return res.status(404).json({ message: "Receipt not found" });
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Receipt record not found." });
+        }
 
         const data = result.rows[0];
 
-        // 3. Conditional Output: JSON or PDF
+        // 3. Output Logic: If 'token' is in query, user wants a PDF download
         if (req.query.token) {
-            // GENERATE PDF
-            const doc = new PDFDocument({ margin: 50, size: 'A4' });
+            const doc = new PDFDocument({ 
+                size: 'A4', 
+                margin: 50,
+                info: { Title: `Receipt-${data.transaction_id || data.id}` }
+            });
+
+            // Set response headers for PDF stream
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=Receipt_${data.transaction_id || 'Fee'}.pdf`);
+            res.setHeader('Content-Disposition', `inline; filename=Receipt_${data.transaction_id || 'Fee'}.pdf`);
+            
             doc.pipe(res);
 
-            // PDF Content Layout
-            doc.fontSize(22).fillColor('#4f46e5').text('FEE PAYMENT RECEIPT', { align: 'center' }).moveDown();
-            doc.fontSize(10).fillColor('#64748b').text(`Receipt Number: ${data.invoice_number || 'N/A'}`, { align: 'right' });
+            // --- PDF STYLING & CONTENT ---
+            // Header Section
+            doc.fontSize(22).fillColor('#4f46e5').text('OFFICIAL FEE RECEIPT', { align: 'center' }).moveDown(0.5);
+            
+            // Branch/School Branding (Can be dynamic)
+            doc.fontSize(10).fillColor('#64748b').text('Institution: BCSM Portal System', { align: 'left' });
+            doc.text(`Receipt No: ${data.invoice_number || 'N/A'}`, { align: 'right' });
             doc.text(`Transaction ID: ${data.transaction_id || data.id}`, { align: 'right' });
-            doc.text(`Date: ${new Date(data.payment_date).toLocaleDateString()}`, { align: 'right' }).moveDown();
+            doc.text(`Date: ${new Date(data.payment_date).toLocaleDateString('en-IN')}`, { align: 'right' }).moveDown();
             
-            doc.rect(50, doc.y, 500, 2).fill('#4f46e5').moveDown();
+            // Visual Divider
+            doc.rect(50, doc.y, 500, 2).fill('#4f46e5').moveDown(1.5);
             
-            doc.fillColor('#1e293b').fontSize(12).text(`Student: ${data.first_name} ${data.last_name}`, { continued: true });
-            doc.text(`  |  Roll: ${data.roll_number || 'N/A'}`, { align: 'left' });
-            doc.text(`Course: ${data.course_name || 'N/A'}`).moveDown();
+            // Student Details
+            doc.fillColor('#1e293b').fontSize(12).font('Helvetica-Bold')
+               .text(`Student Name: ${data.first_name} ${data.last_name}`);
+            doc.font('Helvetica').fontSize(10)
+               .text(`Enrollment No: ${data.enrollment_no || 'N/A'}`)
+               .text(`Roll Number: ${data.roll_number || 'N/A'}`)
+               .text(`Course/Batch: ${data.course_name} (${data.batch_name || 'General'})`)
+               .moveDown(1.5);
             
-            doc.fontSize(14).text(`Description: ${data.fee_description || 'School Fee Payment'}`);
-            doc.moveDown();
-            doc.fontSize(18).fillColor('#22c55e').text(`TOTAL PAID: INR ${data.amount}`, { align: 'right' });
+            // Payment Summary Table-like structure
+            doc.rect(50, doc.y, 500, 25).fill('#f1f5f9');
+            doc.fillColor('#475569').fontSize(10).font('Helvetica-Bold').text('Description', 60, doc.y - 17);
+            doc.text('Amount Paid', 450, doc.y - 17, { align: 'right' });
+            
+            doc.moveDown(0.8).fillColor('#1e293b').font('Helvetica')
+               .text(data.fee_description || 'General School Fee Payment', 60);
+            doc.fontSize(12).font('Helvetica-Bold')
+               .text(`INR ${parseFloat(data.amount).toLocaleString('en-IN')}`, 450, doc.y - 12, { align: 'right' });
+
+            doc.moveDown(2);
+            doc.rect(50, doc.y, 500, 1).fill('#cbd5e1').moveDown(0.5);
+            
+            // Footer & Verification
+            doc.fontSize(14).fillColor('#16a34a').text(`Payment Status: SUCCESSFUL`, { align: 'center' }).moveDown();
+            doc.fontSize(8).fillColor('#94a3b8')
+               .text('This is a computer-generated receipt and does not require a physical signature.', { align: 'center' })
+               .text(`Generated on: ${new Date().toLocaleString()}`, { align: 'center' });
             
             doc.end();
+
         } else {
-            // RETURN JSON for Frontend UI
-            res.json(data);
+            // Standard JSON response for Frontend Dashboard UI
+            res.json({ success: true, data: data });
         }
 
     } catch (err) {
-        console.error("Receipt System Error:", err.message);
-        res.status(500).json({ message: "Internal Server Error" });
+        console.error("🔥 Final Receipt API Error:", err.message);
+        res.status(500).json({ success: false, message: "Internal Server Error processing receipt." });
     }
 });
+
 module.exports = router;
 

@@ -158,7 +158,11 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label fw-bold small">Exam Fee</label>
-                            <input type="number" id="examination_fee" name="examination_fee" class="form-control" placeholder="0.00" oninput="calculateLiveTotal()">
+                            <input type="number" id="exam_fee" name="exam_fee" class="form-control" placeholder="0.00" oninput="calculateLiveTotal()">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Tuition Fee (Monthly)</label>
+                            <input type="number" id="tuition_fee" name="tuition_fee" class="form-control" placeholder="0.00" oninput="calculateLiveTotal()">
                         </div>
 
                         <div class="col-md-12">
@@ -204,12 +208,13 @@
                                 <th>Course</th>
                                 <th>Batch</th>
                                 <th>Duration</th>
+                                <th>Branch</th>
                                 <th>Total Value</th>
                                 <th class="text-center">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="structures-table-body">
-                            <tr><td colspan="6" class="text-center p-5 text-muted">Loading...</td></tr>
+                            <tr><td colspan="7" class="text-center p-5 text-muted">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -289,74 +294,54 @@
     </div>
 </div>
 
-
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="js/global-config.js?v=2.3.1"></script>
 
 <script>
     // --- STATE ---
-    let currentActiveSessionId = null; // সেশন স্টোর করার জন্য গ্লোবাল ভেরিয়েবল
+    let currentActiveSessionId = null; 
     let subjectsCache = [];
     
     // --- INITIALIZATION ---
     document.addEventListener('DOMContentLoaded', async () => {
         const token = localStorage.getItem('erp-token');
         if (!token) window.location.href = '/login.html';
-        
-        // ১. সেশন ফেচ করা এবং ইনপুট ফিল্ডে সেট করা
         await fetchAndSetSession();
-
-        // ২. ডাটা লোড করা
         loadSubjects();
         loadCourses();
         loadFeeStructures();
     });
 
-    // সেশন ফেচ করার ফাংশন
     async function fetchAndSetSession() {
         try {
             const res = await window.authFetch('/api/academicswithfees/sessions');
             const sessions = await res.json();
             const active = sessions.find(s => s.is_active === true);
-            
             if (active) {
-                currentActiveSessionId = active.academic_session_id; // আপনার ডাটাবেজ কলামের নাম অনুযায়ী
+                currentActiveSessionId = active.academic_session_id; 
                 const sessionInput = document.getElementById('academic_session_id_input');
-                if(sessionInput) {
-                    sessionInput.value = currentActiveSessionId;
-                }
+                if(sessionInput) sessionInput.value = currentActiveSessionId;
                 console.log("🚀 Active Session Loaded:", active.session_name);
             } else {
-                alert("Warning: No active academic session found in system settings.");
+                alert("Warning: No active academic session found.");
             }
-        } catch (e) { 
-            console.error("Session Fetch Error:", e); 
-        }
+        } catch (e) { console.error(e); }
     }
-
-    // ===============================================
-    // ACADEMICS LOGIC
-    // ===============================================
 
     async function loadSubjects() {
         try {
             const res = await window.authFetch('/api/academicswithfees/subjects');
             const data = await res.json();
             subjectsCache = data;
-            
             const list = document.getElementById('subject-list');
             list.innerHTML = data.map(s => `
                 <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <div>
-                        <span class="fw-bold">${s.subject_name}</span>
-                        <small class="text-muted d-block">${s.subject_code}</small>
-                    </div>
+                    <div><span class="fw-bold">${s.subject_name}</span><small class="text-muted d-block">${s.subject_code}</small></div>
                     <div>
                         <button class="btn btn-sm btn-light text-primary" onclick="openSubjectModal('${s.subject_id}', '${s.subject_name}', '${s.subject_code}')"><i class="fas fa-edit"></i></button>
                         <button class="btn btn-sm btn-light text-danger" onclick="deleteItem('subjects', '${s.subject_id}')"><i class="fas fa-trash"></i></button>
                     </div>
-                </li>
-            `).join('');
+                </li>`).join('');
         } catch (e) { console.error(e); }
     }
 
@@ -364,15 +349,11 @@
         try {
             const res = await window.authFetch('/api/academicswithfees/courses');
             const data = await res.json();
-            
             const list = document.getElementById('course-list');
             list.innerHTML = data.map(c => `
                 <li class="list-group-item">
                     <div class="d-flex justify-content-between align-items-center mb-2">
-                        <div>
-                            <span class="fw-bold text-dark">${c.course_name}</span>
-                            <span class="badge bg-light text-secondary border ms-2">${c.course_code}</span>
-                        </div>
+                        <div><span class="fw-bold text-dark">${c.course_name}</span><span class="badge bg-light text-secondary border ms-2">${c.course_code}</span></div>
                         <div>
                             <button class="btn btn-sm btn-outline-secondary" onclick="openBatchManager('${c.course_id}', '${c.course_name}')">Batches</button>
                             <button class="btn btn-sm btn-outline-secondary" onclick="openAssignModal('${c.course_id}')">Subjects</button>
@@ -382,8 +363,7 @@
                             </div>
                         </div>
                     </div>
-                </li>
-            `).join('');
+                </li>`).join('');
             populateCourseDropdown(data);
         } catch (e) { console.error(e); }
     }
@@ -416,39 +396,22 @@
         const id = document.getElementById('item-id').value;
         const name = document.getElementById('item-name').value;
         const code = document.getElementById('item-code').value;
-
-        const bodyMap = {
-            subjects: { subject_name: name, subject_code: code },
-            courses: { course_name: name, course_code: code }
-        };
-
+        const body = type === 'subjects' ? { subject_name: name, subject_code: code } : { course_name: name, course_code: code };
         const url = id ? `/api/academicswithfees/${type}/${id}` : `/api/academicswithfees/${type}`;
-        const method = id ? 'PUT' : 'POST';
-
         try {
-            const res = await window.authFetch(url, { method, body: JSON.stringify(bodyMap[type]) });
-            if (res.ok) {
-                genericModal.hide();
-                if(type === 'subjects') loadSubjects();
-                else loadCourses();
-            } else { alert("Operation failed"); }
-        } catch (e) { alert("Network error"); }
+            const res = await window.authFetch(url, { method: id ? 'PUT' : 'POST', body: JSON.stringify(body) });
+            if (res.ok) { genericModal.hide(); type === 'subjects' ? loadSubjects() : loadCourses(); }
+        } catch (e) { console.error(e); }
     });
 
     async function deleteItem(type, id) {
         if(!confirm("Are you sure?")) return;
         try {
             const res = await window.authFetch(`/api/academicswithfees/${type}/${id}`, { method: 'DELETE' });
-            if(res.ok) {
-                if(type === 'subjects') loadSubjects();
-                else loadCourses();
-            }
+            if(res.ok) type === 'subjects' ? loadSubjects() : loadCourses();
         } catch(e) { console.error(e); }
     }
 
-    // ===============================================
-    // BATCH MANAGEMENT
-    // ===============================================
     const batchModal = new bootstrap.Modal(document.getElementById('batchModal'));
 
     async function openBatchManager(courseId, courseName) {
@@ -469,7 +432,7 @@
                     <span>${b.batch_name} (${b.batch_code})</span>
                     <button class="btn btn-sm text-danger" onclick="deleteBatch('${b.batch_id}')"><i class="fas fa-trash"></i></button>
                 </li>`).join('');
-        } catch(e) { list.innerHTML = '<li class="list-group-item text-danger">Error</li>'; }
+        } catch(e) { console.error(e); }
     }
 
     async function quickAddBatch() {
@@ -477,18 +440,13 @@
         const name = document.getElementById('new-batch-name').value;
         const code = document.getElementById('new-batch-code').value;
         if(!name) return alert("Batch Name required");
-
         try {
             const res = await window.authFetch('/api/academicswithfees/batches', {
                 method: 'POST',
                 body: JSON.stringify({ course_id: courseId, batch_name: name, batch_code: code })
             });
-            if(res.ok) {
-                document.getElementById('new-batch-name').value = '';
-                document.getElementById('new-batch-code').value = '';
-                loadBatches(courseId);
-            }
-        } catch(e) { alert("Error adding batch"); }
+            if(res.ok) { document.getElementById('new-batch-name').value = ''; document.getElementById('new-batch-code').value = ''; loadBatches(courseId); }
+        } catch(e) { console.error(e); }
     }
 
     async function deleteBatch(id) {
@@ -497,26 +455,19 @@
         try {
             await window.authFetch(`/api/academicswithfees/batches/${id}`, { method: 'DELETE' });
             loadBatches(courseId);
-        } catch(e) { alert("Error deleting batch"); }
+        } catch(e) { console.error(e); }
     }
-
-    // ===============================================
-    // FEE MANAGEMENT LOGIC
-    // ===============================================
 
     function populateCourseDropdown(courses) {
         const select = document.getElementById('course_code_select');
         select.innerHTML = '<option value="">Select Course</option>';
-        courses.forEach(c => {
-            select.innerHTML += `<option value="${c.course_id}">${c.course_name} (${c.course_code})</option>`;
-        });
+        courses.forEach(c => { select.innerHTML += `<option value="${c.course_id}">${c.course_name} (${c.course_code})</option>`; });
     }
 
     document.getElementById('course_code_select').addEventListener('change', async function() {
         const courseId = this.value;
         const batchSelect = document.getElementById('batch_code_select');
-        batchSelect.innerHTML = '<option value="">Loading...</option>';
-        batchSelect.disabled = true;
+        batchSelect.innerHTML = '<option value="">Loading...</option>'; batchSelect.disabled = true;
         if(!courseId) return;
         try {
             const res = await window.authFetch(`/api/academicswithfees/courses/${courseId}/batches`);
@@ -534,7 +485,6 @@
         if(!isVisible) {
             document.getElementById('fee-form').reset();
             document.getElementById('structure_id').value = '';
-            // অ্যাক্টিভ সেশন আইডি পুনরায় ফর্ম ইনপুটে সেট করা
             if(currentActiveSessionId) document.getElementById('academic_session_id_input').value = currentActiveSessionId;
             document.getElementById('fee-form-title').innerText = 'New Fee Structure';
             toggleOptionalFees();
@@ -553,51 +503,40 @@
         const duration = parseInt(document.getElementById('course_duration').value) || 1;
         const adm = parseFloat(document.getElementById('admission_fee').value) || 0;
         const reg = parseFloat(document.getElementById('registration_fee').value) || 0;
-        const exam = parseFloat(document.getElementById('examination_fee').value) || 0;
+        
+        // ফিক্সড: আইডি গুলো ঠিক করা হয়েছে
+        const examEl = document.getElementById('exam_fee');
+        const tuitionEl = document.getElementById('tuition_fee');
+        
+        const exam = examEl ? (parseFloat(examEl.value) || 0) : 0;
+        const tuition = tuitionEl ? (parseFloat(tuitionEl.value) || 0) * duration : 0;
+        
         const trans = document.getElementById('has_transport').checked ? (parseFloat(document.getElementById('transport_fee').value) || 0) * duration : 0;
         const hostel = document.getElementById('has_hostel').checked ? (parseFloat(document.getElementById('hostel_fee').value) || 0) * duration : 0;
-        const total = adm + reg + exam + trans + hostel;
-        document.getElementById('live-total').innerText = `₹${total.toFixed(2)}`;
+        
+        const total = adm + reg + exam + tuition + trans + hostel;
+        document.getElementById('live-total').innerText = `₹${total.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
     }
 
-    // Submit Fee Form (FIXED)
     document.getElementById('fee-form').addEventListener('submit', async function(e) {
         e.preventDefault();
-        
-        // ১. সেশন আইডি চেক (মেমোরি ভেরিয়েবল থেকে)
-        if(!currentActiveSessionId) {
-            return alert("No active academic session found. Please set one in settings.");
-        }
-
+        if(!currentActiveSessionId) return alert("No active session found.");
         const formData = new FormData(this);
         const payload = Object.fromEntries(formData.entries());
-        
         payload.has_transport = document.getElementById('has_transport').checked;
         payload.has_hostel = document.getElementById('has_hostel').checked;
         payload.course_duration_months = parseInt(payload.course_duration_months);
-        payload.academic_session_id = currentActiveSessionId; // ডাটাবেজ কলামের নাম অনুযায়ী
-
-        ['admission_fee', 'registration_fee', 'examination_fee', 'transport_fee', 'hostel_fee'].forEach(key => {
+        payload.academic_session_id = currentActiveSessionId; 
+        ['admission_fee', 'registration_fee', 'exam_fee', 'tuition_fee', 'transport_fee', 'hostel_fee'].forEach(key => {
             payload[key] = parseFloat(payload[key]) || 0;
         });
-
-        const id = payload.structure_id;
-        delete payload.structure_id;
-
-        const url = id ? `/api/academicswithfees/fees/structures/${id}` : '/api/academicswithfees/fees/structures';
-        const method = id ? 'PUT' : 'POST';
-
+        const id = payload.structure_id; delete payload.structure_id;
         try {
-            const res = await window.authFetch(url, { method, body: JSON.stringify(payload) });
-            if(res.ok) {
-                alert("Saved successfully!");
-                toggleFeeForm();
-                loadFeeStructures();
-            } else {
-                const err = await res.json();
-                alert("Error: " + err.message);
-            }
-        } catch(e) { alert("Network Error"); }
+            const res = await window.authFetch(id ? `/api/academicswithfees/fees/structures/${id}` : '/api/academicswithfees/fees/structures', { 
+                method: id ? 'PUT' : 'POST', body: JSON.stringify(payload) 
+            });
+            if(res.ok) { alert("Saved!"); toggleFeeForm(); loadFeeStructures(); }
+        } catch(e) { console.error(e); }
     });
 
     async function loadFeeStructures() {
@@ -605,19 +544,17 @@
         try {
             const res = await window.authFetch('/api/academicswithfees/fees/structures');
             const data = await res.json();
-            if(data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-muted">No structures defined yet.</td></tr>';
-                return;
-            }
+            if(data.length === 0) { tbody.innerHTML = '<tr><td colspan="7" class="text-center p-4 text-muted">No structures.</td></tr>'; return; }
             tbody.innerHTML = data.map(s => {
                 const duration = s.course_duration_months || 1;
-                const fixed = parseFloat(s.admission_fee) + parseFloat(s.registration_fee) + parseFloat(s.examination_fee);
-                const monthly = ((s.has_transport ? parseFloat(s.transport_fee) : 0) + (s.has_hostel ? parseFloat(s.hostel_fee) : 0)) * duration;
+                const fixed = parseFloat(s.admission_fee || 0) + parseFloat(s.registration_fee || 0) + parseFloat(s.exam_fee || 0); 
+                const monthly = ((parseFloat(s.tuition_fee) || 0) + (s.has_transport ? parseFloat(s.transport_fee) : 0) + (s.has_hostel ? parseFloat(s.hostel_fee) : 0)) * duration;
                 return `<tr>
                     <td class="fw-bold">${s.structure_name}</td>
                     <td>${s.course_code || 'N/A'}</td>
                     <td><span class="badge bg-light text-dark border">${s.batch_code || 'N/A'}</span></td>
                     <td>${duration} Mo</td>
+                    <td><span class="badge bg-info text-dark">${s.branch_name || 'Main'}</span></td>
                     <td class="text-success fw-bold">₹${(fixed + monthly).toFixed(2)}</td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-outline-primary" onclick="editFeeStructure('${s.id}')"><i class="fas fa-edit"></i></button>
@@ -636,19 +573,20 @@
             document.getElementById('fee-form-title').innerText = 'Edit Fee Structure';
             document.getElementById('structure_id').value = data.id;
             document.getElementById('course_code_select').value = data.course_id;
-            
-            const batchRes = await window.authFetch(`/api/academicswithfees/courses/${data.course_id}/batches`);
-            const batches = await batchRes.json();
-            const batchSelect = document.getElementById('batch_code_select');
-            batchSelect.innerHTML = '<option value="">Select Batch</option>';
-            batches.forEach(b => { batchSelect.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`; });
-            batchSelect.disabled = false;
-            batchSelect.value = data.batch_id;
-
+            const bRes = await window.authFetch(`/api/academicswithfees/courses/${data.course_id}/batches`);
+            const batches = await bRes.json();
+            const bSelect = document.getElementById('batch_code_select');
+            bSelect.innerHTML = '<option value="">Select Batch</option>';
+            batches.forEach(b => { bSelect.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`; });
+            bSelect.disabled = false; bSelect.value = data.batch_id;
             document.getElementById('course_duration').value = data.course_duration_months;
             document.getElementById('admission_fee').value = data.admission_fee;
             document.getElementById('registration_fee').value = data.registration_fee;
-            document.getElementById('examination_fee').value = data.examination_fee;
+            
+            // ফিক্সড: এডিট মোডে নতুন ইনপুটগুলো পপুলেট করা
+            if(document.getElementById('exam_fee')) document.getElementById('exam_fee').value = data.exam_fee || 0;
+            if(document.getElementById('tuition_fee')) document.getElementById('tuition_fee').value = data.tuition_fee || 0;
+            
             document.getElementById('has_transport').checked = data.has_transport;
             document.getElementById('transport_fee').value = data.transport_fee;
             document.getElementById('has_hostel').checked = data.has_hostel;
@@ -662,14 +600,10 @@
         try {
             const res = await window.authFetch(`/api/academicswithfees/fees/structures/${id}`, { method: 'DELETE' });
             if(res.ok) loadFeeStructures();
-        } catch(e) { alert("Error deleting"); }
+        } catch(e) { console.error(e); }
     }
 
-    // ===============================================
-    // SUBJECT ASSIGNMENT
-    // ===============================================
     const assignModal = new bootstrap.Modal(document.getElementById('assignModal'));
-
     async function openAssignModal(courseId) {
         document.getElementById('assign-course-id').value = courseId;
         const container = document.getElementById('subject-checkbox-list');
@@ -680,13 +614,8 @@
             const assigned = await res.json();
             const assignedIds = new Set(assigned.map(s => s.subject_id));
             container.innerHTML = subjectsCache.map(s => `
-                <div class="col-md-6">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" value="${s.subject_id}" id="sub-${s.subject_id}" ${assignedIds.has(s.subject_id) ? 'checked' : ''}>
-                        <label class="form-check-label" for="sub-${s.subject_id}">${s.subject_name}</label>
-                    </div>
-                </div>`).join('');
-        } catch(e) { container.innerHTML = 'Error'; }
+                <div class="col-md-6"><div class="form-check"><input class="form-check-input" type="checkbox" value="${s.subject_id}" id="sub-${s.subject_id}" ${assignedIds.has(s.subject_id) ? 'checked' : ''}><label class="form-check-label" for="sub-${s.subject_id}">${s.subject_name}</label></div></div>`).join('');
+        } catch(e) { console.error(e); }
     }
 
     async function saveSubjectAssignments() {
@@ -694,14 +623,10 @@
         const checkboxes = document.querySelectorAll('#subject-checkbox-list input:checked');
         const subjectIds = Array.from(checkboxes).map(c => c.value);
         try {
-            const res = await window.authFetch(`/api/academicswithfees/courses/${courseId}/subjects`, {
-                method: 'PUT',
-                body: JSON.stringify({ subjectIds })
-            });
+            const res = await window.authFetch(`/api/academicswithfees/courses/${courseId}/subjects`, { method: 'PUT', body: JSON.stringify({ subjectIds }) });
             if(res.ok) { alert("Saved!"); assignModal.hide(); }
-        } catch(e) { alert("Failed"); }
+        } catch(e) { console.error(e); }
     }
 </script>
-
 </body>
 </html>

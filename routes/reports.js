@@ -580,29 +580,31 @@ router.get('/batch/:batchId', authenticateToken, authorize(['Teacher', 'Admin', 
 });
 
 // =========================================================
-// 🎯 31. DASHBOARD KPI STATS (FIXED FOR 404 ERROR)
+// 🎯 31. DASHBOARD KPI STATS (FIXED & SECURE)
 // =========================================================
 router.get('/stats', authenticateToken, async (req, res) => {
-    const { branch_id } = req.query;
+    // ইউজারের রোল অনুযায়ী ব্রাঞ্চ লক করা
+    const { branch_id: userBranchId, role } = req.user;
+    const requestedBranchId = req.query.branch_id;
+
+    let targetId;
+    // Super Admin সব ব্রাঞ্চের ডাটা দেখতে পারবে, সাধারণ Admin শুধু নিজের
+    if (role === 'Super Admin' || role === 'Prime Admin') {
+        targetId = (requestedBranchId && requestedBranchId !== 'all') ? requestedBranchId : null;
+    } else {
+        targetId = userBranchId;
+    }
+
     try {
-        // ব্রাঞ্চ আইডি ফিল্টার লজিক
-        const bId = (branch_id && branch_id !== 'all' && branch_id !== 'undefined') ? branch_id : null;
-        const params = bId ? [bId] : [];
-        const branchClause = bId ? `WHERE branch_id = $1` : '';
+        const params = targetId ? [targetId] : [];
+        const whereClause = targetId ? `WHERE branch_id = $1` : '';
 
-        // ১. মোট এনরোল করা স্টুডেন্ট কাউন্ট
-        const stdQuery = `SELECT COUNT(*)::int as count FROM students ${branchClause}`;
-        
-        // ২. একটিভ স্টাফ ও টিচার কাউন্ট (Student বাদে সবাই)
-        const staffQuery = `SELECT COUNT(*)::int as count FROM users ${bId ? `WHERE branch_id = $1 AND role != 'Student'` : `WHERE role != 'Student'`}`;
-        
-        // ৩. এই মাসের মোট ফি কালেকশন (Monthly MTD Fees)
-        const feeQuery = `SELECT COALESCE(SUM(amount), 0)::numeric as total FROM fee_payments ${bId ? `WHERE branch_id = $1 AND payment_date >= DATE_TRUNC('month', CURRENT_DATE)` : `WHERE payment_date >= DATE_TRUNC('month', CURRENT_DATE)`}`;
+        // queries...
+        const stdQuery = `SELECT COUNT(*)::int as count FROM students ${whereClause}`;
+        const staffQuery = `SELECT COUNT(*)::int as count FROM users ${targetId ? `WHERE branch_id = $1 AND role != 'Student'` : `WHERE role != 'Student'`}`;
+        const feeQuery = `SELECT COALESCE(SUM(amount), 0)::numeric as total FROM fee_payments ${targetId ? `WHERE branch_id = $1 AND payment_date >= DATE_TRUNC('month', CURRENT_DATE)` : `WHERE payment_date >= DATE_TRUNC('month', CURRENT_DATE)`}`;
+        const attQuery = `SELECT ROUND((COUNT(CASE WHEN status::text ILIKE 'present' THEN 1 END)::numeric / NULLIF(COUNT(*), 0)) * 100, 1) as avg FROM attendance WHERE attendance_date = CURRENT_DATE ${targetId ? `AND student_id IN (SELECT student_id FROM students WHERE branch_id = $1)` : ''}`;
 
-        // ৪. আজকের গড় উপস্থিতি (Attendance %)
-        const attQuery = `SELECT ROUND((COUNT(CASE WHEN status::text ILIKE 'present' THEN 1 END)::numeric / NULLIF(COUNT(*), 0)) * 100, 1) as avg FROM attendance WHERE attendance_date = CURRENT_DATE ${bId ? `AND branch_id = $1` : ''}`;
-
-        // সব কুয়েরি একসাথে রান করা (Performance Optimization)
         const [std, staff, fee, att] = await Promise.all([
             pool.query(stdQuery, params),
             pool.query(staffQuery, params),
@@ -610,7 +612,6 @@ router.get('/stats', authenticateToken, async (req, res) => {
             pool.query(attQuery, params).catch(() => ({ rows: [{ avg: 0 }] }))
         ]);
 
-        // ফ্রন্টএন্ডের প্রত্যাশিত ফরম্যাটে ডাটা পাঠানো
         res.json({
             students: std.rows[0].count,
             staff: staff.rows[0].count,
@@ -619,7 +620,6 @@ router.get('/stats', authenticateToken, async (req, res) => {
         });
         
     } catch (err) {
-        console.error("Dashboard Stats Sync Failed:", err.message);
         res.status(500).json({ error: "KPI Sync Failed" });
     }
 });

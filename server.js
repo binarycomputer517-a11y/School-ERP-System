@@ -40,6 +40,7 @@ const usersRouter = require('./routes/users');
 const vmsRouter = require('./routes/vms'); 
 const verifyRouter = require('./routes/verify'); 
 const settingsRouter = require('./routes/settings');
+const { generateAndSendDailyReport } = require('./routes/daily-report-automation');
 const mediaRouter = require('./routes/media');
 const announcementsRouter = require('./routes/announcements');
 const noticesRouter = require('./routes/notices');
@@ -293,6 +294,54 @@ app.use('/api/asset', assetRouter);
 // All routes mounted below require a valid Bearer Token
 app.use('/api', authenticateToken);
 
+/**
+ * ✅ UPDATED: MANUAL REPORT TRIGGER
+ * এটি এখন Super Admin এবং Branch Admin (যেমন wb02_admin) উভয়কেই অনুমতি দেবে।
+ */
+app.get('/api/finance/trigger-daily-report', authenticateToken, async (req, res) => {
+    try {
+        // 🛡️ রোল চেক আপডেট: super admin অথবা admin হলেই রিপোর্ট জেনারেট হবে
+        const allowedRoles = ['super admin', 'admin'];
+        
+        if (!allowedRoles.includes(req.user.role.toLowerCase())) {
+            return res.status(403).json({ message: "Access denied. Only Admins can generate reports." });
+        }
+
+        console.log(`📊 Report triggered by: ${req.user.username} (Role: ${req.user.role})`);
+        
+        await generateAndSendDailyReport();
+        res.json({ success: true, message: "Daily Report generation triggered! Check your email." });
+    } catch (err) {
+        console.error("Manual Trigger Error:", err);
+        res.status(500).json({ message: "Failed to trigger report." });
+    }
+});
+
+/**
+ * 2. TEST EMAIL DELIVERY (Fixed Path)
+ */
+app.post('/api/utils/test-email', async (req, res) => {
+    // ✅ সংশোধন: মেইলার ফাইল থেকে ইমপোর্ট করুন
+    const { sendEmailWithAttachment } = require('./utils/mailer');
+    
+    try {
+        await sendEmailWithAttachment({
+            to: 'casudam1989@gmail.com',
+            subject: '🚀 ERP System: Email Service Test',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 2px solid #005A9C;">
+                    <h2 style="color: #005A9C;">Connection Successful!</h2>
+                    <p>Your SMTP settings are working perfectly for the BCSM Portal.</p>
+                    <p>Timestamp: <b>${new Date().toLocaleString()}</b></p>
+                </div>
+            `
+        });
+        res.json({ success: true, message: "Test email sent successfully! Check your inbox." });
+    } catch (error) {
+        console.error("Test Email Error:", error);
+        res.status(500).json({ success: false, message: "Email failed to send." });
+    }
+});
 // ==========================================
 // CUSTOM ROUTE 1: Student Fee Clearance Check
 // ==========================================
@@ -634,6 +683,16 @@ process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down gracefully...');
     await pool.end();
     process.exit(0);
+});
+
+cron.schedule('0 21 * * *', async () => {
+    try {
+        console.log('--- 📊 Starting Scheduled Daily Report Automation ---');
+        await generateAndSendDailyReport();
+        console.log('✅ Scheduled Report Task Completed.');
+    } catch (err) {
+        console.error('❌ Scheduled Report Task Failed:', err);
+    }
 });
 
 startServer();
