@@ -537,7 +537,7 @@
             sessionSelect.innerHTML = '<option value="">-- Select Session --</option>';
             if (Array.isArray(sessions)) {
                 sessions.forEach(s => {
-                    sessionSelect.innerHTML += `<option value="${s.id || s.academic_session_id}">${s.name || s.session_name}</option>`;
+                    sessionSelect.innerHTML += `<option value="${s.academic_session_id || s.academic_session_id}">${s.name || s.session_name}</option>`;
                 });
             }
             

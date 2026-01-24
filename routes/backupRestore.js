@@ -1,77 +1,135 @@
-// routes/backupRestore.js
-
 const express = require('express');
 const router = express.Router();
 const { authenticateToken, authorize } = require('../authMiddleware');
 const fs = require('fs');
 const path = require('path');
+const { exec } = require('child_process');
+const { pool } = require('../database');
 
-// NOTE: __dirname is routes/, so ../backups is sibling to routes/
 const BACKUP_DIR = path.join(__dirname, '../backups'); 
-// Ensure the backups directory exists
-if (!fs.existsSync(BACKUP_DIR)) {
-    fs.mkdirSync(BACKUP_DIR, { recursive: true });
-}
+if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+
+const DB_CONFIG = {
+    user: process.env.DB_USER || 'sudammaity',
+    pass: process.env.DB_PASSWORD,
+    name: process.env.DB_DATABASE || 'school_erp',
+    port: process.env.DB_PORT || 5433,
+    gpgPass: process.env.GPG_PASS || 'default_pass'
+};
 
 /**
- * @route POST /api/system/backup/initiate
- * @desc Triggers a manual database backup (Now actually writes a placeholder file).
- * @access Private (Super Admin, IT Helpdesk)
+ * 1. Encrypted Backup + Real-time Cloud Push
+ * Logic: pg_dump -> GPG AES-256 -> Local Storage -> Rclone Push
  */
-router.post('/initiate', authenticateToken, authorize(['Super Admin', 'IT Helpdesk']), async (req, res) => {
-    try {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `erp_backup_${timestamp}.sql`;
-        const filePath = path.join(BACKUP_DIR, filename);
+
+router.post('/initiate', authenticateToken, authorize(['Super Admin']), async (req, res) => {
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const filename = `erp_secure_${timestamp}.sql.gpg`;
+    const filePath = path.join(BACKUP_DIR, filename);
+
+    // ধাপ ১: লোকাল এনক্রিপ্টেড ব্যাকআপ তৈরি
+    const backupCmd = `export PGPASSWORD='${DB_CONFIG.pass}'; pg_dump -U ${DB_CONFIG.user} -p ${DB_CONFIG.port} ${DB_CONFIG.name} | gpg --batch --yes --passphrase ${DB_CONFIG.gpgPass} -c -o ${filePath}`;
+
+    exec(backupCmd, (error) => {
+        if (error) {
+            console.error('[DR] Local Backup Failure:', error);
+            return res.status(500).json({ message: 'Local Encryption Engine Failed.' });
+        }
+
+        console.log(`[DR] Archive Locked locally: ${filename}. Starting Cloud Sync...`);
+
+        // ধাপ ২: ক্লাউড সিঙ্ক (Rclone ব্যবহার করে গুগল ড্রাইভে পাঠানো)
+        // এটি ব্যাকগ্রাউন্ডে চলবে যাতে ইউজারকে বেশিক্ষণ ওয়েট করতে না হয়
+        const cloudCmd = `rclone copy ${filePath} googledrive:school_erp_backups`;
         
-        // --- ACTUAL FILE WRITE (SIMULATED DUMP) ---
-        // This is the FIX: Write a small placeholder file so the GET route can find it.
-        const simulatedContent = `-- School ERP Simulated Database Backup Dump\n-- Timestamp: ${timestamp}`;
-        fs.writeFileSync(filePath, simulatedContent); 
-        
-        // Simulating the operation time (kept for UX)
-        await new Promise(resolve => setTimeout(resolve, 1500)); 
-        
-        // Simulating success
-        res.status(200).json({
-            message: 'Backup initiated successfully.',
-            filename: filename,
-            path: filePath
+        exec(cloudCmd, (cloudErr) => {
+            if (cloudErr) {
+                console.error('🚨 [CLOUD] Sync Failed. Run "rclone config" to check connection.', cloudErr);
+            } else {
+                console.log(`✅ [CLOUD] Success: ${filename} is now safe in Google Drive.`);
+            }
         });
-    } catch (error) {
-        console.error('Backup Initiation Error:', error);
-        res.status(500).json({ message: 'Backup failed during processing.' });
+
+        res.status(200).json({ 
+            message: 'Local Backup Success. Cloud Sync initiated in background.', 
+            filename: filename,
+            is_cloud: true 
+        });
+    });
+});
+
+/**
+ * 2. Non-Destructive Sandbox Integrity Test
+ */
+
+router.post('/test-integrity', authenticateToken, authorize(['Super Admin']), async (req, res) => {
+    const { filename } = req.body;
+    const sandboxDB = "erp_sandbox_test";
+
+    try {
+        await pool.query(`DROP DATABASE IF EXISTS ${sandboxDB}`);
+        await pool.query(`CREATE DATABASE ${sandboxDB}`);
+        await new Promise(r => setTimeout(r, 2000)); // Settlement delay
+
+        const restoreCmd = `export PGPASSWORD='${DB_CONFIG.pass}'; gpg --batch --passphrase ${DB_CONFIG.gpgPass} -d ${path.join(BACKUP_DIR, filename)} | psql -U ${DB_CONFIG.user} -p ${DB_CONFIG.port} -d ${sandboxDB}`;
+
+        exec(restoreCmd, (error, stdout, stderr) => {
+            if (error) {
+                console.error("[DR] Integrity Check Failed:", stderr);
+                return res.status(500).json({ success: false, message: "Decryption or Structure Mismatch." });
+            }
+            res.json({ success: true, message: "INTEGRITY PASSED: Archive structure validated in Sandbox." });
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Sandbox creation failed." });
     }
 });
 
 /**
- * @route GET /api/system/backup/list
- * @desc Lists recent backup files.
- * @access Private (Super Admin, IT Helpdesk)
+ * 3. Final Production Restore (Emergency Protocol)
  */
-router.get('/list', authenticateToken, authorize(['Super Admin', 'IT Helpdesk']), async (req, res) => {
+router.post('/restore-live', authenticateToken, authorize(['Super Admin']), async (req, res) => {
+    const { filename } = req.body;
+    
     try {
-        // List files in the backups directory and extract metadata
+        // Drop connections to avoid 'database is in use' errors
+        await pool.query(`
+            SELECT pg_terminate_backend(pg_stat_activity.pid)
+            FROM pg_stat_activity
+            WHERE pg_stat_activity.datname = '${DB_CONFIG.name}'
+              AND pid <> pg_backend_pid();
+        `);
+
+        const restoreCmd = `export PGPASSWORD='${DB_CONFIG.pass}'; gpg --batch --passphrase ${DB_CONFIG.gpgPass} -d ${path.join(BACKUP_DIR, filename)} | psql -U ${DB_CONFIG.user} -p ${DB_CONFIG.port} -d ${DB_CONFIG.name}`;
+
+        exec(restoreCmd, (error, stdout, stderr) => {
+            if (error) return res.status(500).json({ success: false, message: "Restore Interrupted." });
+            res.json({ success: true, message: "CRITICAL: Database Overwritten Successfully." });
+        });
+    } catch (err) {
+        res.status(500).json({ success: false, message: "Could not lock database for restore." });
+    }
+});
+
+/**
+ * 4. List Archives (Local View)
+ */
+router.get('/list', authenticateToken, authorize(['Super Admin']), async (req, res) => {
+    try {
         const files = fs.readdirSync(BACKUP_DIR)
-            .filter(name => name.endsWith('.sql') || name.endsWith('.bak'))
+            .filter(name => name.endsWith('.gpg'))
             .map(name => {
-                const stats = fs.statSync(path.join(BACKUP_DIR, name));
+                const stats = fs.statSync(path.join(BACK-DIR, name));
                 return {
                     filename: name,
                     timestamp: stats.mtime,
-                    size: stats.size // size in bytes
+                    size: (stats.size / 1024).toFixed(2) + " KB",
+                    is_cloud: true // Mark as cloud syncable
                 };
             })
-            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // Sort newest first
-
-        res.status(200).json(files);
-    } catch (error) {
-        if (error.code === 'ENOENT') {
-            return res.status(200).json([]);
-        }
-        console.error('Backup List Error:', error);
-        res.status(500).json({ message: 'Failed to retrieve backup list.' });
-    }
+            .sort((a, b) => b.timestamp - a.timestamp);
+        res.json(files);
+    } catch (e) { res.json([]); }
 });
 
 module.exports = router;

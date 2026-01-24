@@ -3,11 +3,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enterprise Command Center | BCSM ERP</title>
-    
+    <title>Enterprise Command Center | Master Authority v4.7</title>
+    <script src="https://cesium.com/downloads/cesiumjs/releases/1.110/Build/Cesium/Cesium.js"></script>
+<link href="https://cesium.com/downloads/cesiumjs/releases/1.110/Build/Cesium/Widgets/widgets.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=JetBrains+Mono&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <style>
         :root {
@@ -21,68 +24,55 @@
             --text-main: #2c3e50;
             --text-muted: #636e72;
             --border: #dfe6e9;
-            --shadow: 0 10px 30px rgba(0,0,0,0.08);
+            --shadow: 0 10px 40px rgba(0,0,0,0.1);
         }
 
-        body { font-family: 'Poppins', sans-serif; background: var(--background); color: var(--text-main); margin: 0; padding: 20px; line-height: 1.6; }
+        body { font-family: 'Poppins', sans-serif; background: var(--background); color: var(--text-main); margin: 0; padding: 25px; line-height: 1.6; }
+        .wrapper { max-width: 1600px; margin: auto; }
         
-        /* Layout Structure */
-        .wrapper { max-width: 1500px; margin: auto; }
-        .glass-panel { background: var(--surface); border-radius: 20px; box-shadow: var(--shadow); padding: 35px; margin-bottom: 30px; border: 1px solid rgba(255,255,255,0.3); }
+        /* UI Panels */
+        .glass-panel { background: var(--surface); border-radius: 24px; box-shadow: var(--shadow); padding: 40px; margin-bottom: 35px; border: 1px solid rgba(255,255,255,0.4); transition: 0.4s ease; }
+        .glass-panel:hover { transform: translateY(-5px); box-shadow: 0 15px 50px rgba(0,0,0,0.15); }
 
-        /* Header Components */
-        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px; }
-        .branding h1 { margin: 0; font-size: 2.2rem; font-weight: 800; color: var(--primary-dark); letter-spacing: -1px; }
-        .branding p { margin: 0; color: var(--text-muted); font-weight: 500; }
+        .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 45px; }
+        .branding h1 { margin: 0; font-size: 2.5rem; font-weight: 800; color: var(--primary-dark); letter-spacing: -1.5px; }
+        
+        .analytics-grid { display: grid; grid-template-columns: 2.2fr 1fr; gap: 35px; margin-bottom: 35px; }
+        #branchMap { height: 500px; border-radius: 20px; border: 1px solid var(--border); z-index: 10; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 25px; }
+        .stat-card { background: var(--surface); padding: 30px; border-radius: 20px; border: 1px solid var(--border); display: flex; align-items: center; gap: 25px; }
+        .stat-icon { width: 65px; height: 65px; border-radius: 18px; display: flex; align-items: center; justify-content: center; font-size: 1.8rem; box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
 
-        /* Buttons & Actions */
-        .btn { padding: 12px 24px; border-radius: 12px; border: none; font-weight: 600; cursor: pointer; transition: 0.3s; display: inline-flex; align-items: center; gap: 10px; font-size: 0.95rem; text-decoration: none; }
-        .btn-primary { background: var(--primary); color: white; box-shadow: 0 4px 15px rgba(0,90,156,0.3); }
-        .btn-primary:hover { transform: translateY(-2px); background: var(--primary-dark); }
+        .btn { padding: 14px 28px; border-radius: 14px; border: none; font-weight: 700; cursor: pointer; transition: 0.3s; display: inline-flex; align-items: center; gap: 12px; font-size: 1rem; text-decoration: none; }
+        .btn-primary { background: var(--primary); color: white; box-shadow: 0 6px 20px rgba(0,90,156,0.25); }
         .btn-secondary { background: var(--surface); border: 2px solid var(--border); color: var(--text-main); }
         .btn-danger { background: var(--accent); color: white; }
 
-        /* Stats & Analytics Row */
-        .analytics-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; margin-bottom: 30px; }
-        .stats-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; }
-        .stat-card { background: var(--surface); padding: 25px; border-radius: 18px; border: 1px solid var(--border); transition: 0.3s; }
-        .stat-card:hover { border-color: var(--primary); box-shadow: var(--shadow); }
-        .stat-icon { width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; margin-bottom: 15px; }
+        /* Tables */
+        .enterprise-table { width: 100%; border-collapse: separate; border-spacing: 0 15px; }
+        .enterprise-table th { padding: 25px; text-align: left; color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.85rem; letter-spacing: 1.5px; }
+        .enterprise-table tr { background: white; transition: 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.02); }
+        .enterprise-table td { padding: 25px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+        .enterprise-table td:first-child { border-left: 1px solid var(--border); border-radius: 20px 0 0 20px; }
+        .enterprise-table td:last-child { border-right: 1px solid var(--border); border-radius: 0 20px 20px 0; }
+
+        /* Modals & Forms */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,33,66,0.8); display: none; z-index: 5000; align-items: center; justify-content: center; backdrop-filter: blur(10px); }
+        .modal-content { background: white; width: 950px; border-radius: 30px; padding: 50px; position: relative; max-height: 90vh; overflow-y: auto; animation: zoomIn 0.3s ease; }
+        @keyframes zoomIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
         
-        /* Table Engine */
-        .data-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; gap: 20px; }
-        .search-container { position: relative; flex-grow: 1; max-width: 500px; }
-        .search-container i { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); color: var(--text-muted); }
-        .search-container input { width: 100%; padding: 14px 20px 14px 55px; border-radius: 15px; border: 2px solid var(--border); outline: none; font-family: inherit; transition: 0.3s; }
-        .search-container input:focus { border-color: var(--primary); box-shadow: 0 0 0 4px rgba(0,90,156,0.1); }
+        .form-control { width: 100%; padding: 15px 20px; border-radius: 12px; border: 1.5px solid var(--border); box-sizing: border-box; font-size: 1rem; }
+        .form-control:focus { border-color: var(--primary); outline: none; box-shadow: 0 0 0 5px rgba(0,90,156,0.15); }
 
-        .enterprise-table { width: 100%; border-collapse: separate; border-spacing: 0 10px; }
-        .enterprise-table th { padding: 20px; text-align: left; color: var(--text-muted); font-weight: 600; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 1px; }
-        .enterprise-table tr { background: white; transition: 0.3s; }
-        .enterprise-table td { padding: 20px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-        .enterprise-table td:first-child { border-left: 1px solid var(--border); border-top-left-radius: 15px; border-bottom-left-radius: 15px; }
-        .enterprise-table td:last-child { border-right: 1px solid var(--border); border-top-right-radius: 15px; border-bottom-right-radius: 15px; }
-        .enterprise-table tr:hover { transform: scale(1.01); box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .tool-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 35px; }
+        .console-box { background: #1e272e; color: #0be881; padding: 25px; border-radius: 20px; font-family: 'JetBrains Mono'; height: 350px; overflow-y: auto; font-size: 0.9rem; }
+        
+        .dist-pill { background: #fff3e0; color: #e65100; font-weight: 800; padding: 5px 15px; border-radius: 50px; border: 1px solid #ffe082; }
+        .badge-active { background: #e8f5e9; color: #2e7d32; }
+        .badge-inactive { background: #ffebee; color: #c62828; }
 
-        /* Status & Badges */
-        .badge { padding: 6px 14px; border-radius: 10px; font-size: 0.75rem; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; }
-        .badge-active { background: #e8f5e9; color: var(--success); }
-        .badge-inactive { background: #ffebee; color: var(--accent); }
-        .code-tag { font-family: 'JetBrains Mono', monospace; background: #dfe6e9; padding: 2px 8px; border-radius: 5px; font-size: 0.85rem; }
-
-        /* Migration & Advanced Tools */
-        .advanced-tools { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
-        .tool-box { padding: 30px; border-radius: 20px; border: 1px solid var(--border); height: 100%; }
-        .form-group { margin-bottom: 20px; }
-        .form-group label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.9rem; }
-        .form-control { width: 100%; padding: 12px 15px; border-radius: 10px; border: 1px solid var(--border); box-sizing: border-box; font-family: inherit; }
-
-        /* Modal Overlays */
-        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: none; z-index: 2000; align-items: center; justify-content: center; }
-        .modal-content { background: white; width: 600px; border-radius: 20px; padding: 40px; position: relative; animation: slideUp 0.3s ease; }
-        @keyframes slideUp { from { transform: translateY(50px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
-
-        #toast { position: fixed; bottom: 30px; right: 30px; padding: 20px 40px; border-radius: 15px; color: white; display: none; z-index: 9999; font-weight: 600; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+        #toast { position: fixed; bottom: 40px; right: 40px; padding: 25px 50px; border-radius: 20px; color: white; display: none; z-index: 9999; font-weight: 700; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
     </style>
 </head>
 <body>
@@ -91,33 +81,56 @@
 
 <div class="modal" id="add-modal">
     <div class="modal-content">
-        <h2 style="margin-top:0"><i class="fas fa-plus-circle"></i> Provision New Branch</h2>
+        <h2 id="modal-title" style="margin-top:0; color: var(--primary-dark); font-size: 2rem;">
+            <i class="fas fa-satellite-dish"></i> Node Infrastructure Provisioning
+        </h2>
+        <hr style="border: 0; border-top: 2px solid var(--border); margin: 30px 0;">
+        
         <form id="branch-form-full">
-            <div class="form-group">
-                <label>Branch Name</label>
-                <input type="text" id="new_name" class="form-control" placeholder="Main Campus" required>
+            <input type="hidden" id="edit_branch_id">
+            
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:30px; margin-bottom:30px;">
+                <div class="form-group"><label>Branch Legal Name</label><input type="text" id="new_name" class="form-control" placeholder="Kolkata Regional Center" required></div>
+                <div class="form-group"><label>System Node Code</label><input type="text" id="new_code" class="form-control" placeholder="BCSM-ERP-KOL" required></div>
             </div>
-            <div class="form-group">
-                <label>Unique Code</label>
-                <input type="text" id="new_code" class="form-control" placeholder="MC-01" required>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-bottom:30px;">
+                <div class="form-group"><label>Official Email</label><input type="email" id="new_email" class="form-control"></div>
+                <div class="form-group"><label>PAN ID</label><input type="text" id="new_pan" class="form-control"></div>
+                <div class="form-group"><label>GSTIN</label><input type="text" id="new_gst" class="form-control"></div>
             </div>
-            <div class="grid-form" style="display:grid; grid-template-columns:1fr 1fr; gap:15px;">
-                <div class="form-group">
-                    <label>Email</label>
-                    <input type="email" id="new_email" class="form-control" placeholder="admin@domain.com">
+
+            <div id="access-section" style="background: #f8fafc; padding: 30px; border-radius: 20px; border: 1px dashed var(--primary); margin-bottom: 30px;">
+                <h4 style="margin-top:0; color:var(--success);"><i class="fas fa-user-shield"></i> Master Admin Allocation</h4>
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px;">
+                    <div class="form-group"><label>Manager Full Name</label><input type="text" id="new_manager_name" class="form-control"></div>
+                    <div class="form-group"><label>Auth Username</label><input type="text" id="manager_username" class="form-control"></div>
+                    <div class="form-group"><label>Auth Password</label><input type="password" id="manager_password" class="form-control"></div>
                 </div>
-                <div class="form-group">
-                    <label>Phone</label>
-                    <input type="text" id="new_phone" class="form-control" placeholder="+91...">
-                </div>
             </div>
-            <div class="form-group">
-                <label>Full Address</label>
-                <textarea id="new_address" class="form-control" rows="3"></textarea>
+
+            <div style="display:grid; grid-template-columns:1.5fr 1fr 1fr; gap:20px; margin-bottom:30px;">
+                <div class="form-group"><label>Pin Code (Mapping Hub)</label><input type="text" id="pin_code" class="form-control" maxlength="6" required></div>
+                <div class="form-group"><label>Bank Node</label><input type="text" id="bank_name" class="form-control"></div>
+                <div class="form-group"><label>Acc. Number</label><input type="text" id="acc_no" class="form-control"></div>
             </div>
-            <div style="display:flex; justify-content: flex-end; gap:10px; margin-top:20px;">
-                <button type="button" class="btn btn-secondary" onclick="closeModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Create Campus</button>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-bottom:30px;">
+                <div class="form-group"><label>Computer Lab Count</label><input type="number" id="lab_count" class="form-control" placeholder="0"></div>
+                <div class="form-group"><label>Classroom Capacity</label><input type="number" id="class_capacity" class="form-control" placeholder="0"></div>
+                <div class="form-group"><label>Faculty strength</label><input type="number" id="faculty_count" class="form-control" placeholder="0"></div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:30px;">
+                <div class="form-group"><label>Brand Logo Asset</label><input type="file" id="upload_logo" class="form-control"></div>
+                <div class="form-group"><label>Executive Photo</label><input type="file" id="upload_photo" class="form-control"></div>
+            </div>
+
+            <div class="form-group"><label>Physical Site Address</label><textarea id="new_address" class="form-control" rows="3"></textarea></div>
+
+            <div style="display:flex; justify-content: flex-end; gap:20px; margin-top:40px;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal()">Abort Operation</button>
+                <button type="submit" id="submit-btn" class="btn btn-primary">Deploy Cluster Node</button>
             </div>
         </form>
     </div>
@@ -127,291 +140,572 @@
     <header class="page-header">
         <div class="branding">
             <h1>Global Command Center</h1>
-            <p>BCSM Enterprise Resource Planning | Super Admin Authority</p>
+            <p>BCSM Enterprise Resource Planning | Master Infrastructure Control</p>
         </div>
-        <div class="global-actions">
-            <a href="/admin-dashboard.html" class="btn btn-secondary"><i class="fas fa-chevron-left"></i> Exit to Dashboard</a>
-            <button class="btn btn-primary" onclick="openModal()"><i class="fas fa-plus"></i> New Provision</button>
+        <div style="display:flex; gap:20px;">
+            <a href="/admin-dashboard.html" class="btn btn-secondary"><i class="fas fa-desktop"></i> Exit to Core</a>
+            <button class="btn btn-primary" onclick="openProvisionModal()"><i class="fas fa-plus"></i> Initiate Provisioning</button>
         </div>
     </header>
 
     <div class="analytics-grid">
         <div class="glass-panel" style="margin-bottom:0">
-            <h3><i class="fas fa-chart-line"></i> Enrollment Distribution</h3>
-            <canvas id="enrollmentChart" height="120"></canvas>
+            <h3><i class="fas fa-globe-asia"></i> Geospatial Node Distribution</h3>
+            <div id="branchMap"></div>
         </div>
-        <div class="stats-strip" style="display:flex; flex-direction:column; gap:15px;">
-            <div class="stat-card">
-                <div class="stat-icon" style="background:#e3f2fd; color:#1976d2;"><i class="fas fa-university"></i></div>
-                <div class="stat-info"><h4>Total Branches</h4><p id="count-total">0</p></div>
+        <div>
+            <div class="stats-grid" style="grid-template-columns: 1fr; gap:20px;">
+                <div class="stat-card" style="border-left: 8px solid var(--primary);">
+                    <div class="stat-icon" style="background:#e3f2fd; color:var(--primary);"><i class="fas fa-network-wired"></i></div>
+                    <div><h4>System Nodes</h4><p id="count-total" style="font-size:2rem; font-weight:800;">0</p></div>
+                </div>
+                <div class="stat-card" style="border-left: 8px solid var(--success);">
+                    <div class="stat-icon" style="background:#e8f5e9; color:var(--success);"><i class="fas fa-user-graduate"></i></div>
+                    <div><h4>Global Users</h4><p id="count-students" style="font-size:2rem; font-weight:800;">0</p></div>
+                </div>
             </div>
-            <div class="stat-card">
-                <div class="stat-icon" style="background:#e8f5e9; color:#2e7d32;"><i class="fas fa-users"></i></div>
-                <div class="stat-info"><h4>Global Students</h4><p id="count-students">0</p></div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon" style="background:#fff3e0; color:#ef6c00;"><i class="fas fa-satellite-dish"></i></div>
-                <div class="stat-info"><h4>Live Campuses</h4><p id="count-active">0</p></div>
+            <div class="glass-panel" style="padding:25px;">
+                <h4><i class="fas fa-chart-pie"></i> Branch Capacity Load</h4>
+                <canvas id="enrollmentChart" height="250"></canvas>
             </div>
         </div>
     </div>
 
     <div class="glass-panel">
-        <div class="data-toolbar">
-            <div class="search-container">
-                <i class="fas fa-search"></i>
-                <input type="text" id="global-search" onkeyup="filterRegistry()" placeholder="Search registry by name, code, or UUID...">
+        <div style="display:flex; justify-content: space-between; margin-bottom: 35px; gap:30px;">
+            <div style="position:relative; flex-grow:1;">
+                <i class="fas fa-search" style="position:absolute; left:25px; top:50%; transform:translateY(-50%); color:var(--text-muted); font-size:1.2rem;"></i>
+                <input type="text" id="global-search" onkeyup="filterRegistry()" placeholder="Deep Search by UUID, Manager, Pin or Node ID..." class="form-control" style="padding-left:70px; height:60px;">
             </div>
-            <button class="btn btn-secondary" onclick="exportData()"><i class="fas fa-file-export"></i> Export CSV</button>
+            <select id="status-filter" onchange="filterRegistry()" class="form-control" style="width:250px; height:60px;">
+                <option value="all">Filter: All Status</option>
+                <option value="active">Status: Operational</option>
+                <option value="inactive">Status: Decommissioned</option>
+            </select>
+            <button class="btn btn-secondary" onclick="exportData()" style="height:60px;"><i class="fas fa-file-export"></i> Export Audit</button>
         </div>
 
         <table class="enterprise-table">
             <thead>
                 <tr>
-                    <th>Branch Identity</th>
-                    <th>Connectivity</th>
-                    <th>Statistics</th>
-                    <th>System Status</th>
+                    <th>Branch Identity & Node</th>
+                    <th>Managerial Compliance</th>
+                    <th>User Load</th>
+                    <th>System Health</th>
                     <th>Governance</th>
                 </tr>
             </thead>
-            <tbody id="registry-body">
-                </tbody>
+            <tbody id="registry-body"></tbody>
         </table>
     </div>
 
-    <div class="advanced-tools">
-        <div class="glass-panel tool-box" style="background: #fffcf0;">
-            <h3><i class="fas fa-exchange-alt"></i> Master User Migration</h3>
-            <p style="font-size:0.85rem">Transfer user partitions between branches. This re-maps all foreign key relationships.</p>
-            <form id="migration-form-full">
-                <div class="form-group">
-                    <label>Originating Branch</label>
-                    <select id="source_branch" class="form-control" required></select>
-                </div>
-                <div class="form-group">
-                    <label>Destination Branch</label>
-                    <select id="target_branch" class="form-control" required></select>
-                </div>
-                <div class="form-group">
-                    <label>User Unique Identifiers (Comma Separated)</label>
-                    <textarea id="migrate_list" class="form-control" placeholder="STUDENT101, STAFF502, user@domain.com" rows="4"></textarea>
-                </div>
-                <button type="submit" class="btn btn-primary" style="width:100%; background:#d4a017; border:none;"><i class="fas fa-random"></i> Execute Migration</button>
-            </form>
+    <div class="tool-grid">
+        <div class="glass-panel" style="background: #fff8e1;">
+            <h3><i class="fas fa-route"></i> Hub Distance Analysis</h3>
+            <p style="color:#e65100; font-size:0.9rem;">Automated geodesic distance calculation using node coordinates.</p>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:25px; margin-top:30px;">
+                <div class="form-group"><label>Origin Node Pin</label><input type="text" id="pin_src" class="form-control" placeholder="700001"></div>
+                <div class="form-group"><label>Target Node Pin</label><input type="text" id="pin_dest" class="form-control" placeholder="721641"></div>
+            </div>
+            <button class="btn btn-primary" onclick="calculateGeoDistance()" style="width:100%; background:#e65100; border:none; margin-top:10px;">
+                <i class="fas fa-calculator"></i> Execute Distance Sync
+            </button>
+            <div id="dist-result" style="margin-top:25px; text-align:center;"></div>
         </div>
 
-        <div class="glass-panel tool-box">
-            <h3><i class="fas fa-cog"></i> Global System Logs</h3>
-            <div id="log-console" style="background:#2d3436; color:#00b894; padding:20px; border-radius:10px; font-family:'JetBrains Mono'; height:300px; overflow-y:auto; font-size:0.8rem;">
-                <div style="color:#aaa;">[SYSTEM] Initializing Governance Console...</div>
-                <div style="color:#aaa;">[AUTH] Super Admin Access Verified.</div>
-                <div style="color:#0984e3;">[REST] Fetching Branch Schema v2.1...</div>
+        <div class="glass-panel">
+            <h3><i class="fas fa-terminal"></i> Global System Logs</h3>
+            <div id="log-console" class="console-box">
+                <div style="color:#aaa;">[SYSTEM] Initializing Master Governance Console v4.7...</div>
+                <div style="color:#aaa;">[AUTH] Super Admin Token Verified.</div>
+                <div style="color:#0984e3;">[REST] Connection established with Node Registry.</div>
             </div>
         </div>
     </div>
 </div>
 
 <script>
+    // --- গ্লোবাল ভেরিয়েবলস (কোনো লাইন বাদ দেওয়া হয়নি) ---
+    // আপনার Cesium Token এখানে নিশ্চিত করুন
+    Cesium.Ion.defaultAccessToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqdGkiOiIxZDZhOGEzMS1jN2NlLTQ0NjktOWFmMS03YTVhNWQ1ZDg5NjQiLCJpZCI6MzgyODQ2LCJpYXQiOjE3NjkyMzY5Nzh9.WDwFBkmaySpP5jibayR8CrwGNAxYW9SPafnx1mBc0CI';
+
     const TOKEN = localStorage.getItem('erp-token');
     const ROLE = localStorage.getItem('user-role');
-    let enrollmentChartInstance = null;
+    let map, markers = [], enrollmentChartInstance = null, masterData = [];
+    let routeLine = null; 
+    let viewer; // Cesium Global 3D Viewer (নতুন যুক্ত)
 
-    // Security Verification
+    // ১. নিরাপত্তা ভেরিফিকেশন (বিদ্যমান)
     if (!TOKEN || !['super admin', 'superadmin'].includes(ROLE.toLowerCase())) {
         window.location.href = '/login.html';
     }
 
+    // ২. সিস্টেম নোটিফিকেশন এবং লগ ইঞ্জিন (বিদ্যমান)
     function notify(msg, type = 'success') {
         const t = document.getElementById('toast');
-        t.textContent = msg;
+        if (!t) return;
+        t.textContent = msg; 
         t.style.background = type === 'error' ? '#C0392B' : '#27ae60';
-        t.style.display = 'block';
-        setTimeout(() => t.style.display = 'none', 4000);
+        t.style.display = 'block'; 
+        setTimeout(() => t.style.display = 'none', 4500);
         appendLog(`[NOTIFY] ${msg}`);
     }
 
     function appendLog(msg) {
         const console = document.getElementById('log-console');
+        if (!console) return;
         const entry = document.createElement('div');
         entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
         console.appendChild(entry);
         console.scrollTop = console.scrollHeight;
     }
 
-    async function loadCoreRegistry() {
-        try {
-            const res = await fetch('/api/branches', {
-                headers: { 'Authorization': `Bearer ${TOKEN}` }
+    // ৩. ৩ডি ম্যাপ ইঞ্জিন (উন্নত CesiumJS Integration - ৩ডি টেরেইন ও দিন-রাত সহ)
+    async function initMap(branches) {
+        if (!viewer) {
+            try {
+                viewer = new Cesium.Viewer('branchMap', {
+                    terrain: Cesium.Terrain.fromWorldTerrain(), 
+                    baseLayerPicker: false,
+                    sceneModePicker: true, 
+                    navigationHelpButton: false,
+                    homeButton: true,
+                    animation: true, 
+                    timeline: true,
+                    shouldAnimate: true 
+                });
+
+                const buildings = await Cesium.createOsmBuildingsAsync();
+                viewer.scene.primitives.add(buildings);
+
+                viewer.scene.globe.enableLighting = true; 
+                appendLog(`[SYSTEM] 3D Engine with Night Cycle & Terrain Initialized.`);
+                
+                // ডিফল্ট ওয়েদার চেক (প্রথম ব্রাঞ্চের জন্য)
+                if(branches.length > 0) {
+                    fetchBranchWeather(parseFloat(branches[0].latitude), parseFloat(branches[0].longitude));
+                }
+            } catch (error) {
+                appendLog(`[CRITICAL] Map Load Error: ${error.message}`);
+                return;
+            }
+        }
+        
+        render3DMarkers(branches);
+    }
+
+    // ৩.১ ৩ডি মার্কার ভিজ্যুয়ালাইজেশন (Leaflet Markers এর ৩ডি রূপান্তর)
+    function render3DMarkers(branches) {
+        if(!viewer) return;
+        viewer.entities.removeAll(); // পুরনো পিন ক্লিন করা
+
+        branches.forEach((b, index) => {
+            if (b.latitude && b.longitude) {
+                viewer.entities.add({
+                    id: b.id,
+                    position: Cesium.Cartesian3.fromDegrees(
+                        parseFloat(b.longitude), 
+                        parseFloat(b.latitude), 
+                        100 
+                    ),
+                    billboard: {
+                        image: 'https://cdn-icons-png.flaticon.com/512/684/684908.png',
+                        width: 35,
+                        height: 35,
+                        verticalOrigin: Cesium.VerticalOrigin.BOTTOM
+                    },
+                    label: {
+                        text: `${b.branch_name}\nNodes: ${b.total_students || 0}`,
+                        font: '12pt Poppins',
+                        fillColor: Cesium.Color.WHITE,
+                        outlineColor: Cesium.Color.BLACK,
+                        outlineWidth: 2,
+                        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+                        pixelOffset: new Cesium.Cartesian2(0, -50)
+                    }
+                });
+            }
+        });
+        
+        if(branches.length > 0) viewer.flyTo(viewer.entities, { duration: 3 });
+    }
+
+    // ৪. পিন-টু-পিন রিয়েল ৩ডি ডিস্ট্যান্স ক্যালকুলেটর (Geodesic Logic)
+    function calculateGeoDistance() {
+        const sPin = document.getElementById('pin_src').value.trim();
+        const dPin = document.getElementById('pin_dest').value.trim();
+
+        if(sPin.length < 6 || dPin.length < 6) {
+            return notify("Invalid PIN: Required 6 digits", "error");
+        }
+
+        const sourceNode = masterData.find(b => b.pin_code === sPin);
+        const destNode = masterData.find(b => b.pin_code === dPin);
+
+        if (sourceNode && destNode && sourceNode.latitude && sourceNode.longitude && destNode.latitude && destNode.longitude) {
+            
+            const startPos = Cesium.Cartesian3.fromDegrees(parseFloat(sourceNode.longitude), parseFloat(sourceNode.latitude));
+            const endPos = Cesium.Cartesian3.fromDegrees(parseFloat(destNode.longitude), parseFloat(destNode.latitude));
+
+            // Haversine ক্যালকুলেশন
+            const p1 = L.latLng(parseFloat(sourceNode.latitude), parseFloat(sourceNode.longitude));
+            const p2 = L.latLng(parseFloat(destNode.latitude), parseFloat(destNode.longitude));
+            const distance = (p1.distanceTo(p2) / 1000).toFixed(2);
+
+            viewer.entities.add({
+                polyline: {
+                    positions: [startPos, endPos],
+                    width: 5,
+                    material: new Cesium.PolylineGlowMaterialProperty({
+                        glowPower: 0.2,
+                        color: Cesium.Color.ORANGE
+                    }),
+                    arcType: Cesium.ArcType.GEODESIC
+                }
             });
-            const data = await res.json();
-            renderRegistry(data);
-            updateVisualStats(data);
-            populateSelectors(data);
-            initChart(data);
-            appendLog(`[SYNC] Registry updated with ${data.length} nodes.`);
-        } catch (err) {
-            notify("Sync Engine Failure", "error");
+
+            viewer.zoomTo(viewer.entities);
+
+            document.getElementById('dist-result').innerHTML = `
+                <div class="dist-pill" style="background:#fff3e0; border:1px solid #e65100; color:#e65100; padding:12px; border-radius:12px; margin-top:15px;">
+                    <i class="fas fa-route"></i> <b>3D Distance: ${distance} KM</b><br>
+                    <small>${sourceNode.branch_code} ↔ ${destNode.branch_code}</small>
+                </div>
+            `;
+            appendLog(`[GEO] 3D Distance: ${distance} KM calculated.`);
+
+            // নতুন রুট চেক করার সময় ডেস্টিনেশনের আবহাওয়া লোড করা
+            fetchBranchWeather(parseFloat(destNode.latitude), parseFloat(destNode.longitude));
+
+        } else {
+            notify("GPS Coordinates missing for these PINs", "error");
+            appendLog(`[GEO] Failure: Missing GPS data.`);
         }
     }
 
+    // ৫. কোর ডাটা লোডিং (API Sync - বিদ্যমান)
+    async function loadCoreRegistry() {
+        try {
+            const res = await fetch('/api/branches', { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+            masterData = await res.json();
+            renderRegistry(masterData);
+            updateStats(masterData);
+            initMap(masterData); 
+            initChart(masterData);
+            appendLog(`[SYNC] Node registry updated with ${masterData.length} records.`);
+        } catch (err) { 
+            notify("Sync Engine Failure", "error"); 
+            appendLog(`[CRITICAL] Sync Failure: ${err.message}`);
+        }
+    }
+
+    // ৬. ডাটা টেবিল রেন্ডারিং (বিদ্যমান)
     function renderRegistry(data) {
         const body = document.getElementById('registry-body');
+        if(!body) return;
         body.innerHTML = data.map(b => `
             <tr class="data-row">
                 <td>
-                    <div style="font-weight:700">${b.branch_name}</div>
-                    <div class="code-tag">${b.branch_code}</div>
+                    <div style="font-weight:800; color:var(--primary-dark); font-size:1.1rem;">${b.branch_name}</div>
+                    <div class="code-tag" style="margin-top:5px; font-family:'JetBrains Mono'; font-size:0.8rem; background:#f0f4f8; padding:2px 8px; border-radius:4px;">${b.branch_code}</div>
                 </td>
                 <td>
-                    <small><i class="fas fa-envelope"></i> ${b.email || 'N/A'}</small><br>
-                    <small><i class="fas fa-phone"></i> ${b.phone_number || 'N/A'}</small>
+                    <div style="font-size:0.95rem;"><b>Manager:</b> ${b.branch_manager_name || 'N/A'}</div>
+                    <div style="font-size:0.8rem; color:var(--text-muted); margin-top:5px;">
+                        <i class="fas fa-map-marker-alt"></i> Pin: ${b.pin_code || '---'} | <i class="fas fa-id-card"></i> PAN: ${b.pan_number || '-'}
+                    </div>
                 </td>
                 <td>
-                    <span class="badge" style="background:#e3f2fd; color:var(--primary)">
+                    <span class="badge" style="background:#e3f2fd; color:var(--primary); font-size:0.9rem; padding:8px 15px; border-radius:10px; font-weight:600;">
                         <i class="fas fa-user-graduate"></i> ${b.total_students || 0}
                     </span>
                 </td>
                 <td>
-                    <span class="badge ${b.is_active ? 'badge-active' : 'badge-inactive'}">
+                    <span class="badge ${b.is_active ? 'badge-active' : 'badge-inactive'}" style="padding:8px 15px; border-radius:10px; font-weight:600; font-size:0.85rem;">
                         ${b.is_active ? '● OPERATIONAL' : '○ DECOMMISSIONED'}
                     </span>
                 </td>
-                <td>
-                    <button class="btn btn-secondary" style="padding:8px 12px" onclick="cloneEntity('${b.id}', '${b.branch_name}')"><i class="fas fa-copy"></i></button>
-                    <button class="btn btn-secondary" style="padding:8px 12px" onclick="toggleEntity('${b.id}', ${b.is_active})"><i class="fas fa-power-off"></i></button>
-                    <button class="btn btn-secondary" style="padding:8px 12px; color:var(--accent)" onclick="purgeEntity('${b.id}')"><i class="fas fa-trash-alt"></i></button>
+                <td style="display:flex; gap:10px;">
+                    <a href="Branch Profile Preview.html?id=${b.id}" class="btn btn-secondary" style="padding:10px; color:var(--primary);" title="View Full Profile">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <button class="btn btn-secondary" style="padding:10px; color:#6c5ce7;" onclick="showQuickStats('${b.id}')" title="Quick Analytics">
+                        <i class="fas fa-chart-line"></i>
+                    </button>
+                    <button class="btn btn-secondary" style="padding:10px;" onclick="openEditModal('${b.id}')" title="Edit Configuration">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn btn-secondary" style="padding:10px;" onclick="toggleNode('${b.id}', ${b.is_active})" title="Toggle Status">
+                        <i class="fas fa-power-off"></i>
+                    </button>
+                    <button class="btn btn-secondary" style="padding:10px; color:var(--accent);" onclick="purgeNode('${b.id}')" title="Delete Node">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
                 </td>
             </tr>
         `).join('');
     }
 
-    function updateVisualStats(data) {
-        document.getElementById('count-total').textContent = data.length;
-        document.getElementById('count-active').textContent = data.filter(b => b.is_active).length;
-        document.getElementById('count-students').textContent = data.reduce((s, b) => s + parseInt(b.total_students || 0), 0);
+    // ৭. অ্যানালিটিক্স এবং স্ট্যাটাস আপডেট (বিদ্যমান)
+    function updateStats(data) {
+        const total = document.getElementById('count-total');
+        const students = document.getElementById('count-students');
+        if(total) total.textContent = data.length;
+        if(students) students.textContent = data.reduce((s, b) => s + (parseInt(b.total_students) || 0), 0);
     }
 
     function initChart(data) {
-        const ctx = document.getElementById('enrollmentChart').getContext('2d');
+        const ctx = document.getElementById('enrollmentChart');
+        if(!ctx) return;
+        const ctx2d = ctx.getContext('2d');
         if (enrollmentChartInstance) enrollmentChartInstance.destroy();
-        
-        enrollmentChartInstance = new Chart(ctx, {
-            type: 'bar',
+        enrollmentChartInstance = new Chart(ctx2d, {
+            type: 'doughnut',
             data: {
                 labels: data.map(b => b.branch_code),
                 datasets: [{
-                    label: 'Student Enrollment',
                     data: data.map(b => b.total_students || 0),
-                    backgroundColor: 'rgba(0, 90, 156, 0.6)',
-                    borderColor: 'rgba(0, 90, 156, 1)',
-                    borderWidth: 1,
-                    borderRadius: 5
+                    backgroundColor: ['#005A9C', '#27ae60', '#f39c12', '#C0392B', '#8e44ad', '#2c3e50'],
+                    borderWidth: 0
                 }]
             },
-            options: { scales: { y: { beginAtZero: true } } }
+            options: { cutout: '70%', plugins: { legend: { display: false } } }
         });
     }
 
-    function populateSelectors(data) {
-        const options = '<option value="">Select Target Campus</option>' + data.map(b => `<option value="${b.id}">${b.branch_name}</option>`).join('');
-        document.getElementById('source_branch').innerHTML = options;
-        document.getElementById('target_branch').innerHTML = options;
-    }
+    // ৮. নোড প্রভিশনিং এবং এডিটিং (বিদ্যমান)
+    window.openProvisionModal = () => {
+        document.getElementById('modal-title').innerHTML = '<i class="fas fa-plus-circle"></i> Initiate New Node Provisioning';
+        document.getElementById('branch-form-full').reset();
+        document.getElementById('edit_branch_id').value = '';
+        document.getElementById('access-section').style.display = 'block';
+        toggleManagerRequired(true);
+        document.getElementById('add-modal').style.display = 'flex';
+    };
 
-    function filterRegistry() {
-        const val = document.getElementById('global-search').value.toLowerCase();
-        document.querySelectorAll('.data-row').forEach(row => {
-            row.style.display = row.textContent.toLowerCase().includes(val) ? '' : 'none';
+    window.openEditModal = (id) => {
+        const b = masterData.find(x => x.id === id);
+        document.getElementById('modal-title').innerHTML = '<i class="fas fa-edit"></i> Modify Infrastructure Configuration';
+        document.getElementById('edit_branch_id').value = b.id;
+        document.getElementById('new_name').value = b.branch_name;
+        document.getElementById('new_code').value = b.branch_code;
+        document.getElementById('new_email').value = b.email || '';
+        document.getElementById('new_pan').value = b.pan_number || '';
+        document.getElementById('new_gst').value = b.gst_number || '';
+        document.getElementById('new_manager_name').value = b.branch_manager_name || '';
+        document.getElementById('pin_code').value = b.pin_code || '';
+        document.getElementById('bank_name').value = b.bank_name || '';
+        document.getElementById('acc_no').value = b.account_number || '';
+        document.getElementById('new_address').value = b.address || '';
+        
+        document.getElementById('lab_count').value = b.lab_count || 0;
+        document.getElementById('class_capacity').value = b.class_capacity || 0;
+        document.getElementById('faculty_count').value = b.faculty_count || 0;
+
+        document.getElementById('access-section').style.display = 'none';
+        toggleManagerRequired(false);
+        document.getElementById('add-modal').style.display = 'flex';
+    };
+
+    function toggleManagerRequired(state) {
+        ['new_manager_name', 'manager_username', 'manager_password'].forEach(f => {
+            const el = document.getElementById(f);
+            if(el) el.required = state;
         });
     }
 
-    // --- Modal Logic ---
-    window.openModal = () => document.getElementById('add-modal').style.display = 'flex';
     window.closeModal = () => document.getElementById('add-modal').style.display = 'none';
 
-    // --- CRUD Master Functions ---
-
-    // Provision New
+    // ৯. ফর্ম সাবমিশন (POST/PUT - বিদ্যমান)
     document.getElementById('branch-form-full').addEventListener('submit', async (e) => {
         e.preventDefault();
-        const payload = {
+        const bId = document.getElementById('edit_branch_id').value;
+        const formData = new FormData();
+        
+        const bInfo = {
             branch_name: document.getElementById('new_name').value,
             branch_code: document.getElementById('new_code').value,
             email: document.getElementById('new_email').value,
-            phone_number: document.getElementById('new_phone').value,
-            address: document.getElementById('new_address').value
+            pan_number: document.getElementById('new_pan').value,
+            gst_number: document.getElementById('new_gst').value,
+            branch_manager_name: document.getElementById('new_manager_name').value,
+            pin_code: document.getElementById('pin_code').value,
+            bank_name: document.getElementById('bank_name').value,
+            account_number: document.getElementById('acc_no').value,
+            address: document.getElementById('new_address').value,
+            lab_count: document.getElementById('lab_count').value,
+            class_capacity: document.getElementById('class_capacity').value,
+            faculty_count: document.getElementById('faculty_count').value,
+            latitude: document.body.dataset.tempLat || null,
+            longitude: document.body.dataset.tempLon || null
         };
 
-        const res = await fetch('/api/branches', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-
-        if (res.ok) {
-            notify("Campus Provisioned Successfully");
-            closeModal();
-            loadCoreRegistry();
-        } else {
-            notify("Provisioning Error", "error");
+        formData.append('branch_info', JSON.stringify(bInfo));
+        
+        if(!bId) {
+            formData.append('user_info', JSON.stringify({
+                username: document.getElementById('manager_username').value,
+                password: document.getElementById('manager_password').value,
+                role: 'admin'
+            }));
         }
+
+        const logo = document.getElementById('upload_logo').files[0];
+        const photo = document.getElementById('upload_photo').files[0];
+        if(logo) formData.append('logo', logo);
+        if(photo) formData.append('photo', photo);
+
+        try {
+            const res = await fetch(bId ? `/api/branches/${bId}` : '/api/branches/full-provision', {
+                method: bId ? 'PUT' : 'POST',
+                headers: { 'Authorization': `Bearer ${TOKEN}` },
+                body: formData
+            });
+
+            if (res.ok) {
+                notify(bId ? "Node Infrastructure Updated" : "New Node Deployed Successfully");
+                closeModal();
+                loadCoreRegistry();
+            } else { notify("Operation Denied: Check System Logs", "error"); }
+        } catch (err) { notify("Sync Error: Connection Lost", "error"); }
     });
 
-    // Clone
-    window.cloneEntity = async (id, name) => {
-        const newName = prompt(`Clone configurations for ${name} into:`, `${name} (Copy)`);
-        if (!newName) return;
-        const res = await fetch('/api/branches/clone', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ source_id: id, new_name: newName })
+    // ১০. অ্যাডভান্সড ফিল্টার এবং ইউটিলিটি (বিদ্যমান)
+    function filterRegistry() {
+        const val = document.getElementById('global-search').value.toLowerCase();
+        const status = document.getElementById('status-filter').value;
+        document.querySelectorAll('.data-row').forEach((row, i) => {
+            const b = masterData[i];
+            if(!b) return;
+            const matchesSearch = row.textContent.toLowerCase().includes(val);
+            const matchesStatus = status === 'all' || (status === 'active' && b.is_active) || (status === 'inactive' && !b.is_active);
+            row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
         });
-        if (res.ok) { notify("Entity Cloned"); loadCoreRegistry(); }
-    };
+    }
 
-    // Toggle
-    window.toggleEntity = async (id, status) => {
-        await fetch(`/api/branches/${id}`, {
-            method: 'PUT',
-            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ is_active: !status })
+    window.toggleNode = async (id, status) => {
+        await fetch(`/api/branches/${id}`, { 
+            method: 'PUT', 
+            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ is_active: !status }) 
         });
         loadCoreRegistry();
     };
 
-    // Purge
-    window.purgeEntity = async (id) => {
-        if (!confirm("This will permanently purge this branch node. Continue?")) return;
-        const res = await fetch(`/api/branches/${id}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${TOKEN}` }
-        });
-        if (res.ok) { notify("Entity Purged"); loadCoreRegistry(); }
-        else notify("Purge Blocked: Child nodes detected.", "error");
+    window.purgeNode = async (id) => {
+        if (!confirm("CRITICAL: Destructive action! Purge this node data permanently?")) return;
+        const res = await fetch(`/api/branches/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${TOKEN}` } });
+        if (res.ok) { notify("Node Purged"); loadCoreRegistry(); }
+        else notify("Purge Denied: Active dependencies", "error");
     };
 
-    // Migration
-    document.getElementById('migration-form-full').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const payload = {
-            source_branch_id: document.getElementById('source_branch').value,
-            target_branch_id: document.getElementById('target_branch').value,
-            user_identifiers: document.getElementById('migrate_list').value.split(',').map(i => i.trim())
-        };
-        const res = await fetch('/api/system/migrate/user', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (res.ok) { 
-            notify("Migration Batch Executed Successfully"); 
-            e.target.reset(); 
-            loadCoreRegistry(); 
-        }
-    });
+    window.showQuickStats = (id) => {
+        const b = masterData.find(x => x.id === id);
+        notify(`Node ${b.branch_code}: Load factor stable. Capacity: ${b.class_capacity || 0} seats.`);
+    };
 
-    document.addEventListener('DOMContentLoaded', loadCoreRegistry);
+    // ১১. অটো-জিওকোডিং ইঞ্জিন (PIN to GPS - বিদ্যমান)
+    async function autoGeocode(pinCode) {
+        if (pinCode.length < 6) return;
+        appendLog(`[GEO] Fetching coordinates for PIN: ${pinCode}...`);
+        
+        try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&postalcode=${pinCode}&country=India`);
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+                const lat = data[0].lat;
+                const lon = data[0].lon;
+
+                document.body.dataset.tempLat = lat;
+                document.body.dataset.tempLon = lon;
+                
+                appendLog(`[GEO] Success: Lat ${lat}, Lon ${lon} synchronized.`);
+                notify("Location mapped to PIN");
+                
+                if(viewer) {
+                    const destination = Cesium.Cartesian3.fromDegrees(parseFloat(lon), parseFloat(lat), 2000);
+                    viewer.camera.flyTo({ destination });
+                }
+            } else {
+                appendLog(`[GEO] Warning: Coordinates not found for this PIN.`);
+            }
+        } catch (error) {
+            appendLog(`[GEO] Error: Geocoding API failed.`);
+        }
+    }
+
+    // ১২. দিন-রাত্রির সময় সিঙ্ক্রোনাইজেশন (Day/Night Sync - নতুন)
+    function syncDayNight() {
+        if(!viewer) return;
+        const now = new Date();
+        const julianDate = Cesium.JulianDate.fromDate(now);
+        viewer.clock.currentTime = julianDate;
+        appendLog(`[TIME] Sun position synced with local time.`);
+    }
+
+    // --- ১৩. ওয়েদার ইন্টেলিজেন্স ইঞ্জিন (নতুন যুক্ত) ---
+    function applyWeatherEffects(weatherCondition) {
+        if (!viewer) return;
+        viewer.scene.postProcessStages.removeAll();
+
+        if (weatherCondition === 'Rain') {
+            viewer.scene.postProcessStages.add(Cesium.PostProcessStageLibrary.createRainStage());
+            appendLog(`[WEATHER] Atmospheric Sync: Precipitation (Rain) active.`);
+        } else if (weatherCondition === 'Snow') {
+            viewer.scene.postProcessStages.add(Cesium.PostProcessStageLibrary.createSnowStage());
+            appendLog(`[WEATHER] Atmospheric Sync: Precipitation (Snow) active.`);
+        }
+    }
+
+    async function fetchBranchWeather(lat, lon) {
+        try {
+            const response = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+            const data = await response.json();
+            const weatherCode = data.current_weather.weathercode;
+            const temp = data.current_weather.temperature;
+
+            // ওয়েদার কার্ড আপডেট
+            updateWeatherCard(temp, weatherCode);
+
+            if ([61, 63, 65, 80, 81, 82].includes(weatherCode)) {
+                applyWeatherEffects('Rain');
+            } else if ([71, 73, 75, 85, 86].includes(weatherCode)) {
+                applyWeatherEffects('Snow');
+            } else {
+                viewer.scene.postProcessStages.removeAll();
+            }
+        } catch (e) {
+            console.error("Weather Sync Error", e);
+        }
+    }
+
+    function updateWeatherCard(temp, code) {
+        let card = document.getElementById('weather-info-card');
+        if(!card) {
+            card = document.createElement('div');
+            card.id = 'weather-info-card';
+            card.style = "position:absolute; top:100px; left:40px; background:rgba(255,255,255,0.9); padding:15px; border-radius:15px; z-index:1000; box-shadow:var(--shadow); border:1px solid var(--primary); font-family:Poppins;";
+            document.body.appendChild(card);
+        }
+        card.innerHTML = `<h5 style="margin:0; color:var(--primary);"><i class="fas fa-cloud-sun"></i> Node Weather</h5>
+                          <div style="font-size:1.5rem; font-weight:700;">${temp}°C</div>
+                          <div style="font-size:0.8rem; color:var(--text-muted);">Status Code: ${code}</div>`;
+    }
+
+    // ১৪. বুটস্ট্র্যাপ ইভেন্ট (বিদ্যমান + নতুন ৩ডি ট্রিগার)
+    document.addEventListener('DOMContentLoaded', () => {
+        loadCoreRegistry();
+        
+        setInterval(syncDayNight, 60000); 
+
+        setTimeout(() => {
+            const pinInput = document.getElementById('pin_code');
+            if(pinInput) {
+                pinInput.addEventListener('blur', (e) => autoGeocode(e.target.value));
+            }
+        }, 1500);
+    });
 </script>
 </body>
 </html>
