@@ -287,7 +287,7 @@ app.use('/api/public/verify', verifyRouter);
 app.use('/api/health-records', healthRouter);
 app.use('/api/inventory', inventoryRouter); 
 app.use('/api/asset', assetRouter);
-
+app.use('/api/public/students', studentsRouter);
 
 
 // --- B. PROTECTED ROUTES (JWT Token Required) ---

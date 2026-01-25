@@ -742,4 +742,30 @@ router.post('/unlock', authenticateToken, authorize(CRUD_ROLES), async (req, res
     }
 });
 
+// =========================================================
+// PUBLIC LOOKUP: No Token Required
+// =========================================================
+router.get('/public/lookup/:enrollmentId', async (req, res) => {
+    const { enrollmentId } = req.params;
+    try {
+        const query = `
+            SELECT 
+                s.first_name, s.last_name, s.enrollment_no, s.status,
+                c.course_name, s.profile_image_path
+            FROM students s
+            LEFT JOIN courses c ON s.course_id = c.id
+            WHERE s.enrollment_no = $1 OR s.admission_id = $1
+            LIMIT 1;
+        `;
+        const result = await pool.query(query, [enrollmentId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Student not found.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error('Public lookup error:', error);
+        res.status(500).json({ message: 'Server error during lookup.' });
+    }
+});
 module.exports = router;
