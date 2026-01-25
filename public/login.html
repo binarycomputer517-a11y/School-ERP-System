@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BCSM Portal - Secure Login</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     
     <style>
         /* --- RESET & BASIC SETUP --- */
@@ -15,12 +15,13 @@
             padding: 0;
             width: 100%;
             height: 100vh;
-            overflow: hidden; /* Prevents scrolling */
+            overflow: hidden; /* Prevents scrolling on desktop */
             display: flex;
             justify-content: center;
             align-items: center;
-            /* Patriotic Background */
+            /* Patriotic Background Gradient */
             background: linear-gradient(180deg, #FF9933 0%, #FFFFFF 50%, #138808 100%);
+            background-attachment: fixed;
         }
 
         /* --- MAIN LAYOUT WRAPPER --- */
@@ -38,39 +39,39 @@
             position: absolute;
             left: 2%; /* Positioned tight to the left edge */
             bottom: 0;
-            height: 95%; /* Huge size */
+            height: 95%; /* Large presence */
             width: auto;
-            z-index: 1; /* Sits behind the form */
+            z-index: 1; /* Sits behind the form if overlapping */
             display: flex;
             align-items: flex-end;
-            border: none !important; /* Forces no border */
+            border: none !important;
             outline: none !important;
-            pointer-events: none; /* Allows clicking through to background if needed */
+            pointer-events: none;
         }
 
         .robot-section img {
             height: 100%; /* Makes robot fill the container height */
             width: auto;
-            max-width: none; /* Removes size limits */
+            max-width: none;
             object-fit: contain;
-            filter: drop-shadow(15px 5px 25px rgba(0,0,0,0.3)); /* Adds 3D depth */
+            filter: drop-shadow(15px 5px 25px rgba(0,0,0,0.3));
             
-            /* MAGIC TRICK: Blends white background if image has one. Remove if using transparent PNG */
+            /* Magic blend: Helps if image has a white background */
             mix-blend-mode: multiply; 
             
             /* Floating Animation */
             animation: floatRobot 6s ease-in-out infinite;
         }
 
-        /* --- LOGIN FORM (RIGHT SIDE - OVERLAPPING HAND) --- */
+        /* --- LOGIN FORM (CENTER-RIGHT) --- */
         #login-container { 
             position: relative;
-            z-index: 10; /* Ensures form is ON TOP of the robot image */
+            z-index: 10; /* Ensures form is always ON TOP */
             
-            /* This margin pushes the form to the right, placing it over the robot's hand */
+            /* Pushes form to the right to clear space for the robot body */
             margin-left: 25%; 
             
-            background: rgba(255, 255, 255, 0.25); /* Glass Effect */
+            background: rgba(255, 255, 255, 0.25); /* Glassmorphism */
             backdrop-filter: blur(25px);
             -webkit-backdrop-filter: blur(25px); 
             
@@ -80,6 +81,7 @@
             width: 380px; 
             box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2); 
             transition: transform 0.3s ease;
+            box-sizing: border-box;
         }
 
         #login-container:hover { transform: translateY(-5px); }
@@ -160,35 +162,48 @@
             animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
 
-        /* Animations */
+        /* --- ANIMATIONS --- */
         @keyframes floatRobot {
             0%, 100% { transform: translateY(0); }
-            50% { transform: translateY(-10px); }
+            50% { transform: translateY(-15px); }
         }
         @keyframes popIn {
             from { opacity: 0; transform: scale(0.5) translateY(20px); }
             to { opacity: 1; transform: scale(1) translateY(0); }
         }
 
-        /* Mobile Responsive */
+        /* --- MOBILE RESPONSIVE --- */
         @media (max-width: 900px) {
-            body { overflow-y: auto; height: auto; display: block; }
-            .container-wrapper { flex-direction: column; padding-bottom: 50px; }
+            body { overflow-y: auto; height: auto; display: block; padding-top: 20px; }
+            .container-wrapper { flex-direction: column; padding-bottom: 50px; height: auto; }
             
-            /* Adjust robot for mobile to sit behind/above form */
             .robot-section { 
                 position: relative; 
-                height: 350px; 
+                height: 300px; 
                 left: 0; 
                 width: 100%; 
                 justify-content: center; 
                 align-items: center;
                 mix-blend-mode: normal; 
-                margin-top: 20px;
+                margin-top: 10px;
+                animation: floatRobot 4s ease-in-out infinite;
             }
             .robot-section img { height: 100%; width: auto; mix-blend-mode: normal; }
             
-            #login-container { margin-left: 0; width: 90%; }
+            .speech-bubble {
+                left: 50%;
+                top: 0;
+                transform: translateX(-50%);
+                border-radius: 20px;
+            }
+
+            #login-container { 
+                margin-left: 0; 
+                width: 90%; 
+                padding: 2rem; 
+                margin-top: -20px; 
+                backdrop-filter: blur(15px);
+            }
         }
     </style>
 </head>
@@ -239,24 +254,24 @@
     <script>
         const bubble = document.getElementById('speech-bubble');
 
-        // Robot Voice Function
+        // AI Robot Voice & Interaction
         function robotAction(message) {
             bubble.innerText = message;
             bubble.style.display = 'block';
             
-            const utterance = new SpeechSynthesisUtterance(message);
-            utterance.rate = 1.0;
-            // Try to set English voice
-            let voices = window.speechSynthesis.getVoices();
-            let englishVoice = voices.find(voice => voice.lang.includes('en'));
-            if(englishVoice) utterance.voice = englishVoice;
-            
-            window.speechSynthesis.speak(utterance);
+            // Text to Speech
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(message);
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                window.speechSynthesis.speak(utterance);
+            }
 
+            // Hide bubble after 6 seconds
             setTimeout(() => { bubble.style.display = 'none'; }, 6000);
         }
 
-        // Toggle Password
+        // Toggle Password Visibility
         function togglePassword() {
             const passInput = document.getElementById('password');
             const icon = document.querySelector('.toggle-pass');
@@ -269,22 +284,27 @@
             }
         }
 
+        // Initial Setup on Load
         document.addEventListener('DOMContentLoaded', function() {
             localStorage.clear(); 
             
+            // Welcome Greeting
             setTimeout(() => {
                 robotAction("Welcome back to BCSM Portal.");
-            }, 800);
+            }, 1000);
 
-            var audio = new Audio('startup.mp3');
+            // Audio Startup Sound
+            const audio = new Audio('startup.mp3');
             audio.volume = 0.5;
             document.body.addEventListener('click', function() { 
-                audio.play().catch(e => {}); 
+                audio.play().catch(e => console.log("Audio waiting for interaction...")); 
             }, { once: true });
         });
 
-        document.getElementById('login-form').addEventListener('submit', function() {
-            robotAction("Processing credentials...");
+        // Form Submit Action
+        document.getElementById('login-form').addEventListener('submit', function(e) {
+            // Keep the form functioning while robot speaks
+            robotAction("Verifying identity... please wait.");
         });
     </script>
 </body>
