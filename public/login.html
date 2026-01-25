@@ -8,108 +8,255 @@
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
     
     <style>
+        /* --- RESET & BASIC SETUP --- */
         body { 
             font-family: 'Montserrat', sans-serif; 
-            display: grid; 
-            place-items: center; 
-            min-height: 100vh; 
             margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100vh;
+            overflow: hidden; /* Prevents scrolling */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            /* Patriotic Background */
             background: linear-gradient(180deg, #FF9933 0%, #FFFFFF 50%, #138808 100%);
-            background-attachment: fixed;
         }
 
+        /* --- MAIN LAYOUT WRAPPER --- */
+        .container-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* --- ROBOT SECTION (LEFT SIDE) --- */
+        .robot-section {
+            position: absolute;
+            left: 2%; /* Positioned tight to the left edge */
+            bottom: 0;
+            height: 95%; /* Huge size */
+            width: auto;
+            z-index: 1; /* Sits behind the form */
+            display: flex;
+            align-items: flex-end;
+            border: none !important; /* Forces no border */
+            outline: none !important;
+            pointer-events: none; /* Allows clicking through to background if needed */
+        }
+
+        .robot-section img {
+            height: 100%; /* Makes robot fill the container height */
+            width: auto;
+            max-width: none; /* Removes size limits */
+            object-fit: contain;
+            filter: drop-shadow(15px 5px 25px rgba(0,0,0,0.3)); /* Adds 3D depth */
+            
+            /* MAGIC TRICK: Blends white background if image has one. Remove if using transparent PNG */
+            mix-blend-mode: multiply; 
+            
+            /* Floating Animation */
+            animation: floatRobot 6s ease-in-out infinite;
+        }
+
+        /* --- LOGIN FORM (RIGHT SIDE - OVERLAPPING HAND) --- */
         #login-container { 
-            background: rgba(255, 255, 255, 0.12);
+            position: relative;
+            z-index: 10; /* Ensures form is ON TOP of the robot image */
+            
+            /* This margin pushes the form to the right, placing it over the robot's hand */
+            margin-left: 25%; 
+            
+            background: rgba(255, 255, 255, 0.25); /* Glass Effect */
             backdrop-filter: blur(25px);
             -webkit-backdrop-filter: blur(25px); 
-            border-top: 1px solid rgba(255, 255, 255, 0.7); 
-            border-left: 1px solid rgba(255, 255, 255, 0.7);
-            border-radius: 30px; 
-            padding: 2.5rem; 
-            width: 90%; 
-            max-width: 400px; 
-            box-shadow: 25px 25px 50px rgba(0, 0, 0, 0.2); 
-            box-sizing: border-box;
-            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 25px; 
+            padding: 3rem; 
+            width: 380px; 
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2); 
+            transition: transform 0.3s ease;
         }
 
-        #login-container:hover { transform: translateY(-5px) scale(1.02); }
+        #login-container:hover { transform: translateY(-5px); }
 
-        h2 { text-align: center; color: #000; margin-bottom: 25px; font-weight: 700; letter-spacing: 1px; }
+        /* --- FORM ELEMENTS --- */
+        .logo-container { text-align: center; margin-bottom: 20px; }
+        .global-school-logo { max-height: 85px; filter: drop-shadow(0 4px 4px rgba(0,0,0,0.1)); }
+
+        h2 { 
+            text-align: center; 
+            color: #000; 
+            margin-bottom: 30px; 
+            font-weight: 800; 
+            letter-spacing: 1px; 
+            text-transform: uppercase;
+        }
         
         .form-group { margin-bottom: 1.5rem; }
-        .form-group label { display: block; margin-bottom: 0.6rem; font-weight: 600; color: #333; font-size: 0.9rem; }
+        .form-group label { display: block; margin-bottom: 0.8rem; font-weight: 700; color: #333; font-size: 0.9rem; }
         
         .form-group input { 
-            width: 100%; border: 1px solid rgba(255, 255, 255, 0.3); border-radius: 12px; 
-            padding: 0.9rem; background: rgba(255, 255, 255, 0.5); color: #000;
-            box-sizing: border-box; font-size: 1rem; outline: none; transition: 0.3s;
+            width: 100%; 
+            border: 2px solid rgba(255, 255, 255, 0.5); 
+            border-radius: 12px; 
+            padding: 1rem; 
+            background: rgba(255, 255, 255, 0.6); 
+            color: #000;
+            box-sizing: border-box; 
+            font-size: 1rem; 
+            font-weight: 600;
+            outline: none; 
+            transition: 0.3s;
         } 
 
-        .form-group input:focus { background: rgba(255, 255, 255, 0.8); border-color: #005A9C; }
+        .form-group input:focus { 
+            background: #fff; 
+            border-color: #005A9C; 
+            box-shadow: 0 0 15px rgba(0, 90, 156, 0.15);
+        }
 
         .pass-wrapper { position: relative; }
         .toggle-pass {
             position: absolute; right: 15px; top: 50%;
-            transform: translateY(-50%); cursor: pointer; color: #666;
+            transform: translateY(-50%); cursor: pointer; color: #555;
         }
         
         button { 
             background: linear-gradient(135deg, #005A9C 0%, #003366 100%);
-            color: white; border: none; border-radius: 12px; font-weight: bold; 
-            padding: 1rem; width: 100%; cursor: pointer; font-size: 1.1rem;
+            color: white; border: none; border-radius: 12px; font-weight: 800; 
+            padding: 1.2rem; width: 100%; cursor: pointer; font-size: 1.1rem;
             box-shadow: 0 10px 20px rgba(0, 51, 102, 0.3); transition: 0.3s; 
             text-transform: uppercase; letter-spacing: 1px;
+            margin-top: 10px;
         }
 
         button:hover { 
-            background: linear-gradient(135deg, #C0392B 0%, #962D22 100%);
-            box-shadow: 0 5px 15px rgba(192, 57, 43, 0.4); transform: translateY(-2px);
+            background: linear-gradient(135deg, #138808 0%, #0B5305 100%); /* Green on Hover */
+            box-shadow: 0 5px 15px rgba(19, 136, 8, 0.4); 
+            transform: translateY(-2px);
         }
         
         #error-msg { color: #C0392B; margin-top: 1rem; text-align: center; font-weight: bold; font-size: 0.9rem; }
         
-        .logo-container { text-align: center; margin-bottom: 20px; }
-        .global-school-logo { max-height: 90px; filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.2)); }
+        /* --- SPEECH BUBBLE --- */
+        .speech-bubble {
+            position: absolute;
+            top: 15%;
+            left: 28%; /* Positioned near robot head */
+            background: white;
+            padding: 12px 25px;
+            border-radius: 20px 20px 20px 0;
+            font-weight: 700;
+            color: #005A9C;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+            border: 2px solid #005A9C;
+            display: none;
+            z-index: 20;
+            animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        /* Animations */
+        @keyframes floatRobot {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.5) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 900px) {
+            body { overflow-y: auto; height: auto; display: block; }
+            .container-wrapper { flex-direction: column; padding-bottom: 50px; }
+            
+            /* Adjust robot for mobile to sit behind/above form */
+            .robot-section { 
+                position: relative; 
+                height: 350px; 
+                left: 0; 
+                width: 100%; 
+                justify-content: center; 
+                align-items: center;
+                mix-blend-mode: normal; 
+                margin-top: 20px;
+            }
+            .robot-section img { height: 100%; width: auto; mix-blend-mode: normal; }
+            
+            #login-container { margin-left: 0; width: 90%; }
+        }
     </style>
 </head>
 <body>
 
-    <div id="login-container">
-        <div class="logo-container">
-            <img src="images/default-logo.png" class="global-school-logo" alt="Logo">
+    <div class="container-wrapper">
+        <div class="robot-section">
+            <div id="speech-bubble" class="speech-bubble">System Active</div>
+            <img src="images/robot.png" alt="AI Guardian"> 
         </div>
 
-        <h2 class="global-school-name">Portal Login</h2>
+        <div id="login-container">
+            <div class="logo-container">
+                <img src="images/default-logo.png" class="global-school-logo" alt="Logo">
+            </div>
 
-        <form id="login-form">
-            <div class="form-group">
-                <label for="username">Username / ID</label>
-                <input type="text" id="username" name="username" required placeholder="Enter your ID">
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <div class="pass-wrapper">
-                    <input type="password" id="password" name="password" required placeholder="Enter password">
-                    <i class="fas fa-eye toggle-pass" onclick="togglePassword()"></i>
+            <h2 class="global-school-name">Portal Login</h2>
+
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="username">Username / ID</label>
+                    <input type="text" id="username" name="username" required placeholder="Enter ID">
                 </div>
-            </div>
-            
-            <button type="submit" id="login-button">Sign In <i class="fas fa-arrow-right ms-2"></i></button>
-            
-            <div id="error-msg"></div>
-            
-            <div style="text-align: center; margin-top: 20px;">
-                <a href="/forgot-password.html" style="text-decoration: none; color: #333; font-size: 0.85rem; font-weight: 600;">Forgot Password?</a>
-            </div>
-        </form>
+                <div class="form-group">
+                    <label for="password">Password</label>
+                    <div class="pass-wrapper">
+                        <input type="password" id="password" name="password" required placeholder="Enter Password">
+                        <i class="fas fa-eye toggle-pass" onclick="togglePassword()"></i>
+                    </div>
+                </div>
+                
+                <button type="submit" id="login-button">
+                    Sign In <i class="fas fa-arrow-right ms-2"></i>
+                </button>
+                
+                <div id="error-msg"></div>
+                
+                <div style="text-align: center; margin-top: 20px;">
+                    <a href="/forgot-password.html" style="text-decoration: none; color: #333; font-size: 0.85rem; font-weight: 700;">Forgot Password?</a>
+                </div>
+            </form>
+        </div>
     </div>
 
     <script src="login.js"></script>
     <script src="js/global-config.js?v=2.3.1"></script>
 
     <script>
-        // ১. পাসওয়ার্ড দেখা বা লুকানোর লজিক
+        const bubble = document.getElementById('speech-bubble');
+
+        // Robot Voice Function
+        function robotAction(message) {
+            bubble.innerText = message;
+            bubble.style.display = 'block';
+            
+            const utterance = new SpeechSynthesisUtterance(message);
+            utterance.rate = 1.0;
+            // Try to set English voice
+            let voices = window.speechSynthesis.getVoices();
+            let englishVoice = voices.find(voice => voice.lang.includes('en'));
+            if(englishVoice) utterance.voice = englishVoice;
+            
+            window.speechSynthesis.speak(utterance);
+
+            setTimeout(() => { bubble.style.display = 'none'; }, 6000);
+        }
+
+        // Toggle Password
         function togglePassword() {
             const passInput = document.getElementById('password');
             const icon = document.querySelector('.toggle-pass');
@@ -122,19 +269,22 @@
             }
         }
 
-        // ২. সেশন সিকিউরিটি: পেজ লোড হলেই পুরনো সব ডাটা ক্লিয়ার হবে
         document.addEventListener('DOMContentLoaded', function() {
-            console.log("Cleaning stale session data...");
             localStorage.clear(); 
             
-            // সাউন্ড ইফেক্ট লজিক
+            setTimeout(() => {
+                robotAction("Welcome back to BCSM Portal.");
+            }, 800);
+
             var audio = new Audio('startup.mp3');
-            audio.volume = 0.4;
-            
-            // ইউজার প্রথম ক্লিকের পর সাউন্ড প্লে হবে
+            audio.volume = 0.5;
             document.body.addEventListener('click', function() { 
-                audio.play().catch(e => console.log("Audio play blocked")); 
+                audio.play().catch(e => {}); 
             }, { once: true });
+        });
+
+        document.getElementById('login-form').addEventListener('submit', function() {
+            robotAction("Processing credentials...");
         });
     </script>
 </body>
