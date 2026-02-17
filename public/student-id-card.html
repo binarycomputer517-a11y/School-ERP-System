@@ -144,14 +144,14 @@
 
     <div class="search-container">
         <h2><i class="fas fa-id-card"></i> Student ID Lookup</h2>
-        <p>ভেরিফিকেশনের জন্য Enrollment ID প্রদান করুন</p>
+        <p>Please provide Enrollment ID for verification</p>
         <div class="search-box">
             <input type="text" id="enrollmentId" placeholder="e.g. STU-2026-0001" onkeypress="if(event.key==='Enter') searchStudent()">
             <button class="btn-search" onclick="searchStudent()">
                 <i class="fas fa-search"></i>
             </button>
         </div>
-        <div id="loader"><i class="fas fa-spinner fa-spin"></i> Searching...</div>
+        <div id="loader"><i class="fas fa-spinner fa-spin"></i> Searching Registry...</div>
         <p id="error-msg" style="color: #C0392B; margin-top: 15px; display: none; font-weight: 700;"></p>
     </div>
 
@@ -187,97 +187,62 @@
             const loader = document.getElementById('loader');
 
             if (!id) {
-                alert("Please enter an Enrollment ID");
+                alert("Please enter a valid Enrollment ID");
                 return;
             }
 
-<<<<<<< HEAD
-=======
-            // UI Reset
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             errorMsg.style.display = 'none';
             cardDisplay.style.display = 'none';
             loader.style.display = 'block';
 
             try {
-<<<<<<< HEAD
-                // 🛠️ রুটটি আপনার server.js এর মাউন্টিং অনুযায়ী পরিবর্তন করা হয়েছে
+                // Route adjusted for standard API mounting
                 const response = await fetch(`/api/public/students/public/lookup/${id}`);
                 
-                // জেসন চেক (সার্ভার যদি ভুল করে HTML পাঠায় তবে এটি ধরবে)
+                // JSON Check
                 const contentType = response.headers.get("content-type");
                 if (!contentType || !contentType.includes("application/json")) {
-                    throw new Error("Server returned an invalid response. Please check backend routes.");
+                    throw new Error("Server returned an invalid response format.");
                 }
 
                 const student = await response.json();
                 loader.style.display = 'none';
 
                 if (response.ok) {
-=======
-                // আপনার ব্যাকএন্ডের নতুন পাবলিক এন্ডপয়েন্ট কল করা হচ্ছে
-                const response = await fetch(`/api/students/public/lookup/${id}`);
-                const student = await response.json();
-
-                loader.style.display = 'none';
-
-                if (response.ok) {
-                    // ডাটা সেট করা
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
                     document.getElementById('displayName').innerText = `${student.first_name} ${student.last_name}`;
                     document.getElementById('displayID').innerText = student.enrollment_no;
                     document.getElementById('displayCourse').innerText = student.course_name || "General Course";
                     
-<<<<<<< HEAD
-                    // ইমেজের জন্য ডাইনামিক পাথ হ্যান্ডলিং
+                    // Dynamic Image Path Handling
                     if (student.profile_image_path) {
-                        // যদি ডাটাবেসে শুধু ফাইলের নাম থাকে তবে 'uploads/' যোগ করুন
                         const imgPath = student.profile_image_path.startsWith('http') 
                                         ? student.profile_image_path 
                                         : `/${student.profile_image_path}`;
                         document.getElementById('displayPhoto').src = imgPath;
-=======
-                    // ফটো চেক
-                    if (student.profile_image_path) {
-                        document.getElementById('displayPhoto').src = student.profile_image_path;
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
                     } else {
                         document.getElementById('displayPhoto').src = "images/student-placeholder.png";
                     }
                     
                     cardDisplay.style.display = 'block';
                 } else {
-                    errorMsg.innerText = student.message || "Student not found in our records.";
+                    errorMsg.innerText = student.message || "Student record not found.";
                     errorMsg.style.display = 'block';
                 }
             } catch (err) {
                 loader.style.display = 'none';
-<<<<<<< HEAD
                 console.error("Search Error:", err);
-                errorMsg.innerText = "Connection error! সার্ভার রুট চেক করুন।";
-=======
-                console.error(err);
-                errorMsg.innerText = "Database connection error! Check if server is running.";
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
+                errorMsg.innerText = "Connection error! Please check server routes.";
                 errorMsg.style.display = 'block';
             }
         }
 
         function downloadImage() {
             const card = document.getElementById('myCard');
-<<<<<<< HEAD
-            // 'useCORS: true' দেওয়া হয়েছে যাতে বাইরের সোর্স থেকে আসা ইমেজ লোড হয়
             html2canvas(card, { 
                 scale: 3, 
                 backgroundColor: null,
                 useCORS: true,
                 allowTaint: false
-=======
-            html2canvas(card, { 
-                scale: 3, 
-                backgroundColor: null,
-                useCORS: true 
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             }).then(canvas => {
                 let link = document.createElement('a');
                 link.download = `BCSM-ID-${document.getElementById('displayID').innerText}.png`;

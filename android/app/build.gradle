@@ -2,33 +2,20 @@ apply plugin: 'com.android.application'
 
 android {
     namespace "com.bcsmerp.app"
-    
-    // variables.gradle থেকে ভার্সনগুলো লোড করার জন্য rootProject.ext ব্যবহার করা হয়েছে
-    compileSdk rootProject.ext.compileSdkVersion 
-
+    compileSdk rootProject.ext.compileSdkVersion
     defaultConfig {
         applicationId "com.bcsmerp.app"
-        
-        // এটি ২২ থেকে বাড়িয়ে ২৩ করা হলো (Capacitor এরর ফিক্স করতে)
-        minSdkVersion 23
-        
-        // targetSdk ও variables.gradle থেকে নেওয়া হচ্ছে
-        targetSdkVersion rootProject.ext.targetSdkVersion 
-        
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
-
-    compileOptions {
-        // Java 21 এরর ফিক্স করতে এখানে VERSION_21 করা হয়েছে
-        sourceCompatibility JavaVersion.VERSION_21
-        targetCompatibility JavaVersion.VERSION_21
-    }
-
     buildTypes {
         release {
             minifyEnabled false
@@ -59,9 +46,9 @@ apply from: 'capacitor.build.gradle'
 
 try {
     def servicesJSON = file('google-services.json')
-    if (servicesJSON.exists()) {
+    if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
     }
 } catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied.")
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
 }
