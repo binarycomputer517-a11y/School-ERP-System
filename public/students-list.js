@@ -1,6 +1,10 @@
 /**
  * students-list.js - FINAL ERP VERSION (SECURE MULTI-BRANCH)
+<<<<<<< HEAD
  * Fixes: 15-Column Layout, Password Toggle, and User Table Integration.
+=======
+ * Fixed: branch_id=undefined bug and Auto-selection logic
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
  */
 
 (function() {
@@ -46,16 +50,28 @@
     function init() {
         if (!studentTableBody) return; 
 
+<<<<<<< HEAD
         activeBranchFilter = (userRole === 'Super Admin') ? (activeBranchId || '') : (userBranchId || '');
 
+=======
+        // 初期化: ড্রপডাউন থেকে ভ্যালু নেওয়ার আগে ডিফল্ট সেট করা
+        activeBranchFilter = (userRole === 'Super Admin') ? (activeBranchId || '') : (userBranchId || '');
+
+        // Event Listeners
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
         if (searchInput) searchInput.addEventListener('keyup', renderTable);
         if (courseFilter) courseFilter.addEventListener('change', renderTable);
         if (statusFilter) statusFilter.addEventListener('change', renderTable);
         
         if (branchFilter) {
             branchFilter.addEventListener('change', (e) => {
+<<<<<<< HEAD
                 activeBranchFilter = e.target.value; 
                 loadStudents(); 
+=======
+                activeBranchFilter = e.target.value; // ড্রপডাউন থেকে আইডি আপডেট
+                loadStudents(); // API রিলোড
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             });
         }
 
@@ -72,13 +88,17 @@
     }
 
     // -----------------------------------------------------------
-    // --- 3. SECURE DATA FETCHING ---
+    // --- 3. SECURE DATA FETCHING (Fixed Undefined Bug) ---
     // -----------------------------------------------------------
     async function loadStudents() {
         try {
             const token = localStorage.getItem('erp-token');
             const headers = { 'Authorization': `Bearer ${token}` };
 
+<<<<<<< HEAD
+=======
+            // ব্রাঞ্চ সিলেকশন লজিক: নিশ্চিত করা হচ্ছে যেন branch_id কখনো undefined না হয়
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             let targetBranch = activeBranchFilter;
             
             if (!targetBranch || targetBranch === 'undefined') {
@@ -97,6 +117,10 @@
 
             allStudentsData = await studentsRes.json();
             
+<<<<<<< HEAD
+=======
+            // ফিল্টারগুলো পপুলেট করা
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             if (branchesRes && branchesRes.ok) populateBranchFilter(await branchesRes.json());
             populateCourseFilter(await coursesRes.json());
             
@@ -108,7 +132,11 @@
     }
 
     // -----------------------------------------------------------
+<<<<<<< HEAD
     // --- 4. RENDER LOGIC (15 COLUMNS WITH PASSWORD FIX) ---
+=======
+    // --- 4. RENDER LOGIC ---
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
     // -----------------------------------------------------------
     function renderTable() {
         const term = searchInput ? searchInput.value.toLowerCase() : '';
@@ -123,10 +151,17 @@
         });
 
         studentTableBody.innerHTML = '';
+<<<<<<< HEAD
         if (recordCountDisplay) recordCountDisplay.innerText = `Total Records: ${filtered.length}`;
 
         if (filtered.length === 0) {
             studentTableBody.innerHTML = `<tr><td colspan="15" class="text-center p-5 text-muted">No student records found.</td></tr>`;
+=======
+        if (recordCountDisplay) recordCountDisplay.innerText = `Records: ${filtered.length}`;
+
+        if (filtered.length === 0) {
+            studentTableBody.innerHTML = `<tr><td colspan="8" class="text-center p-4 text-muted">No records found.</td></tr>`;
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             return;
         }
 
@@ -152,6 +187,7 @@
 
             const row = `
                 <tr class="student-row">
+<<<<<<< HEAD
                     <td class="align-middle text-center">
                         <input class="form-check-input student-chk" type="checkbox" value="${student.student_id}" ${isChecked}>
                     </td>
@@ -164,6 +200,17 @@
                         <div class="d-flex align-items-center gap-2">
                             ${avatar}
                             <div class="fw-bold text-dark text-nowrap">${student.first_name} ${student.last_name || ''}</div>
+=======
+                    <td class="align-middle text-center"><input class="form-check-input student-chk" type="checkbox" value="${student.student_id}" ${isChecked}></td>
+                    <td class="align-middle fw-bold text-indigo">${student.admission_id || '-'}</td>
+                    <td class="align-middle">
+                        <div class="d-flex align-items-center gap-2">
+                            ${avatar}
+                            <div>
+                                <div class="fw-bold text-dark">${student.first_name} ${student.last_name || ''}</div>
+                                <div class="small text-muted">@${student.username}</div>
+                            </div>
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
                         </div>
                     </td>
                     <td class="align-middle small text-truncate" style="max-width: 130px;">${student.parent_first_name ? student.parent_first_name + ' ' + (student.parent_last_name || '') : '-'}</td>
@@ -174,10 +221,17 @@
                     <td class="align-middle small text-nowrap">${student.admission_date ? new Date(student.admission_date).toLocaleDateString('en-GB') : '-'}</td>
                     <td class="align-middle text-center">${statusBadge} ${unlockBtn}</td>
                     <td class="align-middle text-center">
+<<<<<<< HEAD
                         <div class="d-flex justify-content-center gap-1">
                             <a class="btn btn-sm btn-outline-primary border-0" title="View" href="student-profile.html?id=${student.student_id}"><i class="fas fa-eye"></i></a>
                             <a class="btn btn-sm btn-outline-dark border-0" title="Edit" href="edit-student.html?id=${student.student_id}"><i class="fas fa-pen"></i></a>
                             <button class="btn btn-sm btn-outline-danger border-0 del-btn" title="Delete" data-id="${student.student_id}"><i class="fas fa-trash-alt"></i></button>
+=======
+                        <div class="d-flex justify-content-center gap-2">
+                            <a class="btn btn-sm btn-outline-primary" href="student-profile.html?id=${student.student_id}"><i class="fas fa-eye"></i></a>
+                            <a class="btn btn-sm btn-outline-dark" href="edit-student.html?id=${student.student_id}"><i class="fas fa-pen"></i></a>
+                            <button class="btn btn-sm btn-outline-danger del-btn" data-id="${student.student_id}"><i class="fas fa-trash-alt"></i></button>
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
                         </div>
                     </td>
                 </tr>`;
@@ -188,6 +242,7 @@
     }
 
     // -----------------------------------------------------------
+<<<<<<< HEAD
     // --- 5. UTILITY & PASSWORD TOGGLE ---
     // -----------------------------------------------------------
     
@@ -211,18 +266,41 @@
             opt.value = b.id; // Corrected to use ID from branches table
             opt.textContent = b.branch_name;
             if (b.id === activeBranchFilter) opt.selected = true;
+=======
+    // --- 5. UTILITY & FILTERS (Fixed Population) ---
+    // -----------------------------------------------------------
+    function populateBranchFilter(branches) {
+        if (!branchFilter || branchFilter.options.length > 1) return;
+        
+        branches.forEach(b => {
+            const opt = document.createElement('option');
+            opt.value = b.branch_id;
+            opt.textContent = b.branch_name;
+            // ডিফল্ট ব্রাঞ্চটি সিলেক্টেড রাখা
+            if (b.branch_id === activeBranchFilter) opt.selected = true;
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             branchFilter.appendChild(opt);
         });
     }
 
     function populateCourseFilter(courses) {
         if (!courseFilter) return;
+<<<<<<< HEAD
         courseFilter.innerHTML = '<option value="">All Academic Courses</option>';
         courses.forEach(c => {
             courseFilter.innerHTML += `<option value="${c.id}">${c.course_name}</option>`;
         });
     }
 
+=======
+        courseFilter.innerHTML = '<option value="">All Courses</option>';
+        courses.forEach(c => {
+            courseFilter.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`;
+        });
+    }
+
+    // --- Modal & Handlers (সংক্ষেপিত) ---
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
     window.showUnlockModal = (username) => {
         targetUsernameForUnlock = username;
         if (targetStudentNameSpan) targetStudentNameSpan.innerText = username;
@@ -249,7 +327,11 @@
                 bootstrap.Modal.getInstance(unlockModalEl).hide();
                 loadStudents(); 
             } else {
+<<<<<<< HEAD
                 alert("Authorization Denied: Account activation failed.");
+=======
+                alert("Account activation failed.");
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             }
         } catch (err) { 
             alert("Network Error: Could not reach server."); 
@@ -271,7 +353,11 @@
         document.querySelectorAll('.del-btn').forEach(btn => {
             btn.addEventListener('click', async (e) => {
                 const id = e.currentTarget.dataset.id;
+<<<<<<< HEAD
                 if (confirm("DANGER: Permanently delete this student record? This erases all academic history.")) {
+=======
+                if (confirm("Delete this student record?")) {
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
                     const token = localStorage.getItem('erp-token');
                     await fetch(`${API_BASE_URL}${STUDENTS_API_ENDPOINT}/${id}`, { 
                         method: 'DELETE',

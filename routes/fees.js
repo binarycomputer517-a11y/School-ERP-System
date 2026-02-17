@@ -1905,6 +1905,7 @@ router.get('/receipt/:id', async (req, res) => {
     }
 });
 
+<<<<<<< HEAD
 
 router.get('/student/receipts', authenticateToken, async (req, res) => {
     try {
@@ -1916,5 +1917,7 @@ router.get('/student/receipts', authenticateToken, async (req, res) => {
     }
 });
 
+=======
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
 module.exports = router;
 

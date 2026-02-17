@@ -737,6 +737,7 @@ router.get('/:id/skills', authenticateToken, authorize(VIEW_ROLES), async (req, 
 router.post('/unlock', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     const { username } = req.body;
     if (!username) return res.status(400).json({ message: "Username is required." });
+<<<<<<< HEAD
 
     try {
         const query = `
@@ -781,5 +782,50 @@ router.get('/public/lookup/:enrollmentId', async (req, res) => {
         res.status(500).json({ message: 'Server error during lookup.' });
     }
 });
+=======
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
 
+    try {
+        const query = `
+            UPDATE ${USERS_TABLE} 
+            SET is_active = TRUE, status = 'active' 
+            WHERE username = $1 
+            RETURNING id;
+        `;
+        const result = await pool.query(query, [username]);
+        if (result.rowCount === 0) return res.status(404).json({ message: "User not found." });
+        
+        res.status(200).json({ message: "Student account unlocked successfully." });
+    } catch (error) {
+        console.error('Unlock Error:', error);
+        res.status(500).json({ message: "Failed to unlock portal access." });
+    }
+});
+
+// =========================================================
+// PUBLIC LOOKUP: No Token Required
+// =========================================================
+router.get('/public/lookup/:enrollmentId', async (req, res) => {
+    const { enrollmentId } = req.params;
+    try {
+        const query = `
+            SELECT 
+                s.first_name, s.last_name, s.enrollment_no, s.status,
+                c.course_name, s.profile_image_path
+            FROM students s
+            LEFT JOIN courses c ON s.course_id = c.id
+            WHERE s.enrollment_no = $1 OR s.admission_id = $1
+            LIMIT 1;
+        `;
+        const result = await pool.query(query, [enrollmentId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Student not found.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error('Public lookup error:', error);
+        res.status(500).json({ message: 'Server error during lookup.' });
+    }
+});
 module.exports = router;

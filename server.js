@@ -144,9 +144,14 @@ app.use(cors({
         
         // 2. Check if origin is in the allowed list or is a localhost variation
         const isAllowed = allowedOrigins.includes(origin) || 
+<<<<<<< HEAD
                   origin.startsWith('http://localhost') || 
                   origin.startsWith('http://127.0.0.1') ||
                   origin.startsWith('capacitor://');
+=======
+                          origin.startsWith('http://localhost') || 
+                          origin.startsWith('http://127.0.0.1');
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
 
         if (isAllowed) {
             callback(null, true);
@@ -158,12 +163,20 @@ app.use(cors({
     credentials: true, 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     allowedHeaders: [
+<<<<<<< HEAD
     'Content-Type', 
     'Authorization', 
     'X-Requested-With', 
     'Accept', 
     'Origin',
     'active-branch-id'
+=======
+        'Content-Type', 
+        'Authorization', 
+        'X-Requested-With', 
+        'Accept', 
+        'Origin'
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
     ]
 }));
 
@@ -315,6 +328,7 @@ app.get(['/api/users/profile', '/api/users/profile/:id'], authenticateToken, asy
         
         let queryId = loggedInUser.id;
 
+<<<<<<< HEAD
         // 🛡️ SECURITY & SYNTAX GATEWAY
         if (targetId) {
             // 1. Role Check: Only Super Admin can query other IDs
@@ -377,6 +391,8 @@ app.get(['/api/users/profile', '/api/users/profile/:id'], authenticateToken, asy
         });
     }
 });
+=======
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
 /**
  * ✅ UPDATED: MANUAL REPORT TRIGGER
  * এটি এখন Super Admin এবং Branch Admin (যেমন wb02_admin) উভয়কেই অনুমতি দেবে।
@@ -778,7 +794,10 @@ process.on('SIGINT', async () => {
     process.exit(0);
 });
 
+<<<<<<< HEAD
 // Existing Daily Report Automation
+=======
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
 cron.schedule('0 21 * * *', async () => {
     try {
         console.log('--- 📊 Starting Scheduled Daily Report Automation ---');

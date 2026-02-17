@@ -712,7 +712,11 @@ router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teac
             ...structureData,
             admission_fee: safeParseFloat(structureData.admission_fee),
             registration_fee: safeParseFloat(structureData.registration_fee),
+<<<<<<< HEAD
             exam_fee: safeParseFloat(structureData.exam_fee),
+=======
+            examination_fee: safeParseFloat(structureData.examination_fee),
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             tuition_fee: safeParseFloat(structureData.tuition_fee), // এটি যোগ করা হয়েছে
             exam_fee: safeParseFloat(structureData.exam_fee),       // এটি যোগ করা হয়েছে
             transport_fee: safeParseFloat(structureData.transport_fee),
@@ -817,6 +821,7 @@ router.get('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super
 router.put('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
         const { id } = req.params;
+<<<<<<< HEAD
         const { branch_id, role } = req.user; 
         
         const {
@@ -865,13 +870,50 @@ router.put('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super
         if (role !== 'Super Admin' && role !== 'Prime Admin') {
             updateQuery += ` AND branch_id = $11`;
             values.push(branch_id);             // $11
+=======
+        const { branch_id, role } = req.user; // টোকেন থেকে ইউজারের ব্রাঞ্চ এবং রোল নেওয়া
+        
+        const {
+            course_duration_months, admission_fee, registration_fee,
+            examination_fee, tuition_fee, exam_fee, // tuition_fee এবং exam_fee যোগ করা হয়েছে
+            has_transport, transport_fee, has_hostel, hostel_fee
+        } = req.body;
+
+        // ১. সিকিউরিটি লজিক: সুপার অ্যাডমিন সব এডিট করতে পারবে, 
+        // কিন্তু সাধারণ অ্যাডমিন শুধু তার নিজের ব্রাঞ্চের ডাটা এডিট করতে পারবে।
+        let updateQuery = `
+            UPDATE fee_structures SET
+                course_duration_months = $1, admission_fee = $2, registration_fee = $3,
+                examination_fee = $4, has_transport = $5, transport_fee = $6,
+                has_hostel = $7, hostel_fee = $8, tuition_fee = $9, exam_fee = $10,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $11
+        `;
+        
+        let values = [
+            course_duration_months, admission_fee, registration_fee, examination_fee,
+            has_transport || false, (has_transport && transport_fee) ? transport_fee : 0,
+            has_hostel || false, (has_hostel && hostel_fee) ? hostel_fee : 0,
+            tuition_fee || 0, exam_fee || 0,
+            id
+        ];
+
+        // ২. ব্রাঞ্চ ফিল্টার যোগ করা (সুপার অ্যাডমিন না হলে)
+        if (role !== 'Super Admin' && role !== 'Prime Admin') {
+            updateQuery += ` AND branch_id = $12`;
+            values.push(branch_id);
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
         }
 
         const result = await pool.query(updateQuery + " RETURNING *", values);
 
         if (result.rowCount === 0) {
             return res.status(404).json({ 
+<<<<<<< HEAD
                 message: 'Fee structure not found or permission denied.' 
+=======
+                message: 'Fee structure not found or you do not have permission to update it.' 
+>>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             });
         }
 
