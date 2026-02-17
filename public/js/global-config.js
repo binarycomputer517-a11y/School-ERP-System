@@ -26,7 +26,7 @@ if (IS_LOCALHOST) {
     API_BASE_URL = `http://localhost:${BACKEND_PORT}`;
 } else {
     
-    API_BASE_URL = 'http://72.61.140.252:3005'; 
+    API_BASE_URL = 'https://portal.bcsm.org.in';
 }
 
 console.log(`🚀 ERP System Initialized. Gateway: ${API_BASE_URL}`);
