@@ -10,20 +10,26 @@
     "use strict";
 
     // --- 1. SERVER CONNECTION CONFIGURATION ---
-    const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    
-    // Backend Port for Local Development
-    const BACKEND_PORT = 3005; 
-    
-    /**
-     * Dynamic Base URL determination: 
-     * Automatically switches between local and production environment.
-     */
-    const API_BASE_URL = IS_LOCALHOST 
-        ? `http://localhost:${BACKEND_PORT}` 
-        : 'https://portal.bcsm.org.in'; 
+const hostname = window.location.hostname;
+const IS_LOCALHOST = hostname === 'localhost' || hostname === '127.0.0.1';
 
-    console.log(`🚀 ERP System Initialized. Gateway: ${API_BASE_URL}`);
+// Backend Port for Local Development
+const BACKEND_PORT = 3005; 
+
+/**
+ * FIXED: Dynamic Base URL for Android & Web
+ * This logic ensures the app connects to your live server or local IP.
+ */
+let API_BASE_URL;
+
+if (IS_LOCALHOST) {
+    API_BASE_URL = `http://localhost:${BACKEND_PORT}`;
+} else {
+    
+    API_BASE_URL = 'http://72.61.140.252:3005'; 
+}
+
+console.log(`🚀 ERP System Initialized. Gateway: ${API_BASE_URL}`);
 
     // --- 2. CONFIGURATION CONSTANTS ---
     const SETTINGS_CACHE_KEY = 'erp_settings_v2';
