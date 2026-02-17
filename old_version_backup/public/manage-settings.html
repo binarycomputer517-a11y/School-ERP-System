@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise ERP Control Panel</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@400;700&family=Segoe+UI:wght@400;600&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --classic-dark: #1a252f; /* Deep Navy Charcoal */
+            --classic-gold: #c0a375; /* Premium Gold */
+            --classic-bg: #eef2f5;
+            --sidebar-width: 260px;
+        }
+
+        body {
+            background-color: var(--classic-bg);
+            font-family: 'Segoe UI', sans-serif;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h4, h5, h6 {
+            font-family: 'Merriweather', serif;
+            color: var(--classic-dark);
+        }
+
+        /* Layout */
+        .wrapper { display: flex; width: 100%; align-items: stretch; min-height: 100vh; }
+
+        /* Sidebar Styling */
+        #sidebar {
+            min-width: var(--sidebar-width);
+            max-width: var(--sidebar-width);
+            background: var(--classic-dark);
+            color: #fff;
+            box-shadow: 2px 0 15px rgba(0,0,0,0.1);
+            position: fixed; height: 100vh; overflow-y: auto; z-index: 999;
+            display: flex; flex-direction: column;
+        }
+        #sidebar .sidebar-header { padding: 20px; background: rgba(0,0,0,0.2); border-bottom: 1px solid rgba(255,255,255,0.05); }
+        #sidebar ul.components { padding: 10px 0; flex: 1; }
+        #sidebar ul li a {
+            padding: 12px 20px; font-size: 0.9rem; display: block; color: rgba(255,255,255,0.7);
+            text-decoration: none; transition: 0.3s; border-left: 4px solid transparent;
+        }
+        #sidebar ul li a:hover { color: #fff; background: rgba(255,255,255,0.05); }
+        #sidebar ul li a.active {
+            color: #fff; background: rgba(192, 163, 117, 0.15); border-left: 4px solid var(--classic-gold);
+        }
+        #sidebar ul li a i { margin-right: 10px; width: 20px; text-align: center; color: var(--classic-gold); }
+        
+        /* Sidebar Footer */
+        .sidebar-footer { padding: 20px; border-top: 1px solid rgba(255,255,255,0.05); }
+        .btn-sidebar { width: 100%; text-align: left; color: #ccc; background: none; border: none; padding: 10px 0; transition: 0.3s; }
+        .btn-sidebar:hover { color: #fff; transform: translateX(5px); }
+
+        /* Content Area */
+        #content {
+            width: 100%; padding: 30px; margin-left: var(--sidebar-width);
+            transition: all 0.3s;
+        }
+        
+        /* Card Styling */
+        .classic-card {
+            background: #fff; border: none; border-radius: 8px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.04); margin-bottom: 25px;
+            border-top: 3px solid var(--classic-gold);
+        }
+        .classic-card-header {
+            background: transparent; border-bottom: 1px solid #eee;
+            padding: 15px 25px; font-weight: 700; color: var(--classic-dark); font-size: 1.05rem;
+        }
+        .classic-card-body { padding: 25px; }
+
+        /* Form Controls */
+        .form-label { font-weight: 600; color: #555; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .form-control, .form-select {
+            border-radius: 4px; border: 1px solid #dde2e7; padding: 10px 12px; font-size: 0.95rem;
+        }
+        .form-control:focus, .form-select:focus {
+            border-color: var(--classic-gold); box-shadow: 0 0 0 0.2rem rgba(192, 163, 117, 0.25);
+        }
+        
+        /* Switches */
+        .form-switch .form-check-input {
+            width: 3em; height: 1.5em; margin-left: -3em; cursor: pointer;
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba%280, 0, 0, 0.25%29'/%3e%3c/svg%3e");
+        }
+        .form-switch .form-check-input:checked {
+            background-color: var(--classic-gold); border-color: var(--classic-gold);
+            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e");
+        }
+
+        /* Top Bar */
+        .action-bar {
+            background: white; padding: 15px 30px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.03);
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; position: sticky; top: 10px; z-index: 900;
+        }
+        .btn-classic-gold {
+            background-color: var(--classic-gold); color: #fff; border: none; padding: 10px 30px; font-weight: 600; letter-spacing: 0.5px;
+        }
+        .btn-classic-gold:hover { background-color: #a3885d; color: #fff; }
+        .btn-classic-gold:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        .adv-badge { background: var(--classic-dark); color: var(--classic-gold); font-size: 0.65rem; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; margin-left: 5px; vertical-align: middle;}
+        
+        /* Image Preview */
+        .img-preview-box { height: 100px; width: 100%; object-fit: contain; background: #f8f9fa; border: 1px dashed #ccc; margin-bottom: 10px; padding: 5px; }
+    </style>
+</head>
+<body>
+
+<div class="wrapper">
+    <nav id="sidebar">
+        <div class="sidebar-header">
+            <h5 class="mb-0 text-white global-school-name"><i class="fas fa-university text-gold me-2"></i>School ERP</h5>
+        </div>
+
+        <ul class="list-unstyled components nav nav-pills flex-column" id="v-pills-tab" role="tablist">
+            <li class="nav-item"><a href="#general" class="nav-link active" data-bs-toggle="pill"><i class="fas fa-globe"></i> General & School Info</a></li>
+            <li class="nav-item"><a href="#branding" class="nav-link" data-bs-toggle="pill"><i class="fas fa-paint-brush"></i> Branding & Designs</a></li>
+            <li class="nav-item"><a href="#email-carrier" class="nav-link" data-bs-toggle="pill"><i class="fas fa-server"></i> Email Carrier</a></li>
+            <li class="nav-item"><a href="#email-templates" class="nav-link" data-bs-toggle="pill"><i class="fas fa-envelope-open-text"></i> Email Templates</a></li>
+            <li class="nav-item"><a href="#firebase" class="nav-link" data-bs-toggle="pill"><i class="fab fa-google"></i> Firebase Cloud</a></li>
+            <li class="nav-item"><a href="#sms-carrier" class="nav-link" data-bs-toggle="pill"><i class="fas fa-mobile-alt"></i> SMS Carrier</a></li>
+            <li class="nav-item"><a href="#sms-templates" class="nav-link" data-bs-toggle="pill"><i class="fas fa-comment-dots"></i> SMS Templates</a></li>
+            <li class="nav-item"><a href="#payment" class="nav-link" data-bs-toggle="pill"><i class="fas fa-credit-card"></i> Payment Methods</a></li>
+            <li class="nav-item"><a href="#inquiry" class="nav-link" data-bs-toggle="pill"><i class="fas fa-headset"></i> CRM & Inquiry</a></li>
+            <li class="nav-item"><a href="#registration" class="nav-link" data-bs-toggle="pill"><i class="fas fa-user-plus"></i> Registration</a></li>
+            <li class="nav-item"><a href="#dashboard" class="nav-link" data-bs-toggle="pill"><i class="fas fa-chart-line"></i> Dashboard</a></li>
+            <li class="nav-item"><a href="#shortcodes" class="nav-link" data-bs-toggle="pill"><i class="fas fa-code"></i> Shortcodes</a></li>
+            <li class="nav-item"><a href="#charts" class="nav-link" data-bs-toggle="pill"><i class="fas fa-chart-pie"></i> Charts</a></li>
+            <li class="nav-item"><a href="#live-classes" class="nav-link" data-bs-toggle="pill"><i class="fas fa-video"></i> Live Classes</a></li>
+            <li class="nav-item"><a href="#qr-code" class="nav-link" data-bs-toggle="pill"><i class="fas fa-qrcode"></i> QR & Security</a></li>
+            <li class="nav-item"><a href="#logging" class="nav-link" data-bs-toggle="pill"><i class="fas fa-history"></i> Audit Logs</a></li>
+            <li class="nav-item"><a href="#lessons" class="nav-link" data-bs-toggle="pill"><i class="fas fa-book-reader"></i> LMS & Lessons</a></li>
+        </ul>
+
+        <div class="sidebar-footer">
+            <button class="btn-sidebar" onclick="window.location.href='/admin-dashboard.html'"><i class="fas fa-arrow-left me-2"></i> Back to Dashboard</button>
+            <button class="btn-sidebar text-danger" onclick="logout()"><i class="fas fa-sign-out-alt me-2"></i> Logout</button>
+        </div>
+    </nav>
+
+    <div id="content">
+        <form id="settingsForm" enctype="multipart/form-data">
+            <div class="action-bar">
+                <div>
+                    <h3 class="mb-0">System Configuration</h3>
+                    <small class="text-muted">Manage global settings, integrations, and branding.</small>
+                </div>
+                <button type="submit" id="saveBtn" class="btn btn-classic-gold shadow-sm">
+                    <i class="fas fa-save me-2"></i> Save Changes
+                </button>
+            </div>
+
+            <div class="tab-content" id="v-pills-tabContent">
+                
+                <div class="tab-pane fade show active" id="general">
+    <div class="classic-card mt-4">
+    <div class="classic-card-header">
+        <i class="fas fa-certificate text-gold me-2"></i> Accreditation & Global Institutional Partnerships
+    </div>
+    <div class="classic-card-body">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <label class="form-label">Affiliated Board / Academic Council</label>
+                <input type="text" class="form-control" name="board_name" placeholder="e.g., UGC, AICTE, CBSE, AIU Member">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Statutory Registration & ISO Compliance</label>
+                <input type="text" class="form-control" name="legal_authorizations" value="Ministry of Corporate Affairs, ISO 9001:2015 Certified">
+            </div>
+
+            <div class="col-md-12">
+                <label class="form-label">Authorized Strategic Technology Partners</label>
+                <textarea class="form-control" name="technical_partnerships" rows="3">Microsoft Authorized Education Partner, AWS Academy Member, Cisco Networking Academy, Google Cloud Partner, Red Hat Academy, CompTIA Academic Partner, EC-Council Academia Partner</textarea>
+                <small class="text-muted">
+                    <i class="fas fa-info-circle me-1"></i> These credentials will be automatically appended to student certificates, digital transcripts, and portal footers.
+                </small>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">National Skill Development & Government Alliances</label>
+                <input type="text" class="form-control" name="skill_india_nsdc_id" value="NSDC & Skill India Mission Partner">
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Professional Memberships & Industry Bodies</label>
+                <input type="text" class="form-control" name="memberships" value="NASSCOM Membership, PMI Authorized Training Partner, Red Hat Academy Member">
+            </div>
+        </div>
+    </div>
+</div>
+
+                    <div class="classic-card">
+                        <div class="classic-card-header">System Localization & Logic</div>
+                        <div class="classic-card-body">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label">System Currency</label>
+                                    <select class="form-select mb-3" name="currency">
+                                        <option value="INR">INR (₹) - Indian Rupee</option>
+                                        <option value="USD">USD ($) - US Dollar</option>
+                                        <option value="EUR">EUR (€) - Euro</option>
+                                       
+                                    </select>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="ai_exchange_rate_update">
+                                        <label class="form-check-label">AI-Driven Exchange Rate Updates <span class="adv-badge">Smart</span></label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" name="auto_promote_session">
+                                        <label class="form-check-label">Auto-Promote Academic Session</label>
+                                    </div>
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="multi_tenant_mode">
+                                        <label class="form-check-label">Multi-Tenant Isolation Mode</label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="branding">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Upload Official Designs & Backgrounds</div>
+                        <div class="classic-card-body">
+                            <div class="alert alert-info small mb-4">
+                                <i class="fas fa-info-circle me-1"></i> Format: PNG/JPG. Files will be saved securely.
+                            </div>
+                            <div class="row g-4">
+                                <div class="col-md-4 text-center">
+                                    <div class="border p-3 rounded bg-light h-100">
+                                        <label class="form-label d-block">School Logo (Main)</label>
+                                        <img src="/images/default-logo.png" class="img-preview-box" id="preview_logo">
+                                        <input type="file" class="form-control form-control-sm" name="school_logo" onchange="previewImage(this, 'preview_logo')">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="border p-3 rounded bg-light h-100">
+                                        <label class="form-label d-block">ID Card (Front Design)</label>
+                                        <img src="/images/default-logo.png" class="img-preview-box" id="preview_id_front">
+                                        <input type="file" class="form-control form-control-sm" name="design_id_card_front" onchange="previewImage(this, 'preview_id_front')">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="border p-3 rounded bg-light h-100">
+                                        <label class="form-label d-block">ID Card (Back Design)</label>
+                                        <img src="/images/default-logo.png" class="img-preview-box" id="preview_id_back">
+                                        <input type="file" class="form-control form-control-sm" name="design_id_card_back" onchange="previewImage(this, 'preview_id_back')">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="border p-3 rounded bg-light h-100">
+                                        <label class="form-label d-block">Certificate Background</label>
+                                        <img src="/images/default-logo.png" class="img-preview-box" id="preview_cert">
+                                        <input type="file" class="form-control form-control-sm" name="design_certificate_bg" onchange="previewImage(this, 'preview_cert')">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="border p-3 rounded bg-light h-100">
+                                        <label class="form-label d-block">Marksheet Background</label>
+                                        <img src="/images/default-logo.png" class="img-preview-box" id="preview_marksheet">
+                                        <input type="file" class="form-control form-control-sm" name="design_marksheet_bg" onchange="previewImage(this, 'preview_marksheet')">
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-center">
+                                    <div class="border p-3 rounded bg-light h-100">
+                                        <label class="form-label d-block">Bonafide Background</label>
+                                        <img src="/images/default-logo.png" class="img-preview-box" id="preview_bonafide">
+                                        <input type="file" class="form-control form-control-sm" name="design_bonafide_bg" onchange="previewImage(this, 'preview_bonafide')">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="email-carrier">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Mail Server Infrastructure</div>
+                        <div class="classic-card-body">
+                            <div class="row g-4">
+                                <div class="col-md-4">
+                                    <label class="form-label">Primary Driver</label>
+                                    <select class="form-select" name="mail_driver">
+                                        <option value="smtp">SMTP</option>
+                                        <option value="ses">Amazon SES</option>
+                                        <option value="mailgun">Mailgun</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Failover Backup</label>
+                                    <select class="form-select" name="mail_failover_driver">
+                                        <option value="php">PHP Mail (Local)</option>
+                                        <option value="sendgrid">SendGrid</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label">Trigger Condition</label>
+                                    <select class="form-select" name="failover_trigger">
+                                        <option value="3_fails">After 3 Failed Attempts</option>
+                                        <option value="latency">High Latency (>2s)</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-12">
+                                    <label class="form-label">SMTP Hostname</label>
+                                    <input type="text" class="form-control" name="smtp_host" placeholder="smtp.gmail.com">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="email-templates">
+                    <div class="classic-card">
+                        <div class="classic-card-header">AI Content Builder</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="ai_content_optimize">
+                                <label class="form-check-label">AI Subject Line Optimization <span class="adv-badge">GPT-4</span></label>
+                            </div>
+                            <label class="form-label">Global HTML Footer</label>
+                            <textarea class="form-control" name="email_global_footer" rows="3" placeholder="<div class='footer'>School Address...</div>"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="firebase">
+                    <div class="classic-card">
+                        <div class="classic-card-header">FCM Cloud Messaging</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Service Account JSON</label>
+                            <textarea class="form-control font-monospace" name="firebase_service_account" rows="5" placeholder="{ 'type': 'service_account', 'project_id': '...' }"></textarea>
+                            <div class="mt-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" name="firebase_geo_fencing">
+                                    <label class="form-check-label">Enable Geo-Fencing Triggers (Entry/Exit)</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="sms-carrier">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Gateway & DLT Compliance</div>
+                        <div class="classic-card-body">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <label class="form-label">SMS Provider</label>
+                                    <select class="form-select" name="sms_provider">
+                                        <option value="twilio">Twilio (Global)</option>
+                                        <option value="msg91">Msg91 (India DLT)</option>
+                                        <option value="textlocal">TextLocal</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label">DLT Entity ID</label>
+                                    <input type="text" class="form-control" name="dlt_entity_id" placeholder="1001XXXXXXXXX">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="sms-templates">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Template Management</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Default Attendance Template ID</label>
+                            <input type="text" class="form-control mb-3" name="sms_attendance_template_id">
+                            
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="sms_unicode_support">
+                                <label class="form-check-label">Enable Unicode (Hindi/Bengali/Arabic Support)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="payment">
+    <div class="classic-card">
+        <div class="classic-card-header">
+            Global Payment Infrastructure 
+            <span class="float-end badge bg-success">Dynamic JSONB Storage</span>
+        </div>
+        <div class="classic-card-body">
+            
+            <div class="alert alert-light border mb-4">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <label class="fw-bold mb-2">Smart Routing Logic</label>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="auto_switch_gateway">
+                            <label class="form-check-label">Auto-Failover (Switch if Primary Fails)</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" name="enable_emi_payments">
+                            <label class="form-check-label">Enable EMI / Installments</label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label">Primary Gateway</label>
+                        <select class="form-select" name="primary_payment_gateway">
+                            <option value="stripe">Stripe (Global)</option>
+                            <option value="paypal">PayPal (Global)</option>
+                            <option value="razorpay">Razorpay (India)</option>
+                            <option value="sslcommerz">SSLCommerz (BD)</option>
+                            <option value="paytm">PayTM (India)</option>
+                            <option value="flutterwave">Flutterwave (Africa)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-primary">
+                        <div class="card-header bg-primary text-white"><i class="fab fa-stripe me-2"></i> Stripe</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="stripe_publishable_key" placeholder="Publishable Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="stripe_secret_key" placeholder="Secret Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_stripe"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold"><i class="fab fa-paypal me-2 text-primary"></i> PayPal</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="paypal_client_id" placeholder="Client ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="paypal_secret" placeholder="Client Secret">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_paypal"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #3395ff;">Razorpay</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="razorpay_key_id" placeholder="Key ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="razorpay_key_secret" placeholder="Key Secret">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_razorpay"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-dark">SSLCommerz</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="ssl_store_id" placeholder="Store ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="ssl_store_password" placeholder="Store Password">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_sslcommerz"><label>Sandbox Mode</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #00b9f5;">PayTM</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="paytm_mid" placeholder="Merchant ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="paytm_key" placeholder="Merchant Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_paytm"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #00c3f7;">Paystack</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="paystack_public" placeholder="Public Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="paystack_secret" placeholder="Secret Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_paystack"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold" style="background: #f5a623; color: white;">Flutterwave</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="flutterwave_public" placeholder="Public Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="flutterwave_secret" placeholder="Secret Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_flutterwave"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold bg-light text-dark">Instamojo</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="instamojo_api_key" placeholder="API Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="instamojo_auth_token" placeholder="Auth Token">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_instamojo"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-dark">Square</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="square_app_id" placeholder="Application ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="square_access_token" placeholder="Access Token">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_square"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-secondary">Authorize.net</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="authnet_login_id" placeholder="API Login ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="authnet_trans_key" placeholder="Transaction Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_authnet"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-dark bg-white border-bottom">Braintree</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="braintree_merchant_id" placeholder="Merchant ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="braintree_private_key" placeholder="Private Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_braintree"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-dark bg-light">Mollie</div>
+                        <div class="card-body">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="mollie_api_key" placeholder="API Key">
+                            <div class="form-check form-switch mt-4"><input class="form-check-input" type="checkbox" name="enable_mollie"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #a5c338;">PayU Money</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="payu_merchant_key" placeholder="Merchant Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="payu_salt" placeholder="Merchant Salt">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_payu"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-danger">2Checkout</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="2checkout_merchant_code" placeholder="Merchant Code">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="2checkout_secret_key" placeholder="Secret Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_2checkout"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #811e4d;">Skrill</div>
+                        <div class="card-body">
+                            <input type="email" class="form-control mb-2 form-control-sm" name="skrill_merchant_email" placeholder="Merchant Email">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="skrill_secret_word" placeholder="Secret Word">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_skrill"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-danger">Worldpay</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="worldpay_service_key" placeholder="Service Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="worldpay_client_key" placeholder="Client Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_worldpay"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-secondary">CCAvenue</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="ccavenue_merchant_id" placeholder="Merchant ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="ccavenue_access_code" placeholder="Access Code">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_ccavenue"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #e44046;">PayFast</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="payfast_merchant_id" placeholder="Merchant ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="payfast_merchant_key" placeholder="Merchant Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_payfast"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #ef8b6c;">Cashfree</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="cashfree_app_id" placeholder="App ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="cashfree_secret_key" placeholder="Secret Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_cashfree"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #5f259f;">PhonePe</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="phonepe_merchant_id" placeholder="Merchant ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="phonepe_salt_key" placeholder="Salt Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_phonepe"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white" style="background: #0abf53;">Adyen</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="adyen_merchant_account" placeholder="Merchant Account">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="adyen_api_key" placeholder="API Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_adyen"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-dark bg-warning">JazzCash</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="jazzcash_merchant_id" placeholder="Merchant ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="jazzcash_password" placeholder="Password">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_jazzcash"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-success">EasyPaisa</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="easypaisa_store_id" placeholder="Store ID">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="easypaisa_hash_key" placeholder="Hash Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_easypaisa"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-info">Billplz</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="billplz_api_key" placeholder="API Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="billplz_collection_id" placeholder="Collection ID">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_billplz"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-secondary">Midtrans</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="midtrans_client_key" placeholder="Client Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="midtrans_server_key" placeholder="Server Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_midtrans"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-dark bg-light border">Xendit</div>
+                        <div class="card-body">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="xendit_secret_key" placeholder="Secret Key">
+                            <div class="form-check form-switch mt-4"><input class="form-check-input" type="checkbox" name="enable_xendit"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-primary">Iyzico</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="iyzico_api_key" placeholder="API Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="iyzico_secret_key" placeholder="Secret Key">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_iyzico"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-info">Mercado Pago</div>
+                        <div class="card-body">
+                            <input type="text" class="form-control mb-2 form-control-sm" name="mercado_public_key" placeholder="Public Key">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="mercado_access_token" placeholder="Access Token">
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_mercado"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100">
+                        <div class="card-header fw-bold text-white bg-dark">PaySafeCard</div>
+                        <div class="card-body">
+                            <input type="password" class="form-control mb-2 form-control-sm" name="paysafe_api_key" placeholder="API Key">
+                            <div class="form-check form-switch mt-4"><input class="form-check-input" type="checkbox" name="enable_paysafe"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 border-success">
+                        <div class="card-header bg-success text-white">Bank Transfer</div>
+                        <div class="card-body">
+                            <textarea class="form-control mb-2 form-control-sm" name="bank_details" rows="3" placeholder="Bank Name, Account No, IBAN, Swift Code..."></textarea>
+                            <div class="form-check form-switch"><input class="form-check-input" type="checkbox" name="enable_bank_transfer"><label>Enable</label></div>
+                        </div>
+                    </div>
+                </div>
+
+            </div> </div>
+    </div>
+</div>
+                <div class="tab-pane fade" id="inquiry">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Lead Management & AI CRM</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">WhatsApp API Key</label>
+                            <input type="text" class="form-control mb-3" name="whatsapp_api_key">
+                            
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="crm_sentiment_analysis">
+                                <label class="form-check-label">AI Sentiment Analysis (Detect Angry Parents)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="registration">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Digital Onboarding</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="kyc_ocr_enabled">
+                                <label class="form-check-label">Document OCR (Auto-Fill from ID Card Image)</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="registration_face_match">
+                                <label class="form-check-label">Biometric Face Match Verification</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="dashboard">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Analytics & UX</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Cache Refresh Rate (Minutes)</label>
+                            <input type="number" class="form-control mb-3" name="dashboard_cache_time" value="15">
+                            
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="dashboard_predictive_analytics">
+                                <label class="form-check-label">Enable Predictive Revenue Trends <span class="adv-badge">AI</span></label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="shortcodes">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Dynamic Logic Variables</div>
+                        <div class="classic-card-body">
+                            <div class="alert alert-light border">
+                                <strong>Logic Supported:</strong><br>
+                                <code>[if fee_due > 0] Please pay immediately [else] Thank you [/if]</code>
+                            </div>
+                            <label class="form-label">Custom Variable Map (JSON)</label>
+                            <textarea class="form-control font-monospace" name="custom_shortcodes" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="charts">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Visualization Engine</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Library</label>
+                            <select class="form-select mb-3" name="chart_library">
+                                <option value="apex">ApexCharts (Interactive)</option>
+                                <option value="chartjs">Chart.js (Lightweight)</option>
+                            </select>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="chart_drilldown">
+                                <label class="form-check-label">Enable Data Drill-down on Click</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="live-classes">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Virtual Classroom</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Zoom JWT / SDK Key</label>
+                            <input type="password" class="form-control mb-3" name="zoom_api_key">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="live_class_ai_attendance">
+                                <label class="form-check-label">AI Attentiveness Tracking (Face Detection)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="qr-code">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Security & Encryption</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="qr_dynamic_rotation">
+                                <label class="form-check-label">Rotate QR Codes every 60 seconds (Anti-Copy)</label>
+                            </div>
+                            <label class="form-label">Encryption Key (AES-256)</label>
+                            <input type="password" class="form-control" name="qr_encryption_key">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="logging">
+                    <div class="classic-card">
+                        <div class="classic-card-header">Forensic Audit & Blockchain</div>
+                        <div class="classic-card-body">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" name="blockchain_logging">
+                                <label class="form-check-label">Immutable Audit Logs (Private Blockchain)</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="ip_geo_lock">
+                                <label class="form-check-label">Geo-Lock Admin Login (Country Restriction)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane fade" id="lessons">
+                    <div class="classic-card">
+                        <div class="classic-card-header">LMS Configuration</div>
+                        <div class="classic-card-body">
+                            <label class="form-label">Content Standard</label>
+                            <select class="form-select mb-3" name="lms_standard">
+                                <option value="scorm">SCORM 1.2</option>
+                                <option value="xapi">Tin Can (xAPI)</option>
+                            </select>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" name="lms_adaptive_learning">
+                                <label class="form-check-label">Adaptive Learning (Adjust Difficulty Automatically)</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div> </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // --- 1. CONFIGURATION CONSTANTS (MUST BE AT THE TOP) ---
+    const API_URL = '/api/settings';
+    const CONFIG_ID = '1'; 
+    const TOKEN = localStorage.getItem('erp-token'); 
+
+    // --- 2. INITIALIZATION ---
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!TOKEN) {
+            console.warn("No authentication token found. Redirecting to login.");
+            window.location.href = '/login.html'; 
+            return;
+        }
+        await loadSettings();
+    });
+
+    // --- 3. FETCH SETTINGS FUNCTION ---
+    async function loadSettings() {
+        try {
+            const response = await fetch(`${API_URL}/config/current`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            
+            if (response.status === 401 || response.status === 403) {
+                console.error("Token invalid or expired.");
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            if (!response.ok) throw new Error('Failed to fetch settings');
+            
+            const data = await response.json();
+            populateForm(data);
+        } catch (error) {
+            console.error('Load Error:', error);
+        }
+    }
+
+    // --- 4. PREVIEW IMAGE HELPER ---
+    function previewImage(input, previewId) {
+        if (input.files && input.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById(previewId).src = e.target.result;
+            }
+            reader.readAsDataURL(input.files[0]);
+        }
+    }
+
+    // --- 5. POPULATE FORM FIELDS ---
+    function populateForm(data) {
+        for (const [key, value] of Object.entries(data)) {
+            const input = document.querySelector(`[name="${key}"]`);
+            
+            // Handle Images
+            if (key.startsWith('design_') || key === 'school_logo_path') {
+                // If it is main logo, update specific preview
+                if(key === 'school_logo_path') {
+                    const preview = document.getElementById('preview_logo');
+                    if(preview) preview.src = value;
+                }
+                // For other dynamic image fields, try to find matching preview ID by convention
+                // or just leave as is if we have specific IDs in HTML.
+                // Here we specifically mapped input names to preview IDs in HTML (e.g. design_id_card_front -> preview_id_front)
+                // We can add logic if needed, but the current HTML hardcodes IDs for simplicity.
+                // Let's try to update generic previews if value looks like a URL
+                if (value && typeof value === 'string' && (value.startsWith('/uploads') || value.startsWith('http'))) {
+                     // Logic to auto-fill preview if ID matches convention could go here
+                     // But for now, the hardcoded IDs in HTML are fine if populated manually or we rely on user upload preview.
+                     // To show EXISTING images from DB:
+                     if(key === 'design_id_card_front') document.getElementById('preview_id_front').src = value;
+                     if(key === 'design_id_card_back') document.getElementById('preview_id_back').src = value;
+                     if(key === 'design_certificate_bg') document.getElementById('preview_cert').src = value;
+                     if(key === 'design_marksheet_bg') document.getElementById('preview_marksheet').src = value;
+                     if(key === 'design_bonafide_bg') document.getElementById('preview_bonafide').src = value;
+                }
+            }
+
+            // Handle Standard Inputs
+            if (input && input.type !== 'file') {
+                if (input.type === 'checkbox') {
+                    input.checked = (value === true || value === 'true' || value === 1);
+                } else if (input.type === 'radio') {
+                    if (input.value == value) input.checked = true;
+                } else {
+                    input.value = value;
+                }
+            }
+        }
+    }
+
+    // --- 6. SAVE SETTINGS FUNCTION (HANDLES FILES) ---
+    document.getElementById('settingsForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const btn = document.getElementById('saveBtn');
+        const originalContent = btn.innerHTML;
+        
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Uploading...';
+        btn.disabled = true;
+
+        // Use FormData for File Upload support
+        const formData = new FormData(e.target);
+        
+        // Handle unchecked checkboxes explicitly
+        document.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+            formData.set(cb.name, cb.checked);
+        });
+
+        try {
+            const response = await fetch(`${API_URL}/config/${CONFIG_ID}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${TOKEN}` }, // No Content-Type for FormData
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                btn.innerHTML = '<i class="fas fa-check me-2"></i> Saved!';
+                btn.classList.replace('btn-classic-gold', 'btn-success');
+                
+                // Update Cache Locally
+                localStorage.setItem('erp_settings', JSON.stringify(result.settings));
+                
+                // Trigger global update
+                if(typeof refreshGlobalSettings === 'function') {
+                    refreshGlobalSettings();
+                }
+                
+                setTimeout(() => {
+                    btn.innerHTML = originalContent;
+                    btn.classList.replace('btn-success', 'btn-classic-gold');
+                    btn.disabled = false;
+                    // Optional: reload to ensure images persist visually
+                    // window.location.reload(); 
+                }, 1500);
+            } else {
+                throw new Error(result.message || 'Save failed');
+            }
+        } catch (error) {
+            console.error('Save Error:', error);
+            alert(`Error: ${error.message}`);
+            btn.innerHTML = originalContent;
+            btn.disabled = false;
+        }
+    });
+
+    // --- 7. LOGOUT FUNCTION ---
+    function logout() {
+        localStorage.removeItem('erp-token'); 
+        localStorage.clear();
+        window.location.href = '/login.html';
+    }
+</script>
+<script src="js/global-config.js"></script>
+</body>
+</html>

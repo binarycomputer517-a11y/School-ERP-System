@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Events & Clubs Management</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        /* --- CLASSIC DESIGN STYLES --- */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; 
+            color: #333; 
+        }
+        .container { 
+            max-width: 1300px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; 
+            border-radius: 0; 
+        }
+        h1 { 
+            color: #C0392B; font-weight: bold; text-transform: uppercase; text-align: center; 
+            border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 30px; font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; border-bottom: 2px solid #999; 
+            padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px;
+        }
+        
+        /* Grid Layout */
+        .grid-3-col { display: grid; grid-template-columns: 1fr 2fr; gap: 30px; }
+        .form-area { grid-column: 1 / 2; }
+        .table-area { grid-column: 2 / 3; }
+        #reports-tab .grid-3-col { grid-template-columns: 1fr 1fr; }
+        
+        /* Tab Menu */
+        .tab-menu { display: flex; border-bottom: 2px solid #333; margin-bottom: 20px; background-color: #E8E8E8; padding-top: 5px; }
+        .tab-menu button { 
+            padding: 8px 15px; border: 1px solid #333; border-bottom: none; background: #F0F0F0; 
+            cursor: pointer; font-weight: bold; margin-right: -1px; border-radius: 0;
+        }
+        .tab-menu button.active { 
+            background: #005A9C; color: white; border: 2px solid #000; border-bottom: 2px solid #fff; 
+            margin-bottom: -2px; position: relative; z-index: 1;
+        }
+        .tab-content { padding: 15px 0; }
+        
+        /* Form Elements */
+        form { margin-bottom: 20px; padding: 15px; border: 1px solid #E0E0E0; background-color: #F8F8F8; }
+        input, select, textarea { 
+            padding: 8px; margin-right: 10px; border: 1px solid #555; border-radius: 0; width: 100%; 
+            margin-bottom: 10px; box-sizing: border-box; display: block;
+        }
+        
+        button[type="submit"], #reports-tab button { 
+            background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; 
+            border-radius: 0; cursor: pointer; margin-top: 5px; box-shadow: 2px 2px 0 #000; font-weight: bold;
+        }
+        button[type="submit"]:hover { background-color: #003366; box-shadow: 1px 1px 0 #000; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #333; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+
+        .status-Upcoming { color: #005A9C; font-weight: bold; }
+        .status-Active { color: #28a745; font-weight: bold; }
+        .action-btn { 
+            margin: 2px; padding: 5px 8px; font-size: 0.8em; border: 1px solid #000; 
+            border-radius: 0; box-shadow: 1px 1px 0 #000; cursor: pointer; font-weight: bold;
+        }
+        .action-btn.delete { background-color: #dc3545; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Events and Clubs Management</h1>
+    <p>Role: <strong id="user-role-display">Loading...</strong></p>
+
+    <div class="tab-menu">
+        <button id="tab-events-btn" class="active" onclick="switchTab('events')">Manage Events</button>
+        <button id="tab-clubs-btn" onclick="switchTab('clubs')">Manage Clubs</button>
+        <button id="tab-reports-btn" onclick="switchTab('reports')">Reports</button>
+        <button onclick="window.location.href='/admin-dashboard.html'" style="margin-left: auto; background:#333; color:white; border:none; padding:5px 15px; cursor:pointer;">Back to Dashboard</button>
+    </div>
+
+    <div id="events-tab" class="tab-content">
+        <h2>Event Management</h2>
+        <div class="grid-3-col">
+            <div class="form-area">
+                <h3>Add New Event</h3>
+                <form id="event-form">
+                    <input type="text" name="title" placeholder="Event Name (Title)" required>
+                    <textarea name="description" placeholder="Description"></textarea>
+                    <input type="date" name="event_date" required>
+                    <input type="text" name="location" placeholder="Location">
+                    <input type="text" name="organizer" placeholder="Organizer">
+                    <select name="status">
+                        <option value="Upcoming">Upcoming</option>
+                        <option value="Active">Active</option>
+                        <option value="Completed">Completed</option>
+                        <option value="Cancelled">Cancelled</option>
+                    </select>
+                    <button type="submit">Create Event</button>
+                </form>
+            </div>
+            <div class="table-area">
+                <h3 style="margin-top: 0;">All Scheduled Events</h3>
+                <table id="events-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Date</th>
+                            <th>Location</th>
+                            <th>Organizer</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="events-list-body">
+                        <tr><td colspan="6">Loading events...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="clubs-tab" class="tab-content" style="display:none;">
+        <h2>Club Management</h2>
+        <div class="grid-3-col">
+            <div class="form-area">
+                <h3>Create New Club</h3>
+                <form id="club-form">
+                    <input type="text" name="club_name" placeholder="Club Name" required>
+                    
+                    <label style="font-weight:bold; display:block; margin-bottom:5px;">Faculty Advisor:</label>
+                    <select name="coordinator_name" id="advisor_select" required>
+                        <option value="">Loading Teachers...</option>
+                    </select>
+
+                    <input type="text" name="president_name" placeholder="President Name (Student)">
+                    <textarea name="description" placeholder="Description"></textarea>
+                    
+                    <button type="submit">Create Club</button>
+                </form>
+            </div>
+            <div class="table-area">
+                <h3 style="margin-top: 0;">All School Clubs</h3>
+                <table id="clubs-table">
+                    <thead>
+                        <tr>
+                            <th>Club Name</th>
+                            <th>Advisor</th>
+                            <th>President</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clubs-list-body">
+                        <tr><td colspan="5">Loading clubs...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <div id="reports-tab" class="tab-content" style="display:none;">
+        <h2>Activity Reports & Analytics</h2>
+        <div class="grid-3-col">
+            <div class="form-area" style="border: 1px solid #CCC; padding: 15px;">
+                <h3>Report Generation Options</h3>
+                <div style="margin-bottom: 20px;">
+                    <select id="report-filter-type" style="width: 100%; margin-bottom: 10px;">
+                        <option value="event">Event List</option>
+                        <option value="club">Club List</option>
+                    </select>
+                    <button onclick="generateReport()" style="width: 100%;">Generate Report</button>
+                </div>
+            </div>
+            <div class="table-area" id="report-output" style="padding: 15px; border: 1px solid #CCC; background-color: #F8F8F8;">
+                <p>Select a filter and click "Generate Report" to view analytics.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '/api/activities'; 
+    const TOKEN = localStorage.getItem('erp-token'); 
+    const USER_ROLE = localStorage.getItem('user-role');
+    
+    if (!TOKEN) window.location.href = '/login.html';
+    document.getElementById('user-role-display').textContent = USER_ROLE || 'User';
+
+    // --- 1. Tab Switching ---
+    window.switchTab = function(tabName) {
+        document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+        document.querySelectorAll('.tab-menu button').forEach(b => b.classList.remove('active'));
+        
+        document.getElementById(`${tabName}-tab`).style.display = 'block';
+        document.getElementById(`tab-${tabName}-btn`).classList.add('active');
+        
+        if (tabName === 'events') loadEvents();
+        if (tabName === 'clubs') { 
+            loadClubs(); 
+            // Load teachers only if dropdown is empty
+            const select = document.getElementById('advisor_select');
+            if (select.options.length <= 1) loadTeachers(); 
+        }
+    }
+
+    // --- 2. Load Teachers (Auto Populate Dropdown) ---
+    async function loadTeachers() {
+        const select = document.getElementById('advisor_select');
+        try {
+            // Fetch teachers from API
+            const res = await fetch('/api/teachers', { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+            
+            if(res.ok) {
+                const teachers = await res.json();
+                
+                // Clear and add default option
+                select.innerHTML = '<option value="">-- Select Faculty Advisor --</option>';
+                
+                if (teachers.length === 0) {
+                    select.innerHTML += '<option value="" disabled>No teachers found</option>';
+                    return;
+                }
+
+                // Populate options
+                teachers.forEach(t => {
+                    // Try to find the name property (adjust based on your DB response)
+                    const name = t.full_name || t.username || t.name; 
+                    if(name) {
+                        select.innerHTML += `<option value="${name}">${name}</option>`;
+                    }
+                });
+            } else {
+                select.innerHTML = '<option value="">Error loading list</option>';
+            }
+        } catch(e) { 
+            console.error("Teacher load failed:", e);
+            select.innerHTML = '<option value="">Network Error</option>';
+        }
+    }
+
+    // --- 3. Load Events ---
+    async function loadEvents() {
+        const tbody = document.getElementById('events-list-body');
+        tbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+        
+        try {
+            const res = await fetch(`${API_BASE}/events`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+            if(!res.ok) throw new Error(await res.text());
+            const data = await res.json();
+            
+            tbody.innerHTML = '';
+            if(data.length === 0) tbody.innerHTML = '<tr><td colspan="6">No events found.</td></tr>';
+            
+            data.forEach(e => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${e.title}</td>
+                        <td>${new Date(e.event_date).toLocaleDateString()}</td>
+                        <td>${e.location || '-'}</td>
+                        <td>${e.organizer || '-'}</td>
+                        <td class="status-${e.status}">${e.status}</td>
+                        <td><button class="action-btn delete" onclick="deleteItem('events', '${e.id}')">Del</button></td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            tbody.innerHTML = `<tr><td colspan="6" style="color:red">Error: ${e.message}</td></tr>`;
+        }
+    }
+
+    // --- 4. Load Clubs (Fixing Null Display) ---
+    async function loadClubs() {
+        const tbody = document.getElementById('clubs-list-body');
+        tbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+        
+        try {
+            const res = await fetch(`${API_BASE}/clubs`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+            const data = await res.json();
+            
+            tbody.innerHTML = '';
+            if(data.length === 0) tbody.innerHTML = '<tr><td colspan="5">No clubs found.</td></tr>';
+
+            data.forEach(c => {
+                // FIXED: Handle null values properly
+                const advisor = c.coordinator_name ? c.coordinator_name : '<span style="color:#999; font-style:italic;">Not Assigned</span>';
+                const president = c.president_name ? c.president_name : '-';
+                const status = c.status || 'Active';
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-weight:bold; color:#005A9C;">${c.club_name}</td>
+                        <td>${advisor}</td>
+                        <td>${president}</td>
+                        <td>${status}</td>
+                        <td><button class="action-btn delete" onclick="deleteItem('clubs', '${c.id}')">Del</button></td>
+                    </tr>
+                `;
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    // --- 5. Form Submissions ---
+    document.getElementById('event-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        
+        try {
+            const res = await fetch(`${API_BASE}/events`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify(data)
+            });
+            if(res.ok) { alert('Event Created!'); loadEvents(); e.target.reset(); }
+            else alert('Error creating event');
+        } catch(e) { alert('Server Error'); }
+    });
+
+    document.getElementById('club-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const data = Object.fromEntries(new FormData(e.target));
+        
+        try {
+            const res = await fetch(`${API_BASE}/clubs`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+                body: JSON.stringify(data)
+            });
+            if(res.ok) { 
+                alert('Club Created!'); 
+                loadClubs(); 
+                e.target.reset(); 
+            } else {
+                const err = await res.json();
+                alert('Error: ' + err.message);
+            }
+        } catch(e) { alert('Server Error'); }
+    });
+
+    // --- 6. Delete ---
+    window.deleteItem = async function(type, id) {
+        if(!confirm('Delete this item?')) return;
+        await fetch(`${API_BASE}/${type}/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${TOKEN}` }});
+        if(type === 'events') loadEvents(); else loadClubs();
+    }
+
+    // --- 7. Reports ---
+    window.generateReport = async function() {
+        const type = document.getElementById('report-filter-type').value;
+        const out = document.getElementById('report-output');
+        out.innerHTML = 'Loading...';
+        
+        const res = await fetch(`${API_BASE}/reports?type=${type}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+        const data = await res.json();
+        
+        let html = `<h3>${type.toUpperCase()} Report</h3><table><thead><tr>`;
+        if(data.length > 0) {
+            Object.keys(data[0]).forEach(k => html += `<th>${k.replace('_', ' ')}</th>`);
+            html += '</tr></thead><tbody>';
+            data.forEach(row => {
+                html += '<tr>';
+                Object.values(row).forEach(v => {
+                    const displayVal = v ? v : '-';
+                    html += `<td>${displayVal}</td>`
+                });
+                html += '</tr>';
+            });
+            html += '</tbody></table>';
+        } else { html += '<p>No data found.</p>'; }
+        out.innerHTML = html;
+    }
+
+    // Init - Load events by default, but also fetch teachers in background
+    loadEvents();
+    loadTeachers();
+</script>
+<script src="js/global-config.js"></script>
+</body>
+</html>

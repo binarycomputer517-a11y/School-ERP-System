@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Discipline | BCSM ERP</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        /* --- THEME SPECIFIC OVERRIDES --- */
+        body {
+            padding-top: 30px;
+            padding-bottom: 60px;
+        }
+
+        .main-header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: #333;
+        }
+
+        .main-header h1 {
+            font-weight: 800;
+            font-size: 2.5rem;
+            text-transform: uppercase;
+            letter-spacing: -1px;
+            color: var(--primary-dark);
+            background: linear-gradient(to right, #FF9933, #005A9C, #138808);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        /* Severity Colors - Integrated with Glass UI */
+        .severity-Low { color: #138808; font-weight: 800; }
+        .severity-Medium { color: #f39c12; font-weight: 800; }
+        .severity-High { color: #d35400; font-weight: 800; }
+        .severity-Critical { color: #c0392b; font-weight: 800; }
+
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
+        .status-Reported { background: #f1c40f; color: #000; }
+        .status-Under_Review { background: #3498db; color: white; }
+        .status-Resolved { background: #138808; color: white; }
+
+        .action-modal-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+        }
+
+        /* Resolution Dashboard Special Style */
+        #resolution-dashboard {
+            border-top: 5px solid var(--secondary-orange);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <header class="main-header">
+        <h1>Student Discipline Portal</h1>
+        <p class="lead fw-bold">Maintain Academic Integrity & Conduct Standards</p>
+        <div class="badge bg-white text-dark shadow-sm border p-2 px-3">
+            <i class="fas fa-user-shield me-2 text-primary"></i>
+            User Role: <span id="user-role-display" class="text-primary fw-bold">...</span>
+        </div>
+    </header>
+
+    <div class="row g-4">
+        <div class="col-lg-5">
+            <section id="reporting-section" class="glass-card h-100">
+                <h2 class="section-title"><i class="fas fa-bullhorn me-2 text-danger"></i>Report Misconduct</h2>
+                <form id="incident-report-form">
+                    <div class="mb-3">
+                        <label class="form-label">Student Name / ID</label>
+                        <select id="student-select" class="form-select" required>
+                            <option value="" disabled selected>Loading students...</option>
+                        </select>
+                    </div>
+
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Date & Time</label>
+                            <input type="datetime-local" id="incident-date" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">Severity</label>
+                            <select id="severity" class="form-select" required>
+                                <option value="Low">Low</option>
+                                <option value="Medium">Medium</option>
+                                <option value="High">High</option>
+                                <option value="Critical">Critical</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Incident Category</label>
+                        <select id="incident-type" class="form-select" required>
+                            <option value="Tardiness">Tardiness / Truancy</option>
+                            <option value="Verbal Misconduct">Verbal Misconduct</option>
+                            <option value="Physical Harm">Physical Harm / Fighting</option>
+                            <option value="Property Damage">Property Damage</option>
+                            <option value="Academic Dishonesty">Academic Dishonesty</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Venue / Location</label>
+                        <input type="text" id="location" class="form-control" placeholder="e.g., Science Lab, Corridor B" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Incident Narrative</label>
+                        <textarea id="description" class="form-control" rows="3" placeholder="Describe the behavior in detail..." required></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 shadow">
+                        <i class="fas fa-paper-plane me-2"></i>Log Incident
+                    </button>
+                    <div id="report-message" class="mt-3"></div>
+                </form>
+            </section>
+        </div>
+
+        <div class="col-lg-7">
+            <section id="history-section" class="glass-card h-100">
+                <h2 class="section-title"><i class="fas fa-history me-2 text-success"></i>Conduct History</h2>
+                <form id="history-lookup-form" class="row g-2 mb-4">
+                    <div class="col-9">
+                        <input type="text" id="history-student-id" class="form-control" placeholder="Search by Student UUID or Admission ID">
+                    </div>
+                    <div class="col-3">
+                        <button type="submit" class="btn btn-dark w-100 py-2">Search</button>
+                    </div>
+                </form>
+
+                <div id="history-results" class="table-responsive">
+                    <h5 class="fw-bold mb-3">Records for: <span id="history-student-name" class="text-primary">None selected</span></h5>
+                    <table class="table table-glass table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Category</th>
+                                <th>Sev.</th>
+                                <th>Staff</th>
+                                <th>Action</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody">
+                            <tr><td colspan="6" class="text-center p-4">Enter a student ID to view past records.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="history-message" class="mt-2"></div>
+            </section>
+        </div>
+    </div>
+
+    <section id="resolution-dashboard" class="glass-card mt-4 d-none">
+        <h2 class="section-title"><i class="fas fa-gavel me-2 text-warning"></i>Judicial Review Queue</h2>
+        <div class="table-responsive">
+            <table class="table table-glass table-hover">
+                <thead>
+                    <tr>
+                        <th>Ref ID</th>
+                        <th>Student</th>
+                        <th>Category</th>
+                        <th>Incident Date</th>
+                        <th>Severity</th>
+                        <th>Reported By</th>
+                        <th class="text-end">Command</th>
+                    </tr>
+                </thead>
+                <tbody id="pending-tbody">
+                    <tr><td colspan="7" class="text-center p-5">Checking for active incidents...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<div id="action-modal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content action-modal-content">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold text-primary"><i class="fas fa-balance-scale me-2"></i>Finalize Resolution</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="small text-muted mb-4" id="modal-incident-title">Record official action for student</p>
+                <form id="action-form">
+                    <div class="mb-3">
+                        <label class="form-label">Penalty / Action Type</label>
+                        <select id="action-type" class="form-select border-2" required>
+                            <option value="Warning">Official Warning</option>
+                            <option value="Detention">Detention</option>
+                            <option value="Suspension">Suspension</option>
+                            <option value="Expulsion">Expulsion</option>
+                            <option value="Counselling Referral">Counselling Referral</option>
+                        </select>
+                    </div>
+                    
+                    <div class="row g-2 mb-3">
+                        <div class="col-6">
+                            <label class="form-label">Start Date</label>
+                            <input type="date" id="effective-date" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label">End Date (Opt.)</label>
+                            <input type="date" id="completion-date" class="form-control">
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <label class="form-label">Rationale & Observations</label>
+                        <textarea id="action-details" class="form-control" rows="3" placeholder="State reason for action..." required></textarea>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow">Authorize & Resolve</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js"></script>
+
+<script>
+    const API_BASE = '/api/discipline';
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role') || 'Guest';
+    const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
+    
+    const APPROVER_ROLES = ['Super Admin', 'Admin', 'Counsellor'];
+    const REPORTER_ROLES = ['Super Admin', 'Admin', 'Teacher'];
+
+    let bsModal;
+
+    // --- Core API Helper ---
+    async function handleApi(url, options = {}) {
+        if (!TOKEN) throw new Error('Unauthorized: Missing session token.');
+        const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+        const response = await fetch(url, { ...options, headers: authHeaders });
+        if (response.status === 401) { localStorage.clear(); window.location.href = '/login'; }
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ message: 'API error' }));
+            throw new Error(err.message);
+        }
+        return response.json();
+    }
+
+    // --- 1. Populate Dropdowns ---
+    async function loadStudents() {
+        try {
+            const students = await handleApi(`${API_BASE}/students/lookup`);
+            const select = document.getElementById('student-select');
+            select.innerHTML = '<option value="" disabled selected>Select Student</option>';
+            students.forEach(s => {
+                const label = `${s.first_name} ${s.last_name} (${s.admission_id || 'N/A'})`;
+                select.innerHTML += `<option value="${s.student_id}">${label}</option>`;
+            });
+        } catch (e) { console.error("Load Error", e); }
+    }
+
+    // --- 2. Incident Reporting ---
+    document.getElementById('incident-report-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('report-message');
+        msg.innerHTML = '<div class="alert alert-info py-2 small">Processing report...</div>';
+
+        const payload = {
+            student_id: document.getElementById('student-select').value,
+            incident_date: document.getElementById('incident-date').value,
+            incident_type: document.getElementById('incident-type').value,
+            description: document.getElementById('description').value,
+            location: document.getElementById('location').value,
+            severity: document.getElementById('severity').value,
+            reporter_id_fallback: USER_ID 
+        };
+
+        try {
+            const res = await handleApi(`${API_BASE}/report`, { method: 'POST', body: JSON.stringify(payload) });
+            msg.innerHTML = `<div class="alert alert-success small">✅ Logged: Incident ID ${res.incident_id.slice(0,8)}...</div>`;
+            e.target.reset();
+            if (APPROVER_ROLES.includes(USER_ROLE)) fetchPendingIncidents();
+        } catch (e) { msg.innerHTML = `<div class="alert alert-danger small">${e.message}</div>`; }
+    });
+
+    // --- 3. History Retrieval ---
+    document.getElementById('history-lookup-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const studentId = document.getElementById('history-student-id').value.trim();
+        const tbody = document.getElementById('history-tbody');
+        const nameDisplay = document.getElementById('history-student-name');
+        
+        if (!studentId) return;
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center">Fetching conduct history...</td></tr>';
+
+        try {
+            const history = await handleApi(`${API_BASE}/history/${studentId}`);
+            if (!history.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center">No disciplinary records found.</td></tr>';
+                nameDisplay.innerText = studentId;
+                return;
+            }
+            nameDisplay.innerText = history[0].student_name;
+            tbody.innerHTML = history.map(h => `
+                <tr>
+                    <td>${new Date(h.incident_date).toLocaleDateString()}</td>
+                    <td>${h.incident_type}</td>
+                    <td class="severity-${h.severity}">${h.severity}</td>
+                    <td class="small">${h.reported_by}</td>
+                    <td class="small">${h.action_type || 'None'}</td>
+                    <td><span class="status-badge status-${h.status}">${h.status}</span></td>
+                </tr>`).join('');
+        } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="text-danger">${e.message}</td></tr>`; }
+    });
+
+    // --- 4. Pending Resolution Engine ---
+    async function fetchPendingIncidents() {
+        const tbody = document.getElementById('pending-tbody');
+        try {
+            const incidents = await handleApi(`${API_BASE}/incidents/pending`);
+            if (!incidents.length) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center p-4">Clear record: No pending reviews.</td></tr>';
+                return;
+            }
+            tbody.innerHTML = incidents.map(inc => `
+                <tr>
+                    <td class="small fw-bold">#${inc.id.slice(0,5)}</td>
+                    <td><div class="fw-bold">${inc.student_name}</div></td>
+                    <td>${inc.incident_type}</td>
+                    <td class="small">${new Date(inc.incident_date).toLocaleDateString()}</td>
+                    <td class="severity-${inc.severity}">${inc.severity}</td>
+                    <td class="small">${inc.reported_by}</td>
+                    <td class="text-end">
+                        <button onclick="openActionModal('${inc.id}', '${inc.student_name}', '${inc.incident_type}')" class="btn btn-primary btn-sm rounded-pill"><i class="fas fa-gavel me-1"></i>Resolve</button>
+                    </td>
+                </tr>`).join('');
+        } catch (e) { console.error(e); }
+    }
+
+    let currentIncidentId;
+    window.openActionModal = (id, name, type) => {
+        currentIncidentId = id;
+        document.getElementById('modal-incident-title').innerText = `Resolving: ${name} (${type})`;
+        bsModal.show();
+    };
+
+    document.getElementById('action-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const payload = {
+            action_type: document.getElementById('action-type').value,
+            action_details: document.getElementById('action-details').value,
+            effective_date: document.getElementById('effective-date').value,
+            completion_date: document.getElementById('completion-date').value || null,
+        };
+
+        try {
+            await handleApi(`${API_BASE}/action/${currentIncidentId}`, { method: 'POST', body: JSON.stringify(payload) });
+            bsModal.hide();
+            fetchPendingIncidents();
+            alert("Action successfully authorized.");
+        } catch (e) { alert(e.message); }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('user-role-display').innerText = USER_ROLE;
+        bsModal = new bootstrap.Modal(document.getElementById('action-modal'));
+        if (REPORTER_ROLES.includes(USER_ROLE)) loadStudents();
+        if (APPROVER_ROLES.includes(USER_ROLE)) {
+            document.getElementById('resolution-dashboard').classList.remove('d-none');
+            fetchPendingIncidents();
+        }
+    });
+</script>
+</body>
+</html>

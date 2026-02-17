@@ -8,7 +8,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="css/style.css">
 
     <style>
         :root { --primary-cobalt: #003366; --accent-orange: #FF9933; --border-color: #e2e8f0; }
@@ -23,6 +23,7 @@
         .slot-meta { font-size: 0.7rem; color: #64748b; display: block; }
         .btn-delete { position: absolute; top: 2px; right: 5px; color: #dc3545; border: none; background: transparent; cursor: pointer; font-size: 0.8rem; opacity: 0.3; transition: 0.2s; }
         .btn-delete:hover { opacity: 1; transform: scale(1.1); }
+        .branch-banner { background: #fff3e0; border: 1px solid #ffe0b2; padding: 8px 15px; border-radius: 8px; margin-bottom: 15px; font-weight: 600; color: #e65100; display: flex; align-items: center; }
     </style>
 </head>
 <body class="p-3">
@@ -30,13 +31,23 @@
 <div class="container-fluid">
     <header class="d-flex justify-content-between align-items-center mb-4">
         <h4 class="fw-bold m-0"><i class="fas fa-calendar-alt me-2 text-primary-cobalt"></i>Academic Timetable Manager</h4>
-        <a href="/admin-dashboard.html" class="btn btn-primary btn-sm rounded-pill px-4">Dashboard</a>
+        <div class="d-flex align-items-center gap-3">
+            <div id="super-admin-branch-selector" style="display:none">
+                <select id="global-branch-select" class="form-select form-select-sm" onchange="switchBranchContext(this.value)">
+                </select>
+            </div>
+            <a href="/admin-dashboard.html" class="btn btn-primary btn-sm rounded-pill px-4">Dashboard</a>
+        </div>
     </header>
+
+    <div class="branch-banner" id="active-branch-indicator">
+        <i class="fas fa-code-branch me-2"></i> Branch Context: <span id="branch-name-display" class="ms-1">Detecting...</span>
+    </div>
 
     <div class="row g-3">
         <div class="col-lg-3">
             <div class="admin-card">
-                <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">1. Select Batch</h6>
+                <h6 class="fw-bold mb-3 border-bottom pb-2 text-primary">1. Select Group</h6>
                 <div class="mb-3">
                     <label class="form-label small fw-bold">Course Name</label>
                     <select id="course-select" class="form-select form-select-sm" onchange="loadBatches(this.value)">
@@ -56,15 +67,11 @@
                 <form id="slot-form">
                     <div class="mb-2">
                         <label class="small fw-bold">Subject</label>
-                        <select id="subject-select" class="form-select form-select-sm" required>
-                            <option value="">-- Choose Subject --</option>
-                        </select>
+                        <select id="subject-select" class="form-select form-select-sm" required></select>
                     </div>
                     <div class="mb-2">
                         <label class="small fw-bold">Faculty</label>
-                        <select id="teacher-select" class="form-select form-select-sm" required>
-                            <option value="">-- Choose Teacher --</option>
-                        </select>
+                        <select id="teacher-select" class="form-select form-select-sm" required></select>
                     </div>
                     <div class="row g-2 mb-2">
                         <div class="col-7">
@@ -105,44 +112,116 @@
 
 <script>
     const TOKEN = localStorage.getItem('erp-token');
+    let USER_ROLE = localStorage.getItem('erp-user-role');
+    let ACTIVE_BRANCH_ID = localStorage.getItem('erp-branch-id');
     const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+    // --- Identity Recovery from JWT ---
+    if (TOKEN && (!ACTIVE_BRANCH_ID || ACTIVE_BRANCH_ID === "null")) {
+        try {
+            const payload = JSON.parse(atob(TOKEN.split('.')[1]));
+            ACTIVE_BRANCH_ID = payload.branch_id;
+            USER_ROLE = payload.role;
+            localStorage.setItem('erp-branch-id', ACTIVE_BRANCH_ID);
+        } catch(e) { console.error("Identity extraction failed."); }
+    }
 
     document.addEventListener('DOMContentLoaded', async () => {
         if (!TOKEN) window.location.href = '/login.html';
-        try {
-            const [courses, subjects, teachers] = await Promise.all([
-                fetch('/api/academicswithfees/courses', { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json()),
-                fetch('/api/academicswithfees/subjects', { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json()),
-                fetch('/api/teachers/list', { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json())
-            ]);
-            
-            // Data Population - Mapping 'id' or 'course_id' based on DB columns
-            populateDropdown('course-select', courses, 'course_id', 'course_name');
-            populateDropdown('subject-select', subjects, 'id', 'subject_name'); // 'id' ensures UUID is used
-            populateDropdown('teacher-select', teachers, 'id', 'full_name');
-        } catch (e) { console.error("Initial Sync Failed", e); }
+        
+        if (!ACTIVE_BRANCH_ID || ACTIVE_BRANCH_ID === "null") {
+            alert("Error: Active branch context not detected. Please login again.");
+            return;
+        }
+
+        if (USER_ROLE === 'Super Admin') {
+            document.getElementById('super-admin-branch-selector').style.display = 'block';
+            await loadAllBranches();
+        }
+        await initializeResources();
     });
 
-    function populateDropdown(id, data, valKey, labelKey) {
-        const el = document.getElementById(id);
-        el.innerHTML = `<option value="">-- Choose --</option>`;
-        data.forEach(item => {
+    async function loadAllBranches() {
+        const res = await fetch('/api/branches', { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+        const branches = await res.json();
+        const sel = document.getElementById('global-branch-select');
+        sel.innerHTML = '<option value="">-- Switch Branch --</option>';
+        branches.forEach(b => {
             const opt = document.createElement('option');
-            // Checking multiple keys to prevent 'undefined' or incorrect IDs
-            opt.value = item[valKey] || item.id || item.subject_id || item.teacher_id || ""; 
-            opt.textContent = item[labelKey] || item['username'] || 'N/A';
-            el.appendChild(opt);
+            opt.value = b.id;
+            opt.textContent = b.branch_name;
+            if (b.id === ACTIVE_BRANCH_ID) opt.selected = true;
+            sel.appendChild(opt);
         });
     }
 
+    async function switchBranchContext(branchId) {
+        if (!branchId || branchId === "null") return;
+        ACTIVE_BRANCH_ID = branchId;
+        localStorage.setItem('erp-branch-id', branchId);
+        
+        // Full Reset for New Branch
+        document.getElementById('batch-select').disabled = true;
+        document.getElementById('schedule-container').innerHTML = '<p class="text-center text-muted mt-5">Select a batch to load data.</p>';
+        await initializeResources();
+    }
+
+    function populateDropdown(id, data, labelKey) {
+        const el = document.getElementById(id);
+        if(!el) return;
+        el.innerHTML = `<option value="">-- Choose --</option>`;
+        if (!Array.isArray(data)) return;
+
+        data.forEach(item => {
+            const opt = document.createElement('option');
+            // 🔥 UUID SNIFFER: Prioritize standard PK 'id' as per schema Referenced-By
+            const uuid = item.id || item.course_id || item.subject_id || item.teacher_id;
+            const label = item[labelKey] || item.course_name || item.subject_name || item.full_name;
+            
+            if (uuid && uuid !== "undefined") {
+                opt.value = uuid;
+                opt.textContent = label;
+                el.appendChild(opt);
+            }
+        });
+    }
+
+    async function initializeResources() {
+        try {
+            const branchRes = await fetch(`/api/branches/${ACTIVE_BRANCH_ID}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+            const bData = await branchRes.json();
+            document.getElementById('branch-name-display').innerText = bData.branch_name || 'Main Campus';
+
+            const [courses, subjects, teachers] = await Promise.all([
+                fetch(`/api/academicswithfees/courses?branch_id=${ACTIVE_BRANCH_ID}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json()),
+                fetch(`/api/academicswithfees/subjects?branch_id=${ACTIVE_BRANCH_ID}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json()),
+                fetch(`/api/teachers/list?branch_id=${ACTIVE_BRANCH_ID}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }}).then(r => r.json())
+            ]);
+            
+            populateDropdown('course-select', courses, 'course_name');
+            populateDropdown('subject-select', subjects, 'subject_name'); 
+            populateDropdown('teacher-select', teachers, 'full_name');
+        } catch (e) { console.error("Resource Sync Error", e); }
+    }
+
     async function loadBatches(courseId) {
-        if (!courseId) return;
-        const res = await fetch(`/api/academicswithfees/courses/${courseId}/batches`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
-        const data = await res.json();
-        const sel = document.getElementById('batch-select');
-        sel.innerHTML = '<option value="">-- Choose Batch --</option>';
-        data.forEach(b => sel.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`);
-        sel.disabled = false;
+        if (!courseId || courseId === "") {
+            document.getElementById('batch-select').disabled = true;
+            return;
+        }
+        try {
+            const res = await fetch(`/api/academicswithfees/courses/${courseId}/batches?branch_id=${ACTIVE_BRANCH_ID}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+            const data = await res.json();
+            
+            // 🔥 FIXED: Direct mapping to item.id to ensure batch_id is captured correctly
+            const sel = document.getElementById('batch-select');
+            sel.innerHTML = '<option value="">-- Choose Batch --</option>';
+            data.forEach(b => {
+                const bId = b.id || b.batch_id; // Capture primary key
+                sel.innerHTML += `<option value="${bId}">${b.batch_name}</option>`;
+            });
+            sel.disabled = false;
+        } catch (e) { console.error("Batch Load Failed", e); }
     }
 
     async function fetchCurrentSchedule() {
@@ -150,29 +229,33 @@
         const bId = document.getElementById('batch-select').value;
         if (!cId || !bId) return;
         
-        document.getElementById('sync-status').innerText = 'Syncing...';
+        const statusBadge = document.getElementById('sync-status');
+        statusBadge.innerText = 'Syncing...';
         try {
-            const res = await fetch(`/api/timetable/${cId}/${bId}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
+            const res = await fetch(`/api/timetable/${cId}/${bId}?branch_id=${ACTIVE_BRANCH_ID}`, { headers: { 'Authorization': `Bearer ${TOKEN}` }});
             const data = await res.json();
             renderGrid(data);
-            document.getElementById('sync-status').className = 'badge bg-success rounded-pill';
-            document.getElementById('sync-status').innerText = 'Synced';
-        } catch (e) { document.getElementById('sync-status').innerText = 'Sync Error'; }
+            statusBadge.className = 'badge bg-success rounded-pill';
+            statusBadge.innerText = 'Synced';
+        } catch (e) { statusBadge.innerText = 'Sync Error'; }
     }
 
     function renderGrid(data) {
         const container = document.getElementById('schedule-container');
         container.innerHTML = '';
-        const all = Object.values(data).flat();
-        const times = [...new Set(all.map(s => `${s.start_time}-${s.end_time}`))].sort();
+        const allSlots = Object.values(data).flat();
+        const uniqueTimes = [...new Set(allSlots.map(s => `${s.start_time}-${s.end_time}`))].sort();
 
-        if (!times.length) { container.innerHTML = '<p class="text-center py-5">No slots assigned yet.</p>'; return; }
+        if (!uniqueTimes.length) { 
+            container.innerHTML = '<p class="text-center py-5">No classes found for this selection.</p>'; 
+            return; 
+        }
 
         const grid = document.createElement('div');
         grid.className = 'schedule-grid';
         grid.innerHTML = '<div class="grid-header">Timeline</div>' + DAYS.map(d => `<div class="grid-header">${d}</div>`).join('');
 
-        times.forEach(t => {
+        uniqueTimes.forEach(t => {
             const [s, e] = t.split('-');
             grid.innerHTML += `<div class="time-col border-bottom small">${s.slice(0,5)}<br>${e.slice(0,5)}</div>`;
             DAYS.forEach(day => {
@@ -193,6 +276,7 @@
         e.preventDefault();
         
         const payload = {
+            branch_id: ACTIVE_BRANCH_ID,
             course_id: document.getElementById('course-select').value,
             batch_id: document.getElementById('batch-select').value,
             subject_id: document.getElementById('subject-select').value,
@@ -203,10 +287,12 @@
             room_number: document.getElementById('room-input').value
         };
 
-        // Dropdown Validation Check - 'undefined' must not be passed
-        if (!payload.subject_id || payload.subject_id === "" || payload.subject_id === "undefined") {
-            alert("Error: Subject not properly selected. Please refresh the dropdown.");
-            return;
+        // Strict Pre-flight Validation for UUIDs
+        for (const [key, value] of Object.entries(payload)) {
+            if (key !== 'room_number' && (!value || value === "undefined" || value === "")) {
+                alert(`Error: Invalid ${key.replace('_', ' ')}. Please re-select from the list.`);
+                return;
+            }
         }
 
         try {
@@ -218,17 +304,17 @@
 
             const result = await res.json();
             if (res.ok) { 
-                alert("Success: Timetable slot saved successfully!"); 
+                alert("Success: Timetable slot created."); 
                 fetchCurrentSchedule(); 
                 e.target.reset();
             } else {
-                alert("Failure: " + (result.message || "Unknown error"));
+                alert("Error: " + (result.message || "Conflict detected."));
             }
-        } catch (err) { alert("Server Error: Unable to save data."); }
+        } catch (err) { alert("Network Error: Check server connection."); }
     };
 
     window.deleteSlot = async (id) => {
-        if (!confirm("Are you sure you want to delete this class slot?")) return;
+        if (!confirm("Are you sure you want to delete this schedule slot?")) return;
         try {
             const res = await fetch(`/api/timetable/${id}`, {
                 method: 'DELETE',

@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parent Dashboard | School ERP</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { --primary-purple: #8e24aa; --secondary-purple: #6a1b9a; --bg-gray: #f4f7fe; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-gray); color: #333; }
+        
+        .header-nav { background: white; padding: 12px 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+        .brand-logo { color: var(--primary-purple); font-weight: 700; font-size: 1.4rem; text-decoration: none; }
+        
+        /* Notification System */
+        .notif-wrapper { position: relative; cursor: pointer; margin-right: 25px; }
+        .notif-bell { font-size: 1.6rem; color: #64748b; }
+        .notif-badge { 
+            position: absolute; top: -2px; right: -2px; background: #ef4444; 
+            color: white; font-size: 10px; padding: 2px 6px; border-radius: 50%; 
+            font-weight: bold; border: 2px solid white; display: none;
+        }
+        .notif-dropdown {
+            position: absolute; top: 45px; right: 0; width: 320px; background: white;
+            border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+            display: none; z-index: 1000; overflow: hidden; border: 1px solid #e2e8f0;
+        }
+        .notif-header { background: #f8fafc; padding: 12px 15px; font-weight: 600; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+        .notif-item { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; }
+        .notif-item.unread { background: #fff9fe; border-left: 3px solid var(--primary-purple); }
+
+        /* Dashboard Content */
+        .dashboard-container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
+        .child-info-bar { background: #fff9c4; border: 1px solid #ffe082; border-radius: 12px; padding: 15px 25px; margin-bottom: 30px; }
+        
+        .dashboard-card { 
+            background: white; border-radius: 16px; padding: 30px; margin-bottom: 24px; 
+            text-align: center; border: 1px solid #edf2f7; transition: 0.3s;
+            cursor: pointer; height: 100%;
+        }
+        .dashboard-card:hover { transform: translateY(-5px); border-color: var(--primary-purple); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
+        .card-icon { font-size: 2.5rem; color: var(--primary-purple); margin-bottom: 15px; }
+        .card-transport { background: linear-gradient(135deg, var(--primary-purple), var(--secondary-purple)); color: white; border: none; }
+        .card-transport .card-icon, .card-transport .card-text { color: white; opacity: 0.9; }
+    </style>
+</head>
+<body>
+
+    <nav class="header-nav d-flex justify-content-between align-items-center">
+        <a href="#" class="brand-logo">🏫 SCHOOL<span>ERP</span></a>
+        <div class="d-flex align-items-center">
+            <div class="notif-wrapper" id="notifBtn">
+                <i class="fas fa-bell notif-bell"></i>
+                <span class="notif-badge" id="notifBadge">0</span>
+                <div class="notif-dropdown" id="notifDropdown">
+                    <div class="notif-header">
+                        <span>Alerts</span>
+                        <button class="btn btn-sm p-0 text-primary" style="font-size: 11px;" onclick="markAllRead(event)">Mark all as read</button>
+                    </div>
+                    <div id="notifList" style="max-height: 300px; overflow-y: auto;">
+                        <div class="p-4 text-center text-muted">No new alerts</div>
+                    </div>
+                </div>
+            </div>
+            <div class="me-3 text-end d-none d-md-block">
+                <span id="userName" class="d-block fw-bold small">Parent</span>
+                <span class="text-muted" style="font-size: 11px;">Guardian Portal</span>
+            </div>
+            <button id="logoutBtn" class="btn btn-sm btn-outline-danger">Logout</button>
+        </div>
+    </nav>
+
+    <div class="dashboard-container">
+        <div class="child-info-bar row align-items-center g-3">
+            <div class="col-md-5">
+                <label class="fw-bold small mb-1 text-muted">SELECT CHILD</label>
+                <select id="childSelect" class="form-select border-0 shadow-sm"></select>
+            </div>
+            <div class="col-md-7">
+                <div id="childDetails" class="small text-dark fw-semibold">Select a child to view details</div>
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-4">
+                <div class="dashboard-card card-transport" onclick="navigateTo('/track-bus.html')">
+                    <div class="card-icon"><i class="fas fa-bus"></i></div>
+                    <div class="card-title fw-bold">Live Bus Tracking</div>
+                    <div class="card-text small">Track your child's bus in real-time.</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/my-timetable.html')">
+                    <div class="card-icon"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="card-title fw-bold">Class Timetable</div>
+                    <div class="card-text small">Weekly class and period schedule.</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/my-attendance.html')">
+                    <div class="card-icon"><i class="fas fa-user-check"></i></div>
+                    <div class="card-title fw-bold">Attendance</div>
+                    <div class="card-text small">Check daily attendance status.</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/fees-status.html')">
+                    <div class="card-icon"><i class="fas fa-file-invoice-dollar"></i></div>
+                    <div class="card-title fw-bold">Fees & Payments</div>
+                    <div class="card-text small">Pay fees and download receipts.</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/student-profile-view.html')">
+                    <div class="card-icon"><i class="fas fa-user-graduate"></i></div>
+                    <div class="card-title fw-bold">Student Profile</div>
+                    <div class="card-text small">Enrollment and personal details.</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="dashboard-card" onclick="navigateTo('/announcements.html')">
+                    <div class="card-icon"><i class="fas fa-bullhorn"></i></div>
+                    <div class="card-title fw-bold">Notices</div>
+                    <div class="card-text small">Important school announcements.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:3005/api';
+        const TOKEN = localStorage.getItem('erp-token')?.replace(/"/g, '');
+        const AUTH_HEADER = { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+
+        // 1. Notification Management
+        async function fetchNotifications() {
+            if (!TOKEN) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/notifications/my-notifications`, { headers: AUTH_HEADER });
+                if (!res.ok) throw new Error("Fetch failed");
+                const data = await res.json();
+                const list = document.getElementById('notifList');
+                const badge = document.getElementById('notifBadge');
+
+                if (data && data.length > 0) {
+                    const unread = data.filter(n => !n.is_read).length;
+                    badge.style.display = unread > 0 ? 'block' : 'none';
+                    badge.innerText = unread;
+
+                    list.innerHTML = data.map(n => `
+                        <div class="notif-item ${n.is_read ? '' : 'unread'}">
+                            <div class="fw-bold">${n.title}</div>
+                            <div>${n.message}</div>
+                            <small class="text-muted">${new Date(n.created_at).toLocaleTimeString()}</small>
+                        </div>
+                    `).join('');
+                } else {
+                    list.innerHTML = `<div class="p-4 text-center text-muted">No new alerts</div>`;
+                    badge.style.display = 'none';
+                }
+            } catch (err) { console.error("Notif Error"); }
+        }
+
+        async function markAllRead(e) {
+            e.stopPropagation();
+            try {
+                await fetch(`${API_BASE_URL}/notifications/mark-as-read`, { method: 'POST', headers: AUTH_HEADER });
+                fetchNotifications();
+            } catch (err) { console.error("Mark Read Error"); }
+        }
+
+        // 2. Load Children Data
+        async function loadChildren() {
+            if (!TOKEN) return;
+            try {
+                const res = await fetch(`${API_BASE_URL}/parents/me/children`, { headers: AUTH_HEADER });
+                const children = await res.json();
+                const select = document.getElementById('childSelect');
+                
+                if (children && children.length > 0) {
+                    select.innerHTML = children.map(c => `
+                        <option value="${c.student_user_id}" data-roll="${c.roll_number || 'N/A'}" data-class="${c.course_name || 'N/A'}">
+                            ${c.student_name}
+                        </option>
+                    `).join('');
+                    
+                    select.addEventListener('change', updateChildDetails);
+                    updateChildDetails();
+                } else {
+                    document.getElementById('childDetails').innerText = "No students linked to this account.";
+                }
+            } catch (err) { console.error("Child Fetch Error"); }
+        }
+
+        function updateChildDetails() {
+            const select = document.getElementById('childSelect');
+            if (select.selectedOptions.length > 0) {
+                const opt = select.selectedOptions[0];
+                localStorage.setItem('selected-student-id', opt.value);
+                document.getElementById('childDetails').innerHTML = 
+                    `<i class="fas fa-info-circle me-1"></i> Class: ${opt.dataset.class} | Roll: ${opt.dataset.roll}`;
+            }
+        }
+
+        // 3. UI Helpers
+        function toggleNotif(e) {
+            e.stopPropagation();
+            const dd = document.getElementById('notifDropdown');
+            dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function navigateTo(path) {
+            const sid = localStorage.getItem('selected-student-id');
+            if (!sid) {
+                alert("Please select a child profile first.");
+                return;
+            }
+            window.location.href = path;
+        }
+
+        // 4. Robust Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            // Check if token exists and is properly formatted
+            if (!TOKEN || TOKEN.split('.').length < 3) {
+                console.warn("Invalid or missing session token. Redirecting...");
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                // Decode JWT safely
+                const base64Url = TOKEN.split('.')[1];
+                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                const payload = JSON.parse(window.atob(base64));
+                document.getElementById('userName').innerText = payload.username || "Parent User";
+            } catch (e) {
+                console.error("JWT Decode Error:", e);
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Event Listeners
+            document.getElementById('notifBtn').addEventListener('click', toggleNotif);
+            document.addEventListener('click', () => {
+                document.getElementById('notifDropdown').style.display = 'none';
+            });
+            
+            // Data Fetch
+            loadChildren();
+            fetchNotifications();
+            setInterval(fetchNotifications, 30000);
+        });
+
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        });
+    </script>
+</body>
+</html>

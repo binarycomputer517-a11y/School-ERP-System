@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payroll Security Audit | Admin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <script src="/js/global-config.js"></script>
+    <style>
+        :root { --primary: var(--primary-color, #6366f1); --bg: #f8fafc; }
+        body { background: var(--bg); font-family: 'Inter', sans-serif; padding: 2rem; }
+        .audit-card { background: white; border-radius: 15px; border: 1px solid #e2e8f0; padding: 2rem; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+        .badge-verified { background: #dcfce7; color: #166534; border-radius: 50px; padding: 5px 12px; font-size: 0.75rem; font-weight: 700; }
+    </style>
+</head>
+<body>
+<div class="container-fluid">
+    <div class="audit-card">
+        <h4 class="fw-bold mb-4"><i class="fas fa-shield-alt text-primary me-2"></i>Security Audit: QR Verifications</h4>
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead>
+                    <tr class="text-muted small text-uppercase">
+                        <th>Timestamp</th>
+                        <th>Employee</th>
+                        <th>IP Address</th>
+                        <th>Device Info</th>
+                        <th class="text-end">Status</th>
+                    </tr>
+                </thead>
+                <tbody id="auditLogsBody">
+                    <tr><td colspan="5" class="text-center py-4">Loading security logs...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+<script>
+    document.addEventListener('ERP_CONFIG_READY', loadAuditLogs);
+    async function loadAuditLogs() {
+        const res = await fetch('/api/payroll/verification-logs', {
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('erp-token')}` }
+        });
+        const logs = await res.json();
+        const tbody = document.getElementById('auditLogsBody');
+        tbody.innerHTML = logs.map(log => `
+            <tr>
+                <td>${window.formatDate(log.scanned_at, 'long')}<br><small class="text-muted">${new Date(log.scanned_at).toLocaleTimeString()}</small></td>
+                <td><strong>${log.employee_name || 'System User'}</strong><br><small class="text-muted">Record: ${log.record_id.substring(0,8)}</small></td>
+                <td><code>${log.ip_address}</code></td>
+                <td class="small text-muted">${log.user_agent.substring(0, 50)}...</td>
+                <td class="text-end"><span class="badge-verified">VERIFIED</span></td>
+            </tr>`).join('');
+    }
+</script>
+</body>
+</html>

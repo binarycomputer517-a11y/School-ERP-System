@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Library Fines | Student Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary-navy: #003366;
+            --danger-red: #dc3545;
+            --success-green: #15803d;
+            --bg-light: #f8fafc;
+        }
+
+        body { 
+            background-color: var(--bg-light); 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            color: #1e293b;
+        }
+
+        .container { 
+            max-width: 950px; 
+            margin-top: 30px; 
+            margin-bottom: 30px;
+            background: white; 
+            padding: 30px; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 30px rgba(0,0,0,0.05); 
+        }
+
+        h1 { 
+            color: var(--danger-red); 
+            font-weight: 800; 
+            border-bottom: 3px solid var(--danger-red); 
+            padding-bottom: 15px; 
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+        }
+
+        /* Fine Summary Card */
+        .fine-card {
+            background: linear-gradient(135deg, #fff 0%, #fff5f5 100%);
+            border: 1px solid #fee2e2;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+        }
+
+        .fine-total { 
+            font-size: 2.5rem; 
+            font-weight: 800; 
+            color: var(--danger-red); 
+            margin: 10px 0;
+            letter-spacing: -1px;
+        }
+
+        /* --- Responsive Table to Card UI --- */
+        @media (max-width: 768px) {
+            .table-responsive table, 
+            .table-responsive thead, 
+            .table-responsive tbody, 
+            .table-responsive th, 
+            .table-responsive td, 
+            .table-responsive tr { 
+                display: block; 
+            }
+            
+            .table-responsive thead tr { 
+                position: absolute;
+                top: -9999px;
+                left: -9999px;
+            }
+            
+            .table-responsive tr { 
+                border: 1px solid #eee; 
+                margin-bottom: 20px; 
+                border-radius: 12px;
+                padding: 15px;
+                background: #fff;
+                box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+            }
+            
+            .table-responsive td { 
+                border: none;
+                border-bottom: 1px solid #f8fafc; 
+                position: relative;
+                padding-left: 50% !important; 
+                text-align: right !important;
+                font-size: 0.9rem;
+                min-height: 40px;
+            }
+            
+            .table-responsive td:before { 
+                position: absolute;
+                top: 12px;
+                left: 15px;
+                width: 45%; 
+                content: attr(data-label);
+                font-weight: 700;
+                text-align: left;
+                color: var(--primary-navy);
+            }
+
+            .container { padding: 20px; border-radius: 0; margin-top: 0; }
+        }
+
+        /* Status Badges */
+        .badge-status {
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+        .status-paid { background-color: #dcfce7; color: var(--success-green); }
+        .status-pending { background-color: #fee2e2; color: var(--danger-red); }
+
+        .btn-back { font-weight: 600; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary btn-back">
+            <i class="fas fa-arrow-left me-1"></i> Dashboard
+        </a>
+    </div>
+    
+    <h1><i class="fas fa-exclamation-triangle me-2"></i>My Library Fines & Dues</h1>
+    
+    <div class="fine-card mb-5">
+        <h5 class="text-secondary fw-bold">Current Outstanding Balance</h5>
+        <div class="fine-total" id="total-fine-due">₹0.00</div>
+        <div class="alert alert-info py-2 d-inline-block rounded-pill">
+            <i class="fas fa-info-circle me-1"></i> Pending fines are synced with your monthly fee ledger.
+        </div>
+    </div>
+
+    <h3 class="mb-4 fw-bold" style="color: var(--primary-navy);">Transaction Breakdown</h3>
+    
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead class="table-dark">
+                <tr>
+                    <th>Book Details</th>
+                    <th>Due Date</th>
+                    <th>Returned</th>
+                    <th>Days Late</th>
+                    <th>Amount (₹)</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody id="fines-body">
+                <tr><td colspan="6" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status"></div>
+                    <p class="mt-2">Connecting to library database...</p>
+                </td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const API_BASE_URL = '/api/library';
+
+    if (!token) window.location.href = '/login.html';
+
+    function formatCurrency(amount) {
+        return `₹${(parseFloat(amount) || 0.00).toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
+    }
+    
+    async function fetchMyFines() {
+        const finesBody = document.getElementById('fines-body');
+        const totalDueElement = document.getElementById('total-fine-due');
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/fines/my-fines`, { 
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error('System sync error');
+
+            const data = await response.json();
+            finesBody.innerHTML = '';
+
+            if (!data.records || data.records.length === 0) {
+                finesBody.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-success fw-bold"><i class="fas fa-check-circle fa-2x mb-2 d-block"></i> No fines recorded. Your account is clear!</td></tr>';
+                totalDueElement.textContent = formatCurrency(0);
+                return;
+            }
+
+            data.records.forEach(record => {
+                const isPaid = record.payment_status === 'Paid' || record.payment_status === 'Waived';
+                const row = document.createElement('tr');
+                
+                row.innerHTML = `
+                    <td data-label="Book Details">
+                        <div class="fw-bold">${record.book_title || 'Unknown Title'}</div>
+                        <small class="text-muted">ID: ${record.circulation_id.substring(0, 8)}</small>
+                    </td>
+                    <td data-label="Due Date">${new Date(record.due_date).toLocaleDateString('en-GB')}</td>
+                    <td data-label="Returned">${record.return_date ? new Date(record.return_date).toLocaleDateString('en-GB') : '—'}</td>
+                    <td data-label="Days Late">${record.days_late || 0}</td>
+                    <td data-label="Amount" class="fw-bold">${formatCurrency(record.fine_amount)}</td>
+                    <td data-label="Status">
+                        <span class="badge-status ${isPaid ? 'status-paid' : 'status-pending'}">
+                            ${record.payment_status}
+                        </span>
+                    </td>
+                `;
+                finesBody.appendChild(row);
+            });
+            
+            totalDueElement.textContent = formatCurrency(data.total_due);
+
+        } catch (error) {
+            finesBody.innerHTML = `<tr><td colspan="6" class="text-center text-danger py-4">${error.message}</td></tr>`;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchMyFines);
+</script>
+</body>
+</html>

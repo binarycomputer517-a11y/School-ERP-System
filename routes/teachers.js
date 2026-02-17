@@ -100,17 +100,22 @@ router.get('/me/profile', authenticateToken, authorize(['Teacher']), async (req,
     }
 });
 
-// =========================================================
-// 2. GET: Main List (Full Details for Table View - Admin only) 
+/// =========================================================
+// 2. GET: Main List (Filtered by Branch - Multi-Branch Support) 
 // =========================================================
 router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
     try {
-        const query = `
+        // 1. Get branch_id from Query Params (Frontend) or User Token (Session)
+        const requestedBranchId = req.query.branch_id;
+        const userBranchId = req.user.branch_id;
+
+        let query = `
             SELECT 
                 t.id AS teacher_id, t.full_name, t.employee_id, t.designation, t.email, 
                 t.phone_number, t.date_of_birth, t.hire_date, t.is_active, t.address,
                 t.department_id, t.profile_image_path, 
                 u.username, u.role, u.id AS user_id,
+                u.branch_id,
                 hd.department_name, 
                 hd.description AS department_description, 
                 b.branch_name
@@ -119,16 +124,33 @@ router.get('/', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
             LEFT JOIN ${DEPARTMENTS_TABLE} hd ON t.department_id = hd.id 
             LEFT JOIN branches b ON u.branch_id = b.id 
             WHERE u.deleted_at IS NULL
-            ORDER BY t.employee_id;
         `;
-        const result = await pool.query(query);
+
+        const queryParams = [];
+
+        // --- Logic to handle branch filtering and security ---
+        
+        // If the user is NOT a Super Admin, strictly force them to see only their own branch
+        if (req.user.role !== 'Super Admin') {
+            query += ` AND u.branch_id = $1`;
+            queryParams.push(userBranchId);
+        } 
+        // If Super Admin and a valid branch_id is passed (fixes your 'null' log error)
+        else if (requestedBranchId && requestedBranchId !== 'null' && requestedBranchId !== 'undefined') {
+            query += ` AND u.branch_id = $1`;
+            queryParams.push(requestedBranchId);
+        }
+
+        query += ` ORDER BY t.employee_id`;
+
+        const result = await pool.query(query, queryParams);
         res.status(200).json(result.rows);
+
     } catch (error) {
-        console.error('Error fetching full teachers list:', error);
+        console.error('Error fetching teachers list:', error);
         res.status(500).json({ message: 'Failed to retrieve teachers list.' });
     }
 });
-
 // =========================================================
 // 3. GET: Dropdown List
 // =========================================================

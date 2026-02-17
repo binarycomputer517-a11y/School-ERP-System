@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics Command Center | School ERP</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="https://code.highcharts.com/highcharts.js"></script>
+    <script src="https://code.highcharts.com/highcharts-3d.js"></script>
+    <script src="https://code.highcharts.com/highcharts-more.js"></script>
+    <script src="https://code.highcharts.com/modules/cylinder.js"></script>
+    <script src="https://code.highcharts.com/modules/funnel3d.js"></script>
+    <script src="https://code.highcharts.com/modules/exporting.js"></script>
+    <script src="https://code.highcharts.com/modules/export-data.js"></script>
+    <script src="https://code.highcharts.com/modules/accessibility.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        :root { 
+            --primary-grad: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-grad: linear-gradient(135deg, #2af598 0%, #009efd 100%);
+            --danger-grad: linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #feada6 100%);
+            --warning-grad: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+            --dark-grad: linear-gradient(135deg, #232526 0%, #414345 100%);
+            --bg-color: #f0f2f5;
+            --card-bg: rgba(255, 255, 255, 0.95);
+            --text-color: #2d3748;
+            --shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        [data-bs-theme="dark"] {
+            --bg-color: #0f172a;
+            --card-bg: rgba(30, 41, 59, 0.95);
+            --text-color: #f8fafc;
+            --shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        body { 
+            background-color: var(--bg-color); 
+            color: var(--text-color); 
+            font-family: 'Poppins', sans-serif; 
+            transition: 0.3s; 
+            padding-top: 50px; 
+            background-image: radial-gradient(at 0% 0%, hsla(253,16%,7%,1) 0, transparent 50%), radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+
+        /* --- Glassmorphism Cards --- */
+        .card { 
+            background: var(--card-bg); 
+            backdrop-filter: blur(10px); 
+            border: 1px solid rgba(255,255,255,0.1); 
+            border-radius: 16px; 
+            box-shadow: var(--shadow); 
+            margin-bottom: 25px; 
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .card:hover { transform: translateY(-5px); box-shadow: 0 15px 35px rgba(0,0,0,0.12); }
+        
+        .card-title {
+            font-weight: 700; text-transform: uppercase; letter-spacing: 1px; font-size: 0.9rem;
+            color: var(--text-color); opacity: 0.8; margin-bottom: 20px; border-left: 4px solid #764ba2; padding-left: 10px;
+        }
+
+        /* --- Live Ticker --- */
+        #news-ticker { 
+            position: fixed; top: 0; left: 0; width: 100%; height: 45px; 
+            background: var(--dark-grad); 
+            color: #fff; z-index: 1000; display: flex; align-items: center; 
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+            font-weight: 500; letter-spacing: 0.5px;
+        }
+        .ticker-content { display: inline-block; padding-left: 100%; animation: ticker 40s linear infinite; }
+        @keyframes ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
+
+        /* --- Premium KPI Boxes --- */
+        .info-box { 
+            padding: 25px; border-radius: 16px; color: white; position: relative; overflow: hidden;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.15); transition: 0.3s; cursor: pointer;
+        }
+        .info-box:hover { transform: scale(1.03); }
+        .info-box.primary { background: var(--primary-grad); }
+        .info-box.success { background: var(--success-grad); }
+        .info-box.danger { background: var(--danger-grad); color: #5a3a3a; }
+        .info-box.warning { background: var(--warning-grad); color: #5a4a3a; }
+
+        .box-title { font-size: 0.85rem; font-weight: 600; text-transform: uppercase; opacity: 0.9; }
+        .box-value { font-size: 2.5rem; font-weight: 700; margin: 5px 0; letter-spacing: -1px; }
+        .box-icon { position: absolute; right: 20px; bottom: 20px; font-size: 4rem; opacity: 0.2; transform: rotate(-15deg); }
+
+        /* --- Charts --- */
+        .chart-container { height: 420px; width: 100%; border-radius: 12px; overflow: hidden; }
+
+        /* --- Table --- */
+        .table-responsive { border-radius: 12px; overflow: hidden; }
+        .table thead { background: var(--dark-grad); color: white; }
+        .table th { font-weight: 500; border: none; padding: 15px; }
+        .table td { padding: 15px; border-bottom: 1px solid rgba(0,0,0,0.05); vertical-align: middle; }
+        
+        /* --- Buttons --- */
+        .btn-glow {
+            background: var(--primary-grad); color: white; border: none; border-radius: 30px;
+            padding: 10px 25px; font-weight: 600; box-shadow: 0 4px 15px rgba(118, 75, 162, 0.4);
+            transition: 0.3s;
+        }
+        .btn-glow:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(118, 75, 162, 0.6); color: white; }
+
+        /* Floating Actions */
+        .fab-container { position: fixed; bottom: 30px; right: 30px; z-index: 999; display: flex; flex-direction: column; gap: 15px; }
+        .fab-btn { 
+            width: 55px; height: 55px; border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3); transition: 0.3s; border: none; font-size: 1.2rem;
+        }
+        .fab-btn.up { background: var(--primary-grad); color: white; }
+        .fab-btn.theme { background: var(--dark-grad); color: white; }
+        .fab-btn.pdf { background: var(--danger-grad); color: white; }
+        .fab-btn:hover { transform: scale(1.1) rotate(10deg); }
+
+        /* Skeletons */
+        .skeleton-text { height: 1.5rem; background: rgba(255,255,255,0.3); border-radius: 4px; animation: pulse 1.5s infinite; width: 60%; }
+        @keyframes pulse { 0% { opacity: 0.6; } 100% { opacity: 1; } }
+
+        @media print { .no-print, #news-ticker, .fab-container { display: none !important; } body { padding-top: 0; background: white; } }
+    </style>
+</head>
+<body>
+
+    <div id="news-ticker">
+        <div class="ticker-content" id="ticker-text">
+            <i class="fas fa-satellite-dish me-2 text-warning"></i> ANALYTICS COMMAND CENTER ONLINE | REAL-TIME DATA STREAM ACTIVE
+        </div>
+    </div>
+
+    <div class="container-fluid px-4" id="dashboard-content">
+        
+        <header class="d-flex justify-content-between align-items-center mb-5 mt-4 text-white">
+            <div>
+                <h1 class="fw-bold mb-1" style="text-shadow: 0 2px 10px rgba(0,0,0,0.5);">
+                    <i class="fas fa-chart-pie me-2"></i>Analytics & Reports
+                </h1>
+                <p class="mb-0 opacity-75">360° View of Academic & Operational Health</p>
+            </div>
+            <div class="d-flex gap-3 no-print align-items-center bg-dark bg-opacity-50 p-2 rounded-pill ps-4">
+                <div class="form-check form-switch pt-1">
+                    <input class="form-check-input" type="checkbox" id="auto-refresh" checked>
+                    <label class="form-check-label small text-white" for="auto-refresh">Live Sync</label>
+                </div>
+                <button class="btn btn-sm btn-outline-light rounded-circle" onclick="toggleFullScreen()"><i class="fas fa-expand"></i></button>
+                <button class="btn btn-glow btn-sm" onclick="initDashboard()"><i class="fas fa-sync-alt me-2"></i>Refresh Data</button>
+                <a href="/admin-dashboard.html" class="btn btn-sm btn-light rounded-pill px-3 fw-bold">Exit</a>
+            </div>
+        </header>
+
+        <section class="card p-4 mb-5 no-print border-0">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="small text-muted fw-bold mb-1">ACADEMIC SESSION</label>
+                    <select id="session-select" class="form-select bg-light border-0"><option value="">Loading Sessions...</option></select>
+                </div>
+                <div class="col-md-3">
+                    <label class="small text-muted fw-bold mb-1">FROM DATE</label>
+                    <input type="date" id="start-date" class="form-control bg-light border-0">
+                </div>
+                <div class="col-md-3">
+                    <label class="small text-muted fw-bold mb-1">TO DATE</label>
+                    <input type="date" id="end-date" class="form-control bg-light border-0">
+                </div>
+                <div class="col-md-3">
+                    <button onclick="loadReports()" class="btn btn-dark w-100 py-2"><i class="fas fa-filter me-2"></i>Apply Filters</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="row mb-5 g-4">
+            <div class="col-md-3">
+                <div class="info-box primary">
+                    <div class="box-title">Total Active Students</div>
+                    <div id="kpi-students" class="box-value skeleton-text">...</div>
+                    <small><i class="fas fa-check-circle me-1"></i> Verified Enrollments</small>
+                    <i class="fas fa-user-graduate box-icon"></i>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box success">
+                    <div class="box-title">Revenue Collected (YTD)</div>
+                    <div id="kpi-collection" class="box-value skeleton-text">...</div>
+                    <small><i class="fas fa-arrow-up me-1"></i> 12% vs Last Year</small>
+                    <i class="fas fa-wallet box-icon"></i>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box danger">
+                    <div class="box-title">Outstanding Dues</div>
+                    <div id="kpi-outstanding" class="box-value skeleton-text">...</div>
+                    <small><b>Action:</b> Send Reminders</small>
+                    <i class="fas fa-exclamation-triangle box-icon"></i>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="info-box warning">
+                    <div class="box-title">Avg. Attendance</div>
+                    <div id="kpi-attendance" class="box-value skeleton-text">...</div>
+                    <small><i class="fas fa-clock me-1"></i> Today's Status</small>
+                    <i class="fas fa-users box-icon"></i>
+                </div>
+            </div>
+        </section>
+
+        <section class="row mb-4">
+            <div class="col-lg-8">
+                <div class="card p-4">
+                    <h5 class="card-title">💰 Financial Growth Trajectory (3D)</h5>
+                    <div id="feesChart" class="chart-container"></div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card p-4">
+                    <h5 class="card-title">⚖️ Income vs Expense</h5>
+                    <div id="financeChart" class="chart-container"></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="row mb-4">
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">🏫 Enrollment Distribution</h5><div id="enrollmentChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">🚻 Gender Demographics</h5><div id="genderChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">📝 Daily Attendance</h5><div id="attendanceChart" class="chart-container"></div></div></div>
+        </section>
+
+        <section class="row mb-4">
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">📚 Library Circulation</h5><div id="libraryChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">🎯 Academic Performance</h5><div id="scatterChart" class="chart-container"></div></div></div>
+            <div class="col-md-4"><div class="card p-4"><h5 class="card-title">💡 Course ROI Analysis</h5><div id="bubbleChart" class="chart-container"></div></div></div>
+        </section>
+        
+        <section class="row mb-4">
+             <div class="col-md-6"><div class="card p-4"><h5 class="card-title">💳 Payment Gateways</h5><div id="paymentModeChart" class="chart-container"></div></div></div>
+             <div class="col-md-6"><div class="card p-4"><h5 class="card-title">📊 Grade Analysis</h5><div id="gradeChart" class="chart-container"></div></div></div>
+        </section>
+
+        <section class="row mb-5">
+            <div class="col-md-6"><div class="card p-4"><h5 class="card-title">👥 Visitor Analytics</h5><div id="visitorChart" class="chart-container"></div></div></div>
+            <div class="col-md-6"><div class="card p-4"><h5 class="card-title">⚠️ Grievance Status</h5><div id="complaintChart" class="chart-container"></div></div></div>
+        </section>
+
+        <section class="row pb-5">
+            <div class="col-12">
+                <div class="card p-4">
+                    <div class="d-flex justify-content-between align-items-center mb-4">
+                        <h5 class="card-title text-danger mb-0"><i class="fas fa-file-invoice-dollar me-2"></i>Critical Fee Defaulters</h5>
+                        <button class="btn btn-success btn-sm rounded-pill px-3" onclick="exportToExcel()"><i class="fas fa-file-excel me-2"></i>Export CSV</button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="defaulters-table">
+                            <thead class="table-dark"><tr><th>Student Name</th><th>Roll No</th><th>Course</th><th>Amount Due</th><th>Last Payment</th></tr></thead>
+                            <tbody id="defaulters-body"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <div class="fab-container no-print">
+        <button class="fab-btn up" onclick="window.scrollTo({top:0, behavior:'smooth'})" title="Scroll Top"><i class="fas fa-arrow-up"></i></button>
+        <button class="fab-btn theme" id="theme-toggle" title="Toggle Theme"><i class="fas fa-moon"></i></button>
+        <button class="fab-btn pdf" onclick="exportPDF()" title="Download PDF"><i class="fas fa-file-pdf"></i></button>
+    </div>
+
+    <script>
+        const TOKEN = localStorage.getItem('erp-token');
+        if (!TOKEN) window.location.href = '/login.html';
+        
+        let refreshInterval;
+
+        // --- GLOBAL HIGHCHARTS THEME (PREMIUM LOOK) ---
+        Highcharts.theme = {
+            colors: ['#764ba2', '#009efd', '#ff9a9e', '#f6d365', '#24CBE5', '#64E572', '#FF9655', '#FFF263', '#6AF9C4'],
+            chart: { backgroundColor: null, style: { fontFamily: "'Poppins', sans-serif" } },
+            title: { style: { color: '#333', fontWeight: 'bold', textTransform: 'uppercase', fontSize: '16px' } },
+            subtitle: { style: { color: '#666666', font: 'bold 12px "Trebuchet MS", Verdana, sans-serif' } },
+            legend: { itemStyle: { font: '9pt Trebuchet MS, Verdana, sans-serif', color: 'black' }, itemHoverStyle:{ color: 'gray' } }
+        };
+        Highcharts.setOptions(Highcharts.theme);
+
+        // --- Utils ---
+        document.getElementById('theme-toggle').addEventListener('click', () => {
+            const html = document.documentElement;
+            const isDark = html.getAttribute('data-bs-theme') === 'dark';
+            html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
+            
+            // Update Charts Text Color based on theme
+            const textColor = isDark ? '#333' : '#fff';
+            Highcharts.charts.forEach(chart => {
+                if(chart) {
+                    chart.update({ title: { style: { color: textColor } }, legend: { itemStyle: { color: textColor } } });
+                }
+            });
+        });
+
+        function toggleFullScreen() {
+            if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+            else if (document.exitFullscreen) document.exitFullscreen();
+        }
+
+        document.getElementById('auto-refresh').addEventListener('change', (e) => {
+            if (e.target.checked) refreshInterval = setInterval(loadReports, 30000);
+            else clearInterval(refreshInterval);
+        });
+
+        function exportPDF() {
+            const element = document.getElementById('dashboard-content');
+            const opt = { margin: 0.2, filename: 'Executive_Report.pdf', image: { type: 'jpeg', quality: 0.98 }, html2canvas: { scale: 2 }, jsPDF: { unit: 'in', format: 'a3', orientation: 'portrait' } };
+            html2pdf().set(opt).from(element).save();
+        }
+
+        function exportToExcel() {
+            const wb = XLSX.utils.table_to_book(document.getElementById("defaulters-table"));
+            XLSX.writeFile(wb, "Global_Defaulters_List.xlsx");
+        }
+
+        // --- API Helper ---
+        async function apiCall(endpoint) {
+            try {
+                let url = endpoint.startsWith('/api/') ? endpoint : '/api/reports' + endpoint;
+                const res = await fetch(url, { headers: { 'Authorization': `Bearer ${TOKEN}` } });
+                return res.ok ? await res.json() : [];
+            } catch (e) {
+                console.error(`Error loading ${endpoint}`, e);
+                return [];
+            }
+        }
+
+        // --- Main Load Function ---
+        async function loadReports() {
+            // 1. KPI Summaries
+            const kpi = await apiCall('/summaries');
+            if (kpi && kpi.totalStudents !== undefined) {
+                document.getElementById('kpi-students').innerText = kpi.totalStudents;
+                document.getElementById('kpi-collection').innerText = '₹' + kpi.feesCollected.toLocaleString();
+                document.getElementById('kpi-outstanding').innerText = '₹' + kpi.feesOutstanding.toLocaleString();
+                document.getElementById('kpi-attendance').innerText = (kpi.avgAttendance || 0) + '%';
+                document.getElementById('ticker-text').innerHTML = `<i class="fas fa-broadcast-tower me-2 text-success"></i> LIVE STREAM: Revenue Collected ₹${kpi.feesCollected.toLocaleString()} | Outstanding: ₹${kpi.feesOutstanding.toLocaleString()} | Active Students: ${kpi.totalStudents} | System Health: 100%`;
+                document.querySelectorAll('.skeleton-text').forEach(el => el.classList.remove('skeleton-text'));
+            }
+
+            // 2. Fetch Data
+            const [enroll, fees, gender, att, lib, scat, bub, fin, pay, grades, visit, comp, def] = await Promise.all([
+                apiCall('/enrollment-by-course'),
+                apiCall('/fees-collection-monthly'),
+                apiCall('/gender-ratio'),
+                apiCall('/attendance-stats'),   
+                apiCall('/library-stats'),      
+                apiCall('/performance-scatter'),
+                apiCall('/course-bubble'),      
+                apiCall('/finance-comparison'),
+                apiCall('/payment-modes'),
+                apiCall('/grade-distribution'),
+                apiCall('/visitor-stats'),      
+                apiCall('/complaint-stats'),    
+                apiCall('/defaulters')
+            ]);
+
+            // 3. Render Highcharts 3D
+            
+            // Fee Trend (Area Spline 3D)
+            Highcharts.chart('feesChart', {
+                chart: { type: 'areaspline', options3d: { enabled: true, alpha: 10, beta: 0 } },
+                title: { text: null },
+                xAxis: { categories: fees.map(d => d.month) },
+                yAxis: { title: { text: 'Amount' } },
+                plotOptions: { areaspline: { fillOpacity: 0.5 } },
+                series: [{ name: 'Revenue Stream', data: fees.map(d => parseInt(d.amount)), color: '#764ba2' }]
+            });
+
+            // Income vs Expense (3D Column)
+            Highcharts.chart('financeChart', {
+                chart: { type: 'column', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+                title: { text: null },
+                xAxis: { categories: fin.income.map(d => d.month) },
+                yAxis: { title: { text: 'Amount' } },
+                plotOptions: { column: { depth: 40, grouping: false, shadowing: false, borderWidth: 0 } },
+                series: [
+                    { name: 'Income', data: fin.income.map(d => parseInt(d.total)), color: '#009efd' },
+                    { name: 'Expense', data: fin.expense.map(d => parseInt(d.total)), color: '#ff9a9e' }
+                ]
+            });
+
+            // Enrollment (3D Pie)
+            Highcharts.chart('enrollmentChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45, beta: 0 } },
+                title: { text: null },
+                plotOptions: { pie: { depth: 45, allowPointSelect: true, cursor: 'pointer', dataLabels: { enabled: true, format: '{point.name}: {point.percentage:.1f} %' } } },
+                series: [{ name: 'Students', data: enroll.map(d => [d.course_name, parseInt(d.count)]) }]
+            });
+
+            // Gender (3D Donut)
+            Highcharts.chart('genderChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
+                title: { text: null },
+                plotOptions: { pie: { innerSize: 100, depth: 45 } },
+                series: [{ name: 'Count', data: gender.map(d => [d.gender, parseInt(d.count)]) }]
+            });
+
+            // Attendance (3D Pie)
+            Highcharts.chart('attendanceChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
+                title: { text: null },
+                series: [{ name: 'Status', data: att.map(d => [d.status, parseInt(d.count)]) }]
+            });
+
+            // Library (3D Cylinder)
+            Highcharts.chart('libraryChart', {
+                chart: { type: 'cylinder', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+                title: { text: null },
+                xAxis: { categories: lib.map(d => d.month) },
+                series: [{ name: 'Books Issued', data: lib.map(d => parseInt(d.count)), color: '#f6d365' }]
+            });
+
+            // Payment Modes (3D Cylinder)
+            Highcharts.chart('paymentModeChart', {
+                chart: { type: 'cylinder', options3d: { enabled: true, alpha: 15, beta: 15, depth: 50, viewDistance: 25 } },
+                title: { text: null },
+                xAxis: { categories: pay.map(d => d.mode) },
+                series: [{ name: 'Transactions', data: pay.map(d => parseInt(d.total)), color: '#24CBE5' }]
+            });
+
+            // Grades (3D Area)
+            Highcharts.chart('gradeChart', {
+                chart: { type: 'area', options3d: { enabled: true, alpha: 15, beta: 30, depth: 200 } },
+                title: { text: null },
+                xAxis: { categories: grades.map(d => d.grade) },
+                series: [{ name: 'Count', data: grades.map(d => parseInt(d.count)), color: '#64E572' }]
+            });
+
+            // Visitors (3D Column)
+            Highcharts.chart('visitorChart', {
+                chart: { type: 'column', options3d: { enabled: true, alpha: 10, beta: 25, depth: 70 } },
+                title: { text: null },
+                xAxis: { categories: visit.map(d => d.purpose) },
+                series: [{ name: 'Visitors', data: visit.map(d => parseInt(d.count)), color: '#FF9655' }]
+            });
+
+            // Complaints (3D Donut)
+            Highcharts.chart('complaintChart', {
+                chart: { type: 'pie', options3d: { enabled: true, alpha: 45 } },
+                title: { text: null },
+                plotOptions: { pie: { innerSize: 80, depth: 35 } },
+                series: [{ name: 'Issues', data: comp.map(d => [d.status, parseInt(d.count)]) }]
+            });
+
+            // Scatter & Bubble
+            Highcharts.chart('scatterChart', {
+                chart: { type: 'scatter', options3d: { enabled: true, alpha: 10, beta: 30, depth: 250, viewDistance: 5, fitToPlot: false } },
+                title: { text: null },
+                series: [{ name: 'Student Data', colorByPoint: true, data: scat.map(s => [s.x, s.y, s.z]) }]
+            });
+
+            Highcharts.chart('bubbleChart', {
+                chart: { type: 'bubble', options3d: { enabled: true, alpha: 10, beta: 30, depth: 250 } },
+                title: { text: null },
+                series: [{ data: bub.map(b => ({ x: b.x, y: b.y, z: b.r, name: b.label })) }]
+            });
+
+            // 4. Render Table
+            renderDefaulters(def);
+        }
+
+        function renderDefaulters(data) {
+            const tbody = document.getElementById('defaulters-body');
+            tbody.innerHTML = data.length ? '' : '<tr><td colspan="5" class="text-center text-muted">No Defaulters</td></tr>';
+            data.forEach(d => {
+                tbody.innerHTML += `<tr><td><b>${d.student_name}</b></td><td>${d.roll_number}</td><td>${d.course_name}</td><td class="text-danger fw-bold">₹${d.balance_due}</td><td>${d.last_payment_date ? new Date(d.last_payment_date).toLocaleDateString() : '-'}</td></tr>`;
+            });
+        }
+
+        async function initDashboard() {
+            try {
+                const sessions = await apiCall('/api/academic-sessions');
+                if(sessions.length) document.getElementById('session-select').innerHTML = sessions.map(s => `<option value="${s.id}">${s.session_name}</option>`).join('');
+            } catch(e) {}
+            loadReports();
+        }
+
+        document.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

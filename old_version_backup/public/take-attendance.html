@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Attendance | Elite ERP</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --primary: #4F46E5; --present: #10B981; --absent: #EF4444; --bg: #F8FAFC; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg); color: #1E293B; }
+
+        .header-panel {
+            background: linear-gradient(135deg, #1E1B4B 0%, #4F46E5 100%);
+            padding: 40px 20px 80px; color: white; border-radius: 0 0 40px 40px;
+        }
+
+        .main-container { margin-top: -60px; max-width: 900px; margin-left: auto; margin-right: auto; padding: 0 20px; }
+
+        .glass-card {
+            background: white; border: 1px solid rgba(226, 232, 240, 0.8); border-radius: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); padding: 25px; margin-bottom: 25px;
+        }
+
+        /* Status Picker Design */
+        .status-picker { display: flex; background: #F1F5F9; padding: 5px; border-radius: 15px; gap: 5px; }
+        .status-radio { display: none; }
+        .status-label {
+            width: 45px; padding: 8px 0; border-radius: 10px; text-align: center;
+            cursor: pointer; font-weight: 800; transition: 0.3s; margin: 0; color: #64748B;
+        }
+        .radio-p:checked + .label-p { background: var(--present); color: white; box-shadow: 0 4px 10px rgba(16, 185, 129, 0.2); }
+        .radio-a:checked + .label-a { background: var(--absent); color: white; box-shadow: 0 4px 10px rgba(239, 68, 68, 0.2); }
+
+        .student-item {
+            background: white; border-radius: 20px; padding: 15px 20px; margin-bottom: 12px;
+            border: 1px solid #F1F5F9; display: flex; align-items: center; justify-content: space-between;
+            transition: 0.2s;
+        }
+        .student-item:hover { border-color: var(--primary); }
+
+        .avatar-box {
+            width: 45px; height: 45px; background: #EEF2FF; color: var(--primary);
+            border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; margin-right: 15px;
+        }
+
+        .remark-input {
+            border: none; background: #F8FAFC; border-radius: 8px; padding: 4px 10px;
+            font-size: 11px; width: 100%; margin-top: 5px; outline: none; border: 1px solid transparent;
+        }
+        .remark-input:focus { border-color: #E2E8F0; background: white; }
+
+        /* Floating Action Bar */
+        .bottom-bar {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 500px; background: rgba(255,255,255,0.95);
+            backdrop-filter: blur(10px); padding: 12px 25px; border-radius: 50px;
+            border: 1px solid #E2E8F0; display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.1); z-index: 1000;
+        }
+
+        .btn-submit {
+            background: #1E1B4B; color: white; border-radius: 50px; padding: 10px 30px;
+            font-weight: 700; border: none; transition: 0.3s;
+        }
+        .btn-submit:hover { background: var(--primary); transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<div class="header-panel">
+    <div class="container-fluid d-flex justify-content-between align-items-center">
+        <a href="/view-students-class.html" class="text-white"><i class="fas fa-arrow-left fa-lg"></i></a>
+        <h5 class="fw-bold mb-0">Class Roster</h5>
+        <div style="width: 24px;"></div>
+    </div>
+    <div class="mt-4 text-center">
+        <h4 class="fw-800 mb-1" id="batchDisplay">Loading Batch...</h4>
+        <p class="opacity-75 small fw-bold" id="dateDisplay"></p>
+    </div>
+</div>
+
+<div class="main-container">
+    <div class="glass-card">
+        <div class="row text-center">
+            <div class="col-6 border-end">
+                <small class="text-muted fw-bold d-block mb-1">PRESENT</small>
+                <span class="h4 fw-800 text-success" id="pCount">0</span>
+            </div>
+            <div class="col-6">
+                <small class="text-muted fw-bold d-block mb-1">ABSENT</small>
+                <span class="h4 fw-800 text-danger" id="aCount">0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="mb-3 px-2">
+        <div class="input-group bg-white rounded-pill border shadow-sm px-3 py-1">
+            <span class="input-group-text bg-transparent border-0"><i class="fas fa-search text-muted"></i></span>
+            <input type="text" id="searchInput" class="form-control border-0 bg-transparent" placeholder="Find student name..." onkeyup="filterList()">
+        </div>
+    </div>
+
+    <div id="studentContainer">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-3 text-muted fw-bold">Connecting to Roster...</p>
+        </div>
+    </div>
+    
+    <div style="height: 100px;"></div>
+</div>
+
+<div class="bottom-bar">
+    <div class="fw-bold text-muted small">Total: <span id="tCount">0</span></div>
+    <div class="d-flex gap-2">
+        <button class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-bold" onclick="markAll('present')">All P</button>
+        <button class="btn-submit shadow" onclick="submitData()">Save</button>
+    </div>
+</div>
+
+
+
+<script>
+    const TOKEN = localStorage.getItem('erp-token');
+    const params = new URLSearchParams(window.location.search);
+    const courseId = params.get('course');
+    const batchId = params.get('batch');
+
+    let students = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.getElementById('dateDisplay').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        if(!batchId) {
+            window.location.href = '/view-students-class.html';
+            return;
+        }
+        fetchData();
+    });
+
+    async function fetchData() {
+        try {
+            const res = await fetch(`/api/teachers/me/students?course_id=${courseId}&batch_id=${batchId}`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            const data = await res.json();
+            
+            // Initialize students with default 'present' status
+            students = data.map(s => ({ ...s, status: 'present', remarks: '' }));
+            
+            if(students.length > 0) {
+                document.getElementById('batchDisplay').innerText = students[0].batch_name || "Batch Roster";
+            }
+            render();
+        } catch (err) {
+            document.getElementById('studentContainer').innerHTML = '<div class="alert alert-danger text-center m-3">Failed to load roster.</div>';
+        }
+    }
+
+    function render() {
+        const container = document.getElementById('studentContainer');
+        container.innerHTML = students.map((s, i) => `
+            <div class="student-item shadow-sm" data-name="${s.student_full_name.toLowerCase()}">
+                <div class="d-flex align-items-center" style="flex: 1;">
+                    <div class="avatar-box">${s.student_full_name.charAt(0)}</div>
+                    <div style="flex: 1;">
+                        <div class="fw-bold small">${s.student_full_name}</div>
+                        <div class="text-muted" style="font-size: 10px; font-weight:600;">ID: ${s.roll_number || 'N/A'}</div>
+                        <input type="text" class="remark-input" placeholder="Note (Optional)" onchange="updateNote('${s.student_user_id}', this.value)">
+                    </div>
+                </div>
+                <div class="status-picker ms-3">
+                    <input type="radio" name="att-${s.student_user_id}" id="p-${s.student_user_id}" value="present" 
+                        class="status-radio radio-p" checked onchange="updateStatus('${s.student_user_id}', 'present')">
+                    <label for="p-${s.student_user_id}" class="status-label label-p">P</label>
+
+                    <input type="radio" name="att-${s.student_user_id}" id="a-${s.student_user_id}" value="absent" 
+                        class="status-radio radio-a" onchange="updateStatus('${s.student_user_id}', 'absent')">
+                    <label for="a-${s.student_user_id}" class="status-label label-a">A</label>
+                </div>
+            </div>
+        `).join('');
+        updateStats();
+    }
+
+    function updateStatus(id, status) {
+        const student = students.find(s => s.student_user_id === id);
+        if(student) student.status = status;
+        updateStats();
+    }
+
+    function updateNote(id, note) {
+        const student = students.find(s => s.student_user_id === id);
+        if(student) student.remarks = note;
+    }
+
+    function markAll(status) {
+        students.forEach(s => s.status = status);
+        render(); // Re-render to update radio buttons
+    }
+
+    function updateStats() {
+        const p = students.filter(s => s.status === 'present').length;
+        const a = students.filter(s => s.status === 'absent').length;
+        document.getElementById('pCount').innerText = p;
+        document.getElementById('aCount').innerText = a;
+        document.getElementById('tCount').innerText = students.length;
+    }
+
+    function filterList() {
+        const query = document.getElementById('searchInput').value.toLowerCase();
+        document.querySelectorAll('.student-item').forEach(item => {
+            item.style.display = item.dataset.name.includes(query) ? 'flex' : 'none';
+        });
+    }
+
+    async function submitData() {
+        const payload = {
+            batch_id: batchId,
+            attendance_date: new Date().toISOString().split('T')[0],
+            mark_method: 'manual',
+            records: students.map(s => ({ 
+                user_id: s.student_user_id, 
+                status: s.status,
+                remarks: s.remarks 
+            }))
+        };
+
+        try {
+            const res = await fetch('/api/attendance/mark', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            if(res.ok) {
+                alert("✅ Attendance Saved Successfully!");
+                window.location.href = '/view-students-class.html';
+            }
+        } catch (err) {
+            alert("Error saving attendance. Please try again.");
+        }
+    }
+</script>
+</body>
+</html>

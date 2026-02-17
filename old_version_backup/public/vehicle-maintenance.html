@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vehicle Maintenance | Driver Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Poppins', sans-serif; background: #f4f6f9; padding: 20px; margin: 0; }
+        .container { max-width: 600px; margin: auto; background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h2 { color: #005A9C; margin-top: 0; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .form-group { margin-bottom: 15px; }
+        label { display: block; font-weight: 600; margin-bottom: 5px; color: #444; }
+        input, select, textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        button { background: #005A9C; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: 600; font-size: 1em; }
+        button:hover { background: #004477; }
+        .back-link { display: block; margin-top: 20px; text-align: center; text-decoration: none; color: #666; font-size: 0.9em; }
+        #msg { margin-top: 15px; padding: 10px; border-radius: 6px; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Log Maintenance</h2>
+    <p>Vehicle: <strong id="vehicle-display">WB36A3221</strong></p>
+    
+    <div id="msg"></div>
+
+    <form id="maintenance-form">
+        <div class="form-group">
+            <label>Service Date</label>
+            <input type="date" name="service_date" required id="current-date">
+        </div>
+
+        <div class="form-group">
+            <label>Odometer Reading (KM)</label>
+            <input type="number" name="odometer_reading" placeholder="Enter current KM" required>
+        </div>
+
+        <div class="form-group">
+            <label>Type of Maintenance</label>
+            <select name="details" required>
+                <option value="Engine Oil Change">Engine Oil Change</option>
+                <option value="Brake Inspection">Brake Inspection</option>
+                <option value="Tyre Rotation/Replacement">Tyre Rotation/Replacement</option>
+                <option value="Electrical Repair">Electrical Repair</option>
+                <option value="General Servicing">General Servicing</option>
+                <option value="Emergency Breakdown">Emergency Breakdown</option>
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label>Cost (Estimated/Actual)</label>
+            <input type="number" name="cost" placeholder="0.00">
+        </div>
+
+        <button type="submit">Submit Maintenance Log</button>
+    </form>
+
+    <a href="/driver-dashboard.html" class="back-link">← Back to Dashboard</a>
+</div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    document.getElementById('current-date').valueAsDate = new Date();
+
+    document.getElementById('maintenance-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgDiv = document.getElementById('msg');
+        const formData = Object.fromEntries(new FormData(e.target).entries());
+
+        try {
+            // 1. Get Driver status to find the linked vehicle_id
+            const statusRes = await fetch('/api/transport/driver/status', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const statusData = await statusRes.json();
+
+            if (!statusRes.ok) throw new Error("Failed to identify vehicle.");
+
+            // 2. Post maintenance record
+            const response = await fetch('/api/transport/maintenance', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': `Bearer ${token}` 
+                },
+                body: JSON.stringify({ ...formData, vehicle_id: statusData.vehicle_id })
+            });
+
+            if (response.ok) {
+                msgDiv.style.display = 'block';
+                msgDiv.style.background = '#dcfce7';
+                msgDiv.style.color = '#166534';
+                msgDiv.textContent = "Maintenance log saved successfully!";
+                e.target.reset();
+            } else {
+                throw new Error("Failed to save record.");
+            }
+        } catch (err) {
+            msgDiv.style.display = 'block';
+            msgDiv.style.background = '#fee2e2';
+            msgDiv.style.color = '#b91c1c';
+            msgDiv.textContent = err.message;
+        }
+    });
+</script>
+
+</body>
+</html>

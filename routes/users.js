@@ -380,4 +380,53 @@ router.get('/search', authenticateToken, authorize(MESSAGING_ROLES), async (req,
 // and 'MESSAGING_ROLES' is defined if you use it globally in users.js. 
 // If not defined, use specific roles like ['Super Admin', 'Admin', 'Teacher'].
 
+
+// ---------------------------------------------------------
+// 10. GET: User Profile with Branch Data (For ID Card) 🎯
+// ---------------------------------------------------------
+/**
+ * @route   GET /api/users/profile/:id
+ * @desc    Fetch full profile including Branch contact details (Fix for N/A Mobile/Email)
+ * @access  Private
+ */
+router.get('/profile/:id', authenticateToken, async (req, res) => {
+    const profileId = req.params.id;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (!uuidRegex.test(profileId)) {
+        return res.status(400).json({ error: 'Invalid User ID format.' });
+    }
+
+    try {
+        const query = `
+            SELECT 
+                u.id, 
+                u.username, 
+                u.role, 
+                u.full_name,
+                -- COALESCE ব্যবহার করা হয়েছে যাতে User টেবিলে ডেটা না থাকলে Branch টেবিল থেকে নেয়
+                COALESCE(u.email, b.email) AS email, 
+                COALESCE(u.phone_number, b.manager_phone) AS phone_number,
+                b.branch_name,
+                b.branch_code,
+                b.address,
+                b.manager_photo,
+                b.logo_url AS branch_logo
+            FROM ${USERS_TABLE} u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            WHERE u.id = $1 AND u.deleted_at IS NULL;
+        `;
+
+        const result = await pool.query(query, [profileId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'User profile not found.' });
+        }
+
+        res.status(200).json(result.rows[0]);
+    } catch (err) {
+        console.error('Error fetching user profile:', err);
+        res.status(500).json({ error: 'Server error occurred while fetching profile.' });
+    }
+});
 module.exports = router;

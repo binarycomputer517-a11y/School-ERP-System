@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Official Fee Receipt | ERP System</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Official Fee Receipt | BCSM ERP</title>
     
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Cinzel:wght@700;900&family=Libre+Barcode+39+Text&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -46,14 +47,19 @@
         /* --- CONTENT --- */
         .content { position: relative; z-index: 10; padding: 12mm; height: 100%; display: flex; flex-direction: column; justify-content: space-between; flex: 1; }
         .header { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid var(--primary); padding-bottom: 8px; margin-bottom: 12px; }
-        .school-info h1 { font-family: 'Cinzel', serif; font-size: 20px; color: var(--primary); margin: 0; font-weight: 900; }
+        
+        .branch-logo-container { display: flex; align-items: center; gap: 15px; }
+        .branch-logo { height: 65px; width: 65px; object-fit: contain; border: 1px solid #eee; padding: 2px; background: #fff; }
+
+        .school-info h1 { font-family: 'Cinzel', serif; font-size: 18px; color: var(--primary); margin: 0; font-weight: 900; }
         .branch-meta { font-size: 11px; font-weight: 700; color: var(--primary); margin-top: 4px; text-transform: uppercase; }
         .branch-contact { font-size: 9px; color: #444; margin: 2px 0; font-weight: 600; }
+        
         .receipt-title { text-align: right; }
         .receipt-label { font-size: 16px; font-weight: 800; color: var(--accent); text-transform: uppercase; letter-spacing: 2px; display: block; }
         .receipt-no { font-family: 'Libre Barcode 39 Text', cursive; font-size: 32px; color: black; line-height: 1; display: block; margin-top: 5px; }
         
-        .details-grid { display: grid; grid-template-columns: 1.5fr 1fr 0.8fr; gap: 12px; font-size: 11px; margin-bottom: 12px; background: rgba(241, 245, 249, 0.5); padding: 10px; border-radius: 4px; }
+        .details-grid { display: grid; grid-template-columns: 1.5fr 1fr 0.8fr; gap: 12px; font-size: 11px; margin-bottom: 12px; background: rgba(241, 245, 249, 0.5); padding: 10px; border-radius: 4px; border: 1px solid #e2e8f0; }
         .detail-group label { display: block; font-weight: 700; color: #64748b; text-transform: uppercase; font-size: 8px; margin-bottom: 1px; }
         .detail-group span { font-weight: 600; color: #000; font-size: 12px; }
         
@@ -63,8 +69,10 @@
         .total-row td { border-top: 2px solid var(--primary); font-weight: 800; font-size: 13px; padding-top: 8px; color: var(--primary); }
         .word-row td { padding: 8px 5px; background: #fafafa; border-top: 1px solid #000; font-style: italic; font-size: 10px; }
         
-        .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; padding-top: 15px; }
-        .stamp-area { border: 3px solid #2e7d32; color: #2e7d32; padding: 4px 12px; font-weight: 900; text-transform: uppercase; transform: rotate(-10deg); font-size: 14px; opacity: 0.8; letter-spacing: 2px; }
+        .footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: auto; padding-top: 10px; }
+        .branch-footer-info { font-size: 8px; color: #666; font-weight: 600; max-width: 250px; }
+        
+        .stamp-area { border: 3px solid #2e7d32; color: #2e7d32; padding: 4px 12px; font-weight: 900; text-transform: uppercase; transform: rotate(-10deg); font-size: 14px; opacity: 0.8; letter-spacing: 2px; margin-bottom: 15px; }
         .auth-sign { text-align: center; }
         .sign-line { width: 120px; border-bottom: 1px solid #333; margin-bottom: 4px; }
         .sign-label { font-size: 9px; font-weight: 700; text-transform: uppercase; }
@@ -95,11 +103,14 @@
 
         <div class="content">
             <div class="header">
-                <div class="school-info">
-                    <h1 class="global-school-name">Loading...</h1>
-                    <div class="branch-meta"><span id="b-name">...</span> (<span id="b-code">...</span>)</div>
-                    <p id="b-address" style="margin-top:2px;">...</p>
-                    <p class="branch-contact">📞 <span id="b-phone">...</span> | ✉️ <span id="b-email">...</span></p>
+                <div class="branch-logo-container">
+                    <img src="/uploads/media/default-logo.png" id="b-logo" class="branch-logo" alt="Branch Logo">
+                    <div class="school-info">
+                        <h1 id="b-name">BCSM ERP SYSTEM</h1>
+                        <div class="branch-meta">Campus Code: <span id="b-code">...</span></div>
+                        <p id="b-address" style="margin-top:2px; font-size: 9px; max-width: 350px; font-weight: 500;">Loading address...</p>
+                        <p class="branch-contact">📞 <span id="b-phone">...</span> | ✉️ <span id="b-email">...</span></p>
+                    </div>
                 </div>
                 <div class="receipt-title">
                     <span class="receipt-label">Official Receipt</span>
@@ -130,11 +141,19 @@
                     <div id="qrcode"></div>
                     <div style="font-size:8px; font-weight:bold; margin-top:2px;">SCAN TO VERIFY</div>
                 </div>
+                
+                <div class="branch-footer-info">
+                    <div id="b-gst-line">GSTIN: N/A</div>
+                    <div id="b-bank-line">Bank: ... | A/C: ...</div>
+                    <div style="margin-top:2px; font-style: italic;">Thank you for your payment.</div>
+                </div>
+
                 <div class="stamp-area">PAID & CLEARED</div>
+                
                 <div class="auth-sign">
                     <div class="sign-line"></div>
                     <div class="sign-label">Authorized Signatory</div>
-                    <div style="font-size:7px; color:#888; margin-top:2px;">Generated: <span id="gen-date"></span></div>
+                    <div style="font-size:7px; color:#888; margin-top:2px;">Timestamp: <span id="gen-date"></span></div>
                 </div>
             </div>
         </div>
@@ -150,13 +169,14 @@
             const container = document.getElementById('wm-text');
             if(!container) return;
             container.innerHTML = '';
+            const safeText = (branchText && branchText !== "undefined") ? branchText : "BCSM ERP SYSTEM";
             for(let i=0; i<40; i++) {
                 let div = document.createElement('div');
                 div.className = 'wm-item';
-                div.innerText = branchText;
+                div.innerText = safeText;
                 container.appendChild(div);
             }
-            const mtText = ("OFFICIAL RECEIPT • " + branchText.toUpperCase() + " • ").repeat(40);
+            const mtText = ("OFFICIAL RECEIPT • " + safeText.toUpperCase() + " • ").repeat(40);
             document.getElementById('mt-t').innerText = mtText;
             document.getElementById('mt-b').innerText = mtText;
         }
@@ -193,53 +213,69 @@
             if(!TOKEN || !receiptId) return;
 
             try {
+                // ১. পেমেন্ট ডাটা ফেচ করা
                 const res = await fetch(`/api/finance/receipt/${receiptId}`, { 
                     headers: { 'Authorization': `Bearer ${TOKEN}` } 
                 });
-
-                if(!res.ok) throw new Error("Receipt Not Found");
-                
+                if(!res.ok) throw new Error("Receipt Data Failed");
                 const data = await res.json();
-                
-                // Set School/System Branding
-                document.querySelector('.global-school-name').innerText = window.erpSettings?.school_name || "SCHOOL ERP SYSTEM";
-                
-                // Set Branch Specific Info
-                document.getElementById('b-name').innerText = data.branch_name || 'Main Campus';
-                document.getElementById('b-code').innerText = data.branch_code || '---';
-                document.getElementById('b-address').innerText = data.branch_address || 'Official Campus';
-                document.getElementById('b-phone').innerText = data.branch_phone || 'N/A';
-                document.getElementById('b-email').innerText = data.branch_email || 'N/A';
-                
-                // Security Pattern Generation
-                generateSecurity(`${data.branch_name} (${data.branch_code})`);
 
+                // ২. ব্রাঞ্চ আইডি রিট্রিভাল ফিক্স (এটিই এরর দিচ্ছিল)
+                const branchId = data.branch_id || data.student_branch_id || data.id_branch;
+                
+                if (branchId && branchId !== 'undefined') {
+                    const branchRes = await fetch(`/api/branches/${branchId}`, {
+                        headers: { 'Authorization': `Bearer ${TOKEN}` }
+                    });
+                    
+                    if (branchRes.ok) {
+                        const branch = await branchRes.json();
+                        document.getElementById('b-name').innerText = branch.branch_name || 'BCSM ERP';
+                        document.getElementById('b-code').innerText = branch.branch_code || 'N/A';
+                        document.getElementById('b-address').innerText = branch.address || 'Address Not Found';
+                        document.getElementById('b-phone').innerText = branch.phone_number || branch.manager_phone || 'N/A';
+                        document.getElementById('b-email').innerText = branch.email || 'N/A';
+                        if(branch.logo_url) document.getElementById('b-logo').src = branch.logo_url;
+                        document.getElementById('b-gst-line').innerText = `GSTIN: ${branch.gst_number || 'N/A'}`;
+                        document.getElementById('b-bank-line').innerText = `Bank: ${branch.bank_name || '...'} | A/C: ${branch.account_number || '...'}`;
+                        generateSecurity(`${branch.branch_name} (${branch.branch_code})`);
+                    }
+                } else {
+                    // যদি ব্রাঞ্চ আইডি না পাওয়া যায় তবে ডিফল্ট
+                    generateSecurity("BCSM ERP SYSTEM");
+                }
+
+                // ৩. ট্রানজেকশন তথ্য রেন্ডার করা
                 const rNo = data.transaction_id || `REC${data.id.toString().substring(0,6)}`;
                 document.getElementById('barcode-txt').innerText = `*${rNo}*`;
                 document.getElementById('r-date').innerText = new Date(data.payment_date).toLocaleDateString('en-GB');
-                document.getElementById('s-name').innerText = `${data.first_name} ${data.last_name}`;
-                document.getElementById('s-enroll').innerText = data.enrollment_no || data.roll_number || '---';
-                document.getElementById('s-course').innerText = data.course_name || 'N/A';
-                document.getElementById('r-mode').innerText = data.payment_mode;
-                document.getElementById('r-txn').innerText = data.transaction_id || 'N/A';
-                document.getElementById('fee-desc').innerText = data.fee_description || 'Course Tuition & Fees';
                 
-                const amt = parseFloat(data.amount);
+                const fullName = `${data.first_name || ''} ${data.middle_name || ''} ${data.last_name || ''}`.replace(/\s+/g, ' ').trim();
+                document.getElementById('s-name').innerText = fullName || "Student Record";
+                
+                document.getElementById('s-enroll').innerText = data.roll_number || data.enrollment_no || '---';
+                document.getElementById('s-course').innerText = data.course_name || 'N/A';
+                document.getElementById('r-mode').innerText = data.payment_mode || 'Cash';
+                document.getElementById('r-txn').innerText = data.transaction_id || 'N/A';
+                document.getElementById('fee-desc').innerText = data.fee_description || 'Fee Payment';
+                
+                const amt = parseFloat(data.amount) || 0;
                 document.getElementById('fee-amt').innerText = `₹${amt.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
                 document.getElementById('fee-total').innerText = `₹${amt.toLocaleString('en-IN', {minimumFractionDigits: 2})}`;
                 document.getElementById('amt-words').innerText = convertNumberToWords(Math.floor(amt));
                 document.getElementById('gen-date').innerText = new Date().toLocaleString();
 
+                document.getElementById("qrcode").innerHTML = "";
                 new QRCode(document.getElementById("qrcode"), {
-                    text: `RECEIPT:${rNo}|BRANCH:${data.branch_code}|AMT:${amt}|DATE:${data.payment_date}`,
+                    text: `VERIFY:${rNo}|AMT:${amt}`,
                     width: 55,
                     height: 55,
                     colorDark : "#0e1b4d"
                 });
 
             } catch (e) { 
-                console.error(e);
-                document.body.innerHTML = "<h2 style='color:white;text-align:center;padding:50px;'>Error: Receipt record missing from server.</h2>"; 
+                console.error("Receipt Processing Error:", e);
+                document.body.innerHTML = "<h2 style='color:white;text-align:center;padding-top:100px;'>Error: Record sync failed.</h2>";
             }
         }
         loadReceipt();

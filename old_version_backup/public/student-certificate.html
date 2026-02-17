@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Official Student Certificate</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Great+Vibes&family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #0e1b4d; 
+            --accent: #d4af37;  
+            --red: #c0392b;     
+            --text: #222;
+        }
+
+        body {
+            background: #555;
+            font-family: 'Roboto', sans-serif;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact; 
+        }
+
+        .page {
+            width: 210mm;
+            height: 297mm;
+            margin: 10mm auto;
+            background: #fff;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 1. Ultra High Density Watermark */
+        .watermark-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            opacity: 0.05;
+            pointer-events: none;
+        }
+
+        /* 2. Central Guilloche Rosette */
+        .guilloche-center {
+            position: absolute;
+            top: 55%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 550px; height: 550px;
+            z-index: 1;
+            opacity: 0.07;
+            background: 
+                repeating-radial-gradient(circle, var(--primary) 0, var(--primary) 1px, transparent 2px, transparent 10px),
+                repeating-conic-gradient(from 0deg, var(--accent) 0deg 1deg, transparent 1deg 15deg);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        /* 3. Border Frame */
+        .border-frame {
+            position: absolute;
+            inset: 12px;
+            border: 3px double var(--primary);
+            z-index: 10;
+            pointer-events: none;
+            /* Security Pattern on Border */
+            background-image: linear-gradient(135deg, var(--accent) 25%, transparent 25%, transparent 50%, var(--accent) 50%, var(--accent) 75%, transparent 75%, transparent);
+            background-size: 20px 20px;
+            -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+            mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+        }
+
+        /* 4. Security Corners */
+        .secure-corner {
+            position: absolute;
+            width: 120px; height: 120px;
+            z-index: 11;
+            background-color: var(--primary);
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,215,0,0.2) 5px, rgba(255,215,0,0.2) 6px);
+        }
+        .tl { top: 0; left: 0; clip-path: polygon(0 0, 100% 0, 0 100%); border-bottom: 3px solid var(--accent); }
+        .tr { top: 0; right: 0; clip-path: polygon(100% 0, 0 0, 100% 100%); border-bottom: 3px solid var(--accent); }
+        .bl { bottom: 0; left: 0; clip-path: polygon(0 100%, 0 0, 100% 100%); border-top: 3px solid var(--accent); }
+        .br { bottom: 0; right: 0; clip-path: polygon(100% 100%, 100% 0, 0 100%); border-top: 3px solid var(--accent); }
+
+        /* 5. Holographic Strip */
+        .holo-strip {
+            position: absolute;
+            top: 20px; bottom: 20px;
+            right: 45px;
+            width: 5px;
+            z-index: 5;
+            background: linear-gradient(to bottom, #d4af37, #fff, #b8860b, #fff, #d4af37);
+            opacity: 0.7;
+        }
+
+        /* Content Container - Flex Column to prevent overlap */
+        .content {
+            position: relative;
+            z-index: 20;
+            padding: 40px 55px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            text-align: center;
+        }
+
+        /* --- Header Section --- */
+        .header-section { margin-top: 10px; margin-bottom: 15px; flex-shrink: 0; }
+        .org-logo { height: 80px; margin-bottom: 5px; }
+        .org-name { 
+            font-family: 'Cinzel', serif; 
+            font-size: 32px; 
+            font-weight: 900; 
+            color: var(--text);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            line-height: 1.1;
+        }
+        .iso-text { font-size: 9px; font-weight: 700; color: #555; letter-spacing: 2px; text-transform: uppercase; }
+
+        .cert-heading {
+            font-family: 'Cinzel', serif;
+            font-size: 52px;
+            font-weight: 700;
+            margin: 10px 0;
+            /* Split Duct Printing Effect */
+            background: linear-gradient(to bottom, var(--primary) 50%, var(--text) 50%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            color: var(--primary);
+            text-shadow: 1px 1px 0px rgba(0,0,0,0.1);
+        }
+
+        /* --- Profile Section --- */
+        .profile-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 10px 0;
+            padding: 0 10px;
+            flex-shrink: 0;
+        }
+        .badge-col { width: 80px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        .badge-img { width: 60px; height: 60px; object-fit: contain; }
+
+        .photo-box {
+            border: 3px double var(--primary);
+            padding: 3px;
+            width: 120px;
+            height: 150px;
+            background: white;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+        }
+        .student-img { width: 100%; height: 100%; object-fit: cover; }
+
+        .qr-col { width: 80px; text-align: center; }
+        #qrcode {
+            border: 1px solid #ccc;
+            padding: 4px;
+            background: white;
+        }
+        .qr-label { font-size: 8px; font-weight: 700; margin-bottom: 3px; text-transform: uppercase; }
+
+        /* --- Main Body Section (Flexible) --- */
+        .body-section {
+            flex-grow: 1; /* This pushes content to fill space */
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .certify-text {
+            font-family: 'Playfair Display', serif;
+            font-size: 18px;
+            font-style: italic;
+            margin: 10px 0 5px;
+            color: #444;
+        }
+
+        .student-name {
+            font-family: 'Roboto', sans-serif;
+            font-size: 30px;
+            font-weight: 900;
+            color: var(--text);
+            text-transform: uppercase;
+            border-bottom: 3px solid var(--primary);
+            display: inline-block;
+            padding: 0 30px 2px;
+            margin-bottom: 15px;
+            align-self: center;
+        }
+
+        .details-text { font-size: 14px; line-height: 1.5; color: #333; margin-bottom: 5px; }
+        
+        .grade-row {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            font-weight: 700;
+            font-size: 15px;
+            margin: 15px 0;
+            padding: 8px 20px;
+            border: 1px solid #ccc;
+            /* Variable Line Width Pattern Background */
+            background-image: repeating-linear-gradient(90deg, 
+                transparent 0, transparent 2px, 
+                rgba(14, 27, 77, 0.03) 2px, rgba(14, 27, 77, 0.03) 3px
+            );
+            border-radius: 4px;
+        }
+
+        .award-text { font-family: 'Playfair Display', serif; font-size: 16px; font-style: italic; margin-top: 5px; }
+
+        /* Course Title (Increased Margin to prevent overlap) */
+        .course-title {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--red);
+            text-transform: uppercase;
+            margin: 15px 0; /* More spacing */
+            line-height: 1.3;
+        }
+
+        .final-details {
+            font-size: 11px;
+            color: #555;
+            margin-bottom: 20px; /* Space before footer */
+            line-height: 1.6;
+        }
+        
+        /* Serial & Date Block (Moved here to flow naturally) */
+        .verification-block {
+            font-family: monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: #333;
+            margin-top: 10px;
+            padding: 5px;
+            border: 1px dashed #ccc;
+            display: inline-block;
+            align-self: center;
+            background: rgba(255,255,255,0.8);
+        }
+
+        /* --- Footer Section --- */
+        .footer {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-bottom: 10px;
+            position: relative;
+            margin-top: 10px;
+        }
+        
+        .sign-box { text-align: center; width: 180px; z-index: 35; }
+        .sign-line { border-bottom: 2px solid var(--text); height: 35px; margin-bottom: 5px; }
+        .sign-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* 3D Gold Seal */
+        .gold-seal {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, #b38f00 0%, #ffd700 30%, #ffe066 50%, #b38f00 80%, #967700 100%);
+            border-radius: 50%;
+            box-shadow: inset 3px 3px 6px rgba(255, 255, 255, 0.8), inset -3px -3px 6px rgba(0, 0, 0, 0.5), 0 10px 20px rgba(0, 0, 0, 0.3), 0 0 0 4px #fff, 0 0 0 6px var(--accent);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 40;
+        }
+        .seal-inner {
+            width: 90px;
+            height: 90px;
+            border: 2px dotted rgba(255,255,255,0.7);
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            color: #fff;
+            text-align: center;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+            background: radial-gradient(circle, transparent 60%, rgba(0,0,0,0.15) 100%);
+        }
+        .seal-icon { font-size: 40px; margin-bottom: 2px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.3)); }
+        .seal-text { font-size: 8px; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+
+        @media print {
+            body { margin: 0; background: white; }
+            .no-print { display: none !important; }
+            .page { margin: 0; box-shadow: none; border: none; width: 210mm; height: 297mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="text-center my-4 no-print">
+        <button onclick="window.print()" class="btn btn-dark btn-lg shadow">
+            <i class="fas fa-print me-2"></i> Print Certificate
+        </button>
+        <a href="/student-dashboard.html" class="btn btn-outline-secondary btn-lg ms-2">Back</a>
+    </div>
+
+    <div class="page">
+        <div class="watermark-layer" id="bg-watermark"></div>
+
+        <div class="guilloche-center"></div>
+
+        <div class="border-frame"></div>
+
+        <div class="secure-corner tl"></div>
+        <div class="secure-corner tr"></div>
+        <div class="secure-corner bl"></div>
+        <div class="secure-corner br"></div>
+
+        <div class="holo-strip"></div>
+
+        <div class="content">
+            <div class="header-section">
+                <div style="display:flex; justify-content:center; align-items:center; gap:15px;">
+                    <img src="" class="org-logo global-school-logo"> 
+                </div>
+                <div class="org-name global-school-name"></div>
+                <div class="iso-text">ISO 9001:2015 Certified Organization</div>
+            </div>
+
+            <div class="cert-heading">Certificate</div>
+
+            <div class="profile-row">
+                <div class="badge-col">
+                    <img src="/images/iso_badge.png" class="badge-img" onerror="this.style.display='none'"> 
+                    <img src="/images/quality_badge.png" class="badge-img" onerror="this.style.display='none'">
+                </div>
+
+                <div class="photo-box">
+                    <img src="/images/default-profile.png" id="c-photo" class="student-img">
+                </div>
+
+                <div class="qr-col">
+                    <div class="qr-label">Scan to Verify</div>
+                    <div id="qrcode"></div>
+                </div>
+            </div>
+
+            <div class="body-section">
+                <div class="certify-text">This is to certify that</div>
+                <div class="student-name" id="c-name"></div>
+
+                <div class="details-text">
+                    Has successfully completed the prescribed course of study <br>
+                    and passed the final examination with
+                </div>
+
+                <div class="grade-row">
+                    <span>Percentage: <span id="c-percent"></span></span>
+                    <span>•</span>
+                    <span>Grade: <span id="c-division"></span></span>
+                </div>
+
+                <div class="award-text">Has been awarded the</div>
+                
+                <div class="course-title" id="c-course"></div>
+
+                <div class="final-details">
+                    (Course Duration: <span id="c-duration">1 Year</span>)<br>
+                    Academic Session: <span class="highlight" id="c-session"></span><br>
+                    Roll No: <span id="c-roll"></span> | Batch: <span id="c-batch"></span>
+                </div>
+
+                <div class="verification-block">
+                    <div id="cert-serial">S/N: </div>
+                    <div id="c-date">Date: </div>
+                </div>
+            </div>
+
+            <div class="footer">
+                <div class="sign-box" style="text-align:left; margin-left:50px;">
+                    <div class="sign-line"></div>
+                    <div class="sign-label">Controller of Exams</div>
+                </div>
+
+                <div class="gold-seal">
+                    <div class="seal-inner">
+                        <i class="fas fa-certificate seal-icon"></i>
+                        <div class="seal-text">Official<br>Seal</div>
+                    </div>
+                </div>
+
+                <div class="sign-box">
+                    <div class="sign-line"></div>
+                    <div class="sign-label">Director</div>
+                </div>
+            </div>
+            
+            <div style="font-size:9px; margin-top:5px; color:#666;">
+                Address: <span class="global-school-address"></span>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/global-config.js"></script>
+    <script>
+        const TOKEN = localStorage.getItem('erp-token');
+
+        function createDensePattern(name) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const text = (name && name !== 'Loading...') ? name.toUpperCase() : 'CERTIFICATE';
+            const dpr = window.devicePixelRatio || 1;
+            const fontSize = 10; 
+            ctx.font = `900 ${fontSize}px 'Arial Black', sans-serif`; 
+            
+            const textWidth = ctx.measureText(text).width;
+            const logicalWidth = textWidth + 30; 
+            const logicalHeight = 30; 
+
+            canvas.width = logicalWidth * dpr;
+            canvas.height = logicalHeight * dpr;
+            ctx.scale(dpr, dpr);
+
+            ctx.font = `900 ${fontSize}px 'Arial Black', sans-serif`;
+            ctx.fillStyle = "rgba(0, 0, 0, 1)";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+
+            ctx.translate(logicalWidth/2, logicalHeight/2);
+            ctx.rotate(-20 * Math.PI / 180); 
+            ctx.fillText(text, 0, 0);
+
+            const dataUrl = canvas.toDataURL('image/png');
+            const layer = document.getElementById('bg-watermark');
+            layer.style.backgroundImage = `url(${dataUrl})`;
+            layer.style.backgroundSize = `${logicalWidth}px ${logicalHeight}px`;
+            layer.style.backgroundRepeat = 'repeat'; 
+        }
+
+        async function loadData() {
+            if(!TOKEN) return window.location.href='/login.html';
+
+            try {
+                const res = await fetch('/api/online-exam/student/consolidated-report', {
+                    headers: {'Authorization': `Bearer ${TOKEN}`}
+                });
+                const data = await res.json();
+                
+                if(!res.ok) throw new Error(data.message);
+
+                const s = data.student;
+                const results = data.results || [];
+
+                if(s.profile_image_path) {
+                    document.getElementById('c-photo').src = s.profile_image_path;
+                }
+
+                document.getElementById('c-name').innerText = `${s.first_name} ${s.last_name}`;
+                document.getElementById('c-course').innerText = s.course_name;
+                document.getElementById('c-batch').innerText = s.batch_name;
+                document.getElementById('c-roll').innerText = s.roll_number;
+                
+                const issueDate = new Date().toLocaleDateString('en-GB');
+                document.getElementById('c-date').innerText = `Date: ${issueDate}`;
+                document.getElementById('cert-serial').innerText = `S/N: ${s.roll_number}/${new Date().getFullYear()}`;
+                
+                document.getElementById('c-session').innerText = `${new Date().getFullYear()-1}-${new Date().getFullYear()}`;
+
+                let totalObt = 0, totalMax = 0;
+                results.forEach(r => {
+                    totalObt += (parseFloat(r.total_score) || 0);
+                    totalMax += (parseFloat(r.max_marks) || 0);
+                });
+
+                const percent = totalMax > 0 ? ((totalObt/totalMax)*100).toFixed(2) : 0;
+                document.getElementById('c-percent').innerText = `${percent}%`;
+
+                let grade = "Fail";
+                if(percent >= 80) grade = "A+ (Distinction)";
+                else if(percent >= 60) grade = "A (First Class)";
+                else if(percent >= 50) grade = "B (Second Class)";
+                else if(percent >= 40) grade = "C (Pass)";
+                
+                document.getElementById('c-division').innerText = grade;
+
+                document.getElementById("qrcode").innerHTML = ""; 
+                new QRCode(document.getElementById("qrcode"), {
+                    text: `VERIFY:${s.roll_number}|${percent}%|${grade}`,
+                    width: 70, height: 70,
+                    colorDark : "#000000", colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+
+                const checkSchoolName = setInterval(() => {
+                    const schoolNameEl = document.querySelector('.global-school-name');
+                    if(schoolNameEl && schoolNameEl.innerText && schoolNameEl.innerText !== 'Loading...') {
+                        createDensePattern(schoolNameEl.innerText);
+                        clearInterval(checkSchoolName);
+                    }
+                }, 500);
+
+                setTimeout(() => {
+                    if(!document.getElementById('bg-watermark').style.backgroundImage) {
+                        createDensePattern('CERTIFICATE');
+                        if(checkSchoolName) clearInterval(checkSchoolName);
+                    }
+                }, 5000);
+
+            } catch(e) {
+                console.error(e);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', loadData);
+    </script>
+</body>
+</html>

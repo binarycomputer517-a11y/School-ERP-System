@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manage Staff | BCSM</title>
+    <title>Staff Management | BCSM Enterprise</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
@@ -13,7 +13,7 @@
     <style>
         :root {
             --primary-dark: #005A9C; 
-            --glass-bg: rgba(255, 255, 255, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.92);
         }
 
         body {
@@ -25,6 +25,18 @@
         }
 
         .container-fluid { max-width: 1400px; padding-top: 20px; }
+
+        /* Multi-Branch UI Elements */
+        .branch-status-pill {
+            background: white;
+            padding: 8px 18px;
+            border-radius: 50px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #ddd;
+            margin-bottom: 15px;
+        }
 
         /* Glass Cards */
         .glass-card {
@@ -39,9 +51,6 @@
         }
 
         /* Table Styling */
-        .table-glass {
-            background: transparent;
-        }
         .table-glass thead th {
             background: rgba(0, 90, 156, 0.1);
             color: var(--primary-dark);
@@ -51,20 +60,19 @@
             font-size: 0.85rem;
             cursor: pointer;
         }
-        .table-glass tbody tr {
-            transition: all 0.2s;
-            border-bottom: 1px solid rgba(0,0,0,0.05);
-        }
+        
+        .table-glass tbody tr { transition: all 0.2s; }
         .table-glass tbody tr:hover {
-            background: rgba(255, 255, 255, 0.6);
-            transform: scale(1.005);
+            background: rgba(255, 255, 255, 0.8);
+            transform: scale(1.002);
         }
+
         .avatar-tiny {
             width: 35px; height: 35px; border-radius: 50%; object-fit: cover;
             border: 2px solid #fff; box-shadow: 0 2px 5px rgba(0,0,0,0.1);
         }
 
-        /* ID Card Print Template */
+        /* ID Card Design - Vertical Batch Template */
         .id-card-template {
             width: 320px; height: 500px; 
             border: 1px solid #ddd; 
@@ -75,52 +83,62 @@
             font-family: 'Times New Roman', serif;
             box-shadow: 0 0 10px rgba(0,0,0,0.1);
             margin: 20px auto;
-            page-break-inside: avoid;
         }
         
         .id-header { background: #005A9C; color: white; padding: 15px 0; }
         .id-header h3 { margin: 0; font-size: 18px; text-transform: uppercase; letter-spacing: 1px; }
         .id-photo { 
-            width: 120px; height: 120px; 
+            width: 130px; height: 130px; 
             border-radius: 5px; 
             border: 3px solid #005A9C; 
             object-fit: cover; 
             margin: 20px auto; 
             display: block;
-            background: #f0f0f0;
+            background: #f8f9fa;
         }
         .watermark {
-            position: absolute; top: 50%; left: 50%; 
+            position: absolute; top: 55%; left: 50%; 
             transform: translate(-50%, -50%); 
-            width: 70%; opacity: 0.08; z-index: 0;
+            width: 75%; opacity: 0.08; z-index: 0;
         }
         .id-content { position: relative; z-index: 2; padding: 0 20px; }
         .id-role { 
             background: #FFC300; color: #000; 
-            display: inline-block; padding: 5px 20px; 
+            display: inline-block; padding: 5px 25px; 
             font-weight: bold; margin-bottom: 15px; 
             text-transform: uppercase; font-size: 12px;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
 
 <div class="container-fluid">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-end mb-4">
         <div>
-            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-users-cog me-2"></i>Staff Directory</h2>
-            <p class="text-muted mb-0 small">Manage teachers and generate ID cards</p>
+            <h2 class="fw-bold text-dark mb-1"><i class="fas fa-id-badge me-2 text-primary"></i>Staff Management</h2>
+            <div class="branch-status-pill">
+                <i class="fas fa-map-marker-alt text-danger me-2"></i>
+                <span class="small fw-bold text-muted me-1">LOCATION:</span>
+                <span id="active-branch-name" class="small fw-bold text-dark">Locating Campus...</span>
+            </div>
         </div>
-        <div class="d-flex gap-2">
-            <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
-                <i class="fas fa-arrow-left me-1"></i> Dashboard
-            </a>
-            <a href="/manage-departments.html" class="btn btn-info text-white rounded-pill shadow-sm">
-                <i class="fas fa-building me-1"></i> Manage Depts
-            </a>
-            <a href="/add-teacher.html" class="btn btn-primary rounded-pill shadow-sm">
-                <i class="fas fa-plus me-1"></i> Add New Staff
-            </a>
+        
+        <div class="d-flex flex-column align-items-end gap-2">
+            <div id="super-admin-controls" style="display:none;" class="bg-white p-2 rounded shadow-sm border">
+                <label class="small fw-bold text-muted d-block mb-1">Global Campus Switch</label>
+                <select id="global-branch-select" class="form-select form-select-sm border-0 fw-bold" onchange="switchBranchContext(this.value)">
+                    <option value="">Fetching Branches...</option>
+                </select>
+            </div>
+            <div class="d-flex gap-2">
+                <a href="/admin-dashboard.html" class="btn btn-sm btn-outline-dark rounded-pill shadow-sm px-3">
+                    <i class="fas fa-home me-1"></i> Dashboard
+                </a>
+                <a href="/add-teacher.html" class="btn btn-sm btn-primary rounded-pill shadow-sm px-3">
+                    <i class="fas fa-plus-circle me-1"></i> Register Staff
+                </a>
+            </div>
         </div>
     </div>
 
@@ -129,20 +147,17 @@
             <div class="col-md-5">
                 <div class="input-group">
                     <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" id="search-input" class="form-control border-start-0 ps-0" placeholder="Search by Name or ID...">
+                    <input type="text" id="search-input" class="form-control border-start-0 ps-0" placeholder="Filter by Name, ID or Mobile..." onkeyup="handleFilter()">
                 </div>
             </div>
             <div class="col-md-3">
-                <select id="department-filter" class="form-select">
+                <select id="department-filter" class="form-select" onchange="handleFilter()">
                     <option value="">All Departments</option>
                 </select>
             </div>
             <div class="col-md-4 text-md-end">
-                <button onclick="handleFilter()" class="btn btn-dark text-white rounded-pill px-4 me-2">
-                    <i class="fas fa-filter me-1"></i> Filter
-                </button>
-                <button onclick="printAllIdCards()" class="btn btn-warning rounded-pill px-4">
-                    <i class="fas fa-id-card me-1"></i> Print IDs
+                <button onclick="generateAllIdCards()" class="btn btn-warning rounded-pill px-4 fw-bold shadow-sm">
+                    <i class="fas fa-print me-1"></i> Bulk ID Print
                 </button>
             </div>
         </div>
@@ -153,11 +168,11 @@
             <table class="table table-glass table-hover mb-0" id="teacher-table">
                 <thead>
                     <tr>
-                        <th onclick="sortTable('employee_id')">ID <i class="fas fa-sort small ms-1"></i></th>
-                        <th onclick="sortTable('full_name')">Staff Name <i class="fas fa-sort small ms-1"></i></th>
+                        <th onclick="sortTable('employee_id')">Emp ID <i class="fas fa-sort small ms-1"></i></th>
+                        <th onclick="sortTable('full_name')">Full Name <i class="fas fa-sort small ms-1"></i></th>
                         <th>Designation</th>
                         <th>Department</th>
-                        <th>Email</th>
+                        <th>Mobile</th>
                         <th class="text-center">Status</th>
                         <th class="text-end">Actions</th>
                     </tr>
@@ -167,59 +182,105 @@
                 </tbody>
             </table>
         </div>
-        <div id="no-data-msg" class="text-center py-4 d-none text-muted">No staff members found.</div>
+        <div id="no-data-msg" class="text-center py-5 d-none text-muted">
+            <i class="fas fa-folder-open fa-3x mb-3"></i>
+            <p class="fw-bold">No staff records found for this campus.</p>
+        </div>
     </div>
 </div>
 
-<div id="print-area-container" style="position:fixed; top:-10000px;"></div>
+<div id="print-area-container" style="position:fixed; top:-9999px; left:-9999px;"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/global-config.js?v=2.3.1"></script>
+<script src="js/global-config.js"></script>
 
 <script>
     let allTeachers = [];
     let currentSort = { key: 'employee_id', asc: true };
+    
+    // ✅ Syncing with your established localStorage standard
+    let ACTIVE_BRANCH_ID = localStorage.getItem('active_branch_id');
+    let USER_ROLE = localStorage.getItem('erp-role')?.toLowerCase();
 
     document.addEventListener('DOMContentLoaded', async () => {
         const token = localStorage.getItem('erp-token');
         if(!token) window.location.href = '/login.html';
-        await fetchTeachers();
+        
+        // Super Admin Visibility Check
+        if (USER_ROLE === 'super admin' || USER_ROLE === 'admin' || USER_ROLE === 'prime admin') {
+            document.getElementById('super-admin-controls').style.display = 'block';
+            await loadBranchList();
+        }
+
+        initializePage();
     });
 
-    // --- 1. DATA FETCHING ---
+    async function loadBranchList() {
+        try {
+            const res = await window.authFetch('/api/branches');
+            const branches = await res.json();
+            const sel = document.getElementById('global-branch-select');
+            sel.innerHTML = '';
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                opt.textContent = b.branch_name;
+                if(b.id === ACTIVE_BRANCH_ID) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        } catch (e) { console.error("API Connectivity Error: Branches unreachable"); }
+    }
+
+    async function switchBranchContext(branchId) {
+        if(!branchId) return;
+        ACTIVE_BRANCH_ID = branchId;
+        localStorage.setItem('active_branch_id', branchId);
+        initializePage();
+    }
+
+    async function initializePage() {
+        if(!ACTIVE_BRANCH_ID || ACTIVE_BRANCH_ID === "null") {
+            document.getElementById('active-branch-name').innerText = "Please Select Campus";
+            return;
+        }
+
+        try {
+            const res = await window.authFetch(`/api/branches/${ACTIVE_BRANCH_ID}`);
+            if(!res.ok) throw new Error();
+            const data = await res.json();
+            document.getElementById('active-branch-name').innerText = data.branch_name;
+        } catch(e) { 
+            document.getElementById('active-branch-name').innerText = "Unknown Campus"; 
+        }
+
+        fetchTeachers();
+    }
+
     async function fetchTeachers() {
         const tbody = document.getElementById('teachers-list');
-        
         try {
-            const response = await window.authFetch('/api/teachers');
-            if (!response.ok) throw new Error("Failed to fetch data");
+            const response = await window.authFetch(`/api/teachers?branch_id=${ACTIVE_BRANCH_ID}`);
+            if (!response.ok) throw new Error();
             
             allTeachers = await response.json();
             populateDepartments(allTeachers);
             renderTable(allTeachers);
-
         } catch (error) {
-            console.error("Error:", error);
-            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error loading data. Please try again.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Database sync failed. Check campus connection.</td></tr>`;
         }
     }
 
-    // --- 2. IMAGE URL HELPER (FIXED) ---
     function getFullImageUrl(path) {
-        if (!path) return 'https://placehold.co/120';
-        if (path.startsWith('http') || path.startsWith('data:')) return path;
-        
-        // FIX: Ensure there is a slash between base URL and path
-        const baseUrl = window.erpSettings?.API_BASE || '';
-        const cleanPath = path.startsWith('/') ? path : `/${path}`;
-        return `${baseUrl}${cleanPath}`;
+        if (!path) return 'https://placehold.co/150';
+        if (path.startsWith('http')) return path;
+        // Clean leading slashes to prevent double-slash errors in URL formation
+        const baseUrl = window.erpSettings?.API_BASE || 'http://localhost:3005';
+        return `${baseUrl}/${path.replace(/^\/+/, '')}`;
     }
 
-    // --- 3. RENDERING TABLE ---
     function renderTable(data) {
         const tbody = document.getElementById('teachers-list');
         const noData = document.getElementById('no-data-msg');
-        
         tbody.innerHTML = '';
 
         if (!data || data.length === 0) {
@@ -230,31 +291,31 @@
 
         data.forEach(t => {
             const finalPhoto = getFullImageUrl(t.profile_image_path || t.photo_path);
-
             const row = `
                 <tr>
-                    <td class="fw-bold text-secondary">#${t.employee_id || 'N/A'}</td>
+                    <td class="fw-bold text-primary">#${t.employee_id || 'N/A'}</td>
                     <td>
                         <div class="d-flex align-items-center">
                             <img src="${finalPhoto}" class="avatar-tiny me-2" onerror="this.src='https://placehold.co/40'">
-                            <span class="fw-bold text-dark">${t.full_name}</span>
+                            <div>
+                                <div class="fw-bold text-dark">${t.full_name}</div>
+                                <div class="small text-muted" style="font-size:10px;">${t.username || ''}</div>
+                            </div>
                         </div>
                     </td>
-                    <td>${t.designation || '-'}</td>
-                    <td><span class="badge bg-light text-dark border">${t.department_name || 'General'}</span></td>
-                    <td class="small text-muted">${t.email}</td>
+                    <td class="small fw-bold">${t.designation || 'Staff'}</td>
+                    <td><span class="badge bg-white text-primary border border-primary">${t.department_name || 'General'}</span></td>
+                    <td class="small">${t.phone_number || t.phone || '-'}</td>
                     <td class="text-center">
-                        <span class="badge ${t.is_active ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger'} rounded-pill px-3">
+                        <span class="badge ${t.is_active ? 'bg-success' : 'bg-secondary'} rounded-pill">
                             ${t.is_active ? 'Active' : 'Inactive'}
                         </span>
                     </td>
                     <td class="text-end">
-                        <button onclick="editTeacher('${t.teacher_id}')" class="btn btn-sm btn-outline-primary rounded-circle" title="Edit">
-                            <i class="fas fa-pen"></i>
-                        </button>
-                        <button onclick="deleteTeacher('${t.teacher_id}', '${t.full_name}')" class="btn btn-sm btn-outline-danger rounded-circle ms-1" title="Delete">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <div class="btn-group">
+                            <button onclick="editTeacher('${t.teacher_id || t.id}')" class="btn btn-sm btn-outline-primary" title="Edit Profile"><i class="fas fa-edit"></i></button>
+                            <button onclick="deleteTeacher('${t.teacher_id || t.id}', '${t.full_name}')" class="btn btn-sm btn-outline-danger ms-1" title="Delete"><i class="fas fa-trash"></i></button>
+                        </div>
                     </td>
                 </tr>
             `;
@@ -266,28 +327,22 @@
         const select = document.getElementById('department-filter');
         const depts = [...new Set(data.map(t => t.department_name).filter(Boolean))].sort();
         select.innerHTML = '<option value="">All Departments</option>';
-        depts.forEach(d => {
-            select.innerHTML += `<option value="${d}">${d}</option>`;
-        });
+        depts.forEach(d => select.innerHTML += `<option value="${d}">${d}</option>`);
     }
 
-    // --- 4. FILTER & SORT ---
     function handleFilter() {
         const search = document.getElementById('search-input').value.toLowerCase();
         const dept = document.getElementById('department-filter').value;
 
         const filtered = allTeachers.filter(t => {
             const matchName = (t.full_name || '').toLowerCase().includes(search) || 
-                              (t.employee_id || '').toLowerCase().includes(search);
+                              (t.employee_id || '').toLowerCase().includes(search) ||
+                              (t.phone_number || '').includes(search);
             const matchDept = dept === "" || t.department_name === dept;
             return matchName && matchDept;
         });
         renderTable(filtered);
     }
-
-    document.getElementById('search-input').addEventListener('keyup', (e) => {
-        if (e.key === 'Enter') handleFilter();
-    });
 
     function sortTable(key) {
         if(currentSort.key === key) currentSort.asc = !currentSort.asc;
@@ -296,116 +351,103 @@
         const sorted = [...allTeachers].sort((a, b) => {
             const valA = (a[key] || '').toString().toLowerCase();
             const valB = (b[key] || '').toString().toLowerCase();
-            if(valA < valB) return currentSort.asc ? -1 : 1;
-            if(valA > valB) return currentSort.asc ? 1 : -1;
-            return 0;
+            return currentSort.asc ? valA.localeCompare(valB) : valB.localeCompare(valA);
         });
         renderTable(sorted);
     }
 
-    // --- 5. ACTIONS ---
     function editTeacher(id) {
         window.location.href = `/edit-teacher.html?id=${id}`;
     }
 
     async function deleteTeacher(id, name) {
-        if(!confirm(`Are you sure you want to delete ${name}?`)) return;
+        if(!confirm(`⚠️ Warning: Permanent deletion of ${name}?\nRecords like payroll or attendance may be affected.`)) return;
         try {
             const res = await window.authFetch(`/api/teachers/${id}`, { method: 'DELETE' });
-            if(res.ok) {
-                alert("Teacher deleted successfully.");
-                fetchTeachers();
-            } else {
-                alert("Failed to delete teacher.");
-            }
-        } catch(e) { console.error(e); }
+            if(res.ok) fetchTeachers();
+            else alert("Error: Action rejected. Staff member may be linked to active academic records.");
+        } catch(e) { alert("Server error. Could not complete deletion."); }
     }
 
-    // --- 6. ID CARD GENERATOR (FIXED) ---
-    async function printAllIdCards() {
-        if(allTeachers.length === 0) { alert("No staff to print."); return; }
+    async function generateAllIdCards() {
+        const activeStaff = allTeachers.filter(t => t.is_active);
+        if(activeStaff.length === 0) { alert("Error: No active staff found to generate IDs."); return; }
 
         const container = document.getElementById('print-area-container');
         container.innerHTML = ''; 
 
-        const config = window.erpSettings || {};
-        const logoUrl = getFullImageUrl(config.logo || 'images/default-logo.png');
-        const schoolName = config.school_name || "SCHOOL ERP";
-
-        const btn = document.querySelector('button[onclick="printAllIdCards()"]');
+        const schoolName = document.getElementById('active-branch-name').innerText;
+        const btn = document.querySelector('button[onclick="generateAllIdCards()"]');
         const oldText = btn.innerHTML;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Generating...';
+        
+        btn.innerHTML = '<i class="fas fa-sync fa-spin"></i> Rendering Graphics...';
         btn.disabled = true;
 
         const cardImages = [];
         
-        for (const t of allTeachers) {
+        for (const t of activeStaff) {
             const finalPhoto = getFullImageUrl(t.profile_image_path || t.photo_path);
-
-            const cardHTML = `
-                <div class="id-card-template">
-                    <div class="id-header">
-                        <h3>${schoolName}</h3>
-                        <div style="font-size:10px; margin-top:5px;">STAFF IDENTITY CARD</div>
-                    </div>
-                    <img class="watermark" src="${logoUrl}" crossorigin="anonymous">
-                    <div class="id-content">
-                        <img src="${finalPhoto}" class="id-photo" crossorigin="anonymous" onerror="this.src='https://placehold.co/120'">
-                        <h2 style="margin:10px 0; font-size:22px;">${t.full_name}</h2>
-                        <div class="id-role">${t.designation || 'Staff'}</div>
-                        
-                        <table style="width:100%; font-size:13px; text-align:left; margin-top:10px;">
-                            <tr><td style="font-weight:bold; width:40%;">ID No:</td><td>${t.employee_id}</td></tr>
-                            <tr><td style="font-weight:bold;">Department:</td><td>${t.department_name || '-'}</td></tr>
-                            <tr><td style="font-weight:bold;">Joined:</td><td>${new Date(t.hire_date).toLocaleDateString()}</td></tr>
-                        </table>
-
-                        <div style="margin-top:40px; border-top:1px dashed #333; padding-top:5px; font-size:11px;">
-                            Authorized Signatory
-                        </div>
-                    </div>
+            const cardDiv = document.createElement('div');
+            cardDiv.className = 'id-card-template';
+            cardDiv.innerHTML = `
+                <div class="id-header">
+                    <h3>${schoolName}</h3>
+                    <div style="font-size:10px; opacity:0.8;">STAFF IDENTITY CARD</div>
+                </div>
+                <div class="id-content">
+                    <img src="${finalPhoto}" class="id-photo" crossorigin="anonymous">
+                    <h2 style="margin:5px 0; color:#005A9C; font-size:22px;">${t.full_name}</h2>
+                    <div class="id-role">${t.designation || 'FACULTY'}</div>
+                    <table style="width:100%; font-size:12px; text-align:left; margin-top:8px; border-collapse:collapse;">
+                        <tr style="border-bottom:1px solid #eee;"><td style="padding:4px; font-weight:bold;">Emp ID:</td><td>${t.employee_id || 'N/A'}</td></tr>
+                        <tr style="border-bottom:1px solid #eee;"><td style="padding:4px; font-weight:bold;">Dept:</td><td>${t.department_name || '-'}</td></tr>
+                        <tr style="border-bottom:1px solid #eee;"><td style="padding:4px; font-weight:bold;">Joined:</td><td>${t.hire_date ? new Date(t.hire_date).toLocaleDateString() : '-'}</td></tr>
+                    </table>
+                    <div style="margin-top:40px; border-top:2px solid #005A9C; width:150px; margin-left:auto; margin-right:auto;"></div>
+                    <div style="font-size:9px; font-weight:bold; margin-top:3px;">Authorised Signatory</div>
                 </div>
             `;
             
-            const wrapper = document.createElement('div');
-            wrapper.innerHTML = cardHTML;
-            container.appendChild(wrapper);
+            container.appendChild(cardDiv);
 
-            // Wait a bit for images to load inside the DOM
-            await new Promise(r => setTimeout(r, 100));
+            // ⏱️ Delay for high-res asset loading
+            await new Promise(r => setTimeout(r, 200));
 
             try {
-                const canvas = await html2canvas(wrapper.querySelector('.id-card-template'), {
-                    scale: 2,
+                const canvas = await html2canvas(cardDiv, {
+                    scale: 3, 
                     useCORS: true,
-                    allowTaint: true,
                     logging: false
                 });
                 cardImages.push(canvas.toDataURL('image/png'));
-            } catch(e) {
-                console.warn("Skipped card for " + t.full_name, e);
-            }
+            } catch(e) { console.error("Graphics fail for staff: " + t.full_name); }
+            
+            container.removeChild(cardDiv);
         }
 
         if(cardImages.length > 0) {
-            const win = window.open('', '_blank');
-            win.document.write('<html><head><title>Print ID Cards</title><style>body{text-align:center; margin:0;} img{margin:10px; border:1px dashed #ccc; width: 320px; page-break-after:always;}</style></head><body>');
-            cardImages.forEach(imgData => win.document.write(`<img src="${imgData}" />`));
-            win.document.write('</body></html>');
-            win.document.close();
-            
-            setTimeout(() => {
-                win.print();
-                win.close();
-                btn.innerHTML = oldText;
-                btn.disabled = false;
-                container.innerHTML = '';
-            }, 1000);
-        } else {
-            alert("Could not generate any cards. Check console for CORS errors.");
-            btn.innerHTML = oldText;
-            btn.disabled = false;
+            const printWin = window.open('', '_blank');
+            printWin.document.write(`
+                <html>
+                <head>
+                    <title>Staff ID Batch - ${schoolName}</title>
+                    <style>
+                        body { margin:0; padding:40px; display:flex; flex-wrap:wrap; justify-content:center; gap:30px; background:#e9ecef; }
+                        img { width: 320px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); background: white; page-break-inside: avoid; border-radius:10px; }
+                        @media print { body { background:none; padding:0; } img { box-shadow:none; } }
+                    </style>
+                </head>
+                <body>
+                    ${cardImages.map(img => `<img src="${img}">`).join('')}
+                </body>
+                </html>
+            `);
+            printWin.document.close();
+            setTimeout(() => { printWin.print(); }, 500);
         }
+
+        btn.innerHTML = oldText;
+        btn.disabled = false;
     }
 </script>
 

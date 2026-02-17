@@ -25,7 +25,6 @@
             box-shadow: 0 4px 10px rgba(0,0,0,0.15);
         }
         
-        /* Marks Entry Input */
         .marks-input {
             width: 80px;
             text-align: center;
@@ -34,6 +33,7 @@
             padding: 5px;
         }
         .marks-input:focus { border-color: var(--primary-color); outline: none; }
+        .branch-tag { font-size: 0.65rem; font-weight: 800; color: #6366f1; text-transform: uppercase; display: block; margin-bottom: 2px; }
     </style>
 </head>
 <body>
@@ -43,7 +43,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-edit me-2"></i>Exam Management</h2>
-            <p class="text-muted mb-0 small">Create exams, schedule dates, and enter marks</p>
+            <p class="text-muted mb-0 small">Create exams, schedule dates, and enter marks for your branch</p>
         </div>
         <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
             <i class="fas fa-arrow-left me-2"></i> Dashboard
@@ -83,6 +83,13 @@
                     <div class="glass-card h-100">
                         <h5 class="fw-bold text-primary mb-3">Create New Exam</h5>
                         <form id="exam-form">
+                            <div class="mb-3" id="branch-select-container" style="display: none;">
+                                <label class="form-label fw-bold small text-primary">Assign to Branch</label>
+                                <select id="branch_id" name="branch_id" class="form-select border-primary">
+                                    <option value="">Select Branch</option>
+                                </select>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label fw-bold small">Exam Name</label>
                                 <input type="text" name="exam_name" class="form-control" required>
@@ -131,21 +138,25 @@
 
                 <div class="col-lg-8">
                     <div class="glass-card h-100 p-0 overflow-hidden">
-                        <div class="p-3 border-bottom bg-light"><h6 class="fw-bold mb-0">Existing Exams</h6></div>
+                        <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0">Existing Exams</h6>
+                            <select id="filter-branch-list" class="form-select form-select-sm w-auto rounded-pill" style="display:none;" onchange="loadExams()">
+                                <option value="">All Branches</option>
+                            </select>
+                        </div>
                         <div class="table-responsive">
                             <table class="table table-glass table-hover mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Name</th>
-                                        <th>Course</th>
-                                        <th>Batch</th>
+                                        <th>Course & Batch</th>
                                         <th>Marks</th>
                                         <th>Date</th>
                                         <th>Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody id="exams-table-body">
-                                    <tr><td colspan="6" class="text-center p-4">Loading...</td></tr>
+                                    <tr><td colspan="5" class="text-center p-4">Loading...</td></tr>
                                 </tbody>
                             </table>
                         </div>
@@ -201,7 +212,6 @@
                                 <input type="text" name="room_number" class="form-control" required>
                             </div>
                             <button type="submit" id="add-schedule-btn" class="btn btn-success w-100 rounded-pill">Add to Schedule</button>
-                            <button type="button" id="cancel-edit-schedule-btn" class="btn btn-secondary w-100 rounded-pill mt-2" style="display:none;">Cancel</button>
                         </form>
                     </div>
                 </div>
@@ -278,6 +288,10 @@
         </div>
 
         <div class="tab-pane fade" id="pills-status">
+            <div class="glass-card p-3 mb-3" id="status-branch-filter-div" style="display:none;">
+                <label class="small fw-bold">Filter Status by Branch</label>
+                <select id="filter-branch-status" class="form-select form-select-sm w-25" onchange="loadMarksheetStatus()"></select>
+            </div>
             <div class="glass-card p-0 overflow-hidden">
                 <div class="table-responsive">
                     <table class="table table-glass table-hover mb-0">
@@ -337,33 +351,63 @@
 <script src="js/global-config.js?v=2.3.1"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const token = localStorage.getItem('erp-token');
     const sessionId = localStorage.getItem('active_session_id') || '00000000-0000-0000-0000-000000000000';
     
-    if (!token) window.location.href = '/login.html';
-    
+    if (!token) { window.location.href = '/login.html'; return; }
+
+    let currentUser = null;
+    try {
+        currentUser = JSON.parse(atob(token.split('.')[1]));
+    } catch(e) { console.error("JWT Error"); }
+
+    // Init Branch UI
+    if (currentUser.role === 'Super Admin') {
+        document.getElementById('branch-select-container').style.display = 'block';
+        document.getElementById('filter-branch-list').style.display = 'block';
+        document.getElementById('status-branch-filter-div').style.display = 'block';
+    }
+
     // Globals
     let examCache = {};
     const API = {
         EXAMS: '/api/exams',
         MARKS: '/api/marks',
         ACADEMICS: '/api/academicswithfees',
-        STUDENTS: '/api/students'
+        STUDENTS: '/api/students',
+        BRANCHES: '/api/branches'
     };
 
     // --- INIT ---
     loadFormDependencies();
     loadExams();
 
-    // --- 1. CREATE EXAM LOGIC ---
+    // --- 1. BRANCH AWARE DROP-DOWNS ---
     async function loadFormDependencies() {
         try {
-            const res = await window.authFetch(`${API.ACADEMICS}/courses`);
-            const courses = await res.json();
-            const select = document.getElementById('course_code');
-            select.innerHTML = '<option value="">Select Course</option>';
-            courses.forEach(c => select.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`);
+            const [coursesRes, branchesRes] = await Promise.all([
+                window.authFetch(`${API.ACADEMICS}/courses`),
+                currentUser.role === 'Super Admin' ? window.authFetch(API.BRANCHES) : Promise.resolve(null)
+            ]);
+
+            const courses = await coursesRes.json();
+            const cSelect = document.getElementById('course_code');
+            cSelect.innerHTML = '<option value="">Select Course</option>';
+            courses.forEach(c => cSelect.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`);
+
+            if (branchesRes) {
+                const branches = await branchesRes.json();
+                const bSelect = document.getElementById('branch_id');
+                const bfList = document.getElementById('filter-branch-list');
+                const bfStatus = document.getElementById('filter-branch-status');
+
+                bSelect.innerHTML = '<option value="">Select Branch</option>';
+                const branchOpts = branches.map(b => `<option value="${b.id}">${b.branch_name}</option>`).join('');
+                bSelect.innerHTML += branchOpts;
+                bfList.innerHTML += branchOpts;
+                bfStatus.innerHTML += branchOpts;
+            }
         } catch (e) { console.error(e); }
     }
 
@@ -389,22 +433,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const data = Object.fromEntries(fd.entries());
         data.is_midterm_assessment = document.getElementById('is_midterm').checked;
         data.academic_session_id = sessionId;
+        
+        // Auto-assign branch if not Super Admin
+        if (currentUser.role !== 'Super Admin') {
+            data.branch_id = currentUser.branch_id;
+        }
 
         try {
             const res = await window.authFetch(API.EXAMS, { method: 'POST', body: JSON.stringify(data) });
             if(res.ok) {
-                alert("Exam Created!");
+                alert("Exam Created successfully for Branch!");
                 e.target.reset();
                 loadExams();
-            } else { alert("Failed"); }
-        } catch(e) { alert("Error"); }
+            } else { alert("Creation Failed."); }
+        } catch(e) { alert("Error connecting to server."); }
     });
 
     async function loadExams() {
         const tbody = document.getElementById('exams-table-body');
+        const bFilter = document.getElementById('filter-branch-list').value;
         try {
             const res = await window.authFetch(`${API.EXAMS}/list`);
-            const exams = await res.json();
+            let exams = await res.json();
+            
+            // Branch filtering logic
+            if (bFilter) exams = exams.filter(ex => ex.branch_id === bFilter);
+
             examCache = {};
             tbody.innerHTML = '';
 
@@ -418,7 +472,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 tbody.innerHTML += `
                     <tr>
-                        <td>${ex.exam_name}</td>
+                        <td>
+                            ${currentUser.role === 'Super Admin' ? `<span class="branch-tag">${ex.branch_name || 'Main'}</span>` : ''}
+                            <span class="fw-bold">${ex.exam_name}</span>
+                        </td>
                         <td>${ex.course_name || '-'}</td>
                         <td>${ex.batch_name || '-'}</td>
                         <td>${ex.total_marks || 0}</td>
@@ -431,10 +488,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 sSelect.innerHTML += opt;
                 mSelect.innerHTML += opt;
             });
-        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-danger text-center">Error loading</td></tr>'; }
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="5" class="text-danger text-center">Error loading exams.</td></tr>'; }
     }
 
-    // --- 2. SCHEDULE LOGIC ---
+    // --- 2. SCHEDULE & MARKS LOGIC (BRANCH ISOLATED) ---
     document.getElementById('schedule_exam_select').addEventListener('change', async function() {
         const id = this.value;
         const exam = examCache[id];
@@ -457,7 +514,7 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const res = await window.authFetch(`${API.EXAMS}/schedule/${id}`);
             const sch = await res.json();
-            tbody.innerHTML = sch.length ? '' : '<tr><td colspan="5" class="text-center text-muted">No schedule yet.</td></tr>';
+            tbody.innerHTML = sch.length ? '' : '<tr><td colspan="5" class="text-center text-muted">No schedule found.</td></tr>';
             sch.forEach(s => {
                 tbody.innerHTML += `
                     <tr>
@@ -481,26 +538,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const fd = new FormData(e.target);
         const data = Object.fromEntries(fd.entries());
         data.exam_id = examId;
-        data.course_id = exam.course_id;
-        data.batch_id = exam.batch_id;
-        data.subject_id = document.getElementById('subject_code').value;
-        data.max_marks = exam.total_marks;
+        data.branch_id = exam.branch_id; // Pass branch ID to schedule
 
         try {
             const res = await window.authFetch(`${API.EXAMS}/schedule`, { method: 'POST', body: JSON.stringify(data) });
             if(res.ok) {
-                alert("Scheduled!");
+                alert("Scheduled successfully!");
                 document.getElementById('schedule_exam_select').dispatchEvent(new Event('change'));
             }
-        } catch(e) { alert("Error"); }
+        } catch(e) { alert("Schedule failed."); }
     });
 
-    // --- 3. MARKS LOGIC (FIXED) ---
+    // MARKS ENTRY 
     document.getElementById('marks_exam_select').addEventListener('change', async function() {
         const id = this.value;
         const exam = examCache[id];
         const subSelect = document.getElementById('marks_subject_select');
-        
         if(!exam) return;
         document.getElementById('max-marks-display').innerText = exam.total_marks;
 
@@ -520,8 +573,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const tbody = document.getElementById('student-marks-body');
 
         if(!exam || !subId) return alert("Select Exam & Subject");
-
-        tbody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center">Loading branch students...</td></tr>';
 
         try {
             const [studentsRes, marksRes] = await Promise.all([
@@ -531,16 +583,14 @@ document.addEventListener('DOMContentLoaded', () => {
             
             const students = await studentsRes.json();
             const marks = await marksRes.json();
-            
             const markMap = {};
             marks.forEach(m => markMap[m.student_id] = { t: m.marks_obtained_theory, p: m.marks_obtained_practical });
 
             if(!students.length) {
-                tbody.innerHTML = '<tr><td colspan="3" class="text-center">No students found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">No students found in this batch.</td></tr>';
                 return;
             }
 
-            // ✅ FIX: Robust ID Selection
             tbody.innerHTML = students.map(s => {
                 const sid = s.student_id || s.id;
                 return `
@@ -553,14 +603,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td class="text-center"><input type="number" class="marks-input p-mark" value="${markMap[sid]?.p ?? ''}"></td>
                 </tr>
             `}).join('');
-
-        } catch(e) { console.error(e); alert("Error loading data"); }
+        } catch(e) { alert("Error loading students"); }
     });
 
     document.getElementById('marks-entry-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const examId = document.getElementById('marks_exam_select').value;
         const subId = document.getElementById('marks_subject_select').value;
+        const exam = examCache[examId];
         const rows = document.querySelectorAll('#student-marks-body tr[data-sid]');
         
         const marks = [];
@@ -581,26 +631,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const payload = {
             exam_id: examId,
             subject_id: subId,
+            branch_id: exam.branch_id,
             marks: marks,
             academic_session_id: sessionId
         };
 
         try {
-            const res = await window.authFetch(API.MARKS, {
-                method: 'POST',
-                body: JSON.stringify(payload)
-            });
-            if(res.ok) alert("Marks Saved Successfully!");
+            const res = await window.authFetch(API.MARKS, { method: 'POST', body: JSON.stringify(payload) });
+            if(res.ok) alert("Marks Saved for Branch!");
             else alert("Failed to save.");
-        } catch(e) { alert("Error saving marks"); }
+        } catch(e) { alert("Error saving marks."); }
     });
 
-    // --- 4. MARKSHEET STATUS ---
+    // --- 4. MARKSHEET STATUS (BRANCH FILTERED) ---
     window.loadMarksheetStatus = async function() {
         const tbody = document.getElementById('marksheet-status-body');
+        const bfStatus = document.getElementById('filter-branch-status').value;
         try {
             const res = await window.authFetch(`${API.MARKS}/status`);
-            const data = await res.json();
+            let data = await res.json();
+            
+            if (bfStatus) data = data.filter(d => d.branch_id === bfStatus);
+
             tbody.innerHTML = data.map(d => `
                 <tr>
                     <td>${d.enrollment_no}</td>
@@ -610,7 +662,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <td><button class="btn btn-sm btn-primary" onclick="viewMarksheet('${d.enrollment_no}')">View</button></td>
                 </tr>
             `).join('');
-        } catch(e) {}
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="5" class="text-center">Error loading status.</td></tr>'; }
     };
 
     window.viewMarksheet = async function(roll) {
@@ -622,8 +674,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('modal-roll-number').innerText = data.roll_number;
             document.getElementById('modal-course-batch').innerText = data.course_name;
             
-            const tbody = document.getElementById('modal-marks-table-body');
-            tbody.innerHTML = data.marks.map(m => `
+            const mBody = document.getElementById('modal-marks-table-body');
+            mBody.innerHTML = data.marks.map(m => `
                 <tr>
                     <td>${m.subject_name}</td>
                     <td>${m.exam_name}</td>
@@ -638,7 +690,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     window.deleteExam = async (id) => {
-        if(confirm("Delete?")) {
+        if(confirm("Delete this exam and all associated marks?")) {
             await window.authFetch(`${API.EXAMS}/${id}`, { method: 'DELETE' });
             loadExams();
         }

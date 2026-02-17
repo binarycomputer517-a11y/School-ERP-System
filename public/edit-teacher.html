@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Edit Staff Profile | BCSM</title>
+    <title>Edit Staff Profile | BCSM Enterprise</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
@@ -12,7 +12,7 @@
     <style>
         :root {
             --primary-dark: #005A9C; 
-            --glass-bg: rgba(255, 255, 255, 0.85);
+            --glass-bg: rgba(255, 255, 255, 0.92);
         }
 
         body {
@@ -23,58 +23,56 @@
             padding-bottom: 50px;
         }
 
-        .container { max-width: 900px; padding-top: 30px; }
+        .container { max-width: 950px; padding-top: 30px; }
 
-        /* Glass Card */
         .glass-card {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.6);
             border-radius: 15px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+            padding: 35px;
             margin-bottom: 20px;
         }
 
         .section-title {
             color: var(--primary-dark);
-            border-bottom: 2px solid rgba(0,0,0,0.1);
-            padding-bottom: 8px;
-            margin-bottom: 20px;
-            margin-top: 10px;
-            font-weight: 700;
+            border-bottom: 2px solid rgba(0, 90, 156, 0.15);
+            padding-bottom: 10px;
+            margin-bottom: 25px;
+            margin-top: 15px;
+            font-weight: 800;
             text-transform: uppercase;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
+            letter-spacing: 1px;
         }
 
         .form-control, .form-select {
             border-radius: 8px;
-            padding: 10px;
-            border: 1px solid rgba(0,0,0,0.1);
-            background: rgba(255,255,255,0.9);
+            padding: 12px;
+            border: 1px solid #ced4da;
+            background: #fff;
         }
-        .form-control:focus {
-            border-color: var(--primary-dark);
-            box-shadow: 0 0 0 3px rgba(0, 90, 156, 0.15);
-        }
-        
-        .current-file-link {
-            font-size: 0.85rem;
-            margin-top: 5px;
-            display: inline-block;
-            color: var(--primary-dark);
-            text-decoration: none;
-            font-weight: 600;
-        }
-        .current-file-link:hover { text-decoration: underline; }
 
         .img-preview {
-            width: 80px; height: 80px; 
-            border-radius: 50%; 
+            width: 100px; height: 100px; 
+            border-radius: 12px; 
             object-fit: cover;
-            border: 3px solid #fff;
-            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+            border: 4px solid #fff;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            background: #eee;
+        }
+
+        .current-file-link {
+            font-size: 0.8rem;
+            margin-top: 8px;
+            display: inline-block;
+            color: var(--primary-dark);
+            font-weight: 700;
+            background: rgba(0, 90, 156, 0.05);
+            padding: 4px 12px;
+            border-radius: 50px;
+            text-decoration: none;
         }
     </style>
 </head>
@@ -83,19 +81,17 @@
 <div class="container">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-user-edit me-2"></i>Edit Profile</h2>
-            <p class="text-muted mb-0 small">Update staff details and permissions</p>
+            <h2 class="fw-bold text-dark mb-0"><i class="fas fa-user-edit me-2 text-primary"></i>Profile Maintenance</h2>
+            <p class="text-muted mb-0 small" id="branch-indicator">Campus: Locating...</p>
         </div>
-        <a href="/view-teachers.html" class="btn btn-outline-dark rounded-pill">
-            <i class="fas fa-arrow-left me-1"></i> Back
+        <a href="/view-teachers.html" class="btn btn-dark rounded-pill shadow-sm px-4">
+            <i class="fas fa-arrow-left me-2"></i> Return to Directory
         </a>
     </div>
 
-    <div class="glass-card" id="loading-panel">
-        <div class="text-center py-5">
-            <div class="spinner-border text-primary" role="status"></div>
-            <p class="mt-2 text-muted">Loading staff data...</p>
-        </div>
+    <div class="glass-card text-center py-5" id="loading-panel">
+        <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+        <p class="mt-3 fw-bold text-muted">Retrieving Secure Profile Data...</p>
     </div>
 
     <div class="glass-card d-none" id="form-panel">
@@ -103,93 +99,98 @@
             
             <input type="hidden" id="teacher_id_hidden" name="id">
 
-            <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
-                <img src="https://placehold.co/80" id="preview-photo" class="img-preview me-3">
+            <div class="d-flex align-items-center mb-4 pb-4 border-bottom">
+                <img src="https://placehold.co/100" id="preview-photo" class="img-preview me-4">
                 <div>
-                    <h4 class="mb-0 fw-bold" id="header-name">Staff Name</h4>
-                    <span class="badge bg-primary rounded-pill" id="header-id">ID: ...</span>
+                    <h3 class="mb-1 fw-bold text-dark" id="header-name">---</h3>
+                    <div class="d-flex gap-2">
+                        <span class="badge bg-dark" id="header-id">#ID: ---</span>
+                        <span class="badge bg-info text-dark" id="header-role">Role: ---</span>
+                    </div>
                 </div>
             </div>
 
-            <h5 class="section-title">Professional Information</h5>
+            <h5 class="section-title"><i class="fas fa-briefcase me-2"></i>Employment & Status</h5>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Full Name</label>
+                    <label class="form-label fw-bold small">Full Legal Name</label>
                     <input type="text" name="full_name" id="full_name" class="form-control" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Employee ID (Read Only)</label>
+                    <label class="form-label fw-bold small">Employee ID (System Fixed)</label>
                     <input type="text" id="employee_id" class="form-control bg-light" readonly>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Designation</label>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Official Designation</label>
                     <input type="text" name="designation" id="designation" class="form-control">
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <label class="form-label fw-bold small">Department</label>
                     <select name="department_id" id="department_select" class="form-select">
-                        <option value="">Loading...</option>
+                        <option value="">-- Select Department --</option>
                     </select>
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Hire Date</label>
+                <div class="col-md-4">
+                    <label class="form-label fw-bold small">Joining Date</label>
                     <input type="date" name="hire_date" id="hire_date" class="form-control">
                 </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-bold small">Account Status</label>
-                    <select name="is_active" id="is_active" class="form-select">
-                        <option value="true">Active</option>
-                        <option value="false">Inactive / On Leave</option>
+                <div class="col-md-12">
+                    <label class="form-label fw-bold small">Campus Accessibility</label>
+                    <select name="is_active" id="is_active" class="form-select border-primary fw-bold">
+                        <option value="true">Active (Access Granted)</option>
+                        <option value="false">Suspended / Inactive (Access Denied)</option>
                     </select>
                 </div>
             </div>
 
-            <h5 class="section-title">Contact Details</h5>
+            <h5 class="section-title"><i class="fas fa-envelope-open-text me-2"></i>Personal Contact</h5>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Email Address</label>
+                    <label class="form-label fw-bold small">Email Address (System Login)</label>
                     <input type="email" name="email" id="email" class="form-control" required>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Phone Number</label>
+                    <label class="form-label fw-bold small">Primary Mobile</label>
                     <input type="tel" name="phone_number" id="phone_number" class="form-control">
                 </div>
                 <div class="col-12">
-                    <label class="form-label fw-bold small">Address</label>
+                    <label class="form-label fw-bold small">Residential Address</label>
                     <input type="text" name="address" id="address" class="form-control">
                 </div>
             </div>
 
-            <h5 class="section-title">Files & Security</h5>
+            <h5 class="section-title"><i class="fas fa-cloud-upload-alt me-2"></i>Documents & Credentials</h5>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Change Profile Photo</label>
+                    <label class="form-label fw-bold small">Update Profile Picture</label>
                     <input type="file" name="profile_photo" class="form-control" accept="image/*">
                     <div id="current-photo-link"></div>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">Update CV / Resume</label>
+                    <label class="form-label fw-bold small">Update CV / Documents</label>
                     <input type="file" name="cv_file" class="form-control" accept=".pdf,.doc,.docx">
                     <div id="current-cv-link"></div>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small text-danger">New Password</label>
-                    <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current">
+                    <label class="form-label fw-bold small text-primary">Override Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="Type new password ONLY if changing">
+                    <div class="form-text small">Leave blank to maintain current security.</div>
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-bold small">System Role</label>
-                    <select name="new_role" id="new_role" class="form-select">
+                    <label class="form-label fw-bold small">System Access Level</label>
+                    <select name="new_role" id="new_role" class="form-select bg-warning-subtle fw-bold">
                         <option value="Teacher">Teacher</option>
                         <option value="Admin">Admin</option>
                         <option value="HR">HR</option>
-                        <option value="Employee">Employee</option>
+                        <option value="Coordinator">Coordinator</option>
                     </select>
                 </div>
             </div>
 
-            <div class="d-flex justify-content-end pt-3 border-top">
-                <button type="submit" id="submit-btn" class="btn btn-primary rounded-pill px-5 shadow">
-                    <i class="fas fa-save me-2"></i> Save Changes
+            <div class="d-flex justify-content-between align-items-center pt-4 border-top">
+                <span class="text-muted small"><i class="fas fa-info-circle me-1"></i> Syncing with PostgreSQL Production Database</span>
+                <button type="submit" id="submit-btn" class="btn btn-primary rounded-pill px-5 fw-bold shadow">
+                    <i class="fas fa-cloud-upload-alt me-2"></i> Update Profile
                 </button>
             </div>
         </form>
@@ -197,58 +198,66 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/global-config.js?v=2.3.1"></script>
+<script src="js/global-config.js"></script>
 
 <script>
     const urlParams = new URLSearchParams(window.location.search);
     const teacherId = urlParams.get('id');
+    const ACTIVE_BRANCH_ID = localStorage.getItem('active_branch_id');
 
     document.addEventListener('DOMContentLoaded', async () => {
         const token = localStorage.getItem('erp-token');
         if(!token) window.location.href = '/login.html';
-        if(!teacherId) { alert("No ID provided"); window.location.href='/view-teachers.html'; return; }
+        if(!teacherId) { alert("Security Error: Target ID missing"); window.location.href='/view-teachers.html'; return; }
 
-        await loadData();
+        await loadInitialData();
     });
 
-    async function loadData() {
+    async function loadInitialData() {
         try {
-            // 1. Fetch Departments
+            // 1. Load Departments (Must match your hr_departments table)
             const deptRes = await window.authFetch('/api/hr/departments');
             const departments = await deptRes.json();
             
             const deptSelect = document.getElementById('department_select');
-            deptSelect.innerHTML = '<option value="">-- Select --</option>';
+            deptSelect.innerHTML = '<option value="">-- Choose Department --</option>';
             if(Array.isArray(departments)) {
                 departments.forEach(d => {
-                    deptSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+                    const opt = document.createElement('option');
+                    opt.value = d.id;
+                    opt.textContent = d.department_name || d.name; // Aligned with your PSQL Select result
+                    deptSelect.appendChild(opt);
                 });
             }
 
-            // 2. Fetch Teacher Data
+            // 2. Fetch Core Teacher Data
             const res = await window.authFetch(`/api/teachers/${teacherId}`);
-            if(!res.ok) throw new Error("Teacher not found");
+            if(!res.ok) throw new Error("Unauthorized access or Record not found");
             
             const data = await res.json();
-            populateForm(data);
+            
+            // 3. Populate Form with Data Mapping
+            mapDataToForm(data);
 
-            // Show Form
+            // Display
             document.getElementById('loading-panel').classList.add('d-none');
             document.getElementById('form-panel').classList.remove('d-none');
 
         } catch(e) {
-            console.error(e);
-            alert("Error loading data: " + e.message);
+            console.error("Initialization Error:", e);
+            alert("Record Retrieval Failed: " + e.message);
             window.location.href = '/view-teachers.html';
         }
     }
 
-    function populateForm(data) {
+    function mapDataToForm(data) {
+        // Headers
         document.getElementById('header-name').textContent = data.full_name;
-        document.getElementById('header-id').textContent = data.employee_id;
+        document.getElementById('header-id').textContent = `#ID: ${data.employee_id}`;
+        document.getElementById('header-role').textContent = `Role: ${data.role || 'Teacher'}`;
         document.getElementById('teacher_id_hidden').value = teacherId;
 
-        // Inputs
+        // Core Fields
         document.getElementById('full_name').value = data.full_name || '';
         document.getElementById('employee_id').value = data.employee_id || '';
         document.getElementById('designation').value = data.designation || '';
@@ -259,61 +268,69 @@
         document.getElementById('is_active').value = data.is_active ? 'true' : 'false';
         document.getElementById('new_role').value = data.role || 'Teacher';
 
-        // Dates
-        if(data.hire_date) document.getElementById('hire_date').value = data.hire_date.split('T')[0];
-
-        // Files Logic
-        const baseUrl = window.erpSettings?.API_BASE || '';
-        
-        // Photo
-        if(data.profile_image_path) {
-            const photoUrl = data.profile_image_path.startsWith('http') ? data.profile_image_path : `${baseUrl}${data.profile_image_path}`;
-            document.getElementById('preview-photo').src = photoUrl;
-            document.getElementById('current-photo-link').innerHTML = `Current: <a href="${photoUrl}" target="_blank" class="current-file-link">View Photo</a>`;
+        // Hire Date formatting (ISO to Date Input)
+        if(data.hire_date) {
+            document.getElementById('hire_date').value = data.hire_date.split('T')[0];
         }
 
-        // CV
+        // --- File Pathing Logic (Critical for Multi-Branch) ---
+        const baseUrl = window.erpSettings?.API_BASE || 'http://localhost:3005';
+        
+        // Profile Photo
+        if(data.profile_image_path) {
+            const photoUrl = data.profile_image_path.startsWith('http') ? data.profile_image_path : `${baseUrl}/${data.profile_image_path.replace(/^\/+/, '')}`;
+            document.getElementById('preview-photo').src = photoUrl;
+            document.getElementById('current-photo-link').innerHTML = `
+                <a href="${photoUrl}" target="_blank" class="current-file-link">
+                    <i class="fas fa-image me-1"></i> Open Current Photo
+                </a>`;
+        }
+
+        // CV Resume
         if(data.cv_resume_path) {
-            const cvUrl = data.cv_resume_path.startsWith('http') ? data.cv_resume_path : `${baseUrl}${data.cv_resume_path}`;
-            document.getElementById('current-cv-link').innerHTML = `Current: <a href="${cvUrl}" target="_blank" class="current-file-link"><i class="fas fa-file-pdf"></i> View CV</a>`;
+            const cvUrl = data.cv_resume_path.startsWith('http') ? data.cv_resume_path : `${baseUrl}/${data.cv_resume_path.replace(/^\/+/, '')}`;
+            document.getElementById('current-cv-link').innerHTML = `
+                <a href="${cvUrl}" target="_blank" class="current-file-link">
+                    <i class="fas fa-file-pdf me-1"></i> Open Current CV
+                </a>`;
         }
     }
 
-    // --- SUBMISSION ---
+    // --- SUBMISSION LOGIC ---
     document.getElementById('edit-teacher-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         
         const btn = document.getElementById('submit-btn');
-        const oldText = btn.innerHTML;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+        const oldContent = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Processing Sync...';
         btn.disabled = true;
 
         const formData = new FormData(e.target);
 
         try {
-            const baseUrl = window.erpSettings?.API_BASE || '';
+            const baseUrl = window.erpSettings?.API_BASE || 'http://localhost:3005';
             const token = localStorage.getItem('erp-token');
 
-            // Using raw fetch for Multipart
+            // Using Multipart PUT
             const response = await fetch(`${baseUrl}/api/teachers/${teacherId}`, {
                 method: 'PUT',
-                headers: { 'Authorization': `Bearer ${token}` }, // No Content-Type
+                headers: { 'Authorization': `Bearer ${token}` },
                 body: formData
             });
 
             if(response.ok) {
-                alert("Profile updated successfully!");
+                alert("Database Updated Successfully!");
                 window.location.href = '/view-teachers.html';
             } else {
-                const err = await response.json();
-                alert("Update failed: " + (err.message || response.statusText));
+                const result = await response.json();
+                alert("Server Rejected Update: " + (result.message || "Unknown Conflict"));
             }
 
         } catch(error) {
-            console.error(error);
-            alert("Network error occurred.");
+            console.error("PUT Error:", error);
+            alert("Network Error: Connectivity to Server Lost");
         } finally {
-            btn.innerHTML = oldText;
+            btn.innerHTML = oldContent;
             btn.disabled = false;
         }
     });

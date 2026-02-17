@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Configure Automatic Late Fee Calculation</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #27ae60;
+            --error-color: #c0392b;
+            --warning-color: #f39c12;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 20px;
+            font-weight: 600;
+        }
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+            border: 1px solid var(--border-color);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 500;
+        }
+        input[type="number"], select {
+            width: 100%;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid var(--border-color);
+            font-size: 1rem;
+            box-sizing: border-box;
+        }
+        .submit-btn {
+            padding: 12px;
+            background-color: var(--warning-color);
+            color: #333;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            width: 100%;
+        }
+        .submit-btn:hover {
+            background-color: #e68a00;
+        }
+        .fee-structure {
+            border: 1px solid var(--border-color);
+            border-radius: 5px;
+            padding: 15px;
+            margin-top: 20px;
+            background-color: #fff8e1;
+        }
+        .fee-structure h3 {
+            margin-top: 0;
+            color: var(--error-color);
+            font-size: 1.1rem;
+        }
+        .config-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .full-width { grid-column: 1 / -1; }
+        
+        #loading-overlay {
+            text-align: center;
+            padding: 20px;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1><i class="fas fa-calendar-times"></i> Configure Automatic Late Fee</h1>
+    <div class="nav-links">
+        <a href="/admin-dashboard.html">← Back to Dashboard</a>
+    </div>
+
+    <div class="card">
+        <h2>Global Late Fee Policy</h2>
+        <div id="loading-overlay">Loading configuration from server...</div>
+        <p id="status-message" style="text-align: center; font-weight: 500;"></p>
+        
+        <form id="late-fee-form" style="display:none;">
+            <input type="hidden" id="config-id">
+            <div class="config-grid">
+                <div class="form-group full-width">
+                    <label for="grace-days">Grace Period (Days after Due Date):</label>
+                    <input type="number" id="grace-days" min="0" required placeholder="e.g. 5">
+                </div>
+
+                <div class="form-group">
+                    <label for="penalty-type">Penalty Type</label>
+                    <select id="penalty-type" required>
+                        <option value="fixed">Fixed Amount (₹)</option>
+                        <option value="percent_due">Percentage of Due (%)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="penalty-value">Penalty Value</label>
+                    <input type="number" step="0.01" id="penalty-value" required min="0" placeholder="Enter amount or %">
+                </div>
+
+                <div class="form-group">
+                    <label for="compounding-interval">Frequency</label>
+                    <select id="compounding-interval" required>
+                        <option value="once">One-time Fee</option>
+                        <option value="daily">Daily</option>
+                        <option value="weekly">Weekly</option>
+                        <option value="monthly">Monthly</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="max-penalty-value">Max Penalty Cap (₹, Optional)</label>
+                    <input type="number" step="0.01" id="max-penalty-value" min="0" placeholder="Leave blank for no limit">
+                </div>
+
+                <div class="form-group full-width">
+                    <div class="fee-structure">
+                        <h3>Policy Preview</h3>
+                        <p>
+                            If a student fails to pay by the due date, they have a grace period of 
+                            <strong><span id="preview-grace-days">0</span> days</strong>. 
+                            After that, a penalty of 
+                            <strong><span id="preview-penalty-value">0</span></strong> 
+                            will be applied 
+                            <strong><span id="preview-compounding-interval">once</span></strong>.
+                            <span id="preview-max-section" style="display:none;">
+                                The penalty will not exceed <strong>₹<span id="preview-max-penalty">0</span></strong>.
+                            </span>
+                        </p>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" id="submit-btn" class="submit-btn">Save Configuration</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    // CRITICAL FIX: The API path must use /api/finance since feesRouter is mapped there.
+    const API_BASE_URL = '/api/finance/late-fee-config'; 
+    const token = localStorage.getItem('erp-token');
+
+    // Auth Check
+    if (!token) window.location.href = '/login.html';
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchCurrentConfig();
+
+        // Live Preview Listener
+        const inputs = document.querySelectorAll('#late-fee-form input, #late-fee-form select');
+        inputs.forEach(input => {
+            input.addEventListener('input', updatePreview);
+        });
+    });
+
+    // 1. Fetch Real Data
+    async function fetchCurrentConfig() {
+        const form = document.getElementById('late-fee-form');
+        const loader = document.getElementById('loading-overlay');
+        const statusMsg = document.getElementById('status-message');
+
+        try {
+            // Path: /api/finance/late-fee-config/current
+            const response = await fetch(`${API_BASE_URL}/current`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) throw new Error("Failed to load configuration");
+
+            const config = await response.json();
+
+            // Populate Form with Real Data
+            document.getElementById('config-id').value = config.id || '';
+            document.getElementById('grace-days').value = config.grace_days || 0;
+            document.getElementById('penalty-type').value = config.penalty_type || 'fixed';
+            document.getElementById('penalty-value').value = config.penalty_value || 0.00;
+            document.getElementById('compounding-interval').value = config.compounding_interval || 'once';
+            document.getElementById('max-penalty-value').value = config.max_penalty_value || '';
+
+            // Show Form
+            loader.style.display = 'none';
+            form.style.display = 'block';
+            
+            // Initial Preview Update
+            updatePreview();
+
+        } catch (error) {
+            console.error(error);
+            loader.style.display = 'none';
+            statusMsg.textContent = "Error: Could not load configuration from server. Check network connection.";
+            statusMsg.style.color = "red";
+        }
+    }
+
+    // 2. Update Preview Text
+    function updatePreview() {
+        const grace = document.getElementById('grace-days').value || '0';
+        const type = document.getElementById('penalty-type').value;
+        const val = document.getElementById('penalty-value').value || '0';
+        const interval = document.getElementById('compounding-interval').value;
+        const max = document.getElementById('max-penalty-value').value;
+
+        document.getElementById('preview-grace-days').textContent = grace;
+        
+        let valText = '';
+        if(type === 'fixed') valText = `₹${parseFloat(val).toFixed(2)}`;
+        else valText = `${val}% of due amount`;
+        document.getElementById('preview-penalty-value').textContent = valText;
+
+        document.getElementById('preview-compounding-interval').textContent = interval;
+
+        const maxSection = document.getElementById('preview-max-section');
+        if(max) {
+            maxSection.style.display = 'inline';
+            document.getElementById('preview-max-penalty').textContent = parseFloat(max).toFixed(2);
+        } else {
+            maxSection.style.display = 'none';
+        }
+    }
+
+    // 3. Submit Configuration
+    document.getElementById('late-fee-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submit-btn');
+        const statusMsg = document.getElementById('status-message');
+        
+        btn.disabled = true;
+        btn.textContent = "Saving...";
+        statusMsg.textContent = "";
+
+        const formData = {
+            id: document.getElementById('config-id').value,
+            grace_days: parseInt(document.getElementById('grace-days').value),
+            penalty_type: document.getElementById('penalty-type').value,
+            penalty_value: parseFloat(document.getElementById('penalty-value').value),
+            max_penalty_value: parseFloat(document.getElementById('max-penalty-value').value) || null,
+            compounding_interval: document.getElementById('compounding-interval').value
+        };
+
+        const method = formData.id ? 'PUT' : 'POST';
+        // Path: /api/finance/late-fee-config or /api/finance/late-fee-config/ID
+        const url = formData.id ? `${API_BASE_URL}/${formData.id}` : API_BASE_URL;
+
+        try {
+            const response = await fetch(url, {
+                method: method,
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                const error = await response.json().catch(() => ({ message: 'Server error occurred.' }));
+                throw new Error(error.message || "Failed to save configuration");
+            }
+
+            const result = await response.json();
+            
+            // Update ID if it was a new create
+            if(!formData.id && result.id) {
+                document.getElementById('config-id').value = result.id;
+            }
+
+            statusMsg.textContent = "✅ Configuration saved successfully!";
+            statusMsg.style.color = "green";
+
+        } catch (error) {
+            statusMsg.textContent = `❌ Error: ${error.message}`;
+            statusMsg.style.color = "red";
+        } finally {
+            btn.disabled = false;
+            btn.textContent = "Save Configuration";
+        }
+    });
+</script>
+<script src="js/global-config.js"></script>
+</body>
+</html>

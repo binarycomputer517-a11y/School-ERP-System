@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Official Academic Transcript (Admin View)</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #0f172a; /* Deep Navy Blue */
+            --accent-color: #3b82f6; /* Bright Blue */
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --bg-color: #f8fafc;
+            --border-color: #e2e8f0;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+        }
+
+        body {
+            background: var(--bg-color);
+            font-family: 'Inter', sans-serif;
+            color: var(--text-primary);
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact; 
+        }
+
+        /* PAGE CONTAINER (A4) */
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+            border-top: 8px solid var(--accent-color);
+        }
+
+        /* SECURITY WATERMARK */
+        .watermark-container {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .watermark-logo {
+            width: 400px;
+            opacity: 0.03;
+            filter: grayscale(100%);
+        }
+        .watermark-pattern {
+            position: absolute;
+            inset: -50%;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: center;
+            gap: 60px;
+            opacity: 0.04;
+            transform: rotate(-30deg);
+        }
+        .watermark-text {
+            font-size: 14px;
+            font-weight: 800;
+            color: #000;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .content { position: relative; z-index: 2; }
+
+        /* HEADER */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 25px;
+            margin-bottom: 30px;
+        }
+        .school-branding {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .school-logo { 
+            width: 80px; 
+            height: 80px; 
+            object-fit: contain; 
+        }
+        .school-details h1 {
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            margin: 0;
+            line-height: 1.2;
+        }
+        .school-details p {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin: 5px 0 0 0;
+        }
+        .doc-title {
+            text-align: right;
+        }
+        .doc-type {
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            display: block;
+        }
+        .doc-session {
+            font-size: 12px;
+            color: var(--text-secondary);
+            background: #f1f5f9;
+            padding: 4px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-top: 5px;
+            font-weight: 600;
+        }
+
+        /* STUDENT PROFILE */
+        .student-section {
+            background: #f8fafc;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: flex-start;
+            gap: 25px;
+        }
+        .student-photo-box {
+            width: 110px;
+            height: 130px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            padding: 4px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .student-photo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 2px;
+        }
+        .student-info-grid {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px 30px;
+        }
+        .info-group {
+            display: flex;
+            flex-direction: column;
+        }
+        .info-label {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            margin-bottom: 2px;
+        }
+        .info-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        /* RESULTS TABLE */
+        .results-table {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-bottom: 30px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .results-table th {
+            background: var(--primary-color);
+            color: white;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            padding: 12px 15px;
+            text-align: left;
+            letter-spacing: 0.5px;
+        }
+        .results-table td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 14px;
+            color: var(--text-primary);
+        }
+        .results-table tr:last-child td { border-bottom: none; }
+        .results-table tr:nth-child(even) { background-color: #f8fafc; }
+        
+        .grade-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-align: center;
+            min-width: 30px;
+        }
+        .grade-pass { background: #dcfce7; color: #166534; }
+        .grade-avg { background: #fef9c3; color: #854d0e; }
+        .grade-fail { background: #fee2e2; color: #991b1b; }
+
+        /* PERFORMANCE SUMMARY */
+        .summary-dashboard {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        .metric-card {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .metric-title {
+            font-size: 11px;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        .metric-value {
+            font-size: 18px;
+            font-weight: 800;
+            color: var(--primary-color);
+        }
+        .status-passed { color: var(--success-color); }
+        .status-failed { color: var(--danger-color); }
+
+        /* FOOTER */
+        .footer {
+            margin-top: 50px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            padding-top: 20px;
+            border-top: 2px dashed var(--border-color);
+        }
+        .verification-box {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+        }
+        .verify-text {
+            font-size: 11px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+        }
+        .signatures {
+            display: flex;
+            gap: 60px;
+        }
+        .sign-block {
+            text-align: center;
+        }
+        .sign-line {
+            width: 150px;
+            border-bottom: 2px solid #94a3b8;
+            margin-bottom: 8px;
+        }
+        .sign-title {
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--text-primary);
+            text-transform: uppercase;
+        }
+
+        /* UTILS */
+        .disclaimer {
+            text-align: center;
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: 30px;
+            font-style: italic;
+        }
+        
+        .action-bar {
+            text-align: center;
+            padding: 20px;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            margin-bottom: 20px;
+        }
+        .btn-action {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+        .btn-action:hover { background: #1e293b; transform: translateY(-1px); }
+        .btn-secondary { background: white; color: var(--text-primary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: #f8fafc; }
+
+        @media print {
+            body { background: white; }
+            .action-bar { display: none; }
+            .page { 
+                margin: 0; 
+                box-shadow: none; 
+                border: none; 
+                width: 100%; 
+                height: auto;
+                padding: 0;
+            }
+            @page { margin: 15mm; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="action-bar no-print">
+        <button onclick="window.print()" class="btn-action">
+            <i class="fas fa-print"></i> Print Transcript
+        </button>
+        <button onclick="window.close()" class="btn-action btn-secondary">
+            <i class="fas fa-times"></i> Close Window
+        </button>
+    </div>
+
+    <div class="page">
+        <div class="watermark-container">
+            <img src="" class="watermark-logo global-school-logo" id="wm-logo" alt="Watermark">
+            <div class="watermark-pattern" id="bg-text-pattern"></div>
+        </div>
+
+        <div class="content">
+            <header class="header">
+                <div class="school-branding">
+                    <img src="" alt="School Logo" class="school-logo global-school-logo">
+                    <div class="school-details">
+                        <h1 class="school-name global-school-name">Loading Institution...</h1>
+                        <p class="school-address global-school-address">Loading Address...</p>
+                    </div>
+                </div>
+                <div class="doc-title">
+                    <span class="doc-type">Official Transcript</span>
+                    <span class="doc-session">Session: 2024-2025</span>
+                </div>
+            </header>
+
+            <section class="student-section">
+                <div class="student-photo-box">
+                    <img src="" class="student-photo" id="s-photo" alt="Student Photo">
+                </div>
+                <div class="student-info-grid">
+                    <div class="info-group">
+                        <span class="info-label">Student Name</span>
+                        <span class="info-value" id="s-name">Loading...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Roll Number</span>
+                        <span class="info-value" id="s-roll">...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Program / Course</span>
+                        <span class="info-value" id="s-course">...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Batch</span>
+                        <span class="info-value" id="s-batch">...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Exam Reference ID</span>
+                        <span class="info-value" id="s-attempt-id">...</span>
+                    </div>
+                    <div class="info-group">
+                        <span class="info-label">Date of Issue</span>
+                        <span class="info-value" id="current-date"></span>
+                    </div>
+                </div>
+            </section>
+
+            <table class="results-table">
+                <thead>
+                    <tr>
+                        <th width="15%">Code</th>
+                        <th width="45%">Subject</th>
+                        <th width="15%">Max Marks</th>
+                        <th width="15%">Obtained</th>
+                        <th width="10%">Grade</th>
+                    </tr>
+                </thead>
+                <tbody id="marks-body">
+                    </tbody>
+            </table>
+
+            <div class="summary-dashboard">
+                <div class="metric-card">
+                    <div class="metric-title">Total Score</div>
+                    <div class="metric-value" id="val-total">0 / 0</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Percentage</div>
+                    <div class="metric-value" id="val-percent">0%</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Final Result</div>
+                    <div class="metric-value" id="val-status">-</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-title">Division</div>
+                    <div class="metric-value" id="val-division">-</div>
+                </div>
+            </div>
+
+            <footer class="footer">
+                <div class="verification-box">
+                    <div id="qrcode"></div>
+                    <div class="verify-text">
+                        <strong>Digital Verification</strong><br>
+                        Scan to verify authenticity.<br>
+                        Generated via Secure ERP.
+                    </div>
+                </div>
+                
+                <div class="signatures">
+                    <div class="sign-block">
+                        <div class="sign-line"></div>
+                        <div class="sign-title">Controller of Exams</div>
+                    </div>
+                    <div class="sign-block">
+                        <div class="sign-line"></div>
+                        <div class="sign-title">Head of Institution</div>
+                    </div>
+                </div>
+            </footer>
+
+            <div class="disclaimer">
+                This is a computer-generated document and does not require a physical signature. Any alteration to this document renders it invalid.
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/global-config.js"></script>
+    <script>
+        const ATTEMPT_ID = new URLSearchParams(window.location.search).get('attemptId');
+        const TOKEN = localStorage.getItem('erp-token');
+
+        // Grading Logic
+        function getGradeInfo(p) { 
+            if (p >= 90) return { grade: 'O', label: 'Outstanding', class: 'grade-pass' };
+            if (p >= 80) return { grade: 'A+', label: 'Excellent', class: 'grade-pass' };
+            if (p >= 70) return { grade: 'A', label: 'Very Good', class: 'grade-pass' };
+            if (p >= 60) return { grade: 'B+', label: 'Good', class: 'grade-avg' };
+            if (p >= 50) return { grade: 'B', label: 'Average', class: 'grade-avg' };
+            if (p >= 40) return { grade: 'C', label: 'Pass', class: 'grade-avg' };
+            return { grade: 'F', label: 'Fail', class: 'grade-fail' };
+        }
+
+        function getDivision(p, s) { 
+            if (s === 'Failed') return 'N/A';
+            if (p >= 75) return 'Distinction';
+            if (p >= 60) return 'First Division';
+            if (p >= 45) return 'Second Division';
+            return 'Third Division';
+        }
+
+        async function init() {
+            if (!TOKEN || !ATTEMPT_ID) return alert("Unauthorized Access");
+
+            try {
+                const response = await fetch(`/api/online-exam/admin/attempt/${ATTEMPT_ID}`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message);
+
+                const s = data.summary;
+
+                // 1. Fill Profile
+                document.getElementById('s-name').innerText = s.student_name;
+                document.getElementById('s-roll').innerText = s.roll_number;
+                document.getElementById('s-attempt-id').innerText = ATTEMPT_ID.substring(0, 8).toUpperCase();
+                document.getElementById('s-course').innerText = s.course_name || 'N/A';
+                document.getElementById('s-batch').innerText = s.batch_name || 'N/A';
+                document.getElementById('s-photo').src = s.profile_pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(s.student_name)}&background=random`;
+
+                // 2. Calculations
+                const percent = ((s.total_score / s.max_marks) * 100).toFixed(2);
+                const isPassed = percent >= 40;
+                const gradeData = getGradeInfo(percent);
+                
+                // 3. Render Table Row
+                const row = `
+                    <tr>
+                        <td style="font-family:monospace; font-weight:600;">SUB-${s.subject_name ? s.subject_name.substring(0,3).toUpperCase() : 'GEN'}</td>
+                        <td>
+                            <div style="font-weight:600;">${s.subject_name || 'General Assessment'}</div>
+                            <div style="font-size:11px; color:#64748b;">${s.title}</div>
+                        </td>
+                        <td>${s.max_marks}</td>
+                        <td style="font-weight:700;">${s.total_score}</td>
+                        <td><span class="grade-badge ${gradeData.class}">${gradeData.grade}</span></td>
+                    </tr>`;
+                document.getElementById('marks-body').innerHTML = row;
+
+                // 4. Update Summary Cards
+                document.getElementById('val-total').innerText = `${s.total_score} / ${s.max_marks}`;
+                document.getElementById('val-percent').innerText = `${percent}%`;
+                
+                const statusEl = document.getElementById('val-status');
+                statusEl.innerText = isPassed ? "PASSED" : "FAILED";
+                statusEl.className = `metric-value ${isPassed ? 'status-passed' : 'status-failed'}`;
+                
+                document.getElementById('val-division').innerText = getDivision(percent, isPassed ? 'Passed' : 'Failed');
+
+                // 5. Generate QR
+                const qrData = `VERIFY:${ATTEMPT_ID}|ROLL:${s.roll_number}|SCORE:${s.total_score}/${s.max_marks}`;
+                document.getElementById("qrcode").innerHTML = "";
+                new QRCode(document.getElementById("qrcode"), {
+                    text: qrData, width: 65, height: 65,
+                    colorDark : "#0f172a", colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.Q
+                });
+
+            } catch (err) {
+                console.error(err);
+                // alert("Error loading data");
+            }
+        }
+
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

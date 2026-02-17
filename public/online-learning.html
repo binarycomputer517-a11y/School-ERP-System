@@ -3,48 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LMS Admin | BCSM</title>
+    <title>LMS Admin | Enterprise ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="css/style.css">
 
     <style>
-        .content-badge {
-            font-size: 0.7rem;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-weight: 600;
-            text-transform: uppercase;
+        :root { 
+            --primary-cobalt: #003366; 
+            --accent-orange: #FF9933; 
+            --border-color: #e2e8f0; 
+            --bg-light: #f8fafc;
         }
-        .type-video { background: #e3f2fd; color: #0d47a1; }
-        .type-pdf { background: #fbe9e7; color: #bf360c; }
-        .type-quiz { background: #e8f5e9; color: #1b5e20; }
-        .type-external { background: #f3e5f5; color: #4a148c; }
+        body { background-color: var(--bg-light); font-family: 'Inter', sans-serif; font-size: 0.85rem; color: #334155; }
+        .glass-card { background: white; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05); padding: 24px; transition: transform 0.2s; }
+        .content-badge { font-size: 0.7rem; padding: 4px 10px; border-radius: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        .type-video { background: #eff6ff; color: #1e40af; border: 1px solid #dbeafe; }
+        .type-pdf { background: #fff1f2; color: #9f1239; border: 1px solid #ffe4e6; }
+        .type-quiz { background: #f0fdf4; color: #166534; border: 1px solid #dcfce7; }
+        .type-external { background: #faf5ff; color: #6b21a8; border: 1px solid #f3e8ff; }
+        .branch-banner { background: #fffbeb; border: 1px solid #fef3c7; padding: 12px 20px; border-radius: 10px; margin-bottom: 24px; font-weight: 600; color: #92400e; display: flex; align-items: center; box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); }
+        .sticky-form { position: sticky; top: 30px; }
+        .form-label { margin-bottom: 0.4rem; color: #475569; }
+        .btn-primary { background-color: var(--primary-cobalt); border-color: var(--primary-cobalt); }
+        .btn-primary:hover { background-color: #002244; }
+        .hover-row:hover { background-color: #f8fafc; }
     </style>
 </head>
 <body>
 
-<div class="container-fluid" style="max-width: 1600px; padding: 30px;">
+<div class="container-fluid" style="max-width: 1600px; padding: 40px;">
     
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-laptop-code me-2"></i>Online Learning</h2>
-            <p class="text-muted mb-0 small">Manage study materials, video lectures, and assignments</p>
+            <h2 class="fw-bold text-dark mb-1"><i class="fas fa-graduation-cap me-2 text-primary"></i>Online Learning Portal</h2>
+            <p class="text-muted mb-0 small">Manage branch-specific study materials and digital content</p>
         </div>
-        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
-            <i class="fas fa-arrow-left me-2"></i> Dashboard
-        </a>
+        <div class="d-flex align-items-center gap-3">
+            <div id="super-admin-branch-selector" style="display:none" class="bg-white p-2 rounded shadow-sm border text-center">
+                <label class="small fw-bold d-block mb-1 text-muted">Active Campus (Control Plane)</label>
+                <select id="global-branch-select" class="form-select form-select-sm border-0 fw-bold" onchange="switchBranchContext(this.value)">
+                </select>
+            </div>
+            <a href="/admin-dashboard.html" class="btn btn-dark rounded-pill px-4 shadow-sm">Dashboard</a>
+        </div>
+    </div>
+
+    <div class="branch-banner">
+        <i class="fas fa-map-marker-alt me-2 text-warning"></i> 
+        <span>Operating Environment: <span id="branch-name-display" class="fw-bold text-dark ms-1">Detecting Credentials...</span></span>
     </div>
 
     <div class="row g-4">
-        
         <div class="col-lg-4">
-            <div class="glass-card">
-                <h6 class="fw-bold text-primary mb-3" id="form-title">
-                    <i class="fas fa-cloud-upload-alt me-2"></i>Upload Content
+            <div class="glass-card sticky-form">
+                <h6 class="fw-bold text-primary mb-4" id="form-title">
+                    <i class="fas fa-file-upload me-2"></i>Upload Content
                 </h6>
                 
                 <form id="module-form">
@@ -52,64 +68,65 @@
 
                     <div class="mb-3">
                         <label class="form-label fw-bold small">Module Title</label>
-                        <input type="text" id="module-title" class="form-control" required placeholder="e.g. Chapter 1: Introduction">
+                        <input type="text" id="module-title" class="form-control form-control-lg fs-6" required placeholder="Introduction to Systems">
                     </div>
                     
                     <div class="mb-3">
-                        <label class="form-label fw-bold small">Content Type</label>
+                        <label class="form-label fw-bold small">Resource Category</label>
                         <select id="content-type" class="form-select" required>
-                            <option value="VIDEO">Video Lecture</option>
-                            <option value="PDF">Reading Material (PDF)</option>
-                            <option value="QUIZ">Online Quiz</option>
-                            <option value="EXTERNAL">External Link/Assignment</option>
+                            <option value="VIDEO">Video Lecture (MP4/Link)</option>
+                            <option value="PDF">Course Notes (PDF)</option>
+                            <option value="QUIZ">Interactive Quiz</option>
+                            <option value="EXTERNAL">Assignments & External Tasks</option>
                         </select>
                     </div>
 
-                    <div class="p-3 bg-light rounded mb-3 border">
-                        <label class="form-label fw-bold small text-muted">Resource Source</label>
-                        <input type="file" id="content-file" class="form-control mb-2 text-sm">
-                        <div class="text-center small text-muted my-1">- OR -</div>
-                        <input type="url" id="content-url" class="form-control" placeholder="https://youtube.com/...">
+                    <div class="p-3 bg-light rounded-3 mb-4 border border-dashed text-center">
+                        <label class="form-label fw-bold small d-block mb-2">Resource Attachment</label>
+                        <input type="file" id="content-file" class="form-control form-control-sm mb-2">
+                        <div class="text-muted small my-1">- OR PROVIDE URL -</div>
+                        <input type="url" id="content-url" class="form-control mt-2" placeholder="https://cdn.resource.com/file">
                     </div>
 
-                    <div class="row g-2 mb-3">
-                        <div class="col-6">
-                            <label class="form-label fw-bold small">Course</label>
+                    <div class="row g-3 mb-3">
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Associated Course</label>
                             <select id="course-select" class="form-select" required onchange="loadBatches(this.value)">
-                                <option value="">Loading...</option>
-                            </select>
-                        </div>
-                        <div class="col-6">
-                            <label class="form-label fw-bold small">Batch</label>
-                            <select id="batch-select" class="form-select">
-                                <option value="">-- All --</option>
+                                <option value="">Select Academic Course</option>
                             </select>
                         </div>
                         <div class="col-12">
-                            <label class="form-label fw-bold small">Subject</label>
-                            <select id="subject-select" class="form-select" required>
-                                <option value="">Loading...</option>
+                            <label class="form-label fw-bold small">Target Batch</label>
+                            <select id="batch-select" class="form-select" required>
+                                <option value="">-- Select Batch --</option>
                             </select>
                         </div>
                     </div>
 
-                    <div class="row g-2 mb-4">
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small">Subject Track</label>
+                        <select id="subject-select" class="form-select" required>
+                            <option value="">Select Track</option>
+                        </select>
+                    </div>
+
+                    <div class="row g-3 mb-4">
                         <div class="col-6">
-                            <label class="form-label fw-bold small text-success">Publish Date</label>
+                            <label class="form-label fw-bold small text-success">Release Date</label>
                             <input type="datetime-local" id="publish-date" class="form-control">
                         </div>
                         <div class="col-6">
-                            <label class="form-label fw-bold small text-danger">Expiry Date</label>
+                            <label class="form-label fw-bold small text-danger">Archival Date</label>
                             <input type="datetime-local" id="expiry-date" class="form-control">
                         </div>
                     </div>
 
                     <div class="d-grid gap-2">
-                        <button type="submit" id="submit-module-btn" class="btn btn-primary rounded-pill shadow-sm">
-                            <i class="fas fa-paper-plane me-2"></i> Publish Module
+                        <button type="submit" id="submit-module-btn" class="btn btn-primary py-2 fw-bold shadow-sm">
+                            <i class="fas fa-check-circle me-2"></i> Finalize & Publish
                         </button>
-                        <button type="button" id="cancel-btn" class="btn btn-light rounded-pill btn-sm" style="display:none;" onclick="resetForm()">
-                            Cancel Edit
+                        <button type="button" id="cancel-btn" class="btn btn-outline-secondary btn-sm border-0" style="display:none;" onclick="resetForm()">
+                            Cancel & Reset
                         </button>
                     </div>
                 </form>
@@ -117,54 +134,105 @@
         </div>
 
         <div class="col-lg-8">
-            <div class="glass-card h-100 p-0 overflow-hidden">
-                <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
-                    <h6 class="fw-bold mb-0">Content Library</h6>
-                    <span class="badge bg-secondary rounded-pill" id="module-count">0 items</span>
+            <div class="glass-card h-100 p-0 overflow-hidden shadow-sm">
+                <div class="px-4 py-3 border-bottom bg-white d-flex justify-content-between align-items-center">
+                    <h6 class="fw-bold mb-0">Active Curriculum Library</h6>
+                    <span class="badge bg-dark px-3" id="module-count">0 items</span>
                 </div>
                 
-                <div class="table-responsive" style="max-height: 700px;">
-                    <table class="table table-glass table-hover mb-0 align-middle">
-                        <thead class="table-light sticky-top">
-                            <tr>
-                                <th>Content Details</th>
+                <div class="table-responsive" style="max-height: 750px;">
+                    <table class="table table-hover mb-0 align-middle">
+                        <thead class="bg-light sticky-top">
+                            <tr class="text-secondary small text-uppercase">
+                                <th class="ps-4">Module Details</th>
                                 <th>Target Audience</th>
                                 <th>Status</th>
-                                <th class="text-end">Actions</th>
+                                <th class="text-end pe-4">Actions</th>
                             </tr>
                         </thead>
                         <tbody id="module-tbody">
-                            <tr><td colspan="4" class="text-center p-5 text-muted">Loading content...</td></tr>
+                            <tr><td colspan="4" class="text-center p-5"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/global-config.js?v=2.3.1"></script>
+<script src="js/global-config.js?v=2.3.5"></script>
 
 <script>
     const API_BASE = '/api/online-learning';
     const ACADEMIC_API = '/api/academicswithfees';
+    const TOKEN = localStorage.getItem('erp-token');
+    let USER_ROLE = localStorage.getItem('erp-user-role');
+    let ACTIVE_BRANCH_ID = localStorage.getItem('erp-branch-id');
 
-    document.addEventListener('DOMContentLoaded', () => {
-        const token = localStorage.getItem('erp-token');
-        if (!token) window.location.href = '/login.html';
+    // Identity recovery & normalization for Multi-Branch Access
+    if (TOKEN && (!ACTIVE_BRANCH_ID || ACTIVE_BRANCH_ID === "null")) {
+        try {
+            const payload = JSON.parse(atob(TOKEN.split('.')[1]));
+            ACTIVE_BRANCH_ID = payload.branch_id;
+            USER_ROLE = payload.role ? payload.role.toLowerCase() : ""; 
+            localStorage.setItem('erp-branch-id', ACTIVE_BRANCH_ID);
+            localStorage.setItem('erp-user-role', USER_ROLE);
+        } catch (e) { console.error("Identity Parse Failure", e); }
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        if (!TOKEN) window.location.href = '/login.html';
         
-        loadDependencies();
-        fetchModules();
+        // Super Admin validation for Centralized Control
+        if (USER_ROLE === 'super admin' || USER_ROLE === 'super-admin' || USER_ROLE === 'prime admin') {
+            document.getElementById('super-admin-branch-selector').style.display = 'block';
+            await loadAllBranches();
+        }
+        
+        initializePage();
     });
 
-    // 1. Load Dropdowns
+    async function loadAllBranches() {
+        try {
+            const res = await window.authFetch('/api/branches');
+            const branches = await res.json();
+            const sel = document.getElementById('global-branch-select');
+            sel.innerHTML = '<option value="">-- Switch Campus --</option>';
+            branches.forEach(b => {
+                const opt = document.createElement('option');
+                opt.value = b.id;
+                opt.textContent = b.branch_name;
+                if (b.id === ACTIVE_BRANCH_ID) opt.selected = true;
+                sel.appendChild(opt);
+            });
+        } catch (e) { console.error("Failed to load campus list", e); }
+    }
+
+    async function switchBranchContext(branchId) {
+        if (!branchId) return;
+        ACTIVE_BRANCH_ID = branchId;
+        localStorage.setItem('erp-branch-id', branchId);
+        initializePage();
+    }
+
+    async function initializePage() {
+        try {
+            const res = await window.authFetch(`/api/branches/${ACTIVE_BRANCH_ID}`);
+            const data = await res.json();
+            document.getElementById('branch-name-display').innerText = data.branch_name;
+        } catch(e) { }
+
+        await loadDependencies(); 
+        fetchModules();
+    }
+
     async function loadDependencies() {
         try {
+            // Updated to pass branch_id context to ensure cross-campus visibility support
             const [coursesRes, subjectsRes] = await Promise.all([
-                window.authFetch(`${ACADEMIC_API}/courses`),
-                window.authFetch(`${ACADEMIC_API}/subjects`)
+                window.authFetch(`${ACADEMIC_API}/courses?branch_id=${ACTIVE_BRANCH_ID}`),
+                window.authFetch(`${ACADEMIC_API}/subjects?branch_id=${ACTIVE_BRANCH_ID}`)
             ]);
             
             const courses = await coursesRes.json();
@@ -173,134 +241,106 @@
             const cSelect = document.getElementById('course-select');
             const sSelect = document.getElementById('subject-select');
             
-            cSelect.innerHTML = '<option value="">Select Course</option>';
-            courses.forEach(c => cSelect.innerHTML += `<option value="${c.id || c.course_id}">${c.course_name}</option>`);
+            cSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            courses.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.course_id || c.id;
+                opt.textContent = c.course_name;
+                cSelect.appendChild(opt);
+            });
             
-            sSelect.innerHTML = '<option value="">Select Subject</option>';
-            subjects.forEach(s => sSelect.innerHTML += `<option value="${s.id || s.subject_id}">${s.subject_name}</option>`);
+            sSelect.innerHTML = '<option value="">-- Select Subject --</option>';
+            subjects.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.subject_id || s.id;
+                opt.textContent = s.subject_name;
+                sSelect.appendChild(opt);
+            });
 
-        } catch (e) { console.error("Dep Load Error", e); }
+        } catch (e) { console.error("Dependency Load Error", e); }
     }
 
+    // 🔥 Updated Batch Auto-Population using Primary Key 'id' and 'is_global' logic
     async function loadBatches(courseId) {
         const bSelect = document.getElementById('batch-select');
-        if (!courseId) {
-            bSelect.innerHTML = '<option value="">-- All Batches --</option>';
+        bSelect.innerHTML = '<option value="">Loading...</option>';
+
+        if (!courseId || courseId === "" || courseId === "undefined") {
+            bSelect.innerHTML = '<option value="">-- Select Batch --</option>';
             return;
         }
+
         try {
-            const res = await window.authFetch(`${ACADEMIC_API}/courses/${courseId}/batches`);
+            // 🔥 This URL now includes 'branch_id' which triggers the 'is_global' logic in backend
+            const res = await window.authFetch(`${ACADEMIC_API}/courses/${courseId}/batches?branch_id=${ACTIVE_BRANCH_ID}`);
             const batches = await res.json();
-            bSelect.innerHTML = '<option value="">-- All Batches --</option>';
-            batches.forEach(b => bSelect.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`);
-        } catch (e) { console.error(e); }
+            
+            bSelect.innerHTML = '<option value="">-- Select Batch --</option>';
+            if (Array.isArray(batches) && batches.length > 0) {
+                batches.forEach(b => {
+                    const opt = document.createElement('option');
+                    // Uses 'batch_id' (which is the aliased Primary Key 'id' from our backend update)
+                    opt.value = b.batch_id || b.id; 
+                    opt.textContent = b.batch_name;
+                    bSelect.appendChild(opt);
+                });
+            } else {
+                bSelect.innerHTML = '<option value="">No Global or Local Batches Found</option>';
+            }
+        } catch (e) { 
+            console.error("Batch Synchronization Error", e); 
+            bSelect.innerHTML = '<option value="">Error Loading</option>';
+        }
     }
 
-    // 2. Fetch & Render Modules
     async function fetchModules() {
         const tbody = document.getElementById('module-tbody');
         try {
-            const res = await window.authFetch(`${API_BASE}/modules`);
+            const res = await window.authFetch(`${API_BASE}/modules?branch_id=${ACTIVE_BRANCH_ID}`);
             const modules = await res.json();
-            
-            document.getElementById('module-count').innerText = `${modules.length} items`;
+            document.getElementById('module-count').innerText = `${modules.length} modules found`;
 
             if (modules.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center p-5 text-muted">No content uploaded yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center p-5 text-muted">No content records for this branch.</td></tr>';
                 return;
             }
 
             tbody.innerHTML = modules.map(m => {
-                // Determine Badge Class
                 let badgeClass = 'type-external';
                 if(m.content_type === 'VIDEO') badgeClass = 'type-video';
                 if(m.content_type === 'PDF') badgeClass = 'type-pdf';
                 if(m.content_type === 'QUIZ') badgeClass = 'type-quiz';
 
-                // Determine Status Color
-                const isPublished = m.status === 'Published';
-                const statusColor = isPublished ? 'text-success' : 'text-warning';
-                
-                // Format Date safely
-                const expiry = m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : 'No Expiry';
-
                 return `
-                <tr>
-                    <td>
+                <tr class="hover-row">
+                    <td class="ps-4">
                         <div class="fw-bold text-dark">${m.title}</div>
-                        <span class="content-badge ${badgeClass} me-2">${m.content_type}</span>
-                        <small class="text-muted">${m.subject_name || 'General'}</small>
+                        <div class="mt-1">
+                             <span class="content-badge ${badgeClass}">${m.content_type}</span>
+                             <span class="text-muted small ms-2"><i class="fas fa-book-open me-1"></i>${m.subject_name || 'General'}</span>
+                        </div>
                     </td>
                     <td>
-                        <div class="small fw-bold">${m.course_name || 'All Courses'}</div>
-                        <div class="small text-muted">${m.batch_name || 'All Batches'}</div>
+                        <div class="small fw-bold text-dark">${m.course_name || 'All Courses'}</div>
+                        <div class="text-muted small">${m.batch_name || 'Global/All'}</div>
                     </td>
                     <td>
-                        <div class="small fw-bold ${statusColor}"><i class="fas fa-circle fa-xs me-1"></i>${m.status}</div>
-                        <div class="small text-muted" style="font-size:0.75rem">Exp: ${expiry}</div>
+                        <div class="small fw-bold text-success"><i class="fas fa-circle fa-xs me-1"></i>${m.status}</div>
+                        <div class="text-muted small">${m.expiry_date ? new Date(m.expiry_date).toLocaleDateString() : 'No Expiry'}</div>
                     </td>
-                    <td class="text-end">
-                        <button class="btn btn-sm btn-outline-primary me-1" onclick="editModule('${m.id}')" title="Edit"><i class="fas fa-edit"></i></button>
-                        <button class="btn btn-sm btn-outline-danger" onclick="deleteModule('${m.id}')" title="Delete"><i class="fas fa-trash"></i></button>
+                    <td class="text-end pe-4">
+                        <div class="btn-group shadow-sm">
+                            <button class="btn btn-white btn-sm border" onclick="editModule('${m.id}')"><i class="fas fa-pen text-primary"></i></button>
+                            <button class="btn btn-white btn-sm border" onclick="deleteModule('${m.id}')"><i class="fas fa-trash text-danger"></i></button>
+                        </div>
                     </td>
-                </tr>
-                `;
+                </tr>`;
             }).join('');
-
-        } catch (e) { tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger p-4">Error loading content.</td></tr>'; }
+        } catch (e) { 
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger p-4">Sync Failure: Connection lost.</td></tr>';
+        }
     }
 
-    // 3. Form Handling
-    document.getElementById('module-form').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const btn = document.getElementById('submit-module-btn');
-        btn.disabled = true;
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-
-        const id = document.getElementById('module-id').value;
-        const formData = new FormData();
-        
-        // Append text fields
-        formData.append('title', document.getElementById('module-title').value);
-        formData.append('content_type', document.getElementById('content-type').value);
-        formData.append('content_url', document.getElementById('content-url').value);
-        formData.append('course_id', document.getElementById('course-select').value);
-        formData.append('subject_id', document.getElementById('subject-select').value);
-        formData.append('batch_id', document.getElementById('batch-select').value || "");
-        formData.append('publish_date', document.getElementById('publish-date').value);
-        formData.append('expiry_date', document.getElementById('expiry-date').value);
-
-        // Append File
-        const fileInput = document.getElementById('content-file');
-        if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
-
-        try {
-            const url = id ? `${API_BASE}/modules/${id}` : `${API_BASE}/modules`;
-            const method = id ? 'PUT' : 'POST';
-            
-            // Note: Don't set Content-Type header manually for FormData, browser does it with boundary
-            const token = localStorage.getItem('erp-token');
-            const res = await fetch(url, {
-                method: method,
-                headers: { 'Authorization': `Bearer ${token}` }, // Standard fetch for FormData
-                body: formData
-            });
-
-            if (!res.ok) throw new Error("Operation failed");
-            
-            alert("Success!");
-            resetForm();
-            fetchModules();
-
-        } catch (e) { 
-            alert("Error: " + e.message); 
-        } finally {
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fas fa-paper-plane me-2"></i> Publish Module';
-        }
-    });
-
-    // 4. Edit & Delete
     async function editModule(id) {
         try {
             const res = await window.authFetch(`${API_BASE}/modules/${id}`);
@@ -310,45 +350,87 @@
             document.getElementById('module-title').value = data.title;
             document.getElementById('content-type').value = data.content_type;
             document.getElementById('content-url').value = data.content_url || '';
-            document.getElementById('course-select').value = data.course_id;
-            document.getElementById('subject-select').value = data.subject_id;
             
-            // Load batches then select
-            await loadBatches(data.course_id);
-            document.getElementById('batch-select').value = data.batch_id || "";
+            const cSelect = document.getElementById('course-select');
+            const sSelect = document.getElementById('subject-select');
             
-            // Format Dates for Input (YYYY-MM-DDTHH:mm)
+            // Ensure dependencies are loaded
+            if (cSelect.options.length <= 1) await loadDependencies();
+
+            cSelect.value = data.course_id;
+            sSelect.value = data.subject_id;
+
+            if (data.course_id) {
+                // 🔥 Critical: Re-load batches for the selected course before setting the value
+                await loadBatches(data.course_id);
+                document.getElementById('batch-select').value = data.batch_id;
+            }
+            
             const fmtDate = (d) => d ? new Date(d).toISOString().slice(0, 16) : '';
             document.getElementById('publish-date').value = fmtDate(data.publish_date);
             document.getElementById('expiry-date').value = fmtDate(data.expiry_date);
 
-            // UI Changes
-            document.getElementById('form-title').innerHTML = '<i class="fas fa-edit me-2"></i>Edit Module';
-            document.getElementById('submit-module-btn').innerHTML = '<i class="fas fa-save me-2"></i> Update Module';
+            document.getElementById('form-title').innerText = 'Update Digital Content';
+            document.getElementById('submit-module-btn').innerText = 'Update & Synchronize';
             document.getElementById('cancel-btn').style.display = 'block';
-            
             window.scrollTo({top: 0, behavior: 'smooth'});
-
-        } catch (e) { alert("Error loading details"); }
+        } catch (e) { alert("Error retrieving module details."); }
     }
+
+    document.getElementById('module-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submit-module-btn');
+        btn.disabled = true;
+
+        const id = document.getElementById('module-id').value;
+        const formData = new FormData();
+        
+        formData.append('branch_id', ACTIVE_BRANCH_ID);
+        formData.append('title', document.getElementById('module-title').value);
+        formData.append('content_type', document.getElementById('content-type').value);
+        formData.append('content_url', document.getElementById('content-url').value);
+        formData.append('course_id', document.getElementById('course-select').value);
+        formData.append('subject_id', document.getElementById('subject-select').value);
+        formData.append('batch_id', document.getElementById('batch-select').value);
+        formData.append('publish_date', document.getElementById('publish-date').value);
+        formData.append('expiry_date', document.getElementById('expiry-date').value);
+
+        const fileInput = document.getElementById('content-file');
+        if (fileInput.files[0]) formData.append('file', fileInput.files[0]);
+
+        try {
+            const url = id ? `${API_BASE}/modules/${id}` : `${API_BASE}/modules`;
+            const method = id ? 'PUT' : 'POST';
+            const res = await fetch(url, {
+                method: method,
+                headers: { 'Authorization': `Bearer ${TOKEN}` },
+                body: formData
+            });
+
+            if (!res.ok) throw new Error("API Execution Failure");
+            alert("Digital curriculum updated successfully.");
+            resetForm();
+            fetchModules();
+        } catch (e) { alert("Execution Error: Check your network."); }
+        finally { btn.disabled = false; }
+    });
 
     window.resetForm = function() {
         document.getElementById('module-form').reset();
         document.getElementById('module-id').value = '';
-        document.getElementById('form-title').innerHTML = '<i class="fas fa-cloud-upload-alt me-2"></i>Upload Content';
-        document.getElementById('submit-module-btn').innerHTML = '<i class="fas fa-paper-plane me-2"></i> Publish Module';
+        document.getElementById('form-title').innerText = 'Upload Content';
+        document.getElementById('submit-module-btn').innerText = 'Finalize & Publish';
         document.getElementById('cancel-btn').style.display = 'none';
+        document.getElementById('batch-select').innerHTML = '<option value="">-- Select Batch --</option>';
     }
 
     async function deleteModule(id) {
-        if(!confirm("Delete this content permanently?")) return;
+        if(!confirm("Are you sure you want to permanently delete this digital asset?")) return;
         try {
             await window.authFetch(`${API_BASE}/modules/${id}`, { method: 'DELETE' });
             fetchModules();
-        } catch (e) { alert("Delete failed"); }
+        } catch (e) { console.error("Deletion Failed", e); }
     }
-
 </script>
-
 </body>
 </html>

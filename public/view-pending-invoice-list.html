@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Outstanding Invoices | BCSM ERP</title>
+    <title>Outstanding Invoices | BCSS Institutional ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
@@ -28,14 +28,14 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold text-dark mb-0"><i class="fas fa-file-invoice-dollar me-2" style="color: #0e1b4d;"></i>Outstanding Invoices</h2>
-            <p class="text-muted mb-0 small global-school-name text-uppercase" style="letter-spacing: 1px;">Syncing Branch Security...</p>
+            <p class="text-muted mb-0 small global-school-name text-uppercase" style="letter-spacing: 1px;">Synchronizing Institutional Registry...</p>
         </div>
         <div class="d-flex gap-2">
             <button class="btn btn-outline-success rounded-pill px-4" onclick="exportToExcel()">
                 <i class="fas fa-file-excel me-2"></i>Export CSV
             </button>
             <a href="/admin-dashboard.html" class="btn btn-primary rounded-pill px-4 shadow-sm">
-                <i class="fas fa-home me-2"></i>Dashboard
+                <i class="fas fa-home me-2"></i>Institutional Dashboard
             </a>
         </div>
     </div>
@@ -43,29 +43,29 @@
     <div class="glass-card mb-4 border-0">
         <div class="row g-3 align-items-end">
             <div class="col-md-3">
-                <label class="form-label fw-bold small text-secondary">Course Filter</label>
+                <label class="form-label fw-bold small text-secondary">Course Faculty Filter</label>
                 <select id="course-filter" class="form-select border-0 bg-light py-2 shadow-none">
-                    <option value="">All Programs</option>
+                    <option value="">All Academic Programs</option>
                 </select>
             </div>
             <div class="col-md-3">
                 <label class="form-label fw-bold small text-secondary">Payment Status</label>
                 <select id="status-filter" class="form-select border-0 bg-light py-2 shadow-none">
-                    <option value="pending" selected>All Pending</option>
-                    <option value="overdue">Overdue Only</option>
-                    <option value="partial">Partial Payment</option>
+                    <option value="pending" selected>All Pending Balances</option>
+                    <option value="overdue">Overdue Arrears</option>
+                    <option value="partial">Partial Payments</option>
                 </select>
             </div>
             <div class="col-md-4">
-                <label class="form-label fw-bold small text-secondary">Quick Search</label>
+                <label class="form-label fw-bold small text-secondary">Telemetry Search</label>
                 <div class="input-group">
                     <span class="input-group-text bg-light border-0"><i class="fas fa-search"></i></span>
-                    <input type="text" id="search-input" class="form-control border-0 bg-light py-2 shadow-none" placeholder="Student Name or Roll...">
+                    <input type="text" id="search-input" class="form-control border-0 bg-light py-2 shadow-none" placeholder="Search Student Name or ID...">
                 </div>
             </div>
             <div class="col-md-2">
                 <button class="btn btn-dark w-100 rounded-pill py-2" onclick="loadInvoices()">
-                    <i class="fas fa-sync-alt me-2"></i>Apply
+                    <i class="fas fa-sync-alt me-2"></i>Apply Filters
                 </button>
             </div>
         </div>
@@ -76,18 +76,18 @@
             <table class="table table-hover table-custom mb-0">
                 <thead>
                     <tr>
-                        <th class="ps-4">Student Name & Roll</th>
+                        <th class="ps-4">Student Profile & Enrollment</th>
                         <th>Program</th>
                         <th class="text-end">Balance Due</th>
                         <th class="text-center">Status</th>
-                        <th class="text-center pe-4">Actions</th>
+                        <th class="text-center pe-4">Institutional Actions</th>
                     </tr>
                 </thead>
                 <tbody id="invoice-tbody">
                     <tr>
                         <td colspan="5" class="text-center p-5 text-muted">
                             <div class="spinner-grow spinner-grow-sm text-primary me-2"></div> 
-                            Initializing Branch-Safe Connection...
+                            Initializing Branch-Safe Neural Connection...
                         </td>
                     </tr>
                 </tbody>
@@ -104,10 +104,10 @@
         const token = localStorage.getItem('erp-token');
         if (!token) window.location.href = '/login.html';
         
-        // Load branch-specific profile
+        // Load branch-specific profile parameters
         setTimeout(() => {
-            const branchName = window.erpSettings?.school_name || "BCSM Branch";
-            document.querySelector('.global-school-name').innerText = `Records for: ${branchName}`;
+            const branchName = window.erpSettings?.school_name || "BCSS Branch Node";
+            document.querySelector('.global-school-name').innerText = `Registry Records: ${branchName}`;
             loadCourses();
             loadInvoices();
         }, 500);
@@ -125,12 +125,12 @@
                 opt.textContent = c.course_name;
                 select.appendChild(opt);
             });
-        } catch (e) { console.error("Filter Load Error:", e); }
+        } catch (e) { console.error("Filter Synchronization Error:", e); }
     }
 
     async function loadInvoices() {
         const tbody = document.getElementById('invoice-tbody');
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2 small mb-0">Synchronizing Ledger...</p></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2 small mb-0">Synchronizing Ledger Telemetry...</p></td></tr>';
 
         const params = new URLSearchParams({
             course_id: document.getElementById('course-filter').value,
@@ -140,13 +140,13 @@
 
         try {
             const res = await window.authFetch(`/api/reports/student-dues?${params.toString()}`);
-            if(!res.ok) throw new Error("API Unauthorized");
+            if(!res.ok) throw new Error("Institutional Access Denied");
             
             const data = await res.json();
             tbody.innerHTML = '';
 
             if (data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center p-5 text-muted">No outstanding balances found for this branch.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center p-5 text-muted">No outstanding ledger balances found for this node.</td></tr>';
                 return;
             }
 
@@ -164,7 +164,7 @@
                     <tr data-student-id="${row.student_id}">
                         <td class="ps-4">
                             <div class="fw-bold text-dark text-uppercase">${row.student_name}</div>
-                            <div class="small text-muted font-monospace">ROLL: ${row.roll_number || 'N/A'}</div>
+                            <div class="small text-muted font-monospace">Enrollment No: ${row.roll_number || 'N/A'}</div>
                         </td>
                         <td><span class="text-secondary small fw-bold">${row.course_name || 'N/A'}</span></td>
                         <td class="text-end fw-bold text-danger">${window.formatCurrency(balance)}</td>
@@ -172,12 +172,12 @@
                         <td class="text-center pe-4">
                             <div class="d-flex justify-content-center gap-2">
                                 <button class="btn btn-sm btn-primary rounded-pill px-3 shadow-sm" onclick="payNow('${row.student_id}')">
-                                    <i class="fas fa-wallet me-1"></i> Pay
+                                    <i class="fas fa-wallet me-1"></i> Process Payment
                                 </button>
-                                <button class="btn btn-sm btn-outline-dark btn-action-circle rounded-circle" onclick="viewLedger('${row.student_id}')" title="Statement">
+                                <button class="btn btn-sm btn-outline-dark btn-action-circle rounded-circle" onclick="viewLedger('${row.student_id}')" title="Financial Statement">
                                     <i class="fas fa-history"></i>
                                 </button>
-                                <button class="btn btn-sm btn-outline-warning btn-action-circle rounded-circle" onclick="notifyStudent('${row.student_id}')" title="Reminder">
+                                <button class="btn btn-sm btn-outline-warning btn-action-circle rounded-circle" onclick="notifyStudent('${row.student_id}')" title="Broadcast Reminder">
                                     <i class="fas fa-bell"></i>
                                 </button>
                             </div>
@@ -187,18 +187,18 @@
             });
 
         } catch (error) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger p-4">Session expired or Branch access denied.</td></tr>`;
+            tbody.innerHTML = `<tr><td colspan="5" class="text-center text-danger p-4">Session expired or Node access restricted.</td></tr>`;
         }
     }
 
-    // Secure Navigation Helpers
+    // Secure Institutional Navigation
     function payNow(id) {
-        if(!validateUUID(id)) return alert('Error: Invalid Student Identifier');
+        if(!validateUUID(id)) return alert('Security Error: Invalid Identity Hash');
         window.location.href = `/fee-collection.html?studentId=${id}`;
     }
 
     function viewLedger(id) {
-        if(!validateUUID(id)) return alert('Error: Invalid Student Identifier');
+        if(!validateUUID(id)) return alert('Security Error: Invalid Identity Hash');
         window.open(`/student-ledger.html?studentId=${id}`, '_blank');
     }
 
@@ -208,11 +208,11 @@
     }
 
     async function notifyStudent(id) {
-        alert("Success: Payment reminder has been queued for delivery.");
+        alert("Institutional Broadcast: Payment reminder has been queued for delivery.");
     }
 
     function exportToExcel() {
-        alert("Success: CSV Export initiated.");
+        alert("Telemetry Export: CSV dataset generation initiated.");
     }
 </script>
 

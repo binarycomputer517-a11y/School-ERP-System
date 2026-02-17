@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leave Management | Student Portal</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --primary: #4361ee;
+            --success: #2ecc71;
+            --danger: #e74c3c;
+            --warning: #f1c40f;
+            --bg: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-main: #2b2d42;
+            --text-muted: #8d99ae;
+        }
+
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: var(--bg); 
+            color: var(--text-main);
+            margin: 0; padding: 10px; 
+        }
+
+        .container { max-width: 1200px; margin: 20px auto; }
+
+        header {
+            background: linear-gradient(135deg, var(--primary), #3a0ca3);
+            padding: 25px; border-radius: 20px;
+            color: white; margin-bottom: 25px;
+            box-shadow: 0 10px 20px rgba(67, 97, 238, 0.15);
+        }
+
+        .btn-back {
+            background: rgba(255,255,255,0.15);
+            padding: 8px 15px; border-radius: 10px;
+            text-decoration: none; color: white;
+            font-size: 0.85rem; display: inline-block; margin-bottom: 15px;
+            transition: 0.3s;
+        }
+        .btn-back:hover { background: rgba(255,255,255,0.25); }
+
+        h1 { margin: 0; font-size: 1.6rem; font-weight: 700; }
+
+        /* Balance Section */
+        #balance-display { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); 
+            gap: 15px; margin-bottom: 25px; 
+        }
+
+        .balance-item { 
+            background: white; padding: 18px; 
+            border-radius: 18px; text-align: center;
+            border: 1px solid #f0f0f0; box-shadow: 0 4px 6px rgba(0,0,0,0.02);
+        }
+        .balance-item strong { display: block; font-size: 1.6rem; color: var(--primary); }
+        .balance-item span { font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; }
+
+        /* Layout */
+        .grid-layout { display: grid; grid-template-columns: 1fr; gap: 25px; }
+        @media (min-width: 992px) { .grid-layout { grid-template-columns: 400px 1fr; } }
+
+        .card { 
+            background: var(--card-bg); padding: 25px; 
+            border-radius: 20px; border: 1px solid #f1f1f1;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.03);
+        }
+
+        h2 { font-size: 1.15rem; margin-top: 0; display: flex; align-items: center; gap: 10px; margin-bottom: 20px; }
+        
+        label { display: block; margin-top: 15px; font-weight: 600; font-size: 0.85rem; color: #4a5568; }
+        input, select, textarea { 
+            width: 100%; padding: 12px; margin-top: 8px; 
+            border: 1px solid #e2e8f0; border-radius: 12px; 
+            background-color: #fcfcfc; font-family: inherit; font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+
+        .btn-submit { 
+            width: 100%; background-color: var(--primary); color: white; 
+            padding: 14px; border: none; cursor: pointer; margin-top: 25px; 
+            font-weight: 700; border-radius: 12px; transition: 0.3s;
+        }
+        .btn-submit:hover { opacity: 0.9; transform: translateY(-2px); }
+        .btn-submit:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+
+        /* Tables */
+        .table-container { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px; color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; border-bottom: 2px solid #f8f9fa; }
+        td { padding: 14px 12px; border-bottom: 1px solid #f8f9fa; font-size: 0.85rem; }
+
+        .status-badge { 
+            padding: 5px 10px; border-radius: 8px; 
+            font-weight: 700; font-size: 0.7rem; text-transform: uppercase;
+        }
+        .status-badge.Pending { background: #fff8e1; color: #f39c12; }
+        .status-badge.Approved { background: #e8f5e9; color: #2ecc71; }
+        .status-badge.Rejected { background: #ffebee; color: #e74c3c; }
+
+        .action-btn { padding: 5px 10px; border-radius: 6px; border: none; font-size: 0.75rem; cursor: pointer; margin-right: 5px; font-weight: 600; }
+        .btn-approve { background: #2ecc71; color: white; }
+        .btn-reject { background: #e74c3c; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <header>
+        <a href="/student-dashboard.html" class="btn-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+        <h1><i class="fas fa-calendar-check me-2"></i> Leave Management</h1>
+    </header>
+
+    <div id="admin-view" class="card" style="display: none; margin-bottom: 25px;">
+        <h2><i class="fas fa-user-shield"></i> Pending Approvals</h2>
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Applicant</th>
+                        <th>Type</th>
+                        <th>Dates</th>
+                        <th>Days</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="approvals-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="grid-layout">
+        <div class="card">
+            <h2><i class="fas fa-pen-fancy"></i> Apply for Leave</h2>
+            <div id="balance-display"></div>
+            
+            <form id="apply-leave-form">
+                <label>Leave Type</label>
+                <select id="leave-type" name="leave_type_id" required>
+                    <option value="">Loading types...</option>
+                </select>
+
+                <div style="display: flex; gap: 12px;">
+                    <div style="flex: 1;">
+                        <label>Start Date</label>
+                        <input type="date" id="start-date" name="start_date" required>
+                    </div>
+                    <div style="flex: 1;">
+                        <label>End Date</label>
+                        <input type="date" id="end-date" name="end_date" required>
+                    </div>
+                </div>
+
+                <p style="font-size: 0.8rem; margin-top: 12px; color: var(--text-muted); font-weight: 600;">
+                    Estimated Working Days: <span id="calculated-days" style="color: var(--primary); font-size: 0.9rem;">0</span>
+                </p>
+
+                <label>Reason</label>
+                <textarea id="reason" name="reason" rows="3" placeholder="State your reason..." required></textarea>
+
+                <button type="submit" id="submit-btn" class="btn-submit">Submit Application</button>
+                <p id="apply-error" style="margin-top: 10px; font-weight: 600; text-align: center;"></p>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2><i class="fas fa-history"></i> Application History</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Duration</th>
+                            <th>Days</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="history-tbody">
+                        <tr><td colspan="4" style="text-align: center; color: #888;">Loading history...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.1/moment.min.js"></script>
+<script>
+    const API_BASE = '/api/leave';
+    const token = localStorage.getItem('erp-token');
+    const userRole = localStorage.getItem('user-role');
+
+    if (!token) window.location.href = '/login.html';
+
+    // Helper: API Fetcher
+    async function handleApi(url, options = {}) {
+        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+        const response = await fetch(url, { ...options, headers });
+        if (response.status === 401 || response.status === 403) {
+            window.location.href = '/login.html';
+            return;
+        }
+        if (!response.ok) {
+            const err = await response.json();
+            throw new Error(err.message || 'Action failed');
+        }
+        return response.json();
+    }
+
+    // 1. Fetch Balances
+    async function fetchBalances() {
+        const display = document.getElementById('balance-display');
+        const select = document.getElementById('leave-type');
+        try {
+            const balances = await handleApi(`${API_BASE}/balance`);
+            display.innerHTML = balances.map(b => `
+                <div class="balance-item">
+                    <strong>${b.current_balance}</strong>
+                    <span>${b.leave_type}</span>
+                </div>
+            `).join('');
+            select.innerHTML = '<option value="">-- Select Type --</option>' + 
+                balances.map(b => `<option value="${b.leave_type_id}">${b.leave_type} (${b.current_balance})</option>`).join('');
+        } catch (e) { display.innerHTML = 'Error loading balances'; }
+    }
+
+    // 2. Fetch History
+    async function fetchHistory() {
+        const tbody = document.getElementById('history-tbody');
+        try {
+            const history = await handleApi(`${API_BASE}/history`);
+            tbody.innerHTML = history.map(h => `
+                <tr>
+                    <td><strong>${h.leave_type}</strong></td>
+                    <td>${moment(h.start_date).format('DD MMM')} - ${moment(h.end_date).format('DD MMM, YYYY')}</td>
+                    <td>${h.total_days}</td>
+                    <td><span class="status-badge ${h.status}">${h.status}</span></td>
+                </tr>
+            `).join('') || '<tr><td colspan="4" align="center">No history found</td></tr>';
+        } catch (e) { tbody.innerHTML = 'Error loading history'; }
+    }
+
+    // 3. Admin Approvals
+    async function fetchApprovals() {
+        if (!['Admin', 'Super Admin', 'Coordinator'].includes(userRole)) return;
+        document.getElementById('admin-view').style.display = 'block';
+        const tbody = document.getElementById('approvals-tbody');
+        try {
+            const approvals = await handleApi(`${API_BASE}/approvals/pending`);
+            tbody.innerHTML = approvals.map(app => `
+                <tr>
+                    <td>${app.applicant_name}<br><small>${app.applicant_role}</small></td>
+                    <td>${app.leave_type}</td>
+                    <td>${moment(app.start_date).format('DD/MM')} - ${moment(app.end_date).format('DD/MM')}</td>
+                    <td>${app.total_days}</td>
+                    <td>
+                        <button class="action-btn btn-approve" onclick="processApproval('${app.id}', 'Approved')">Approve</button>
+                        <button class="action-btn btn-reject" onclick="processApproval('${app.id}', 'Rejected')">Reject</button>
+                    </td>
+                </tr>
+            `).join('') || '<tr><td colspan="5" align="center">No pending approvals</td></tr>';
+        } catch (e) { }
+    }
+
+    // Process Approval
+    window.processApproval = async (id, status) => {
+        let note = status === 'Rejected' ? prompt('Reason for rejection:') : 'Approved';
+        if (status === 'Rejected' && !note) return;
+        try {
+            await handleApi(`${API_BASE}/approval/${id}`, { method: 'PUT', body: JSON.stringify({ status, rejection_reason: note }) });
+            fetchApprovals(); fetchHistory(); fetchBalances();
+        } catch (e) { alert(e.message); }
+    };
+
+    // Day Calculation
+    function calculateDays() {
+        const start = moment(document.getElementById('start-date').value);
+        const end = moment(document.getElementById('end-date').value);
+        const display = document.getElementById('calculated-days');
+        if (start.isValid() && end.isValid() && !start.isAfter(end)) {
+            let count = 0; let curr = start.clone();
+            while (curr.isSameOrBefore(end)) {
+                if (curr.day() !== 0 && curr.day() !== 6) count++;
+                curr.add(1, 'days');
+            }
+            display.textContent = count;
+        } else { display.textContent = '0'; }
+    }
+
+    document.getElementById('start-date').addEventListener('change', calculateDays);
+    document.getElementById('end-date').addEventListener('change', calculateDays);
+
+    // Form Submit
+    document.getElementById('apply-leave-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = document.getElementById('submit-btn');
+        const err = document.getElementById('apply-error');
+        btn.disabled = true; err.textContent = '';
+        
+        const data = Object.fromEntries(new FormData(e.target));
+        try {
+            await handleApi(`${API_BASE}/apply`, { method: 'POST', body: JSON.stringify(data) });
+            err.style.color = 'var(--success)'; err.textContent = 'Application Submitted Successfully!';
+            e.target.reset(); fetchHistory(); fetchBalances();
+        } catch (e) { err.style.color = 'var(--danger)'; err.textContent = e.message; }
+        finally { btn.disabled = false; }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        fetchBalances(); fetchHistory(); fetchApprovals();
+        const today = moment().format('YYYY-MM-DD');
+        document.getElementById('start-date').min = today;
+        document.getElementById('end-date').min = today;
+    });
+</script>
+</body>
+</html>

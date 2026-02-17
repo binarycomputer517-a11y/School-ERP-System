@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Academic Calendar | BCSM</title>
+    <title>Academic Calendar | BCSM Portal</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
@@ -28,7 +28,7 @@
             margin-top: 20px;
         }
 
-        /* --- UNIQUE CALENDAR GRID STYLE --- */
+        /* --- CALENDAR GRID ARCHITECTURE --- */
         .calendar-wrapper {
             background: var(--glass-bg);
             backdrop-filter: blur(12px);
@@ -72,11 +72,11 @@
             border-color: var(--primary-color);
         }
 
-        /* The Grid Layout */
+        /* Modern Calendar Grid Layout */
         .calendar-grid {
             display: grid; 
             grid-template-columns: repeat(7, 1fr);
-            gap: 12px; /* Gap creates the floating card effect */
+            gap: 12px; 
         }
 
         .day-name {
@@ -100,7 +100,7 @@
             cursor: pointer;
         }
 
-        /* Hover Effect - Lift Up */
+        /* Card-lift Hover Interaction */
         .day-cell:hover {
             transform: translateY(-5px);
             box-shadow: 0 10px 20px rgba(0,0,0,0.08);
@@ -120,7 +120,7 @@
             border-radius: 50%;
         }
 
-        /* Today Highlight */
+        /* Real-time Day Highlight (Current Date) */
         .day-cell.today {
             background: #f0f8ff;
             border: 1px solid var(--primary-color);
@@ -131,7 +131,7 @@
             box-shadow: 0 2px 5px rgba(20, 118, 178, 0.4);
         }
 
-        /* Event Badges */
+        /* Dynamic Event Identification Tags */
         .event {
             font-size: 0.7rem;
             color: white;
@@ -155,13 +155,13 @@
             margin-right: 5px;
         }
 
-        /* Event Colors */
+        /* Event Categorization Color Profiles */
         .event.exam { background: linear-gradient(135deg, #FF6B6B, #EE5253); box-shadow: 0 2px 5px rgba(238, 82, 83, 0.3); }
         .event.holiday { background: linear-gradient(135deg, #1DD1A1, #10AC84); box-shadow: 0 2px 5px rgba(16, 172, 132, 0.3); }
         .event.meeting { background: linear-gradient(135deg, #FECA57, #FF9F43); box-shadow: 0 2px 5px rgba(255, 159, 67, 0.3); color: #333; }
         .event.general { background: linear-gradient(135deg, #54A0FF, #2E86DE); box-shadow: 0 2px 5px rgba(46, 134, 222, 0.3); }
 
-        /* Sidebar Styles */
+        /* Sidebar Agenda View Styles */
         .sidebar-card {
             background: white;
             border-radius: 20px;
@@ -198,13 +198,13 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="fw-bold mb-0" style="color: var(--primary-dark);">Academic Schedule</h4>
-            <p class="text-muted small">Manage school events & holidays</p>
+            <p class="text-muted small">Comprehensive overview of institutional events, exams, and holidays</p>
         </div>
         <div class="d-flex gap-2">
-            <button class="btn btn-success rounded-pill px-4 shadow-sm" onclick="openAddEventModal()">
+            <button id="addEventBtn" class="btn btn-success rounded-pill px-4 shadow-sm" onclick="openAddEventModal()" style="display: none;">
                 <i class="fas fa-plus me-2"></i> Add New Event
             </button>
-            <a href="/admin-dashboard.html" class="btn btn-dark rounded-pill px-4 shadow-sm">
+            <a href="/dashboard" id="backToDash" class="btn btn-dark rounded-pill px-4 shadow-sm">
                 <i class="fas fa-arrow-left me-2"></i> Dashboard
             </a>
         </div>
@@ -214,9 +214,9 @@
         <div class="col-lg-9">
             <div class="calendar-wrapper">
                 <div class="calendar-header">
-                    <button class="nav-btn" id="prevMonth" data-action="prev"><i class="fas fa-chevron-left"></i></button>
-                    <h2 id="currentMonthYear">Loading...</h2>
-                    <button class="nav-btn" id="nextMonth" data-action="next"><i class="fas fa-chevron-right"></i></button>
+                    <button class="nav-btn" id="prevMonth"><i class="fas fa-chevron-left"></i></button>
+                    <h2 id="currentMonthYear">Synchronizing...</h2>
+                    <button class="nav-btn" id="nextMonth"><i class="fas fa-chevron-right"></i></button>
                 </div>
 
                 <div class="calendar-grid" id="calendar-grid-container">
@@ -235,20 +235,20 @@
         <div class="col-lg-3">
             <div class="sidebar-card">
                 <h5 class="fw-bold mb-4" style="color: var(--primary-dark); border-left: 4px solid var(--primary-color); padding-left: 10px;">
-                    Upcoming Events
+                    Upcoming Agenda
                 </h5>
                 
                 <div id="event-list" style="max-height: 600px; overflow-y: auto;">
                     <ul id="monthly-events-ul" class="list-unstyled">
                         <li class="text-center text-muted py-5">
                             <i class="fas fa-calendar-day fa-3x mb-3 text-light-gray"></i><br>
-                            Loading events...
+                            Fetching schedule...
                         </li>
                     </ul>
                 </div>
 
                 <div class="mt-4 pt-3 border-top">
-                    <small class="text-uppercase text-muted fw-bold mb-2 d-block" style="font-size: 0.7rem;">Event Types</small>
+                    <small class="text-uppercase text-muted fw-bold mb-2 d-block" style="font-size: 0.7rem;">Event Classification</small>
                     <div class="d-flex flex-wrap gap-2">
                         <span class="badge rounded-pill bg-danger"><i class="fas fa-pen-alt me-1"></i> Exam</span>
                         <span class="badge rounded-pill bg-success"><i class="fas fa-umbrella-beach me-1"></i> Holiday</span>
@@ -265,23 +265,23 @@
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow-lg" style="border-radius: 15px;">
             <div class="modal-header border-0 bg-light" style="border-radius: 15px 15px 0 0;">
-                <h5 class="modal-title fw-bold text-dark">Add Calendar Event</h5>
+                <h5 class="modal-title fw-bold text-dark">Create Calendar Event</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <form id="add-event-form">
                     <div class="mb-3">
                         <label class="form-label fw-bold small text-muted">Event Title</label>
-                        <input type="text" class="form-control form-control-lg" placeholder="e.g. Final Exam" required>
+                        <input type="text" id="event-title" class="form-control form-control-lg" placeholder="e.g. Annual Sports Day" required>
                     </div>
                     <div class="row g-3 mb-4">
                         <div class="col-6">
-                            <label class="form-label fw-bold small text-muted">Date</label>
-                            <input type="date" class="form-control" required>
+                            <label class="form-label fw-bold small text-muted">Scheduled Date</label>
+                            <input type="date" id="event-date" class="form-control" required>
                         </div>
                         <div class="col-6">
-                            <label class="form-label fw-bold small text-muted">Type</label>
-                            <select class="form-select">
+                            <label class="form-label fw-bold small text-muted">Event Category</label>
+                            <select id="event-type" class="form-select">
                                 <option value="general">General</option>
                                 <option value="exam">Exam</option>
                                 <option value="holiday">Holiday</option>
@@ -289,7 +289,11 @@
                             </select>
                         </div>
                     </div>
-                    <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 fw-bold shadow-sm">Save to Calendar</button>
+                    <div class="mb-3">
+                        <label class="form-label fw-bold small text-muted">Additional Description (Optional)</label>
+                        <textarea id="event-desc" class="form-control" rows="2" placeholder="Provide specific details or instructions..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 rounded-pill py-2 fw-bold shadow-sm">Sync to Calendar</button>
                 </form>
             </div>
         </div>
@@ -300,7 +304,39 @@
 <script src="js/calendar-manager-client.js"></script> 
 
 <script>
-    // Modal Trigger
+    /**
+     * RBAC Integration: Manages visibility of administrative elements
+     * Validates user profile context stored in localStorage
+     */
+    document.addEventListener('DOMContentLoaded', () => {
+        const user = JSON.parse(localStorage.getItem('user-profile') || '{}');
+        const role = user.role ? user.role.toLowerCase() : '';
+        const adminRoles = ['super admin', 'admin', 'coordinator'];
+        
+        // Expose management tools only to authorized roles
+        if (role && adminRoles.includes(role)) {
+            const addBtn = document.getElementById('addEventBtn');
+            if (addBtn) addBtn.style.display = 'block';
+        }
+        
+        // Dynamic dashboard routing based on user session role
+        const dashBtn = document.getElementById('backToDash');
+        if (dashBtn) {
+            if (role === 'parent') {
+                dashBtn.href = '/parent-dashboard.html';
+            } else if (role === 'student') {
+                dashBtn.href = '/student-dashboard.html';
+            } else if (role === 'admin' || role === 'super admin') {
+                dashBtn.href = '/admin-dashboard.html';
+            } else {
+                dashBtn.href = '/login.html';
+            }
+        }
+    });
+
+    /**
+     * Toggles the Add Event Modal instance
+     */
     function openAddEventModal() {
         const modal = new bootstrap.Modal(document.getElementById('addEventModal'));
         modal.show();

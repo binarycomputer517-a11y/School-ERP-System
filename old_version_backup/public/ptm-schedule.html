@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PTM Manager | Teacher Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap');
+        :root { --primary: #6366f1; --bg: #f8fafc; }
+        body { background: var(--bg); font-family: 'Outfit', sans-serif; color: #1e293b; }
+        .glass-card { background: white; border-radius: 20px; border: 1px solid #e2e8f0; box-shadow: 0 10px 30px rgba(0,0,0,0.02); }
+        .status-badge { padding: 5px 12px; border-radius: 50px; font-size: 0.75rem; font-weight: 700; }
+        .status-Open { background: #dcfce7; color: #166534; }
+        .status-Scheduled { background: #e0f2fe; color: #0369a1; }
+        .status-Canceled { background: #fee2e2; color: #991b1b; }
+        .nav-link.active { color: var(--primary) !important; font-weight: bold; border-bottom: 2px solid var(--primary); }
+    </style>
+</head>
+<body>
+
+<div class="container py-5">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold mb-0">PTM Scheduling Hub</h2>
+            <p class="text-muted">Manage parent meetings and availability slots</p>
+        </div>
+        <div class="btn-group">
+            <button class="btn btn-outline-primary" onclick="exportCSV()"><i class="fas fa-file-csv me-2"></i>Export CSV</button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#generateModal"><i class="fas fa-magic me-2"></i>Generate Slots</button>
+        </div>
+    </div>
+
+    <div class="row g-4 mb-4" id="statsRow">
+        <div class="col-md-4">
+            <div class="glass-card p-4 text-center">
+                <small class="text-muted text-uppercase fw-bold">Open Slots</small>
+                <h3 class="fw-bold mb-0" id="stat-open">0</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="glass-card p-4 text-center">
+                <small class="text-muted text-uppercase fw-bold">Scheduled</small>
+                <h3 class="fw-bold mb-0 text-primary" id="stat-scheduled">0</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="glass-card p-4 text-center">
+                <small class="text-muted text-uppercase fw-bold">Completed</small>
+                <h3 class="fw-bold mb-0 text-success" id="stat-completed">0</h3>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card p-4">
+        <div class="table-responsive">
+            <table class="table align-middle">
+                <thead class="text-muted small text-uppercase">
+                    <tr>
+                        <th>Date & Time</th>
+                        <th>Student / Parent</th>
+                        <th>Type</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="scheduleBody">
+                    <tr><td colspan="5" class="text-center py-5">Loading your schedule...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="generateModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content border-0 rounded-4">
+            <div class="modal-header border-0">
+                <h5 class="fw-bold">Bulk Generate Slots</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="generateForm">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label small fw-bold">DATE</label>
+                        <input type="date" name="date" class="form-control" required>
+                    </div>
+                    <div class="row g-3 mb-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">START TIME</label>
+                            <input type="time" name="start_time" class="form-control" required>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">END TIME</label>
+                            <input type="time" name="end_time" class="form-control" required>
+                        </div>
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">DURATION (MIN)</label>
+                            <select name="duration" class="form-select">
+                                <option value="15">15 Mins</option>
+                                <option value="30" selected>30 Mins</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small fw-bold">MEETING TYPE</label>
+                            <select name="type" class="form-select">
+                                <option value="In-Person">In-Person</option>
+                                <option value="Online">Online</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold">Create Availability</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const TOKEN = localStorage.getItem('erp-token');
+    const TEACHER_ID = localStorage.getItem('teacher_id') || localStorage.getItem('profile-id');
+
+    async function initPTM() {
+        if (!TOKEN || !TEACHER_ID) return;
+        loadStats();
+        loadSchedule();
+    }
+
+    async function loadStats() {
+        // Uses router.get('/stats/:teacherId')
+        const res = await fetch(`/api/ptm/stats/${TEACHER_ID}`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const stats = await res.json();
+        document.getElementById('stat-open').innerText = stats.open_slots;
+        document.getElementById('stat-scheduled').innerText = stats.scheduled;
+        document.getElementById('stat-completed').innerText = stats.completed;
+    }
+
+    async function loadSchedule() {
+        // Uses router.get('/teacher/:teacherId/slots')
+        const res = await fetch(`/api/ptm/teacher/${TEACHER_ID}/slots`, {
+            headers: { 'Authorization': `Bearer ${TOKEN}` }
+        });
+        const data = await res.json();
+        const body = document.getElementById('scheduleBody');
+        body.innerHTML = '';
+
+        data.forEach(slot => {
+            const time = new Date(slot.meeting_time).toLocaleString('en-GB', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+            
+            body.innerHTML += `
+                <tr>
+                    <td><div class="fw-bold">${time}</div><small class="text-muted">${slot.duration_minutes} mins</small></td>
+                    <td>${slot.student_name || '<span class="text-muted">Available Slot</span>'}</td>
+                    <td><span class="badge bg-light text-dark border">${slot.meeting_type}</span></td>
+                    <td><span class="status-badge status-${slot.status}">${slot.status}</span></td>
+                    <td class="text-end">
+                        <div class="btn-group">
+                            <a href="/api/ptm/ics/${slot.id}" class="btn btn-sm btn-light border" title="Add to Calendar"><i class="fas fa-calendar-plus"></i></a>
+                            ${slot.status === 'Scheduled' ? `<button onclick="openFeedback('${slot.id}')" class="btn btn-sm btn-primary">Feedback</button>` : ''}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    // Handle Bulk Generation
+    document.getElementById('generateForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const payload = Object.fromEntries(formData);
+        payload.teacher_id = TEACHER_ID;
+
+        // Uses router.post('/generate-slots')
+        const res = await fetch('/api/ptm/generate-slots', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` },
+            body: JSON.stringify(payload)
+        });
+
+        if (res.ok) {
+            location.reload();
+        } else {
+            alert("Failed to generate slots");
+        }
+    };
+
+    function exportCSV() {
+        // Uses router.get('/export/csv/:teacherId')
+        window.location.href = `/api/ptm/export/csv/${TEACHER_ID}?token=${TOKEN}`;
+    }
+
+    document.addEventListener('DOMContentLoaded', initPTM);
+</script>
+</body>
+</html>

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Emergency SOS | Driver Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --danger: #dc2626;
+            --bg: #fef2f2;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .sos-card {
+            background: white;
+            padding: 40px 20px;
+            border-radius: 24px;
+            box-shadow: 0 20px 40px rgba(220, 38, 38, 0.15);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+            border: 2px solid #fee2e2;
+        }
+
+        .sos-button {
+            width: 160px;
+            height: 160px;
+            background: var(--danger);
+            color: white;
+            border: 8px solid #fca5a5;
+            border-radius: 50%;
+            font-size: 2em;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4);
+            animation: pulse-red 2s infinite;
+            margin: 20px auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s;
+        }
+
+        .sos-button:active { transform: scale(0.9); }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.7); }
+            70% { box-shadow: 0 0 0 20px rgba(220, 38, 38, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0); }
+        }
+
+        .alert-type-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .alert-option {
+            padding: 12px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 0.85em;
+            cursor: pointer;
+            background: #f8fafc;
+        }
+
+        .alert-option.selected {
+            background: var(--danger);
+            color: white;
+            border-color: var(--danger);
+        }
+
+        #status-msg { margin-top: 20px; font-weight: 600; display: none; }
+        .back-link { display: block; margin-top: 30px; text-decoration: none; color: #64748b; }
+    </style>
+</head>
+<body>
+
+<div class="sos-card">
+    <h1 style="color: var(--danger); margin: 0;">EMERGENCY SOS</h1>
+    <p style="color: #64748b;">Press for 2 seconds to alert School Admin</p>
+
+    <div class="sos-button" id="sos-trigger">SOS</div>
+
+    <div class="alert-type-grid">
+        <div class="alert-option selected" onclick="selectType(this, 'Breakdown')">🛠 Breakdown</div>
+        <div class="alert-option" onclick="selectType(this, 'Accident')">⚠️ Accident</div>
+        <div class="alert-option" onclick="selectType(this, 'Medical')">🚑 Medical</div>
+        <div class="alert-option" onclick="selectType(this, 'Other')">❓ Other</div>
+    </div>
+
+    <div id="status-msg"></div>
+
+    <a href="/driver-dashboard.html" class="back-link">← Cancel and Go Back</a>
+</div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    let selectedAlert = 'Breakdown';
+    let holdTimer;
+
+    function selectType(el, type) {
+        document.querySelectorAll('.alert-option').forEach(opt => opt.classList.remove('selected'));
+        el.classList.add('selected');
+        selectedAlert = type;
+    }
+
+    const sosBtn = document.getElementById('sos-trigger');
+
+    sosBtn.addEventListener('mousedown', startHold);
+    sosBtn.addEventListener('mouseup', cancelHold);
+    sosBtn.addEventListener('touchstart', startHold);
+    sosBtn.addEventListener('touchend', cancelHold);
+
+    function startHold() {
+        holdTimer = setTimeout(sendSOS, 1500); // Prevents accidental taps
+        sosBtn.style.transform = 'scale(0.95)';
+    }
+
+    function cancelHold() {
+        clearTimeout(holdTimer);
+        sosBtn.style.transform = 'scale(1)';
+    }
+
+    async function sendSOS() {
+        const statusMsg = document.getElementById('status-msg');
+        
+        // Get current location for precise help
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            try {
+                const response = await fetch('/api/transport/sos', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        type: selectedAlert,
+                        lat: pos.coords.latitude,
+                        lon: pos.coords.longitude
+                    })
+                });
+
+                if (response.ok) {
+                    statusMsg.style.display = 'block';
+                    statusMsg.style.color = '#166534';
+                    statusMsg.innerText = "ALERTS SENT TO ADMIN & POLICE";
+                    sosBtn.style.animation = 'none';
+                    sosBtn.style.background = '#059669';
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        });
+    }
+</script>
+
+</body>
+</html>

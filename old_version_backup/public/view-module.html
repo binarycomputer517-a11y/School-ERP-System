@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Content Viewer</title>
+    <style>
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 20px; background-color: #F0F2F5; }
+        .viewer-container { max-width: 900px; margin: auto; background: white; padding: 30px; border: 1px solid #333; box-shadow: 8px 8px 0 #888; }
+        h1 { border-bottom: 3px double #333; padding-bottom: 10px; color: #005A9C; text-transform: uppercase; font-size: 1.5em; }
+        .meta-info { font-size: 0.9em; color: #555; margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .content-box { width: 100%; min-height: 500px; border: 1px solid #ccc; background: #000; display: flex; align-items: center; justify-content: center; color: white; }
+        iframe { width: 100%; height: 500px; border: none; }
+        .back-nav { margin-bottom: 20px; }
+        .back-nav a { font-weight: bold; color: #005A9C; text-decoration: none; }
+    </style>
+</head>
+<body>
+
+<div class="viewer-container">
+    <div class="back-nav">
+        <a href="/my-syllabus.html">&larr; Back to Syllabus</a>
+    </div>
+
+    <h1 id="module-title">Loading Academic Content...</h1>
+    <div class="meta-info" id="module-meta">Please wait while the server synchronizes...</div>
+
+    <div class="content-box" id="display-area">
+        Synchronizing Media...
+    </div>
+</div>
+
+
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const urlParams = new URLSearchParams(window.location.search);
+    const moduleId = urlParams.get('id');
+
+    async function initializeViewer() {
+        if (!moduleId) {
+            document.getElementById('module-title').innerText = "Invalid Request";
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/online-learning/modules/${moduleId}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if (!res.ok) throw new Error("Content Access Denied");
+            const data = await res.json();
+
+            // UI Update
+            document.getElementById('module-title').innerText = data.title;
+            document.getElementById('module-meta').innerText = `Type: ${data.content_type} | Category: ${data.subject_name || 'General Academic'}`;
+
+            const displayArea = document.getElementById('display-area');
+            
+            if (data.content_type === 'VIDEO') {
+                // Check if YouTube URL
+                let videoUrl = data.content_url;
+                if (videoUrl.includes('youtube.com') || videoUrl.includes('youtu.be')) {
+                    const videoId = videoUrl.includes('v=') ? videoUrl.split('v=')[1].split('&')[0] : videoUrl.split('/').pop();
+                    displayArea.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen></iframe>`;
+                } else {
+                    displayArea.innerHTML = `<video controls style="width:100%"><source src="${videoUrl}" type="video/mp4"></video>`;
+                }
+            } else if (data.content_type === 'PDF') {
+                displayArea.innerHTML = `<iframe src="${data.content_url}#toolbar=0"></iframe>`;
+            } else {
+                displayArea.innerHTML = `<div style="padding:40px; text-align:center;">
+                    <p>External Resource detected.</p>
+                    <a href="${data.content_url}" target="_blank" style="color:white; text-decoration:underline;">Click here to open Resource</a>
+                </div>`;
+            }
+
+        } catch (error) {
+            document.getElementById('module-title').innerText = "Access Denied";
+            document.getElementById('display-area').innerHTML = `<div style="color:red; padding:20px;">Error: ${error.message}</div>`;
+        }
+    }
+
+    window.onload = initializeViewer;
+</script>
+</body>
+</html>

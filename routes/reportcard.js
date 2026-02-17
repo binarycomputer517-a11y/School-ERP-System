@@ -84,9 +84,9 @@ async function fetchReportDetails(studentId, examId) {
 /**
  * @route   GET /api/report-card/exams/student/:studentId
  * @desc    Fetches the list of completed exams for a specific student to generate a report.
- * @access  Private (Admin, Teacher, Student)
+ * @access  Private (Admin, Teacher, Student, Parent)
  */
-router.get('/exams/student/:studentId', authenticateToken, authorize(['Admin', 'Teacher', 'Student']), async (req, res) => {
+router.get('/exams/student/:studentId', authenticateToken, authorize(['Admin', 'Teacher', 'Student', 'Parent']), async (req, res) => {
     const { studentId } = req.params;
     
     try {
@@ -123,9 +123,9 @@ router.get('/exams/student/:studentId', authenticateToken, authorize(['Admin', '
 /**
  * @route   GET /api/report-card/detail/student/:studentId/exam/:examId
  * @desc    Fetches detailed marks, totals, and grades for a specific student and exam.
- * @access  Private (Admin, Teacher, Student)
+ * @access  Private (Admin, Teacher, Student, Parent)
  */
-router.get('/detail/student/:studentId/exam/:examId', authenticateToken, authorize(['Admin', 'Teacher', 'Student']), async (req, res) => {
+router.get('/detail/student/:studentId/exam/:examId', authenticateToken, authorize(['Admin', 'Teacher', 'Student', 'Parent']), async (req, res) => {
     const { studentId, examId } = req.params;
 
     try {
@@ -151,9 +151,9 @@ router.get('/detail/student/:studentId/exam/:examId', authenticateToken, authori
 /**
  * @route   GET /api/report-card/pdf/student/:studentId/exam/:examId
  * @desc    Generates and streams the PDF report card (Requires token via query string).
- * @access  Private (Admin, Teacher, Student)
+ * @access  Private (Admin, Teacher, Student, Parent)
  */
-router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(['Admin', 'Teacher', 'Student']), async (req, res) => {
+router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(['Admin', 'Teacher', 'Student', 'Parent']), async (req, res) => {
     const { studentId, examId } = req.params;
 
     // --- Placeholder HTML Template Function ---
@@ -224,14 +224,9 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
         // CRITICAL FIX: Use try...finally to prevent the "Frame Detached" error and resource leaks.
         try {
             // Use 'headless: "new"' for stability and essential server arguments
-            // Fallback for local launch if it fails with default args
-            
-            // Check if running in a potentially restrictive environment (e.g., local Mac without full Chrome path or cloud)
-            const isLocalMac = process.platform === 'darwin' && !process.env.NODE_ENV;
             
             browser = await puppeteer.launch({ 
                 headless: "new",
-                // Conditional args for cloud/non-local environments
                 args: [
                     '--no-sandbox', 
                     '--disable-setuid-sandbox', 
@@ -239,14 +234,10 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
                     '--single-process',
                     '--no-zygote'
                 ],
-                // On local, try to use system Chrome if standard Puppeteer fails
-                // You might need to uncomment and adjust the executablePath if local launch fails
-                // executablePath: isLocalMac ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : undefined,
                 timeout: 60000 
             }); 
             const page = await browser.newPage();
             
-            // Set longer timeout for page loading content
             await page.setContent(htmlContent, { 
                 waitUntil: ['domcontentloaded', 'load'], 
                 timeout: 60000 
@@ -260,11 +251,9 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
 
         } catch (launchError) {
             console.error('Puppeteer Launch/PDF Error:', launchError);
-            // If Puppeteer fails entirely, send a fallback message instead of crashing the process
             res.status(500).json({ message: 'PDF Generation failed. Check server logs for Puppeteer dependency issues.' });
             return;
         } finally {
-            // Ensure the browser instance is closed regardless of success/failure
             if (browser) {
                 await browser.close();
             }
@@ -277,7 +266,6 @@ router.get('/pdf/student/:studentId/exam/:examId', authenticateToken, authorize(
 
 
     } catch (error) {
-        // Log the external error for server diagnosis
         console.error('Report Card Route Error:', error); 
         res.status(500).json({ message: 'Failed to retrieve report data due to an internal server error.' });
     }

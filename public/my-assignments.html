@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Assignments | Student Portal</title>
+    <title>Academic Assignments | Portal</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -150,7 +150,7 @@
             bottom: 0; left: 0; width: 100%; height: 100%; 
             background: rgba(0,0,0,0.5); 
             z-index: 2000; 
-            align-items: flex-end; /* Bottom sheet logic */
+            align-items: flex-end; 
         }
 
         .modal-content { 
@@ -209,8 +209,8 @@
 
 <header class="app-header">
     <div class="container" style="padding-bottom: 0;">
-        <a href="/student-dashboard.html" class="back-link"><i class="fas fa-chevron-left"></i> &nbsp;Dashboard</a>
-        <h1><i class="fas fa-tasks"></i> Academic Assignments</h1>
+        <a href="/student-dashboard.html" id="back-nav" class="back-link"><i class="fas fa-chevron-left"></i> &nbsp;Dashboard</a>
+        <h1 id="page-title"><i class="fas fa-tasks"></i> Academic Assignments</h1>
     </div>
 </header>
 
@@ -218,7 +218,7 @@
     <div id="assignment-list" style="margin-top: 40px;">
         <div style="text-align: center; padding: 40px; color: var(--text-light);">
             <i class="fas fa-circle-notch fa-spin fa-2x"></i>
-            <p>Fetching your assignments...</p>
+            <p>Fetching secure data link...</p>
         </div>
     </div>
 </div>
@@ -230,13 +230,10 @@
         
         <form id="upload-form">
             <input type="hidden" id="submit-id">
-            
-            <label>Upload Attachment</label>
+            <label>Upload Attachment (Max 10MB)</label>
             <input type="file" id="submission-file" required>
-            
             <label>Student Notes</label>
-            <textarea id="student-notes" rows="4" placeholder="Briefly describe your submission..."></textarea>
-            
+            <textarea id="student-notes" rows="4" placeholder="Briefly describe the submission..."></textarea>
             <div class="modal-btns">
                 <button type="submit" class="btn-action">SUBMIT NOW</button>
                 <button type="button" class="btn-action btn-cancel" onclick="closeModal()">CANCEL</button>
@@ -245,64 +242,96 @@
     </div>
 </div>
 
+<script src="/js/global-config.js"></script>
 <script>
     const token = localStorage.getItem('erp-token');
 
-    function getStudentId() {
+    /**
+     * Extracts identity and role from the JWT
+     */
+    function getUserContext() {
         if (!token) return null;
         try {
             const payload = JSON.parse(atob(token.split('.')[1]));
-            return payload.studentId || payload.id || localStorage.getItem('student-id');
-        } catch (e) {
-            return localStorage.getItem('student-id');
-        }
+            return {
+                role: payload.role.toLowerCase(),
+                // Resolve student ID: If parent, get selected child ID; if student, get self-ID
+                studentId: payload.role.toLowerCase() === 'parent' 
+                           ? localStorage.getItem('selected-student-id') 
+                           : (payload.student_id || payload.id || localStorage.getItem('student-id'))
+            };
+        } catch (e) { return null; }
     }
 
-    const currentStudentId = getStudentId();
+    const context = getUserContext();
 
     async function loadAssignments() {
         const listDiv = document.getElementById('assignment-list');
-        if (!currentStudentId) {
-            listDiv.innerHTML = `<div class="error-display">Identity Missing. Please log in again.</div>`;
+        
+        if (!token) return window.location.href = '/login.html';
+
+        if (context.role === 'parent') {
+            document.getElementById('page-title').innerHTML = '<i class="fas fa-user-graduate"></i> Child\'s Assignments';
+            document.getElementById('back-nav').href = '/parent-dashboard.html';
+        }
+
+        if (!context.studentId) {
+            listDiv.innerHTML = `<div class="error-display">Neural Link Missing. Please select a student from dashboard.</div>`;
             return;
         }
 
         try {
-            const res = await fetch(`/api/online-learning/assignments/student/${currentStudentId}`, {
+            // 
+            const res = await fetch(`/api/online-learning/assignments/student/${context.studentId}`, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
 
             if (!res.ok) throw new Error();
             const assignments = await res.json();
 
-            if (assignments.length === 0) {
-                listDiv.innerHTML = '<div style="text-align:center; padding:60px; color:#94a3b8;"><i class="fas fa-inbox fa-3x mb-3"></i><p>No assignments found.</p></div>';
+            if (!Array.isArray(assignments) || assignments.length === 0) {
+                listDiv.innerHTML = '<div style="text-align:center; padding:60px; color:#94a3b8;"><i class="fas fa-inbox fa-3x mb-3"></i><p>No assignments found in curriculum.</p></div>';
                 return;
             }
 
             listDiv.innerHTML = assignments.map(a => {
-                const statusSlug = a.submission_status.toLowerCase().replace(/\s+/g, '-');
-                const isLocked = a.submission_status !== 'Not Submitted';
+                const status = a.submission_status || 'Not Submitted';
+                const statusSlug = status.toLowerCase().replace(/\s+/g, '-');
+                const isLocked = status !== 'Not Submitted';
+                const isParent = context.role === 'parent';
+
+                // Date Formatting
+                const dueDate = a.due_date ? new Date(a.due_date).toLocaleDateString('en-GB', {
+                    day: '2-digit', month: 'short', year: 'numeric'
+                }) : 'TBA';
 
                 return `
                     <div class="assignment-card">
                         <div class="card-header">
-                            <h3>${a.title}</h3>
-                            <span class="status-pill status-${statusSlug}">${a.submission_status}</span>
+                            <div>
+                                <small style="color:var(--primary); font-weight:700; text-transform:uppercase; font-size:0.65rem;">${a.subject_name || 'General'}</small>
+                                <h3>${a.title}</h3>
+                            </div>
+                            <span class="status-pill status-${statusSlug}">${status}</span>
                         </div>
                         
                         <div class="card-body">
                             <div class="meta-info">
-                                <span><i class="fas fa-link"></i> <a href="${a.content_url}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:500;">Study Resources</a></span>
-                                <span><i class="fas fa-award"></i> Grade: <b>${a.marks_obtained || '--'}</b> / ${a.max_marks}</span>
+                                <span><i class="fas fa-calendar-alt"></i> Deadline: <b>${dueDate}</b></span>
+                                <span><i class="fas fa-user-tie"></i> Teacher: ${a.teacher_name || 'Instructor'}</span>
+                                ${a.content_url ? `<span><i class="fas fa-link"></i> <a href="${a.content_url}" target="_blank" style="color:var(--primary); text-decoration:none; font-weight:600;">Download Materials</a></span>` : ''}
+                                <span><i class="fas fa-award"></i> Marks: <b>${a.marks_obtained !== null ? a.marks_obtained : '--'}</b> / ${a.max_marks || 100}</span>
                             </div>
 
-                            ${a.feedback ? `<div class="feedback-box"><b>Instructor Note:</b> ${a.feedback}</div>` : ''}
+                            ${a.feedback ? `<div class="feedback-box"><b>Teacher Feedback:</b> ${a.feedback}</div>` : ''}
 
                             <div class="actions">
-                                ${!isLocked ? 
-                                    `<button class="btn-action" onclick="openModal('${a.id}')"><i class="fas fa-upload"></i> &nbsp;UPLOAD WORK</button>` : 
-                                    `<button class="btn-action" style="background: var(--success); opacity: 0.8;" disabled><i class="fas fa-check-circle"></i> &nbsp;SUBMITTED</button>`
+                                ${isParent ? 
+                                    (isLocked ? `<button class="btn-action" style="background:var(--success); opacity:0.7;" disabled><i class="fas fa-check-circle"></i> WORK SUBMITTED</button>` : `<button class="btn-action" style="background:var(--warning); color:black; opacity:0.7;" disabled><i class="fas fa-clock"></i> SUBMISSION PENDING</button>`)
+                                    : (!isLocked ? 
+                                        `<button class="btn-action" onclick="openModal('${a.id}')"><i class="fas fa-upload"></i> UPLOAD WORK</button>` : 
+                                        `<button class="btn-action" style="background:var(--success); opacity:0.8;" disabled><i class="fas fa-check-circle"></i> SUBMITTED</button>`
+                                    )
                                 }
                             </div>
                         </div>
@@ -310,7 +339,8 @@
                 `;
             }).join('');
         } catch (err) {
-            listDiv.innerHTML = `<div class="error-display">Network Failure. Please try again.</div>`;
+            console.error("🔥 UI Link Failure:", err);
+            listDiv.innerHTML = `<div class="error-display">Telemetry Sync Failed. Verify network connection.</div>`;
         }
     }
 
@@ -329,12 +359,18 @@
     document.getElementById('upload-form').onsubmit = async (e) => {
         e.preventDefault();
         const file = document.getElementById('submission-file').files[0];
-        if (!file) return;
+        const submitId = document.getElementById('submit-id').value;
+
+        if (!file || !submitId) return;
 
         const formData = new FormData();
-        formData.append('submission_id', document.getElementById('submit-id').value);
+        formData.append('submission_id', submitId);
         formData.append('student_notes', document.getElementById('student-notes').value);
         formData.append('submission_file', file);
+
+        const btn = e.target.querySelector('button[type="submit"]');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> SYNCING...';
 
         try {
             const res = await fetch('/api/online-learning/assignments/submit', {
@@ -347,7 +383,10 @@
             closeModal();
             loadAssignments();
         } catch (err) {
-            alert("Upload failed. Please check file size/format.");
+            alert("Upload link interrupted. Check file format/size.");
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = 'SUBMIT NOW';
         }
     };
 

@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fee Collection Terminal | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        .balance-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-left: 5px solid var(--primary-dark);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+        .balance-positive { color: #198754; font-weight: 800; font-size: 1.5rem; }
+        .balance-negative { color: #dc3545; font-weight: 800; font-size: 1.5rem; }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width: 1200px; padding-top: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-cash-register me-2"></i>Fee Collection Terminal</h2>
+            <p class="text-muted mb-0 small">Collect fees and manage student accounts</p>
+        </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-7">
+            <div class="glass-card">
+                <h5 class="section-title"><i class="fas fa-user-check me-2"></i>1. Select Student</h5>
+                <div class="mb-4">
+                    <label class="form-label fw-bold">Student Name / Roll No</label>
+                    <select id="student-select" class="form-select" onchange="loadStudentDetails(this.value)">
+                        <option value="">-- Loading Students... --</option>
+                    </select>
+                </div>
+
+                <div id="payment-form" style="display: none;">
+                    <h5 class="section-title mt-4"><i class="fas fa-hand-holding-usd me-2"></i>2. Receive Payment</h5>
+                    
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Payment Date</label>
+                            <input type="date" id="payment-date" class="form-control" readonly disabled>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label fw-bold small">Payment Mode</label>
+                            <select id="pay-mode" class="form-select">
+                                <option value="Cash">Cash</option>
+                                <option value="UPI">UPI / GPay / PhonePe</option>
+                                <option value="Bank Transfer">Bank Transfer (NEFT)</option>
+                                <option value="Cheque">Cheque</option>
+                                <option value="Card">Card</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Amount to Collect (INR)</label>
+                            <div class="input-group">
+                                <span class="input-group-text fw-bold">₹</span>
+                                <input type="number" id="pay-amount" class="form-control fw-bold" placeholder="0.00" min="1">
+                            </div>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-bold small">Remarks / Transaction ID</label>
+                            <textarea id="pay-notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <button class="btn btn-primary w-100 py-3 rounded-pill shadow" onclick="processPayment()" id="collect-btn">
+                            <span id="btn-text" class="fw-bold"><i class="fas fa-check-circle me-2"></i> COLLECT PAYMENT</span>
+                            <span id="btn-spinner" class="spinner-border spinner-border-sm" style="display:none;"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-5">
+            <div class="glass-card h-100">
+                <h5 class="section-title"><i class="fas fa-file-invoice-dollar me-2"></i>Account Summary</h5>
+                
+                <div id="student-info-box">
+                    <div class="text-center py-5 text-muted border rounded border-dashed">
+                        <i class="fas fa-user-graduate fa-3x mb-3 opacity-25"></i><br>
+                        Select a student to view details.
+                    </div>
+                </div>
+
+                <div id="history-section" style="display: none;" class="mt-4">
+                    <h6 class="fw-bold border-bottom pb-2 mb-3">Recent Transactions</h6>
+                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                        <table class="table table-sm table-hover" style="font-size: 0.85rem;">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Mode</th>
+                                    <th class="text-end">Amount</th>
+                                    <th class="text-center">Receipt</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const token = localStorage.getItem('erp-token');
+        if (!token) window.location.href = '/login.html';
+        
+        document.getElementById('payment-date').valueAsDate = new Date();
+        loadStudentList();
+    });
+
+    // 1. Load Student List
+    async function loadStudentList() {
+        try {
+            const response = await window.authFetch('/api/students');
+            const students = await response.json();
+            
+            const select = document.getElementById('student-select');
+            
+            students.sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
+
+            select.innerHTML = '<option value="">-- Select Student --</option>';
+            students.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.student_id; 
+                opt.text = `${s.first_name} ${s.last_name} (Roll: ${s.roll_number || 'N/A'})`;
+                select.appendChild(opt);
+            });
+
+        } catch (error) {
+            console.error('Error loading students:', error);
+        }
+    }
+
+    // 2. Fetch Student Details (FIXED TABLE LOGIC)
+    async function loadStudentDetails(studentId) {
+        const infoBox = document.getElementById('student-info-box');
+        const paymentForm = document.getElementById('payment-form');
+        const historySection = document.getElementById('history-section');
+        
+        if (!studentId) {
+            paymentForm.style.display = 'none';
+            historySection.style.display = 'none';
+            infoBox.innerHTML = '<div class="text-center py-5 text-muted">Select a student...</div>';
+            return;
+        }
+
+        infoBox.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+
+        try {
+            // Fetch Financial Data
+            const financeRes = await window.authFetch(`/api/finance/student/${studentId}`);
+            const data = await financeRes.json();
+
+            console.log("Finance Data:", data); // Debugging
+
+            // Calculate Balance
+            const totalDue = parseFloat(data.balance || 0); 
+            const totalPaid = parseFloat(data.total_paid || 0);
+            const totalBilled = parseFloat(data.total_fees || 0);
+
+            let balanceHtml = '';
+            if(totalDue > 0) {
+                balanceHtml = `<div class="balance-card"><small class="text-uppercase fw-bold text-danger">Total Due</small><div class="balance-negative">₹${totalDue.toFixed(2)}</div></div>`;
+            } else {
+                balanceHtml = `<div class="balance-card"><small class="text-uppercase fw-bold text-success">Cleared</small><div class="balance-positive">₹0.00</div></div>`;
+            }
+
+            // Render Info
+            infoBox.innerHTML = `
+                <div class="mb-3">
+                    <h5 class="fw-bold mb-0 text-dark">${data.student_name || 'Student'}</h5>
+                    <p class="text-muted small mb-0">${data.course_name || 'N/A'} (${data.batch_name || '-'})</p>
+                </div>
+                ${balanceHtml}
+                <div class="row g-2 small text-muted">
+                    <div class="col-6">Total Billed: <span class="fw-bold text-dark">₹${totalBilled.toFixed(2)}</span></div>
+                    <div class="col-6">Total Paid: <span class="fw-bold text-dark">₹${totalPaid.toFixed(2)}</span></div>
+                </div>
+            `;
+
+            // ✅ CRITICAL FIX: HISTORY TABLE
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '';
+            
+            // Detect payments array
+            let paymentsList = [];
+            if (Array.isArray(data)) paymentsList = data;
+            else if (data.payments && Array.isArray(data.payments)) paymentsList = data.payments;
+
+            if (paymentsList.length > 0) {
+                paymentsList.forEach(p => {
+                    // FIX: Added 'receipt_number' to the check list
+                    const receiptRef = p.receipt_number || p.transaction_id || p.id || p.paymentId; 
+                    
+                    // FIX: Added 'total_amount' to amount check
+                    const amountValue = parseFloat(p.amount || p.amount_paid || p.total_amount || 0);
+
+                    // Render row (Even if ID is missing, show row for debugging)
+                    const printBtn = receiptRef 
+                        ? `<button class="btn btn-sm btn-outline-primary py-0" onclick="viewReceipt('${receiptRef}')"><i class="fas fa-print"></i></button>`
+                        : `<span class="text-muted small">N/A</span>`;
+
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${new Date(p.payment_date || p.created_at || Date.now()).toLocaleDateString()}</td>
+                            <td>${p.payment_mode || 'Cash'}</td>
+                            <td class="text-end fw-bold">₹${amountValue.toFixed(2)}</td>
+                            <td class="text-center">${printBtn}</td>
+                        </tr>
+                    `;
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent transactions found.</td></tr>';
+            }
+
+            // Show Form
+            paymentForm.style.display = 'block';
+            historySection.style.display = 'block';
+            
+            // Auto-fill amount if due
+            document.getElementById('pay-amount').value = totalDue > 0 ? totalDue.toFixed(2) : '';
+
+        } catch (error) {
+            console.error(error);
+            infoBox.innerHTML = '<p class="text-danger text-center">Error loading details.</p>';
+        }
+    }
+
+    // 3. Process Payment
+    async function processPayment() {
+        const studentId = document.getElementById('student-select').value;
+        const amount = document.getElementById('pay-amount').value;
+        
+        if (!amount || parseFloat(amount) <= 0) return alert('Enter valid amount');
+
+        const btn = document.getElementById('collect-btn');
+        const spinner = document.getElementById('btn-spinner');
+        const text = document.getElementById('btn-text');
+
+        btn.disabled = true;
+        spinner.style.display = 'inline-block';
+        text.style.display = 'none';
+
+        try {
+            const response = await window.authFetch('/api/finance/collect', {
+                method: 'POST',
+                body: JSON.stringify({
+                    student_id: studentId,
+                    amount_paid: amount,
+                    payment_mode: document.getElementById('pay-mode').value,
+                    notes: document.getElementById('pay-notes').value
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert('Payment Successful!');
+                // Check all possible ID fields
+                const receiptRef = result.receipt_number || result.transaction_id || result.id;
+                
+                if(receiptRef) viewReceipt(receiptRef);
+
+                loadStudentDetails(studentId);
+                document.getElementById('pay-amount').value = '';
+            } else {
+                alert(result.message || 'Payment Failed');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Network Error');
+        } finally {
+            btn.disabled = false;
+            spinner.style.display = 'none';
+            text.style.display = 'inline';
+        }
+    }
+
+    // 4. View Receipt
+    function viewReceipt(identifier) {
+        if(!identifier || identifier === 'undefined') {
+            alert("Error: Receipt ID missing.");
+            return;
+        }
+        window.open(`/print-receipt.html?id=${identifier}`, '_blank');
+    }
+</script>
+
+</body>
+</html>

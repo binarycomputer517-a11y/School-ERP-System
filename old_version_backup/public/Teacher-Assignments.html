@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Instructor Console | Assignment & Grading</title>
+    <style>
+        /* --- CLASSIC ERP THEME --- */
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #F4F4F4; color: #111; }
+        .container { max-width: 1400px; margin: auto; padding: 30px; background-color: #FFF; border: 2px solid #333; box-shadow: 10px 10px 0 #999; }
+        h1 { text-align: center; border-bottom: 5px double #333; padding-bottom: 15px; text-transform: uppercase; color: #C0392B; }
+        
+        .tab-bar { display: flex; background: #EEE; border: 1px solid #333; margin-bottom: 25px; }
+        .tab { padding: 15px 30px; cursor: pointer; font-weight: bold; border-right: 1px solid #CCC; transition: 0.3s; }
+        .tab.active { background: #FFF; border-top: 4px solid #C0392B; color: #C0392B; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        .dashboard-grid { display: grid; grid-template-columns: 420px 1fr; gap: 30px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #333; }
+        th, td { padding: 12px; border: 1px solid #CCC; text-align: left; font-size: 0.9em; }
+        th { background: #333; color: white; text-transform: uppercase; }
+        
+        label { display: block; margin-top: 15px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #555; box-sizing: border-box; font-family: inherit; }
+        
+        .btn { padding: 10px 20px; border: 2px solid #000; cursor: pointer; font-weight: bold; box-shadow: 3px 3px 0 #000; text-transform: uppercase; }
+        .btn-save { background: #005A9C; color: white; }
+        .btn-grade { background: #27ae60; color: white; font-size: 0.8em; }
+        .btn-view { background: #f39c12; color: white; text-decoration: none; font-size: 0.8em; padding: 5px 10px; border: 1px solid #000; display: inline-block; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="float: right;"><a href="/teacher-dashboard.html" style="font-weight: bold; color: #005A9C;">&larr; Exit Dashboard</a></div>
+    <h1>Instructor Assignment Console</h1>
+
+    <div class="tab-bar">
+        <div class="tab active" onclick="switchTab('create-tab', this)">1. Create & Manage Tasks</div>
+        <div class="tab" id="review-btn" onclick="switchTab('review-tab', this)">2. Review Submissions</div>
+    </div>
+
+    <div id="create-tab" class="tab-content active">
+        <div class="dashboard-grid">
+            <div class="form-card">
+                <h2>New Assignment</h2>
+                <form id="assignment-form">
+                    <label>Target Course:</label>
+                    <select id="course-select" required onchange="loadBatches(this.value)"></select>
+                    
+                    <label>Target Batch (Optional):</label>
+                    <select id="batch-select" disabled>
+                        <option value="">-- All Batches --</option>
+                    </select>
+
+                    <label>Subject:</label>
+                    <select id="subject-select" required></select>
+                    
+                    <label>Assignment Title:</label>
+                    <input type="text" id="title" required placeholder="e.g., Physics Lab Report 01">
+                    
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:2">
+                            <label>Deadline:</label>
+                            <input type="datetime-local" id="due_date" required>
+                        </div>
+                        <div style="flex:1">
+                            <label>Max Marks:</label>
+                            <input type="number" id="max_marks" value="10">
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn btn-save" style="width:100%; margin-top:20px;">Publish Assignment</button>
+                </form>
+            </div>
+            <div class="list-card">
+                <h2>Active Assignments</h2>
+                <table id="active-list">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Target</th>
+                            <th>Deadline</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="active-tbody">
+                        <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="review-tab" class="tab-content">
+        <h2>Submissions Pending Review</h2>
+        <table id="review-table">
+            <thead>
+                <tr>
+                    <th>Student Name</th>
+                    <th>Assignment</th>
+                    <th>Submission</th>
+                    <th>Score / Max</th>
+                    <th>Feedback</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="review-tbody">
+                <tr><td colspan="6" style="text-align:center;">Click tab to refresh submissions...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const API_BASE = '/api/online-learning';
+
+    function switchTab(id, el) {
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+        el.classList.add('active');
+        if(id === 'review-tab') fetchPendingSubmissions();
+    }
+
+    // --- FIX: loadBatches Function ---
+    async function loadBatches(courseId) {
+        const bSelect = document.getElementById('batch-select');
+        if (!courseId) {
+            bSelect.innerHTML = '<option value="">-- All Batches --</option>';
+            bSelect.disabled = true;
+            return;
+        }
+        try {
+            const res = await fetch(`/api/academicswithfees/courses/${courseId}/batches`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const batches = await res.json();
+            bSelect.innerHTML = '<option value="">-- All Batches --</option>' + 
+                batches.map(b => `<option value="${b.batch_id}">${b.batch_name}</option>`).join('');
+            bSelect.disabled = false;
+        } catch (e) { console.error("Batch load error:", e); }
+    }
+
+    // --- Data Loading ---
+    async function loadResources() {
+        const headers = { 'Authorization': `Bearer ${token}` };
+        try {
+            const courses = await fetch('/api/academicswithfees/courses', { headers }).then(r => r.json());
+            const subjects = await fetch('/api/academicswithfees/subjects', { headers }).then(r => r.json());
+            
+            document.getElementById('course-select').innerHTML = '<option value="">-- Select Course --</option>' + 
+                courses.map(c => `<option value="${c.course_id}">${c.course_name}</option>`).join('');
+            document.getElementById('subject-select').innerHTML = '<option value="">-- Select Subject --</option>' + 
+                subjects.map(s => `<option value="${s.id || s.subject_id}">${s.subject_name}</option>`).join('');
+            
+            fetchActiveAssignments();
+        } catch (e) { alert("Session expired. Please login again."); }
+    }
+
+    async function fetchActiveAssignments() {
+        const res = await fetch(`${API_BASE}/modules`, { headers: { 'Authorization': `Bearer ${token}` }});
+        const data = await res.json();
+        document.getElementById('active-tbody').innerHTML = data.map(a => `
+            <tr>
+                <td><b>${a.title}</b></td>
+                <td>${a.course_name || 'All'}</td>
+                <td>${new Date(a.due_date).toLocaleString()}</td>
+                <td><button onclick="deleteTask('${a.id}')" style="background:red; color:white; border:none; cursor:pointer;">DEL</button></td>
+            </tr>
+        `).join('');
+    }
+
+    // --- Review & Grading ---
+    async function fetchPendingSubmissions() {
+        const tbody = document.getElementById('review-tbody');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Scanning...</td></tr>';
+        try {
+            const res = await fetch(`${API_BASE}/submissions/pending`, { headers: { 'Authorization': `Bearer ${token}` }});
+            const data = await res.json();
+            
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">✅ No pending submissions to review.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(sub => `
+                <tr>
+                    <td><b>${sub.student_name}</b></td>
+                    <td>${sub.assignment_title}</td>
+                    <td><a href="${sub.submission_file_url}" target="_blank" class="btn-view">View Work</a></td>
+                    <td><input type="number" id="marks-${sub.id}" style="width:60px;" placeholder="${sub.max_marks}"></td>
+                    <td><textarea id="feedback-${sub.id}" placeholder="Note..." style="height:35px;"></textarea></td>
+                    <td><button class="btn btn-grade" onclick="submitGrade('${sub.id}')">SAVE</button></td>
+                </tr>
+            `).join('');
+        } catch (e) { console.error(e); }
+    }
+
+    async function submitGrade(subId) {
+        const marks = document.getElementById(`marks-${subId}`).value;
+        const feedback = document.getElementById(`feedback-${subId}`).value;
+        if(!marks) return alert("Enter marks.");
+
+        const res = await fetch(`${API_BASE}/submissions/grade`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ submission_id: subId, marks, feedback })
+        });
+        if(res.ok) { alert("Graded!"); fetchPendingSubmissions(); }
+    }
+
+    document.getElementById('assignment-form').onsubmit = async (e) => {
+        e.preventDefault();
+        const payload = {
+            course_id: document.getElementById('course-select').value,
+            batch_id: document.getElementById('batch-select').value || null,
+            subject_id: document.getElementById('subject-select').value,
+            title: document.getElementById('title').value,
+            due_date: document.getElementById('due_date').value,
+            max_marks: document.getElementById('max_marks').value,
+            content_type: 'ASSIGNMENT'
+        };
+        const res = await fetch(`${API_BASE}/modules`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if(res.ok) { alert("Published!"); fetchActiveAssignments(); document.getElementById('assignment-form').reset(); }
+    };
+
+    window.onload = loadResources;
+</script>
+</body>
+</html>

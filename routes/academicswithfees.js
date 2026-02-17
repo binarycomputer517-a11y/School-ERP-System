@@ -41,19 +41,37 @@ const safeParseInt = (value, fallback = 1) => {
 
 /**
  * @route   POST /api/academicswithfees/courses
- * @desc    Create a new course
- * @access  Private (Admin)
+ * @desc    Create a new course (Isolated by Branch)
+ * @access  Private (Admin, Super Admin)
  */
-router.post('/courses', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
+router.post('/courses', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     const { course_name, course_code } = req.body;
+    
+    // ১. টোকেন থেকে লগইন করা ইউজারের ব্রাঞ্চ আইডি নেওয়া
+    const branch_id = req.user.branch_id; 
+
+    if (!branch_id) {
+        return res.status(400).json({ message: 'User branch identification failed.' });
+    }
+
     try {
-        // --- FIXED ---: Return the 'id' column, aliased as 'course_id'
-        const newCourse = await pool.query(
-            "INSERT INTO courses (course_name, course_code) VALUES ($1, $2) RETURNING id AS course_id, course_name, course_code", 
-            [course_name, course_code]
-        );
+        // ২. ডাটাবেজে branch_id সহ ইনসার্ট করা
+        const query = `
+            INSERT INTO courses (course_name, course_code, branch_id) 
+            VALUES ($1, $2, $3) 
+            RETURNING id AS course_id, course_name, course_code, branch_id
+        `;
+        
+        const newCourse = await pool.query(query, [course_name, course_code, branch_id]);
+        
         res.status(201).json(newCourse.rows[0]);
     } catch (err) {
+        // ৩. ডুপ্লিকেট কোর্স কোড হ্যান্ডেল করা (একই ব্রাঞ্চে ডুপ্লিকেট হবে না)
+        if (err.code === '23505') {
+            return res.status(409).json({ 
+                message: 'A course with this code already exists in your branch.' 
+            });
+        }
         console.error('Error creating course:', err);
         res.status(500).json({ message: 'Error creating course', error: err.message });
     }
@@ -128,31 +146,55 @@ router.delete('/courses/:id', authenticateToken, authorize(['Admin', 'Super Admi
 
 /**
  * @route   POST /api/academicswithfees/batches
- * @desc    Create a new batch for a course
- * @access  Private (Admin)
+ * @desc    Create a new batch (Updated: Removed redundant batch_id column support)
+ * @access  Private (Admin, Super Admin)
  */
-router.post('/batches', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
-    const { batch_name, batch_code, course_id } = req.body; // course_id is the UUID from courses.id
-    if (!batch_name || !course_id) {
-        return res.status(400).json({ message: 'Batch name and course ID are required.' });
+router.post('/batches', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    const { batch_name, batch_code, course_id, is_global } = req.body;
+    
+    // 1. Retrieve the branch ID from the authenticated user token
+    const branch_id = req.user.branch_id; 
+
+    if (!branch_id) {
+        return res.status(400).json({ message: 'User branch identification failed. Please re-login.' });
     }
+
+    if (!batch_name || !course_id) {
+        return res.status(400).json({ message: 'Batch name and Course ID are mandatory.' });
+    }
+
     try {
-        // --- FIXED ---: Return 'id' aliased as 'batch_id'
-        // 'course_id' (foreign key) correctly references 'courses.id'
-        const newBatch = await pool.query(
-            "INSERT INTO batches (batch_name, batch_code, course_id) VALUES ($1, $2, $3) RETURNING id AS batch_id, batch_name, batch_code, course_id",
-            [batch_name.trim(), batch_code ? batch_code.trim() : null, course_id]
-        );
-        res.status(201).json(newBatch.rows[0]);
+        /**
+         * 2. Insert into database using the Primary Key 'id'.
+         * We have removed the redundant 'batch_id' column from the INSERT statement.
+         * We added 'is_global' to allow the batch to be visible across all branches.
+         */
+        const query = `
+            INSERT INTO batches (batch_name, batch_code, course_id, branch_id, is_global) 
+            VALUES ($1, $2, $3, $4, $5) 
+            RETURNING id AS batch_id, batch_name, batch_code, course_id, branch_id, is_global;
+        `;
+        
+        const result = await pool.query(query, [
+            batch_name.trim(), 
+            batch_code ? batch_code.trim() : null, 
+            course_id, 
+            branch_id,
+            is_global || false // Defaults to false unless specified
+        ]);
+        
+        res.status(201).json(result.rows[0]);
     } catch (err) {
+        // 3. Handle Unique Constraint Violations (e.g., duplicate batch code)
         if (err.code === '23505') {
-            return res.status(409).json({ message: 'A batch with this name or code already exists for this course.' });
+            return res.status(409).json({ 
+                message: 'A batch with this code already exists in the system.' 
+            });
         }
-        console.error('Error creating batch:', err);
-        res.status(500).json({ message: 'Error creating batch', error: err.message });
+        console.error('Batch Creation Error:', err.message);
+        res.status(500).json({ message: 'Internal server error while creating batch.' });
     }
 });
-
 /**
  * @route   GET /api/academicswithfees/batches
  * @desc    Get a list of all batches across all courses
@@ -486,12 +528,26 @@ router.post('/sessions', authenticateToken, authorize(['Admin', 'Super Admin']),
  * @desc    Get all academic sessions
  * @access  Private (All Authenticated Roles)
  */
-router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
+router.get('/sessions', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
     try {
-        // --- FIXED ---: Select 'id' aliased as 'academic_session_id'.
-        // This fixes the 'column "academic_session_id" does not exist' error.
-        const result = await pool.query('SELECT id AS academic_session_id, session_name FROM academic_sessions ORDER BY start_date DESC'); 
-        res.json(result.rows);
+        // ভুল ছিল: SELECT id AS academic_session_id (কারণ 'id' কলামটি আর নেই)
+        // সঠিক: SELECT academic_session_id, session_name...
+        const result = await pool.query(`
+            SELECT 
+                academic_session_id, 
+                session_name, 
+                is_active 
+            FROM academic_sessions 
+            ORDER BY start_date DESC
+        `); 
+
+        // ফ্রন্টএন্ডের compatibility-র জন্য (add-student.js যেন ভেঙে না যায়)
+        const sessions = result.rows.map(s => ({
+            ...s,
+            id: s.academic_session_id // academic_session_id কেই 'id' হিসেবেও পাঠানো হচ্ছে
+        }));
+
+        res.json(sessions);
     } catch (err) {
         console.error('Error fetching academic sessions:', err);
         res.status(500).json({ message: 'Server error while fetching sessions', error: err.message });
@@ -548,89 +604,117 @@ router.delete('/sessions/:id', authenticateToken, authorize(['Admin', 'Super Adm
 // =================================================================
 // --- FEE MANAGEMENT ---
 // =================================================================
-
-/**
- * @route   POST /api/academicswithfees/fees/structures
- * @desc    Create a new fee structure for a specific course and batch
- * @access  Private (Admin)
- */
-router.post('/fees/structures', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
+router.post('/fees/structures', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     const {
-        course_id, batch_id, // These are now UUIDs from courses.id and batches.id
+        course_id, batch_id,
         course_duration_months, admission_fee,
-        registration_fee, examination_fee, has_transport, transport_fee,
-        has_hostel, hostel_fee
+        registration_fee, tuition_fee, exam_fee,
+        has_transport, transport_fee, has_hostel, hostel_fee
     } = req.body;
 
+    // টোকেন থেকে লগইন করা ইউজারের ব্রাঞ্চ আইডি নেওয়া
+    const branch_id = req.user.branch_id; 
+
+    if (!branch_id) {
+        return res.status(400).json({ message: 'Branch identification failed. Please re-login.' });
+    }
+
     try {
-        // --- FIXED ---: Query by 'id' (Primary Key)
-        const courseRes = await pool.query('SELECT course_name FROM courses WHERE id = $1', [course_id]);
-        // --- FIXED ---: Query by 'id' (Primary Key)
-        const batchRes = await pool.query('SELECT batch_name FROM batches WHERE id = $1', [batch_id]);
+        // ১. সক্রিয় একাডেমিক সেশন খুঁজে বের করা
+        const activeSessionRes = await pool.query(
+            "SELECT academic_session_id FROM academic_sessions WHERE is_active = true LIMIT 1"
+        );
+
+        if (activeSessionRes.rowCount === 0) {
+            return res.status(400).json({ 
+                message: 'No active academic session found. Please mark a session as active in settings.' 
+            });
+        }
+
+        const academic_session_id = activeSessionRes.rows[0].academic_session_id;
+
+        // ২. নাম তৈরির জন্য কোর্স ও ব্যাচ চেক করা
+        const [courseRes, batchRes] = await Promise.all([
+            pool.query('SELECT course_name FROM courses WHERE id = $1', [course_id]),
+            pool.query('SELECT batch_name FROM batches WHERE id = $1', [batch_id])
+        ]);
 
         if (courseRes.rowCount === 0 || batchRes.rowCount === 0) {
-            return res.status(404).json({ message: 'Invalid course or batch ID provided.' });
+            return res.status(404).json({ message: 'Invalid course or batch selection.' });
         }
+        
         const structure_name = `${courseRes.rows[0].course_name} - ${batchRes.rows[0].batch_name}`;
 
+        // ৩. চূড়ান্ত ডাটা ইনসার্ট (branch_id যুক্ত করা হয়েছে)
         const insertQuery = `
             INSERT INTO fee_structures (
-                course_id, batch_id, structure_name, course_duration_months,
-                admission_fee, registration_fee, examination_fee,
-                has_transport, transport_fee, has_hostel, hostel_fee
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11) RETURNING *;`;
+                branch_id, course_id, batch_id, academic_session_id, structure_name, 
+                course_duration_months, admission_fee, registration_fee, 
+                tuition_fee, exam_fee, has_transport, transport_fee, 
+                has_hostel, hostel_fee
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
+            RETURNING *;`;
         
-        // These values are correct, as 'fee_structures.course_id' and 'batch_id'
-        // reference the 'id' columns from courses/batches (based on your schema)
         const values = [
-            course_id, batch_id, structure_name, course_duration_months, admission_fee,
-            registration_fee, examination_fee, has_transport || false,
-            (has_transport && transport_fee) ? transport_fee : null,
-            has_hostel || false, (has_hostel && hostel_fee) ? hostel_fee : null
+            branch_id, course_id, batch_id, academic_session_id, structure_name, 
+            course_duration_months, admission_fee || 0, registration_fee || 0, 
+            tuition_fee || 0, exam_fee || 0, has_transport || false, 
+            transport_fee || 0, has_hostel || false, hostel_fee || 0
         ];
+
         const newStructure = await pool.query(insertQuery, values);
         res.status(201).json(newStructure.rows[0]);
 
     } catch (err) {
+        // ৪. ইউনিক কনস্ট্রেইন এরর হ্যান্ডেল করা (Branch-specific)
         if (err.code === '23505') {
-            return res.status(409).json({ message: `A fee structure for this course and batch already exists.` });
+            return res.status(409).json({ 
+                message: 'A fee structure for this Course, Batch, and Session already exists in your branch.' 
+            });
         }
-        console.error('Error creating fee structure:', err);
-        res.status(500).json({ message: "Error creating fee structure", error: err.message });
+        console.error('SERVER ERROR:', err);
+        res.status(500).json({ message: "Internal server error", error: err.message });
     }
 });
 
+
+
 /**
  * @route   GET /api/academicswithfees/fees/structures/find
- * @desc    Get a single fee structure by Course ID and Batch ID
+ * @desc    Get a single fee structure by Course, Batch, and Branch
  * @access  Private (All Authenticated Roles)
  */
-router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => { // Updated Auth
+router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teacher', 'Coordinator', 'Super Admin', 'Student']), async (req, res) => {
     try {
-        const { course_id, batch_id } = req.query; // These are the UUIDs
+        const { course_id, batch_id } = req.query;
+        // ১. টোকেন থেকে ইউজারের নিজস্ব ব্রাঞ্চ আইডি নেওয়া
+        const branch_id = req.user.branch_id; 
 
         if (!course_id || !batch_id) { 
             return res.status(400).json({ message: 'Course ID and Batch ID are required for lookup.' });
         }
         
-        // This query is correct. 'fee_structures.course_id' references 'courses.id'
+        // ২. কুয়েরিতে branch_id যুক্ত করা হয়েছে যাতে সঠিক ব্রাঞ্চের ফি পাওয়া যায়
         const result = await pool.query(
             `SELECT * FROM fee_structures 
-             WHERE course_id = $1 AND batch_id = $2`, 
-            [course_id, batch_id] 
+             WHERE course_id = $1 AND batch_id = $2 AND branch_id = $3`, 
+            [course_id, batch_id, branch_id] 
         );
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Fee structure not found for this course and batch.' });
+            return res.status(404).json({ message: 'No fee structure found for this batch in your branch.' });
         }
         
         const structureData = result.rows[0];
         
+        // আপনার চমৎকার স্যানিটাইজেশন লজিকটি এখানে বহাল থাকল
         const sanitizedData = {
             ...structureData,
             admission_fee: safeParseFloat(structureData.admission_fee),
             registration_fee: safeParseFloat(structureData.registration_fee),
-            examination_fee: safeParseFloat(structureData.examination_fee),
+            exam_fee: safeParseFloat(structureData.exam_fee),
+            tuition_fee: safeParseFloat(structureData.tuition_fee), // এটি যোগ করা হয়েছে
+            exam_fee: safeParseFloat(structureData.exam_fee),       // এটি যোগ করা হয়েছে
             transport_fee: safeParseFloat(structureData.transport_fee),
             hostel_fee: safeParseFloat(structureData.hostel_fee),
             course_duration_months: safeParseInt(structureData.course_duration_months, 1),
@@ -642,35 +726,64 @@ router.get('/fees/structures/find', authenticateToken, authorize(['Admin', 'Teac
         
     } catch (err) {
         console.error(`ERROR in /fees/structures/find route:`, err);
-        res.status(500).json({ message: "Server error while fetching fee structure", error: err.message });
+        res.status(500).json({ message: "Server error", error: err.message });
     }
 });
-
 /**
  * @route   GET /api/academicswithfees/fees/structures
- * @desc    Get all fee structures with course and batch details
- * @access  Private (Admin)
+ * @desc    Get fee structures (Joined with Codes & Branch)
+ * @access  Private (Admin, Super Admin)
  */
-router.get('/fees/structures', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
+router.get('/fees/structures', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    const { branch_id: userBranchId, role } = req.user;
+
     try {
-        // --- FIXED ---: Changed JOINs to use 'id' (Primary Key)
-        const result = await pool.query(`
-            SELECT fs.id, fs.structure_name, fs.course_id, fs.batch_id, 
-                   fs.admission_fee, fs.registration_fee, fs.examination_fee,
-                   fs.has_transport, fs.transport_fee, fs.has_hostel, fs.hostel_fee, fs.course_duration_months,
-                   c.course_name, c.course_code, b.batch_name, b.batch_code
-            FROM fee_structures fs
-            JOIN courses c ON fs.course_id = c.id 
-            JOIN batches b ON fs.batch_id = b.id
-            ORDER BY fs.id DESC
-        `);
+        let query;
+        let params = [];
+
+        // সুপার অ্যাডমিন সব ব্রাঞ্চের কোড এবং নাম দেখতে পাবেন
+        if (role === 'Super Admin' || role === 'Prime Admin') {
+            query = `
+                SELECT 
+                    fs.*, 
+                    b.branch_name, 
+                    c.course_name, 
+                    c.course_code, 
+                    bat.batch_name, 
+                    bat.batch_code 
+                FROM fee_structures fs
+                LEFT JOIN branches b ON fs.branch_id = b.id
+                LEFT JOIN courses c ON fs.course_id = c.id
+                LEFT JOIN batches bat ON fs.batch_id = bat.id
+                ORDER BY fs.created_at DESC
+            `;
+        } else {
+            // সাধারণ অ্যাডমিন শুধু নিজের ব্রাঞ্চের কোড এবং নাম দেখবেন
+            query = `
+                SELECT 
+                    fs.*, 
+                    c.course_name, 
+                    c.course_code, 
+                    bat.batch_name, 
+                    bat.batch_code,
+                    b.branch_name
+                FROM fee_structures fs
+                JOIN courses c ON fs.course_id = c.id
+                JOIN batches bat ON fs.batch_id = bat.id
+                JOIN branches b ON fs.branch_id = b.id
+                WHERE fs.branch_id = $1
+                ORDER BY fs.created_at DESC
+            `;
+            params = [userBranchId];
+        }
+
+        const result = await pool.query(query, params);
         res.status(200).json(result.rows);
     } catch (err) {
         console.error('Error fetching fee structures:', err);
-        res.status(500).json({ message: "Server error while fetching fee structures", error: err.message });
+        res.status(500).json({ message: "Server error", error: err.message });
     }
 });
-
 /**
  * @route   GET /api/academicswithfees/fees/structures/:id
  * @desc    Get a single fee structure by its ID (Fee Structure's PK)
@@ -698,62 +811,122 @@ router.get('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super
 
 /**
  * @route   PUT /api/academicswithfees/fees/structures/:id
- * @desc    Update a fee structure by its ID
- * @access  Private (Admin)
+ * @desc    Update a fee structure (Securely isolated by Branch)
+ * @access  Private (Admin, Super Admin)
  */
-router.put('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
+router.put('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
     try {
-        const { id } = req.params; // This is fee_structures.id
+        const { id } = req.params;
+        const { branch_id, role } = req.user; 
+        
         const {
-            course_duration_months, admission_fee, registration_fee,
-            examination_fee, has_transport, transport_fee, has_hostel, hostel_fee
+            course_duration_months, 
+            admission_fee, 
+            registration_fee,
+            tuition_fee, 
+            exam_fee, 
+            has_transport, 
+            transport_fee, 
+            has_hostel, 
+            hostel_fee
         } = req.body;
 
-        const updateQuery = `
+        // 1. SQL Query - Fixed parameter indexing ($1 to $10)
+        let updateQuery = `
             UPDATE fee_structures SET
-                course_duration_months = $1, admission_fee = $2, registration_fee = $3,
-                examination_fee = $4, has_transport = $5, transport_fee = $6,
-                has_hostel = $7, hostel_fee = $8
-            WHERE id = $9 RETURNING *;
+                course_duration_months = $1, 
+                admission_fee = $2, 
+                registration_fee = $3,
+                tuition_fee = $4, 
+                exam_fee = $5, 
+                has_transport = $6, 
+                transport_fee = $7,
+                has_hostel = $8, 
+                hostel_fee = $9,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = $10
         `;
-        const values = [
-            course_duration_months, admission_fee, registration_fee, examination_fee,
-            has_transport || false, (has_transport && transport_fee) ? transport_fee : null,
-            has_hostel || false, (has_hostel && hostel_fee) ? hostel_fee : null,
-            id
+        
+        // 2. Values Array - Perfectly mapped to the indices above
+        let values = [
+            course_duration_months || 0,        // $1
+            admission_fee || 0,                 // $2
+            registration_fee || 0,              // $3
+            tuition_fee || 0,                   // $4
+            exam_fee || 0,                      // $5
+            has_transport || false,             // $6
+            (has_transport ? transport_fee : 0),// $7
+            has_hostel || false,                // $8
+            (has_hostel ? hostel_fee : 0),      // $9
+            id                                  // $10
         ];
 
-        const result = await pool.query(updateQuery, values);
-        if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Fee structure not found.' });
+        // 3. Security Logic: Restrict non-admins to their own branch
+        if (role !== 'Super Admin' && role !== 'Prime Admin') {
+            updateQuery += ` AND branch_id = $11`;
+            values.push(branch_id);             // $11
         }
-        res.status(200).json({ message: 'Fee structure updated successfully.', data: result.rows[0] });
+
+        const result = await pool.query(updateQuery + " RETURNING *", values);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ 
+                message: 'Fee structure not found or permission denied.' 
+            });
+        }
+
+        res.status(200).json({ 
+            message: 'Fee structure updated successfully.', 
+            data: result.rows[0] 
+        });
+
     } catch (err) {
         console.error('Error updating fee structure:', err);
         res.status(500).json({ message: "Error updating fee structure", error: err.message });
     }
 });
-
 /**
  * @route   DELETE /api/academicswithfees/fees/structures/:id
- * @desc    Delete a fee structure by its ID
- * @access  Private (Admin)
+ * @desc    Delete a fee structure (Securely isolated by Branch)
+ * @access  Private (Admin, Super Admin)
  */
-router.delete('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => { // Updated Auth
+router.delete('/fees/structures/:id', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    const { id } = req.params;
+    const { branch_id, role } = req.user; // টোকেন থেকে ডাটা নেওয়া
+
     try {
-        const { id } = req.params; // This is fee_structures.id
-        const result = await pool.query("DELETE FROM fee_structures WHERE id = $1 RETURNING id", [id]);
+        let query;
+        let params;
+
+        // ১. সিকিউরিটি চেক: সুপার অ্যাডমিন সব ডিলিট করতে পারবে
+        // কিন্তু সাধারণ অ্যাডমিন শুধু নিজের ব্রাঞ্চের ডাটা ডিলিট করতে পারবে
+        if (role === 'Super Admin' || role === 'Prime Admin') {
+            query = "DELETE FROM fee_structures WHERE id = $1 RETURNING id";
+            params = [id];
+        } else {
+            query = "DELETE FROM fee_structures WHERE id = $1 AND branch_id = $2 RETURNING id";
+            params = [id, branch_id];
+        }
+
+        const result = await pool.query(query, params);
 
         if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Fee structure not found.' });
+            return res.status(404).json({ 
+                message: 'Fee structure not found or you do not have permission to delete it.' 
+            });
         }
+        
         res.status(200).json({ message: 'Fee structure deleted successfully.' });
+
     } catch (err) {
+        // ২. ফরেন কি কনস্ট্রেইন চেক (যদি স্টুডেন্ট ইনভয়েস এই ফি-র সাথে যুক্ত থাকে)
         if (err.code === '23503') {
-            return res.status(409).json({ message: 'Cannot delete structure. It is referenced by other records (e.g., students).' });
+            return res.status(409).json({ 
+                message: 'Cannot delete: This structure is already linked to student invoices or records.' 
+            });
         }
         console.error('Error deleting fee structure:', err);
-        res.status(500).json({ message: 'Error deleting fee structure', error: err.message });
+        res.status(500).json({ message: 'Internal Server Error', error: err.message });
     }
 });
 
@@ -776,7 +949,32 @@ router.get('/batches/:courseId', authenticateToken, authorize(['Admin', 'Teacher
     }
 });
 
-
+/**
+ * @route   PATCH /api/academicswithfees/sessions/:id/set-active
+ * @desc    Set a specific session as active and deactivate others
+ * @access  Private (Admin)
+ */
+router.patch('/sessions/:id/set-active', authenticateToken, authorize(['Admin', 'Super Admin']), async (req, res) => {
+    const { id } = req.params; // academic_session_id
+    const client = await pool.connect();
+    try {
+        await client.query('BEGIN');
+        // সব সেশনকে ইন-অ্যাক্টিভ করুন
+        await client.query('UPDATE academic_sessions SET is_active = false');
+        // নির্দিষ্ট সেশনকে অ্যাক্টিভ করুন
+        const result = await client.query(
+            'UPDATE academic_sessions SET is_active = true WHERE academic_session_id = $1 RETURNING *',
+            [id]
+        );
+        await client.query('COMMIT');
+        res.json({ message: 'Session activated successfully', session: result.rows[0] });
+    } catch (err) {
+        await client.query('ROLLBACK');
+        res.status(500).json({ message: 'Error activating session', error: err.message });
+    } finally {
+        client.release();
+    }
+});
 // =================================================================
 // --- EXPORT ROUTER ---
 // =================================================================

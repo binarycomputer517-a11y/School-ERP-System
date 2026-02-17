@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Revenue Forecasting | School ERP</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root {
+            --primary-color: #4a90e2;
+            --success-color: #2ecc71;
+            --light-gray-color: #f4f7f9;
+            --dark-gray-color: #555;
+            --border-color: #dfe6e9;
+            --card-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
+        }
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--light-gray-color);
+            color: var(--dark-gray-color);
+            margin: 0; padding: 0;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 30px auto;
+            padding: 20px;
+        }
+        h1 { text-align: center; color: #333; margin-bottom: 20px; }
+        .nav-links { text-align: center; margin-bottom: 30px; }
+        .nav-links a {
+            text-decoration: none;
+            color: var(--primary-color);
+            font-weight: 500;
+        }
+        .card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 25px;
+            margin-bottom: 25px;
+            box-shadow: var(--card-shadow);
+        }
+        .metric-box {
+            background-color: #e3f2fd;
+            border: 1px solid #90caf9;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .metric-box h3 { margin: 0; color: #555; font-size: 0.9em; }
+        .metric-box p { margin: 5px 0 0; font-size: 2em; color: var(--primary-color); font-weight: 700; }
+        
+        /* Simple CSS Bar Chart */
+        .chart-container {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-around;
+            height: 300px;
+            padding: 20px 0;
+            border-bottom: 2px solid #ccc;
+            margin-top: 20px;
+        }
+        .bar-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 10%;
+        }
+        .bar {
+            width: 100%;
+            background-color: var(--primary-color);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.5s ease;
+            min-height: 2px;
+            position: relative;
+        }
+        .bar:hover { opacity: 0.8; }
+        .bar-label { margin-top: 10px; font-size: 0.8em; color: #666; }
+        .bar-value { margin-bottom: 5px; font-size: 0.8em; font-weight: 600; }
+        
+        .placeholder-message { text-align: center; color: #888; padding: 40px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Revenue Forecast (Next 6 Months)</h1>
+    <div class="nav-links">
+        <a href="/finance-dashboard.html">← Back to Finance Dashboard</a>
+    </div>
+
+    <div class="card">
+        <div class="metric-box">
+            <h3>Total Projected Collection (Accounts Receivable)</h3>
+            <p id="total-projected">₹0.00</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Cash Flow Projection</h2>
+        <p style="font-size: 0.9em; color: #666;">Based on due dates of currently pending invoices.</p>
+        
+        <div id="chart-area" class="chart-container">
+            <div class="placeholder-message">Loading forecast data...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const token = localStorage.getItem('erp-token');
+    const authHeaders = { 'Authorization': `Bearer ${token}` };
+
+    if (!token) window.location.href = '/login';
+
+    async function fetchAndRenderForecast() {
+        const chartArea = document.getElementById('chart-area');
+        
+        try {
+            // =========================================================
+            // CORRECT URL: Points to /api/fees/...
+            // =========================================================
+            const response = await fetch('/api/fees/reports/revenue-forecast', { headers: authHeaders });
+            
+            if (!response.ok) throw new Error('Failed to fetch data');
+            
+            const data = await response.json();
+            
+            // Render Total
+            const total = parseFloat(data.total_projected) || 0;
+            document.getElementById('total-projected').textContent = `₹${total.toLocaleString('en-IN')}`;
+
+            // Render Chart
+            chartArea.innerHTML = '';
+            
+            if (!data.forecast_data || data.forecast_data.length === 0) {
+                chartArea.innerHTML = '<div class="placeholder-message">No pending invoices found for the next 6 months.</div>';
+                return;
+            }
+
+            // Find max value for scaling height of bars
+            const maxVal = Math.max(...data.forecast_data.map(d => parseFloat(d.projected_amount)));
+
+            data.forecast_data.forEach(item => {
+                const amount = parseFloat(item.projected_amount);
+                // Calculate height percentage (max height 100%)
+                const heightPercent = maxVal > 0 ? (amount / maxVal) * 100 : 0;
+                
+                const html = `
+                    <div class="bar-group">
+                        <span class="bar-value">₹${(amount/1000).toFixed(1)}k</span>
+                        <div class="bar" style="height: ${heightPercent}%;" title="${item.invoice_count} Invoices"></div>
+                        <span class="bar-label">${item.month_label}</span>
+                    </div>
+                `;
+                chartArea.innerHTML += html;
+            });
+
+        } catch (error) {
+            console.error(error);
+            chartArea.innerHTML = '<div class="placeholder-message" style="color:red;">Error loading forecast.</div>';
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchAndRenderForecast);
+</script>
+<script src="js/global-config.js"></script>
+</body>
+</html>

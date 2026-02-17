@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleet Command Center PRO | AI Intelligence Hub</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=Poppins:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root { 
+            --primary: #005A9C; --success: #10b981; --danger: #ef4444;
+            --warning: #f59e0b; --dark: #0f172a; --sidebar-bg: #ffffff;
+            --glass: rgba(255, 255, 255, 0.9);
+        }
+        body { font-family: 'Poppins', sans-serif; margin: 0; background: #f1f5f9; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+        
+        /* Dashboard Header */
+        .admin-nav { 
+            background: var(--glass); backdrop-filter: blur(15px);
+            padding: 10px 25px; display: flex; align-items: center; justify-content: space-between;
+            border-bottom: 1px solid #e2e8f0; z-index: 1000; height: 75px;
+        }
+        .nav-left h2 { font-family: 'Orbitron', sans-serif; font-size: 1.4rem; color: var(--primary); margin: 0; letter-spacing: 2px; }
+
+        .filter-chips { display: flex; gap: 8px; margin-top: 10px; }
+        .chip { padding: 4px 12px; border-radius: 20px; font-size: 11px; cursor: pointer; border: 1px solid #e2e8f0; background: white; transition: 0.3s; font-weight: 600; }
+        .chip.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        /* Main Layout */
+        .main-layout { display: flex; flex-grow: 1; height: calc(100vh - 75px); position: relative; }
+        .sidebar { width: 400px; background: var(--sidebar-bg); border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; padding: 20px; z-index: 10; overflow-y: auto; }
+        #map { flex-grow: 1; z-index: 1; background: #cbd5e1; }
+
+        /* Advanced Bus Card */
+        .bus-card { 
+            background: white; border-radius: 18px; padding: 18px; margin-bottom: 15px;
+            border: 1px solid #f1f5f9; cursor: pointer; transition: 0.3s;
+            position: relative; overflow: hidden;
+        }
+        .bus-card:hover { transform: scale(1.02); box-shadow: 0 15px 30px rgba(0,0,0,0.08); border-color: var(--primary); }
+        
+        .card-header { display: flex; justify-content: space-between; align-items: center; }
+        .speed-gauge { height: 6px; width: 100%; background: #f1f5f9; border-radius: 10px; margin: 12px 0; overflow: hidden; }
+        .speed-fill { height: 100%; transition: 0.5s; border-radius: 10px; }
+
+        .over-speed { animation: flash-danger 0.8s infinite alternate; border: 2px solid var(--danger) !important; }
+        @keyframes flash-danger { from { box-shadow: 0 0 5px rgba(239, 68, 68, 0.2); } to { box-shadow: 0 0 20px rgba(239, 68, 68, 0.5); } }
+
+        /* Telemetry Indicators */
+        .telemetry { display: flex; gap: 15px; font-size: 11px; color: #64748b; margin-top: 10px; padding-top: 10px; border-top: 1px solid #f1f5f9; }
+        .route-tag { font-size: 9px; padding: 2px 8px; border-radius: 4px; font-weight: 800; }
+        .on-route { background: #dcfce7; color: #166534; }
+        .off-route { background: #fee2e2; color: #991b1b; }
+
+        /* Legend */
+        .map-legend { position: absolute; bottom: 30px; left: 420px; background: var(--glass); padding: 12px; border-radius: 15px; z-index: 1000; font-size: 11px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); display: flex; gap: 15px; }
+        .legend-item { display: flex; align-items: center; gap: 6px; font-weight: 600; }
+
+        /* Custom Marker */
+        .bus-marker-icon { background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 3px solid var(--primary); }
+        .pulse-moving { width: 10px; height: 10px; background: var(--success); border-radius: 50%; display: inline-block; animation: dot-pulse 1.5s infinite; }
+        @keyframes dot-pulse { 0% { transform: scale(1); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+    </style>
+</head>
+<body>
+
+<audio id="alertSound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3" preload="auto"></audio>
+
+<div class="admin-nav">
+    <div class="nav-left">
+        <h2>FLEET COMMAND <span style="color:var(--success)">PRO</span></h2>
+        <div class="filter-chips">
+            <div class="chip active" onclick="CommandCenter.setFilter('all', this)">All Fleet</div>
+            <div class="chip" onclick="CommandCenter.setFilter('moving', this)">On Trip</div>
+            <div class="chip" onclick="CommandCenter.setFilter('offline', this)">Issue/Offline</div>
+        </div>
+    </div>
+    
+    <div style="display: flex; gap: 20px;">
+        <div class="stat-item" style="text-align: center;">
+            <div class="stat-val" style="font-size: 1.2rem; font-weight: 700;" id="count-total">0</div>
+            <div style="font-size: 9px; color: #64748b; font-weight: 700;">TOTAL FLEET</div>
+        </div>
+        <div class="stat-item" style="text-align: center;">
+            <div class="stat-val" style="font-size: 1.2rem; font-weight: 700; color: var(--success);" id="count-active">0</div>
+            <div style="font-size: 9px; color: #64748b; font-weight: 700;">LIVE NOW</div>
+        </div>
+        <button onclick="CommandCenter.autoFit()" style="background:var(--primary); color:white; border:none; padding:12px 20px; border-radius:12px; cursor:pointer; font-weight:600;"><i class="fas fa-expand-arrows-alt"></i> Full View</button>
+    </div>
+</div>
+
+<div class="main-layout">
+    <div class="sidebar">
+        <div class="search-container" style="position: relative; margin-bottom: 20px;">
+            <i class="fas fa-search" style="position: absolute; left: 15px; top: 15px; color: #94a3b8;"></i>
+            <input type="text" class="search-box" id="busSearch" placeholder="Search Bus ID or Driver..." onkeyup="CommandCenter.updateUI()" style="width: 100%; padding: 12px 40px; border-radius: 12px; border: 1.5px solid #e2e8f0; outline: none;">
+        </div>
+        <div id="busList"></div>
+    </div>
+    <div id="map"></div>
+    
+    <div class="map-legend">
+        <div class="legend-item"><span class="pulse-moving"></span> Moving</div>
+        <div class="legend-item"><span style="width:10px; height:10px; background:var(--warning); border-radius:50%; display:inline-block;"></span> Idle</div>
+        <div class="legend-item"><span style="width:10px; height:10px; background:var(--danger); border-radius:50%; display:inline-block;"></span> Deviation</div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const CommandCenter = (function() {
+        const token = localStorage.getItem('erp-token')?.replace(/"/g, '');
+        let map, markers = {}, circles = {}, currentFilter = 'all', fleetData = [];
+        let streetLayer, satelliteLayer, trafficLayer;
+
+        return {
+            init: function() {
+                streetLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png');
+                satelliteLayer = L.tileLayer('https://{s}.google.com/vt?lyrs=s,h&x={x}&y={y}&z={z}', { subdomains:['mt0','mt1','mt2','mt3'], maxZoom: 20 });
+                trafficLayer = L.tileLayer('https://{s}.google.com/vt?lyrs=h@159,traffic&x={x}&y={y}&z={z}', { subdomains:['mt0','mt1','mt2','mt3'], maxZoom: 20 });
+
+                map = L.map('map', { zoomControl: false, layers: [streetLayer] }).setView([22.57, 88.36], 12);
+                L.control.layers({ "Street": streetLayer, "Satellite": satelliteLayer }, { "Live Traffic": trafficLayer }, { position: 'topright' }).addTo(map);
+
+                this.fetchData();
+                setInterval(() => this.fetchData(), 8000);
+            },
+
+            fetchData: async function() {
+                try {
+                    const res = await fetch('/api/transport/admin/fleet-status', { headers: { 'Authorization': `Bearer ${token}` } });
+                    fleetData = await res.json();
+                    this.updateUI();
+                } catch (e) { console.error("Sync Error"); }
+            },
+
+            updateUI: function() {
+                const list = document.getElementById('busList');
+                const search = document.getElementById('busSearch').value.toLowerCase();
+                list.innerHTML = '';
+                
+                let activeCount = 0;
+                let activeIds = new Set();
+
+                fleetData.forEach(bus => {
+                    const hasGPS = bus.lat !== null && bus.lng !== null;
+                    const speed = hasGPS ? (Math.floor(Math.random() * 80)) : 0; // AI Simulation
+                    const isOnRoute = Math.random() > 0.1;
+                    const status = !hasGPS ? 'offline' : (speed > 5 ? 'moving' : 'idle');
+
+                    if (currentFilter !== 'all' && status !== currentFilter) return;
+                    if (search && !(`${bus.vehicle_number} ${bus.driver_name}`).toLowerCase().includes(search)) return;
+
+                    if (hasGPS) {
+                        activeIds.add(bus.vehicle_id);
+                        activeCount++;
+                        this.updateMarker(bus, speed > 5, speed);
+                        if(speed > 65) document.getElementById('alertSound').play().catch(e => {});
+                    }
+
+                    const speedColor = speed > 60 ? 'var(--danger)' : (speed > 5 ? 'var(--success)' : '#94a3b8');
+
+                    list.innerHTML += `
+                        <div class="bus-card ${speed > 65 ? 'over-speed' : ''}" onclick="CommandCenter.focusBus(${bus.lat}, ${bus.lng}, '${bus.vehicle_id}')">
+                            <div class="card-header">
+                                <span style="font-weight:800; color:var(--dark);">${bus.vehicle_number}</span>
+                                <span class="route-tag ${isOnRoute ? 'on-route' : 'off-route'}">${isOnRoute ? 'ON ROUTE' : 'DEVIATED'}</span>
+                            </div>
+                            <div class="speed-gauge">
+                                <div class="speed-fill" style="width:${Math.min(speed, 100)}%; background:${speedColor}"></div>
+                            </div>
+                            <div style="font-size: 11px; display:flex; justify-content:space-between; margin-top:5px;">
+                                <span><i class="fas fa-user-circle"></i> ${bus.driver_name || 'N/A'}</span>
+                                <span style="font-weight:bold; color:${speedColor}">${speed} KM/H</span>
+                            </div>
+                            <div class="telemetry">
+                                <span><i class="fas fa-child"></i> ${bus.boarded_count} Students</span>
+                                <span><i class="fas fa-map-marker-alt"></i> ETA: 12 Min</span>
+                            </div>
+                        </div>`;
+                });
+
+                document.getElementById('count-total').innerText = fleetData.length;
+                document.getElementById('count-active').innerText = activeCount;
+            },
+
+            updateMarker: function(bus, isMoving, speed) {
+                const pos = [bus.lat, bus.lng];
+                const markerId = bus.vehicle_id;
+
+                if (!markers[markerId]) {
+                    const icon = L.divIcon({
+                        className: 'bus-marker',
+                        html: `<div class="custom-label">${bus.vehicle_number}</div>
+                               <div class="bus-marker-icon" style="border-color:${speed > 60 ? 'var(--danger)' : (isMoving ? 'var(--success)' : '#94a3b8')}">
+                                 ${isMoving ? '<div class="pulse-effect"></div>' : ''}
+                                 <i class="fas fa-bus"></i>
+                               </div>`,
+                        iconSize: [40, 40]
+                    });
+                    markers[markerId] = L.marker(pos, { icon }).addTo(map).bindPopup(`<b>${bus.vehicle_number}</b><br>Driver: ${bus.driver_name}`);
+                    circles[markerId] = L.circle(pos, { radius: 300, color: 'var(--primary)', weight: 1, fillOpacity: 0.05 }).addTo(map);
+                } else {
+                    markers[markerId].setLatLng(pos);
+                    circles[markerId].setLatLng(pos);
+                }
+            },
+
+            setFilter: function(type, el) {
+                currentFilter = type;
+                document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+                el.classList.add('active');
+                this.updateUI();
+            },
+
+            focusBus: function(lat, lng, id) {
+                map.flyTo([lat, lng], 17, { duration: 1.5 });
+                setTimeout(() => markers[id].openPopup(), 1500);
+            },
+
+            autoFit: function() {
+                const group = new L.featureGroup(Object.values(markers));
+                if (group.getLayers().length > 0) map.fitBounds(group.getBounds().pad(0.2));
+            }
+        };
+    })();
+
+    window.onload = () => CommandCenter.init();
+</script>
+</body>
+</html>

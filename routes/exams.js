@@ -1,305 +1,223 @@
-// routes/exams.js
+// routes/exams.js (FINALIZED BRANCH-AWARE & SESSION-SAFE VERSION WITH PARENT ACCESS)
 
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
 
-// --- Roles Configuration ---
-// These roles define who can manage (create/edit/delete) and who can only view exam data.
+// --- Role Definitions ---
 const EXAM_MANAGER_ROLES = ['Super Admin', 'Admin', 'Coordinator'];
-const EXAM_VIEWER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Teacher', 'Student'];
+// 🔥 FIXED: Added 'Parent' to EXAM_VIEWER_ROLES to resolve 403 Forbidden errors in logs
+const EXAM_VIEWER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Teacher', 'Student', 'Parent'];
 
 // =======================================================================================
-// 1. EXAM CRUD ROUTES (Core Exam Entry Management)
+// 1. EXAM CRUD ROUTES
 // =======================================================================================
 
 /**
  * @route   GET /api/exams/list
- * @desc    Get a JOINED list of all exams linked to courses/batches.
- * @access  Private (EXAM_VIEWER_ROLES)
- * * 🛑 CRITICAL FIX INCLUDED: This query ensures course_id and batch_id are returned,
- * which is essential for the frontend to filter exams relevant to the logged-in student.
+ * @desc    Fetches branch-isolated exams. Super Admin sees all.
  */
 router.get('/list', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req, res) => {
+    const { branch_id, role } = req.user;
+
     try {
-        const query = `
+        let query = `
             SELECT 
-                e.id AS exam_id,
-                e.exam_name,
-                e.exam_type,
-                e.exam_date,
-                e.course_id,  -- IMPORTANT: Included for frontend filtering
-                e.batch_id,   -- IMPORTANT: Included for frontend filtering
-                c.course_name,
-                b.batch_name,
-                b.batch_code, -- Added batch_code for clearer display
-                e.max_theory_marks,
-                e.max_practical_marks,
-                (e.max_theory_marks + e.max_practical_marks) AS total_marks
-            FROM 
-                exams e
-            LEFT JOIN 
-                courses c ON e.course_id = c.id
-            LEFT JOIN 
-                batches b ON e.batch_id = b.id
-            ORDER BY
-                e.exam_date DESC, c.course_name;
+                e.id AS exam_id, e.exam_name, e.exam_type, e.exam_date, e.course_id, e.batch_id,
+                e.branch_id, c.course_name, b.batch_name, b.batch_code, br.branch_name,
+                (COALESCE(e.max_theory_marks, 0) + COALESCE(e.max_practical_marks, 0)) AS total_marks,
+                e.max_theory_marks, e.max_practical_marks
+            FROM exams e
+            LEFT JOIN courses c ON e.course_id = c.id
+            LEFT JOIN batches b ON e.batch_id = b.id
+            LEFT JOIN branches br ON e.branch_id = br.id
+            WHERE 1=1
         `;
         
-        const result = await pool.query(query);
-        res.status(200).json(result.rows);
+        const params = [];
+        // Isolation logic: Super Admin sees everything, others are restricted to their branch
+        if (role !== 'Super Admin' && branch_id) {
+            query += ` AND e.branch_id = $1`;
+            params.push(branch_id);
+        }
 
+        query += ` ORDER BY e.exam_date DESC, c.course_name`;
+        
+        const result = await pool.query(query, params);
+        res.status(200).json(result.rows);
     } catch (error) {
-        console.error('Error fetching comprehensive exam list:', error);
-        res.status(500).json({ message: 'Failed to retrieve combined exam list.' });
+        console.error('List Fetch Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve exam list.' });
     }
 });
 
 /**
  * @route   POST /api/exams
- * @desc    Create a new exam (Header for a series of subjects)
- * @access  Private (EXAM_MANAGER_ROLES)
+ * @desc    Creates a new exam entry with Branch and Session safety.
  */
 router.post('/', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
-    const {
+    const { branch_id: user_branch, role } = req.user;
+    let {
         exam_name, exam_type, exam_date, is_midterm_assessment, academic_session_id,
-        course_id, batch_id, max_theory_marks, max_practical_marks
+        course_id, batch_id, max_theory_marks, max_practical_marks, branch_id
     } = req.body;
 
-    // Validation
-    if (!exam_name || !exam_date || !course_id || !batch_id || !academic_session_id) {
-        return res.status(400).json({ message: 'Missing required fields: name, date, course, batch, or session.' });
-    }
+    // Tactical branch determination
+    const finalBranchId = (role === 'Super Admin' && branch_id) ? branch_id : user_branch;
 
     try {
+        // 🔥 SELF-HEALING SESSION: Fetch active session if frontend sends dummy data
+        if (!academic_session_id || academic_session_id.includes('00000000')) {
+            const sessionRes = await pool.query(
+                `SELECT academic_session_id FROM academic_sessions WHERE is_active = TRUE LIMIT 1`
+            );
+            if (sessionRes.rows.length === 0) {
+                return res.status(400).json({ message: "No active academic session found." });
+            }
+            academic_session_id = sessionRes.rows[0].academic_session_id;
+        }
+
         const query = `
             INSERT INTO exams (
                 exam_name, exam_type, exam_date, is_midterm_assessment, academic_session_id,
-                course_id, batch_id, max_theory_marks, max_practical_marks
+                course_id, batch_id, branch_id, max_theory_marks, max_practical_marks
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id AS exam_id, exam_name;
         `;
         
-        const newExam = await pool.query(query, [
+        const result = await pool.query(query, [
             exam_name, exam_type, exam_date, is_midterm_assessment || false, academic_session_id,
-            course_id, batch_id, max_theory_marks || 100, max_practical_marks || 0
+            course_id, batch_id, finalBranchId, max_theory_marks || 100, max_practical_marks || 0
         ]);
 
-        res.status(201).json(newExam.rows[0]);
-
+        res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error('Error creating exam:', error);
+        console.error('Exam Creation Error:', error.message);
         res.status(500).json({ message: 'Failed to create exam.' });
     }
 });
 
 /**
  * @route   DELETE /api/exams/:id
- * @desc    Delete an exam series.
- * @access  Private (EXAM_MANAGER_ROLES)
  */
 router.delete('/:id', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
+    const { branch_id, role } = req.user;
     try {
         const { id } = req.params;
-        // Assumes ON DELETE CASCADE is set up in the database to delete related schedules and marks.
-        await pool.query('DELETE FROM exams WHERE id = $1', [id]);
+        // Branch Security check
+        const check = await pool.query(`SELECT branch_id FROM exams WHERE id = $1`, [id]);
+        if (check.rows.length > 0 && role !== 'Super Admin' && check.rows[0].branch_id !== branch_id) {
+            return res.status(403).json({ message: "Unauthorized branch access." });
+        }
+
+        await pool.query('DELETE FROM exams WHERE id = $1', [id]); 
         res.status(200).json({ message: 'Exam deleted successfully.' });
     } catch (error) {
-        console.error('Error deleting exam:', error);
         res.status(500).json({ message: 'Failed to delete exam.' });
     }
 });
 
 // =======================================================================================
-// 2. EXAM SCHEDULE CRUD ROUTES (Subject-specific Scheduling)
+// 2. EXAM SCHEDULE CRUD ROUTES
 // =======================================================================================
 
 /**
  * @route   GET /api/exams/schedule/:examId
- * @desc    Get all schedule entries (subjects, dates, times) for a specific exam series.
- * @access  Private (EXAM_VIEWER_ROLES)
  */
 router.get('/schedule/:examId', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req, res) => {
     try {
-        const { examId } = req.params;
         const query = `
             SELECT 
-                es.id AS schedule_id,
-                es.subject_id,
-                s.subject_name,
-                s.subject_code,
-                es.exam_date,
-                es.start_time,
-                es.end_time,
-                es.room_number,
-                es.max_marks
+                es.id AS schedule_id, es.subject_id, s.subject_name, s.subject_code,
+                es.exam_date, es.start_time, es.end_time, es.room_number, es.max_marks
             FROM exam_schedules es
             JOIN subjects s ON es.subject_id = s.id
-            WHERE es.exam_id = $1
+            WHERE es.exam_id = $1::uuid
             ORDER BY es.exam_date, es.start_time;
         `;
-        const result = await pool.query(query, [examId]);
+        const result = await pool.query(query, [req.params.examId]);
         res.status(200).json(result.rows);
-
     } catch (error) {
-        console.error('Error fetching exam schedule:', error);
-        res.status(500).json({ message: 'Failed to fetch exam schedule.' });
+        res.status(500).json({ message: 'Failed to fetch schedule.' });
     }
 });
 
 /**
  * @route   POST /api/exams/schedule
- * @desc    Create a new schedule entry (one subject for one exam)
- * @access  Private (EXAM_MANAGER_ROLES)
  */
 router.post('/schedule', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
-    const {
-        exam_id, course_id, batch_id, subject_id, exam_date,
-        room_number, start_time, end_time, max_marks // max_marks should ideally be derived from exam.js/exam_marks.js logic, but included here for direct entry capability
-    } = req.body;
+    const { exam_id, course_id, batch_id, subject_id, exam_date, room_number, start_time, end_time } = req.body;
 
-    if (!exam_id || !course_id || !batch_id || !subject_id || !exam_date || !start_time || !end_time) {
+    if (!exam_id || !subject_id || !exam_date) {
         return res.status(400).json({ message: 'Missing required schedule fields.' });
     }
 
+    let client;
     try {
+        client = await pool.connect();
+        await client.query('BEGIN'); 
+
+        // Inherit marks and branch context from parent exam
+        const examQuery = `SELECT max_theory_marks, max_practical_marks, branch_id FROM exams WHERE id = $1::uuid`;
+        const examRes = await client.query(examQuery, [exam_id]);
+
+        if (examRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Exam not found.' });
+        }
+
+        const { max_theory_marks, max_practical_marks, branch_id: examBranchId } = examRes.rows[0];
+        const derived_max_marks = (max_theory_marks || 0) + (max_practical_marks || 0);
+        
         const query = `
             INSERT INTO exam_schedules (
                 exam_id, course_id, batch_id, subject_id, exam_date,
-                room_number, start_time, end_time, max_marks
+                room_number, start_time, end_time, max_marks, branch_id
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
             RETURNING id AS schedule_id;
         `;
-        const newSchedule = await pool.query(query, [
+        const newSchedule = await client.query(query, [
             exam_id, course_id, batch_id, subject_id, exam_date,
-            room_number, start_time, end_time, max_marks || 100 // Default to 100 if not provided
+            room_number, start_time, end_time, derived_max_marks, examBranchId 
         ]);
         
+        await client.query('COMMIT'); 
         res.status(201).json(newSchedule.rows[0]);
 
     } catch (error) {
-        if (error.code === '23505') { // unique_violation: ensures a subject is scheduled only once per exam/batch
-            return res.status(409).json({ message: 'This subject is already scheduled for this exam and batch.' });
-        }
-        console.error('Error creating schedule entry:', error);
+        if (client) await client.query('ROLLBACK'); 
+        console.error('Schedule Creation Error:', error.message);
         res.status(500).json({ message: 'Failed to create schedule entry.' });
+    } finally {
+        if (client) client.release();
     }
 });
 
 /**
- * @route   PUT /api/exams/schedule/:scheduleId
- * @desc    Update an existing schedule entry
- * @access  Private (EXAM_MANAGER_ROLES)
+ * @route   GET /api/exams/student/:sid/skills
+ * @desc    Fetches radar data for student competency charts
+ * @access  Private (Authorized for Viewer Roles to support Parent Dashboard)
  */
-router.put('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
-    const { scheduleId } = req.params;
-    const { subject_id, exam_date, room_number, start_time, end_time, max_marks } = req.body;
-
+router.get('/student/:sid/skills', authenticateToken, authorize(EXAM_VIEWER_ROLES), async (req, res) => {
     try {
         const query = `
-            UPDATE exam_schedules
-            SET 
-                subject_id = $1,
-                exam_date = $2,
-                room_number = $3,
-                start_time = $4,
-                end_time = $5,
-                max_marks = $6,
-                updated_at = NOW()
-            WHERE id = $7
-            RETURNING *;
+            SELECT s.subject_name as label, COALESCE(AVG(m.marks_obtained_theory + m.marks_obtained_practical), 0) as value
+            FROM subjects s
+            JOIN marks m ON s.id = m.subject_id
+            WHERE m.student_id = $1::uuid
+            GROUP BY s.subject_name LIMIT 6;
         `;
-        const updatedSchedule = await pool.query(query, [
-            subject_id, exam_date, room_number, start_time, end_time, max_marks, scheduleId
-        ]);
-        
-        if (updatedSchedule.rows.length === 0) {
-            return res.status(404).json({ message: 'Schedule entry not found.' });
-        }
-        res.status(200).json(updatedSchedule.rows[0]);
-
-    } catch (error) {
-        console.error('Error updating schedule entry:', error);
-        res.status(500).json({ message: 'Failed to update schedule entry.' });
-    }
-});
-
-/**
- * @route   DELETE /api/exams/schedule/:scheduleId
- * @desc    Delete a specific schedule entry
- * @access  Private (EXAM_MANAGER_ROLES)
- */
-router.delete('/schedule/:scheduleId', authenticateToken, authorize(EXAM_MANAGER_ROLES), async (req, res) => {
-    try {
-        const { scheduleId } = req.params;
-        await pool.query('DELETE FROM exam_schedules WHERE id = $1', [scheduleId]);
-        res.status(200).json({ message: 'Schedule entry deleted successfully.' });
-    } catch (error) {
-        console.error('Error deleting schedule entry:', error);
-        res.status(500).json({ message: 'Failed to delete schedule entry.' });
-    }
-});
-
-/**
- * @route   GET /api/transcript/:studentId
- * @desc    Generate a complete academic transcript/marksheet for a student.
- * @access  Private (Student, Admin, Teacher)
- */
-router.get('/transcript/:studentId', authenticateToken, authorize(['Student', 'Admin', 'Teacher']), async (req, res) => {
-    const { studentId } = req.params;
-
-    try {
-        const query = `
-            SELECT
-                m.exam_schedule_id,
-                es.exam_name,
-                s.subject_name,
-                m.marks_obtained,
-                m.max_marks,
-                m.pass_marks,
-                m.grade_achieved,
-                m.created_at AS result_date
-            FROM marks m
-            
-            -- 1. Get Exam Details
-            JOIN exam_schedule es ON m.exam_schedule_id = es.id
-            
-            -- 2. Get Subject Name
-            JOIN subjects s ON m.subject_id = s.id
-            
-            -- 3. Filter by Student (assuming 'marks' table uses student_id for the student's primary ID)
-            WHERE m.student_id = $1
-            
-            ORDER BY es.exam_name, s.subject_name;
-        `;
-        
-        const result = await pool.query(query, [studentId]);
-
-        if (result.rowCount === 0) {
-            return res.status(200).json({ message: 'No marksheet data found for this student.', transcript: [] });
-        }
-        
-        // Grouping the results by exam for easy client-side rendering
-        const transcript = result.rows.reduce((acc, row) => {
-            const examId = row.exam_schedule_id;
-            if (!acc[examId]) {
-                acc[examId] = {
-                    exam_name: row.exam_name,
-                    results: []
-                };
-            }
-            acc[examId].results.push(row);
-            return acc;
-        }, {});
-
-        res.status(200).json({ transcript: Object.values(transcript) });
-
-    } catch (error) {
-        console.error(`Error generating transcript for student ${studentId}:`, error);
-        res.status(500).json({ message: 'Failed to generate transcript due to a backend error.' });
+        const { rows } = await pool.query(query, [req.params.sid]);
+        res.json({
+            labels: rows.length ? rows.map(r => r.label) : ['Logic', 'Theory', 'Practical', 'Research', 'Viva', 'Ethics'],
+            values: rows.length ? rows.map(r => Math.round(parseFloat(r.value))) : [0, 0, 0, 0, 0, 0]
+        });
+    } catch (err) {
+        console.error('Skills Fetch Error:', err.message);
+        res.status(500).json({ error: 'Failed to fetch competency data' });
     }
 });
 

@@ -9,6 +9,7 @@ const saltRounds = 10;
 const { authenticateToken, authorize } = require('../authMiddleware');
 const moment = require('moment'); 
 const { getApp } = require('../utils/helpers'); 
+const { sendWelcomeEmail } = require('../services/emailService');
 
 // --- Constants: Database Tables ---
 const STUDENTS_TABLE = 'students';
@@ -22,7 +23,7 @@ const PAYMENTS_TABLE = 'fee_payments';
 
 // --- Constants: Access Control ---
 const CRUD_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar'];
-const VIEW_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar', 'Teacher', 'Coordinator', 'Student'];
+const VIEW_ROLES = ['Super Admin', 'Admin', 'HR', 'Registrar', 'Teacher', 'Coordinator', 'Student', 'Parent'];
 
 // --- Helper Functions ---
 function getConfigIds(req) {
@@ -67,95 +68,122 @@ function buildUpdateQuery(body, fieldDefinitions, updatedBy) {
 }
 
 
-// =========================================================
-// 1. GET: Main Student List (Optimized for Dashboard)
-// =========================================================
+//// =========================================================
+// 1. GET: Main Student List (Updated with Password Hash)
+//// =========================================================
 router.get('/', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     try {
-        const { branch_id, role } = req.user; // মিডলওয়্যার থেকে রোল এবং ব্রাঞ্চ আইডি নেওয়া হচ্ছে
+        const { branch_id, role } = req.user; 
 
+        // UPDATED QUERY: Added u.password_hash AS portal_password to map with frontend
         let query = `
-            SELECT 
+            SELECT DISTINCT ON (s.student_id)
                 s.student_id, s.admission_id, s.enrollment_no, s.first_name, s.last_name, 
                 s.email, s.phone_number, s.status, s.course_id, s.batch_id, s.branch_id,
+                s.created_at,
                 u.username, u.role, u.id AS user_id,
+                u.password_hash AS portal_password, -- Fixed: Fetching hash for portal view
                 c.course_name, b.batch_name, br.branch_name,
                 (
-                    COALESCE(fs.admission_fee, 0) + COALESCE(fs.registration_fee, 0) + COALESCE(fs.examination_fee, 0)
-                    +
-                    ((COALESCE(fs.transport_fee, 0) * COALESCE(fs.course_duration_months, 0)) 
-                    + (COALESCE(fs.hostel_fee, 0) * COALESCE(fs.course_duration_months, 0)))
+                    SELECT (
+                        COALESCE(fs.admission_fee, 0) + 
+                        COALESCE(fs.registration_fee, 0) + 
+                        COALESCE(fs.exam_fee, 0) +
+                        ((COALESCE(fs.transport_fee, 0) + COALESCE(fs.hostel_fee, 0)) * COALESCE(fs.course_duration_months, 0))
+                    )
+                    FROM ${FEE_STRUCTURES_TABLE} fs 
+                    WHERE fs.course_id = s.course_id AND fs.batch_id = s.batch_id 
+                    LIMIT 1
                 ) AS total_fees_due
             FROM ${STUDENTS_TABLE} s
             LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id
             LEFT JOIN ${BATCHES_TABLE} b ON s.batch_id = b.id
             LEFT JOIN ${BRANCHES_TABLE} br ON s.branch_id = br.id
-            LEFT JOIN ${FEE_STRUCTURES_TABLE} fs ON fs.course_id = s.course_id AND fs.batch_id = s.batch_id
             WHERE u.deleted_at IS NULL
         `;
 
         const queryParams = [];
-        // লজিক: যদি Super Admin না হয়, তবে শুধুমাত্র তার নিজস্ব ব্রাঞ্চের ডাটা দেখাবে
-        if (role !== 'super admin' && branch_id) {
+        
+        if (role.toLowerCase() !== 'super admin' && branch_id) {
             query += ` AND s.branch_id = $1`;
             queryParams.push(branch_id);
         }
 
-        query += ` ORDER BY s.created_at DESC;`;
+        query += ` ORDER BY s.student_id, s.created_at DESC;`;
 
         const result = await pool.query(query, queryParams);
+        
         res.status(200).json(result.rows);
     } catch (error) {
-        console.error('Error fetching students list:', error);
-        res.status(500).json({ message: 'Failed to retrieve students list.' });
+        console.error('CRITICAL: Error fetching student dashboard list:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Internal server error while retrieving the student registry.' 
+        });
+    }
+});
+// =========================================================
+// 1.5. GET: Count All Students (For Serial Admission ID)
+// =========================================================
+/**
+ * @route   GET /api/students/count-all
+ * @desc    Get total count of students to generate serial Admission ID.
+ * @access  Private (CRUD_ROLES)
+ */
+router.get('/count-all', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
+    try {
+        // ডাটাবেস থেকে মোট স্টুডেন্ট সংখ্যা গণনা করা হচ্ছে
+        const query = `SELECT COUNT(*) FROM ${STUDENTS_TABLE}`;
+        const result = await pool.query(query);
+        
+        const count = parseInt(result.rows[0].count);
+        
+        res.status(200).json({ 
+            success: true,
+            count: count 
+        });
+    } catch (error) {
+        console.error('Error in count-all route:', error);
+        res.status(500).json({ message: 'Failed to count students.', error: error.message });
     }
 });
 
 // =========================================================
-// 2. POST: Create New Student (CRITICAL FIX: Multer Integration)
+// 2. POST: Create New Student (FIXED: Multer + Email Integration)
 // =========================================================
 router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
-    // 1. Get Multer instance from the Express app instance (attached in server.js)
     const upload = req.app.get('upload'); 
 
     if (!upload) {
-        console.error("Multer instance not found. Cannot proceed with file upload.");
-        return res.status(500).json({ message: "File upload service is unavailable. Check server config." });
+        return res.status(500).json({ message: "File upload service is unavailable." });
     }
     
-    // 2. Use Multer middleware for a single file upload
     upload.single('profile_image_path')(req, res, (err) => {
         if (err) {
             console.error('Multer Upload Error:', err);
-            if (err.code === 'LIMIT_FILE_SIZE') {
-                return res.status(400).json({ message: 'The uploaded file exceeds the file size limit.' });
-            }
-            return res.status(500).json({ message: 'File upload failed: ' + err.message });
+            return res.status(400).json({ message: 'File upload failed: ' + err.message });
         }
         next(); 
     });
-}, async (req, res) => { // Actual controller logic
+}, async (req, res) => {
     let body = req.body;
-    
     const { branch_id, created_by } = getConfigIds(req);
 
-    // 🚨 Add uploaded file path to the body for database insertion
     if (req.file) {
         body.profile_image_path = req.file.path; 
     }
 
-    // Validation
     if (!body.username || !body.password || !body.first_name || !body.last_name || !body.course_id || !body.batch_id) {
-        return res.status(400).json({ message: 'Missing required fields: Name, Login, Course, or Batch.' });
+        return res.status(400).json({ message: 'Missing required fields.' });
     }
 
     const client = await pool.connect();
     
     try {
-        await client.query('BEGIN'); // Start Transaction
+        await client.query('BEGIN'); // ট্রানজাকশন শুরু
 
-        // --- A. Auto-Generate Enrollment/Admission IDs ---
+        // --- A. ID Generation ---
         if (!body.enrollment_no) {
             const year = new Date().getFullYear();
             const countRes = await client.query(`SELECT COUNT(*) FROM ${STUDENTS_TABLE}`);
@@ -163,20 +191,14 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
             body.enrollment_no = `STU-${year}-${String(nextNum).padStart(4, '0')}`;
         }
         if (!body.admission_id) {
-            const uniqueSuffix = Math.floor(Math.random() * 900000) + 100000;
-            body.admission_id = `ADMN-${uniqueSuffix}`;
+            body.admission_id = `ADMN-${Math.floor(Math.random() * 900000) + 100000}`;
         }
         
-        // --- B. Fetch Active Academic Session (Fallback safety) ---
+        // --- B. Session Setup ---
         let academic_session_id = toUUID(body.academic_session_id);
         if (!academic_session_id) {
             const sessionRes = await client.query("SELECT id FROM academic_sessions WHERE is_active = TRUE LIMIT 1");
-            if (sessionRes.rowCount > 0) {
-                academic_session_id = sessionRes.rows[0].id;
-            } else {
-                const anySession = await client.query("SELECT id FROM academic_sessions LIMIT 1");
-                academic_session_id = anySession.rowCount > 0 ? anySession.rows[0].id : null;
-            }
+            academic_session_id = sessionRes.rows.length > 0 ? sessionRes.rows[0].id : null;
         }
 
         // --- C. Create User Login ---
@@ -213,25 +235,31 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
             body.profile_image_path || null, body.signature_path || null, body.id_document_path || null, body.aadhaar_number || null, body.nationality || null,
             body.city || null, body.state || null, body.zip_code || null, body.country || null, body.religion || null, body.blood_group || null, body.caste_category || null,
             body.parent_first_name || null, body.parent_last_name || null, body.parent_phone_number || null, body.parent_email || null, body.parent_occupation || null, body.guardian_relation || null,
-            body.admission_date || moment().format('YYYY-MM-DD') // Default admission date
+            body.admission_date || moment().format('YYYY-MM-DD')
         ]);
 
-        await client.query('COMMIT'); // Commit Transaction
+        await client.query('COMMIT');
+
+        // --- E. SEND SUCCESS EMAIL ---
+        if (body.email) {
+            sendWelcomeEmail({
+                email: body.email,
+                first_name: body.first_name,
+                admission_id: body.admission_id,
+                raw_password: body.password,
+                school_name: "BCSM School"
+            });
+        }
         
         res.status(201).json({ 
-            message: 'Student created successfully.', 
+            message: 'Student registered successfully and welcome email sent.', 
             student: studentResult.rows[0],
-            admission_id: body.admission_id, 
-            enrollment_no: body.enrollment_no
+            admission_id: body.admission_id
         });
 
     } catch (error) {
-        await client.query('ROLLBACK'); // Fail Safe
+        await client.query('ROLLBACK');
         console.error('Student Creation Error:', error);
-        
-        if (error.code === '23505') {
-            return res.status(409).json({ message: 'Duplicate Data: Username, Email, or Enrollment No already exists.' });
-        }
         res.status(500).json({ message: 'Failed to create student profile.', error: error.message });
     } finally {
         client.release();
@@ -239,14 +267,16 @@ router.post('/', authenticateToken, authorize(CRUD_ROLES), (req, res, next) => {
 });
 
 
-/// =========================================================
-// 3. GET: Single Student Details (Smart Lookup) - FIX: Added Total Paid Calculation
+// =========================================================
+// 3. GET: Single Student Details (Optimized for ID Cards & Profile)
 // =========================================================
 router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const idParam = req.params.id;
     const safeId = toUUID(idParam);
 
-    if (!safeId) return res.status(400).json({ message: 'Invalid ID format.' });
+    const whereClause = safeId 
+        ? `(s.student_id = $1::uuid OR s.user_id = $1::uuid)` 
+        : `s.admission_id = $1`;
 
     try {
         const query = `
@@ -255,7 +285,12 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
                 u.username, 
                 u.role,
                 c.course_name,
-                -- 🛑 গুরুত্বপূর্ণ ফিক্স: ইনভয়েস টেবিল থেকে মোট পেমেন্ট ক্যালকুলেট করা হচ্ছে
+                bt.batch_name,
+                br.branch_name,
+                br.address AS branch_address,
+                br.email AS branch_email,
+                br.phone_number AS branch_phone,
+                br.logo_url AS branch_logo,
                 COALESCE((
                     SELECT SUM(paid_amount) 
                     FROM ${INVOICES_TABLE} 
@@ -264,17 +299,29 @@ router.get('/:id', authenticateToken, authorize(VIEW_ROLES), async (req, res) =>
             FROM ${STUDENTS_TABLE} s
             LEFT JOIN ${USERS_TABLE} u ON s.user_id = u.id
             LEFT JOIN ${COURSES_TABLE} c ON s.course_id = c.id 
-            WHERE s.student_id = $1::uuid OR s.user_id = $1::uuid;
+            LEFT JOIN ${BATCHES_TABLE} bt ON s.batch_id = bt.id
+            LEFT JOIN ${BRANCHES_TABLE} br ON s.branch_id = br.id
+            WHERE ${whereClause};
         `;
-        const result = await pool.query(query, [safeId]);
+        
+        const result = await pool.query(query, [idParam]);
 
         if (result.rows.length === 0) {
-            return res.status(404).json({ message: 'Student not found.' });
+            return res.status(404).json({ 
+                success: false, 
+                message: 'Student record not found in the system.' 
+            });
         }
+
         res.status(200).json(result.rows[0]);
+
     } catch (error) {
-        console.error('Error fetching student details:', error);
-        res.status(500).json({ message: 'Failed to retrieve student details.' });
+        console.error('API Error [GET Student Details]:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Internal server error while fetching student data.',
+            error: error.message 
+        });
     }
 });
 
@@ -297,7 +344,6 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
     try {
         await client.query('BEGIN');
 
-        // --- Step 1: Update USERS table (for login/contact details) ---
         if (body.user_id) {
             const userId = toUUID(body.user_id);
             const userUpdateFields = [];
@@ -312,7 +358,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
                  userUpdateFields.push(`phone_number = $${userParamIndex++}`);
                  userUpdateValues.push(body.phone_number);
             }
-            if (body.password) { // Only update password if a new one is provided
+            if (body.password) {
                  const password_hash = await bcrypt.hash(body.password, saltRounds);
                  userUpdateFields.push(`password_hash = $${userParamIndex++}`);
                  userUpdateValues.push(password_hash);
@@ -332,7 +378,6 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
             }
         }
 
-        // --- Step 2: Update STUDENT Profile ---
         const studentFieldDefinitions = {
             first_name: 'text', last_name: 'text', middle_name: 'text', 
             dob: 'date', gender: 'text', blood_group: 'text', religion: 'text', mother_tongue: 'text',
@@ -343,7 +388,7 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
             parent_first_name: 'text', parent_last_name: 'text', parent_phone_number: 'text',
             parent_email: 'text', parent_occupation: 'text', guardian_relation: 'text',
             parent_annual_income: 'numeric',
-            profile_image_path: 'text', signature_path: 'text', id_document_path: 'text', // Included for update
+            profile_image_path: 'text', signature_path: 'text', id_document_path: 'text', 
             location_coords: 'text',
             admission_date: 'date' 
         };
@@ -365,7 +410,6 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         `;
         
         updateValues.push(safeStudentId);
-
         const result = await client.query(studentUpdateQuery, updateValues);
 
         if (result.rowCount === 0) {
@@ -374,7 +418,6 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
         }
 
         await client.query('COMMIT');
-        
         res.status(200).json({ 
             message: 'Student profile updated successfully.',
             first_name: result.rows[0].first_name, 
@@ -384,7 +427,6 @@ router.put('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res) =>
     } catch (error) {
         await client.query('ROLLBACK');
         console.error('Student Update Error:', error);
-        
         if (error.code === '23505') {
             return res.status(409).json({ message: 'Duplicate Data: Email, Phone, or Enrollment No already exists.' });
         }
@@ -406,8 +448,6 @@ router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res)
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-
-        // Check if student exists
         const getRes = await client.query(`SELECT user_id FROM ${STUDENTS_TABLE} WHERE student_id = $1::uuid`, [safeStudentId]);
         if (getRes.rowCount === 0) {
             await client.query('ROLLBACK');
@@ -415,18 +455,9 @@ router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res)
         }
         const userId = getRes.rows[0].user_id;
 
-        // Soft Delete Student
-        await client.query(
-            `UPDATE ${STUDENTS_TABLE} SET status = 'Inactive', deleted_at = CURRENT_TIMESTAMP WHERE student_id = $1::uuid`, 
-            [safeStudentId]
-        );
-
-        // Soft Delete User Login
+        await client.query(`UPDATE ${STUDENTS_TABLE} SET status = 'Inactive', deleted_at = CURRENT_TIMESTAMP WHERE student_id = $1::uuid`, [safeStudentId]);
         if (userId) {
-            await client.query(
-                `UPDATE ${USERS_TABLE} SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP WHERE id = $1::uuid`, 
-                [userId]
-            );
+            await client.query(`UPDATE ${USERS_TABLE} SET is_active = FALSE, deleted_at = CURRENT_TIMESTAMP WHERE id = $1::uuid`, [userId]);
         }
 
         await client.query('COMMIT');
@@ -445,14 +476,13 @@ router.delete('/:id', authenticateToken, authorize(CRUD_ROLES), async (req, res)
 // =========================================================
 // 6. GET: Student Fee Records (FINAL FIX)
 // =========================================================
-router.get('/:id/fees', authenticateToken, async (req, res) => {
+router.get('/:id/fees', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const studentId = req.params.id;
     const safeStudentId = toUUID(studentId);
 
     if (!safeStudentId) return res.status(400).json({ message: 'Invalid Student ID.' });
 
     try {
-        // --- STEP 1: Fetch Summary Data (Total Billed / Paid / Due) ---
         const summaryQuery = `
             SELECT
                 COALESCE(SUM(i.total_amount), 0) AS total_billed,
@@ -465,7 +495,6 @@ router.get('/:id/fees', authenticateToken, async (req, res) => {
         const summaryResult = await pool.query(summaryQuery, [safeStudentId]);
         let summary = summaryResult.rows[0] || { total_billed: 0, total_paid: 0, balance_due: 0 };
 
-        // --- STEP 2: Fetch Detailed Payment History ---
         const historyQuery = `
             SELECT 
                 p.id,
@@ -483,7 +512,6 @@ router.get('/:id/fees', authenticateToken, async (req, res) => {
         
         const historyResult = await pool.query(historyQuery, [safeStudentId]);
 
-        // --- STEP 3: Combine and Send Response ---
         const finalResponse = {
             ...summary,
             payment_history: historyResult.rows 
@@ -501,7 +529,7 @@ router.get('/:id/fees', authenticateToken, async (req, res) => {
 // =========================================================
 // 7. GET: Library Books (Dashboard/Profile Support)
 // =========================================================
-router.get('/:id/library', authenticateToken, async (req, res) => {
+router.get('/:id/library', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const studentId = req.params.id;
     const safeStudentId = toUUID(studentId);
 
@@ -511,7 +539,7 @@ router.get('/:id/library', authenticateToken, async (req, res) => {
         const query = `
             SELECT * FROM book_circulation 
             WHERE student_id = $1::uuid 
-              AND return_date IS NULL  -- ✅ FIX APPLIED: Check for NULL return_date instead of a missing 'status' column
+              AND return_date IS NULL
             ORDER BY issue_date DESC;
         `;
         try {
@@ -535,7 +563,6 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
     const safeStudentId = toUUID(studentId);
 
     try {
-        
         const query = `
             SELECT DISTINCT
                 t.full_name, 
@@ -562,11 +589,6 @@ router.get('/:id/teachers', authenticateToken, authorize(VIEW_ROLES), async (req
 // =========================================================
 // 8.5. GET: Students by Course/Batch (For Marks Entry)
 // =========================================================
-
-/**
- * @route   GET /api/students/course/:courseId/batch/:batchId
- * @desc    Get list of enrolled students for a specific course and batch (used by Marks Entry).
- */
 router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Coordinator']), async (req, res) => {
     const { courseId, batchId } = req.params;
     const safeCourseId = toUUID(courseId);
@@ -608,10 +630,6 @@ router.get('/course/:courseId/batch/:batchId', authenticateToken, authorize(['Ad
 // =========================================================
 // 9. GET: Student Lookup
 // =========================================================
-
-/**
- * @route GET /api/students/lookup/all
- */
 router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 'Teacher', 'Placement Officer']), async (req, res) => {
     try {
         const result = await pool.query(`
@@ -632,9 +650,6 @@ router.get('/lookup/all', authenticateToken, authorize(['Admin', 'Super Admin', 
 });
 
 
-const path = require('path');
-const fs = require('fs');
-
 // =========================================================
 // 10. GET: Secure Digital Vault (File Protection)
 // =========================================================
@@ -643,7 +658,6 @@ router.get('/vault/:filename', authenticateToken, async (req, res) => {
     const authUserId = req.user.id; // User ID from JWT
 
     try {
-        // Security Check: Does this file belong to the student or is requester an Admin?
         const verifyQuery = `
             SELECT 1 FROM ${STUDENTS_TABLE} 
             WHERE (user_id = $1 OR student_id = $1) 
@@ -655,7 +669,6 @@ router.get('/vault/:filename', authenticateToken, async (req, res) => {
             return res.status(403).json({ message: "Access Denied: Unauthorised vault access." });
         }
 
-        // Resolve absolute path to the file
         const filePath = path.join(__dirname, '../uploads', filename);
 
         if (fs.existsSync(filePath)) {
@@ -672,7 +685,7 @@ router.get('/vault/:filename', authenticateToken, async (req, res) => {
 // =========================================================
 // 11. GET: Attendance Percentage (Dashboard Aggregate)
 // =========================================================
-router.get('/:id/attendance-summary', authenticateToken, async (req, res) => {
+router.get('/:id/attendance-summary', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const safeId = toUUID(req.params.id);
     try {
         const query = `
@@ -691,7 +704,7 @@ router.get('/:id/attendance-summary', authenticateToken, async (req, res) => {
 // =========================================================
 // 12. GET: Skills Radar Data (Marks Aggregate)
 // =========================================================
-router.get('/:id/skills', authenticateToken, async (req, res) => {
+router.get('/:id/skills', authenticateToken, authorize(VIEW_ROLES), async (req, res) => {
     const safeId = toUUID(req.params.id);
     try {
         const query = `
@@ -718,5 +731,55 @@ router.get('/:id/skills', authenticateToken, async (req, res) => {
     }
 });
 
+// =========================================================
+// 13. POST: Quick Unlock Portal Access
+// =========================================================
+router.post('/unlock', authenticateToken, authorize(CRUD_ROLES), async (req, res) => {
+    const { username } = req.body;
+    if (!username) return res.status(400).json({ message: "Username is required." });
+
+    try {
+        const query = `
+            UPDATE ${USERS_TABLE} 
+            SET is_active = TRUE, status = 'active' 
+            WHERE username = $1 
+            RETURNING id;
+        `;
+        const result = await pool.query(query, [username]);
+        if (result.rowCount === 0) return res.status(404).json({ message: "User not found." });
+        
+        res.status(200).json({ message: "Student account unlocked successfully." });
+    } catch (error) {
+        console.error('Unlock Error:', error);
+        res.status(500).json({ message: "Failed to unlock portal access." });
+    }
+});
+
+// =========================================================
+// PUBLIC LOOKUP: No Token Required
+// =========================================================
+router.get('/public/lookup/:enrollmentId', async (req, res) => {
+    const { enrollmentId } = req.params;
+    try {
+        const query = `
+            SELECT 
+                s.first_name, s.last_name, s.enrollment_no, s.status,
+                c.course_name, s.profile_image_path
+            FROM students s
+            LEFT JOIN courses c ON s.course_id = c.id
+            WHERE s.enrollment_no = $1 OR s.admission_id = $1
+            LIMIT 1;
+        `;
+        const result = await pool.query(query, [enrollmentId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ message: 'Student not found.' });
+        }
+        res.status(200).json(result.rows[0]);
+    } catch (error) {
+        console.error('Public lookup error:', error);
+        res.status(500).json({ message: 'Server error during lookup.' });
+    }
+});
 
 module.exports = router;

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Staff Profile | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root {
+            --primary-dark: #005A9C; 
+            --glass-bg: rgba(255, 255, 255, 0.85);
+        }
+
+        body {
+            font-family: 'Montserrat', sans-serif;
+            background: linear-gradient(180deg, #FF9933 0%, #FFFFFF 50%, #138808 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+            padding-bottom: 50px;
+        }
+
+        .container { max-width: 900px; padding-top: 30px; }
+
+        /* Glass Card */
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            color: var(--primary-dark);
+            border-bottom: 2px solid rgba(0,0,0,0.1);
+            padding-bottom: 8px;
+            margin-bottom: 20px;
+            margin-top: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            font-size: 0.95rem;
+        }
+
+        .form-control, .form-select {
+            border-radius: 8px;
+            padding: 10px;
+            border: 1px solid rgba(0,0,0,0.1);
+            background: rgba(255,255,255,0.9);
+        }
+        .form-control:focus {
+            border-color: var(--primary-dark);
+            box-shadow: 0 0 0 3px rgba(0, 90, 156, 0.15);
+        }
+        
+        .current-file-link {
+            font-size: 0.85rem;
+            margin-top: 5px;
+            display: inline-block;
+            color: var(--primary-dark);
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .current-file-link:hover { text-decoration: underline; }
+
+        .img-preview {
+            width: 80px; height: 80px; 
+            border-radius: 50%; 
+            object-fit: cover;
+            border: 3px solid #fff;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.1);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-user-edit me-2"></i>Edit Profile</h2>
+            <p class="text-muted mb-0 small">Update staff details and permissions</p>
+        </div>
+        <a href="/view-teachers.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </a>
+    </div>
+
+    <div class="glass-card" id="loading-panel">
+        <div class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Loading staff data...</p>
+        </div>
+    </div>
+
+    <div class="glass-card d-none" id="form-panel">
+        <form id="edit-teacher-form" enctype="multipart/form-data">
+            
+            <input type="hidden" id="teacher_id_hidden" name="id">
+
+            <div class="d-flex align-items-center mb-4 pb-3 border-bottom">
+                <img src="https://placehold.co/80" id="preview-photo" class="img-preview me-3">
+                <div>
+                    <h4 class="mb-0 fw-bold" id="header-name">Staff Name</h4>
+                    <span class="badge bg-primary rounded-pill" id="header-id">ID: ...</span>
+                </div>
+            </div>
+
+            <h5 class="section-title">Professional Information</h5>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Full Name</label>
+                    <input type="text" name="full_name" id="full_name" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Employee ID (Read Only)</label>
+                    <input type="text" id="employee_id" class="form-control bg-light" readonly>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Designation</label>
+                    <input type="text" name="designation" id="designation" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Department</label>
+                    <select name="department_id" id="department_select" class="form-select">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Hire Date</label>
+                    <input type="date" name="hire_date" id="hire_date" class="form-control">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Account Status</label>
+                    <select name="is_active" id="is_active" class="form-select">
+                        <option value="true">Active</option>
+                        <option value="false">Inactive / On Leave</option>
+                    </select>
+                </div>
+            </div>
+
+            <h5 class="section-title">Contact Details</h5>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Email Address</label>
+                    <input type="email" name="email" id="email" class="form-control" required>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Phone Number</label>
+                    <input type="tel" name="phone_number" id="phone_number" class="form-control">
+                </div>
+                <div class="col-12">
+                    <label class="form-label fw-bold small">Address</label>
+                    <input type="text" name="address" id="address" class="form-control">
+                </div>
+            </div>
+
+            <h5 class="section-title">Files & Security</h5>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Change Profile Photo</label>
+                    <input type="file" name="profile_photo" class="form-control" accept="image/*">
+                    <div id="current-photo-link"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">Update CV / Resume</label>
+                    <input type="file" name="cv_file" class="form-control" accept=".pdf,.doc,.docx">
+                    <div id="current-cv-link"></div>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small text-danger">New Password</label>
+                    <input type="password" name="password" class="form-control" placeholder="Leave blank to keep current">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold small">System Role</label>
+                    <select name="new_role" id="new_role" class="form-select">
+                        <option value="Teacher">Teacher</option>
+                        <option value="Admin">Admin</option>
+                        <option value="HR">HR</option>
+                        <option value="Employee">Employee</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-end pt-3 border-top">
+                <button type="submit" id="submit-btn" class="btn btn-primary rounded-pill px-5 shadow">
+                    <i class="fas fa-save me-2"></i> Save Changes
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const teacherId = urlParams.get('id');
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const token = localStorage.getItem('erp-token');
+        if(!token) window.location.href = '/login.html';
+        if(!teacherId) { alert("No ID provided"); window.location.href='/view-teachers.html'; return; }
+
+        await loadData();
+    });
+
+    async function loadData() {
+        try {
+            // 1. Fetch Departments
+            const deptRes = await window.authFetch('/api/hr/departments');
+            const departments = await deptRes.json();
+            
+            const deptSelect = document.getElementById('department_select');
+            deptSelect.innerHTML = '<option value="">-- Select --</option>';
+            if(Array.isArray(departments)) {
+                departments.forEach(d => {
+                    deptSelect.innerHTML += `<option value="${d.id}">${d.name}</option>`;
+                });
+            }
+
+            // 2. Fetch Teacher Data
+            const res = await window.authFetch(`/api/teachers/${teacherId}`);
+            if(!res.ok) throw new Error("Teacher not found");
+            
+            const data = await res.json();
+            populateForm(data);
+
+            // Show Form
+            document.getElementById('loading-panel').classList.add('d-none');
+            document.getElementById('form-panel').classList.remove('d-none');
+
+        } catch(e) {
+            console.error(e);
+            alert("Error loading data: " + e.message);
+            window.location.href = '/view-teachers.html';
+        }
+    }
+
+    function populateForm(data) {
+        document.getElementById('header-name').textContent = data.full_name;
+        document.getElementById('header-id').textContent = data.employee_id;
+        document.getElementById('teacher_id_hidden').value = teacherId;
+
+        // Inputs
+        document.getElementById('full_name').value = data.full_name || '';
+        document.getElementById('employee_id').value = data.employee_id || '';
+        document.getElementById('designation').value = data.designation || '';
+        document.getElementById('department_select').value = data.department_id || '';
+        document.getElementById('email').value = data.email || '';
+        document.getElementById('phone_number').value = data.phone_number || '';
+        document.getElementById('address').value = data.address || '';
+        document.getElementById('is_active').value = data.is_active ? 'true' : 'false';
+        document.getElementById('new_role').value = data.role || 'Teacher';
+
+        // Dates
+        if(data.hire_date) document.getElementById('hire_date').value = data.hire_date.split('T')[0];
+
+        // Files Logic
+        const baseUrl = window.erpSettings?.API_BASE || '';
+        
+        // Photo
+        if(data.profile_image_path) {
+            const photoUrl = data.profile_image_path.startsWith('http') ? data.profile_image_path : `${baseUrl}${data.profile_image_path}`;
+            document.getElementById('preview-photo').src = photoUrl;
+            document.getElementById('current-photo-link').innerHTML = `Current: <a href="${photoUrl}" target="_blank" class="current-file-link">View Photo</a>`;
+        }
+
+        // CV
+        if(data.cv_resume_path) {
+            const cvUrl = data.cv_resume_path.startsWith('http') ? data.cv_resume_path : `${baseUrl}${data.cv_resume_path}`;
+            document.getElementById('current-cv-link').innerHTML = `Current: <a href="${cvUrl}" target="_blank" class="current-file-link"><i class="fas fa-file-pdf"></i> View CV</a>`;
+        }
+    }
+
+    // --- SUBMISSION ---
+    document.getElementById('edit-teacher-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const btn = document.getElementById('submit-btn');
+        const oldText = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+        btn.disabled = true;
+
+        const formData = new FormData(e.target);
+
+        try {
+            const baseUrl = window.erpSettings?.API_BASE || '';
+            const token = localStorage.getItem('erp-token');
+
+            // Using raw fetch for Multipart
+            const response = await fetch(`${baseUrl}/api/teachers/${teacherId}`, {
+                method: 'PUT',
+                headers: { 'Authorization': `Bearer ${token}` }, // No Content-Type
+                body: formData
+            });
+
+            if(response.ok) {
+                alert("Profile updated successfully!");
+                window.location.href = '/view-teachers.html';
+            } else {
+                const err = await response.json();
+                alert("Update failed: " + (err.message || response.statusText));
+            }
+
+        } catch(error) {
+            console.error(error);
+            alert("Network error occurred.");
+        } finally {
+            btn.innerHTML = oldText;
+            btn.disabled = false;
+        }
+    });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Results | Admin Console</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        body { background-color: #f4f6f9; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .container { max-width: 1200px; margin-top: 30px; }
+        .card { border: none; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .card-header { background: #fff; border-bottom: 1px solid #eee; padding: 20px; border-radius: 10px 10px 0 0; }
+        .student-img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; border: 2px solid #eee; }
+        .score-badge { font-weight: bold; font-size: 1em; }
+        .table th { font-weight: 600; color: #555; background: #f8f9fa; }
+        .table td { vertical-align: middle; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="mb-1" id="quiz-title">Loading Exam Title...</h2>
+            <p class="text-muted mb-0">Student Performance Report</p>
+        </div>
+        <a href="/online-exam.html" class="btn btn-outline-secondary"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Participant List</h5>
+            <button class="btn btn-sm btn-success" onclick="window.print()"><i class="fas fa-print"></i> Print List</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th class="ps-4">Rank</th>
+                            <th>Student</th>
+                            <th>Roll Number</th>
+                            <th>Submitted At</th>
+                            <th class="text-center">Score</th>
+                            <th class="text-center">Percentage</th>
+                            <th class="text-end pe-4">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="results-body">
+                        <tr><td colspan="7" class="text-center py-5">Loading results...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const QUIZ_ID = new URLSearchParams(window.location.search).get('quizId');
+    const TOKEN = localStorage.getItem('erp-token');
+
+    async function loadResults() {
+        if (!TOKEN) return window.location.href = '/login.html';
+        
+        try {
+            const response = await fetch(`/api/online-exam/admin/quiz-attempts/${QUIZ_ID}`, {
+                headers: { 'Authorization': `Bearer ${TOKEN}` }
+            });
+            
+            const data = await response.json();
+            const tbody = document.getElementById('results-body');
+            
+            if (data.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5 text-muted">No students have submitted this exam yet.</td></tr>`;
+                document.getElementById('quiz-title').innerText = "Exam Results";
+                return;
+            }
+
+            document.getElementById('quiz-title').innerText = data[0].title;
+            tbody.innerHTML = '';
+
+            data.forEach((row, index) => {
+                const percentage = ((row.total_score / row.max_marks) * 100).toFixed(1);
+                let badgeClass = percentage >= 40 ? 'bg-success-subtle text-success' : 'bg-danger-subtle text-danger';
+                
+                const date = new Date(row.end_time).toLocaleString();
+                const avatar = row.profile_image_path || `https://ui-avatars.com/api/?name=${row.first_name}+${row.last_name}&background=random`;
+
+                // ✅ UPDATE: Button now opens marksheet in new tab
+                const tr = `
+                    <tr>
+                        <td class="ps-4 fw-bold text-secondary">#${index + 1}</td>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                <img src="${avatar}" class="student-img me-3">
+                                <div>
+                                    <div class="fw-bold text-dark">${row.first_name} ${row.last_name}</div>
+                                </div>
+                            </div>
+                        </td>
+                        <td>${row.roll_number}</td>
+                        <td class="small text-muted">${date}</td>
+                        <td class="text-center fw-bold">${row.total_score} / ${row.max_marks}</td>
+                        <td class="text-center">
+                            <span class="badge ${badgeClass} score-badge">${percentage}%</span>
+                        </td>
+                        <td class="text-end pe-4">
+                            <button class="btn btn-sm btn-primary" onclick="window.open('/admin-marksheet.html?attemptId=${row.attempt_id}', '_blank')">
+                                <i class="fas fa-file-alt"></i> Marksheet
+                            </button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += tr;
+            });
+
+        } catch (error) {
+            console.error(error);
+            document.getElementById('results-body').innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Error loading data. Ensure you are logged in as Admin.</td></tr>`;
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadResults);
+</script>
+
+</body>
+</html>

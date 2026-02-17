@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCSM | Chairman's Master Terminal 2026</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- DYNAMIC FONT & VARIABLES --- */
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Montserrat:wght@100;300;600;800&display=swap');
+
+        :root {
+            --bg: #00050a;
+            --neon-blue: #00f2ff;
+            --gold: #ffaa00;
+            --glass: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.12);
+            --neon-glow: 0 0 25px rgba(0, 242, 255, 0.6);
+            --matrix-color: rgba(0, 242, 255, 0.15);
+            --cubic: cubic-bezier(0.7, 0, 0.3, 1);
+        }
+
+        [data-theme="light"] {
+            --bg: #f4f9ff; --neon-blue: #0055ff; --gold: #8b6b00;
+            --glass: rgba(0, 0, 0, 0.04); --glass-border: rgba(0, 0, 0, 0.15);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; cursor: none; }
+        body { background: var(--bg); color: #fff; font-family: 'Montserrat', sans-serif; overflow-x: hidden; scroll-behavior: smooth; }
+        [data-theme="light"] body { color: #001a33; }
+
+        /* --- BACKGROUND & CURSOR --- */
+        #bg-canvas { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0.5; }
+        .cursor-dot { position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 99999; pointer-events: none; width: 10px; height: 10px; background: var(--gold); box-shadow: 0 0 15px var(--gold); }
+        .cursor-outline { position: fixed; top: 0; left: 0; transform: translate(-50%, -50%); border-radius: 50%; z-index: 99998; pointer-events: none; width: 45px; height: 45px; border: 2px solid var(--neon-blue); transition: 0.4s var(--cubic); }
+
+        /* --- SYSTEM BAR --- */
+        .sys-st-bar {
+            background: rgba(0, 5, 10, 0.98); padding: 14px 5%; display: flex; justify-content: space-between;
+            font-size: 11px; font-weight: 800; border-bottom: 1px solid var(--glass-border);
+            position: sticky; top: 0; z-index: 10000; backdrop-filter: blur(40px);
+            font-family: 'Orbitron'; letter-spacing: 2px; color: var(--neon-blue);
+        }
+
+        /* --- HEADER BRANDING --- */
+        .header-brand { 
+            padding: 30px 5%; display: flex; align-items: center; gap: 40px; 
+            background: linear-gradient(135deg, rgba(0, 32, 64, 0.5), transparent);
+            position: sticky; top: 45px; z-index: 9999; backdrop-filter: blur(25px);
+            border-bottom: 1px solid var(--glass-border);
+        }
+        .logo-main { width: 115px; filter: drop-shadow(0 0 20px var(--neon-blue)); transition: 0.8s var(--cubic); }
+        .brand-title { 
+            font-family: 'Orbitron', sans-serif; font-size: clamp(1.5rem, 4vw, 3.2rem); font-weight: 900; 
+            background: linear-gradient(90deg, #ff00ff, var(--neon-blue), var(--gold), #ff00ff); 
+            background-size: 200% auto; -webkit-background-clip: text; background-clip: text; 
+            -webkit-text-fill-color: transparent; animation: flowText 5s linear infinite; line-height: 1.1;
+        }
+        @keyframes flowText { to { background-position: 200% center; } }
+
+        /* --- NAVIGATION & MEGA DROPDOWN --- */
+        nav { background: var(--glass); border-bottom: 1px solid var(--glass-border); position: sticky; top: 165px; z-index: 9998; backdrop-filter: blur(30px); }
+        .nav-list { display: flex; list-style: none; justify-content: center; }
+        .nav-node { position: relative; }
+        .nav-node > a { display: block; padding: 25px 35px; color: inherit; text-decoration: none; font-size: 12px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px; transition: 0.4s; }
+        .nav-node:hover > a { background: var(--neon-blue); color: #000; box-shadow: var(--neon-glow); }
+        .dropdown { position: absolute; top: 100%; left: 0; background: rgba(0, 8, 20, 0.98); min-width: 280px; display: none; border: 1px solid var(--neon-blue); z-index: 10005; box-shadow: 0 30px 60px rgba(0,0,0,1); clip-path: polygon(0 0, 100% 0, 100% 90%, 90% 100%, 0 100%, 0 30%); }
+        .nav-node:hover .dropdown { display: block; animation: dropFade 0.5s var(--cubic); }
+        @keyframes dropFade { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .dropdown a { display: block; padding: 20px 30px; color: #fff; text-decoration: none; font-size: 11px; border-bottom: 1px solid rgba(255,255,255,0.05); transition: 0.3s; }
+        .dropdown a:hover { color: var(--neon-blue); padding-left: 45px; background: rgba(255,255,255,0.05); }
+
+        /* --- EXECUTIVE GRID --- */
+        .exec-grid {
+            max-width: 1400px; margin: 80px auto; padding: 0 5%;
+            display: grid; grid-template-columns: 380px 1fr; gap: 50px;
+        }
+
+        .bio-node {
+            position: sticky; top: 220px; background: var(--glass);
+            border: 1px solid var(--glass-border); border-radius: 30px; padding: 40px;
+            backdrop-filter: blur(30px); border-top: 4px solid var(--gold);
+        }
+
+        .holo-frame {
+            position: relative; width: 220px; height: 220px; margin: 0 auto 30px;
+            border-radius: 50%; border: 3px solid var(--neon-blue); padding: 8px;
+            box-shadow: 0 0 30px rgba(0, 242, 255, 0.3);
+        }
+        .holo-frame img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; filter: grayscale(1); transition: 0.5s; }
+        .bio-node:hover img { filter: grayscale(0); }
+        .scan-anim { position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: var(--gold); animation: scan 3s linear infinite; box-shadow: 0 0 15px var(--gold); }
+        @keyframes scan { 0%, 100% { top: 0; opacity: 0; } 50% { top: 100%; opacity: 1; } }
+
+        .msg-terminal {
+            background: rgba(0, 8, 20, 0.85); border: 1px solid var(--glass-border);
+            border-radius: 40px; padding: 70px; backdrop-filter: blur(50px);
+            border-left: 2px solid var(--neon-blue);
+        }
+
+        /* --- FOOTER --- */
+        footer { background: #000; padding: 150px 5% 100px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 50px; border-top: 5px solid var(--gold); }
+        .footer-col h3 { font-family: 'Orbitron'; color: var(--gold); margin-bottom: 50px; font-size: 18px; letter-spacing: 5px; }
+        .footer-col ul li { list-style: none; margin-bottom: 25px; font-size: 16px; opacity: 0.6; transition: 0.4s; color: #fff; }
+        .footer-col ul li:hover { opacity: 1; color: var(--neon-blue); padding-left: 15px; }
+        .copyright-bar { background: #000; padding: 45px 5%; border-top: 1px solid var(--glass-border); text-align: center; }
+
+        @media (max-width: 1024px) {
+            .exec-grid { grid-template-columns: 1fr; }
+            .bio-node { position: static; }
+            footer { grid-template-columns: repeat(2, 1fr); }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+    <div class="cursor-dot" id="cursor-dot"></div>
+    <div class="cursor-outline" id="cursor-outline"></div>
+
+    <div class="sys-st-bar">
+        <div><i class="fas fa-satellite-dish"></i> COORDINATES: <span id="loc">LOCATING...</span></div>
+        <div><i class="fas fa-microchip"></i> NODE_ID: BCSM_CH_TERMINAL</div>
+        <div><i class="fas fa-atom"></i> REAL_TIME: <span id="time">00:00:00</span></div>
+        <div style="cursor:pointer" onclick="toggleTheme()"><i class="fas fa-sync-alt"></i> MODE: AUTO_SYNC</div>
+    </div>
+
+    <header class="header-brand">
+        <img src="bcsmlogo.png" alt="BCSM" class="logo-main">
+        <div class="brand-text-box">
+            <h1 class="brand-title">CHAIRMAN'S DIRECTIVE<span style="font-size:1.2rem; vertical-align:super; color:var(--gold);"></span></h1>
+            <p style="color:var(--gold); font-family:'Orbitron'; font-size: 12px; letter-spacing: 10px; text-transform: uppercase;">Authority Command Node</p>
+        </div>
+    </header>
+
+    <nav>
+        <ul class="nav-list">
+            <li class="nav-node">
+                <a href="index.html">Portal Home</a>
+                <div class="dropdown">
+                    <a href="https://portal.bcsm.org.in/login.html">Quantum Dashboard</a>
+                    <a href="#">Global Notifications</a>
+                </div>
+            </li>
+            <li class="nav-node">
+                <a href="#">About Node</a>
+                <div class="dropdown">
+                    <a href="#">Mission Strategy 2030</a>
+                    <a href="#">Chairman's Archive</a>
+                    <a href="#">Legacy & Milestones</a>
+                </div>
+            </li>
+            <li class="nav-node">
+                <a href="#">Academics Core</a>
+                <div class="dropdown">
+                    <a href="#">Neural AI & Robotics</a>
+                    <a href="#">Cyber Defense Protocols</a>
+                    <a href="#">Cloud Infrastructure</a>
+                </div>
+            </li>
+            <li class="nav-node">
+                <a href="#">Student Gateway</a>
+                <div class="dropdown">
+                    <a href="#">Identity Verification</a>
+                    <a href="#">Examination Result</a>
+                    <a href="#">E-Books Library</a>
+                </div>
+            </li>
+        </ul>
+    </nav>
+
+    <div class="exec-grid">
+        <aside class="bio-node">
+            <div class="holo-frame">
+                <div class="scan-anim"></div>
+                <img src="https://i.imgur.com/wg9Y3OT.png" alt="S. Maity">
+            </div>
+            <h2 style="font-family:'Orbitron'; text-align: center; color: #fff;">S. MAITY</h2>
+            <p style="color:var(--gold); font-family:'Orbitron'; font-size: 11px; text-align: center; font-weight: 900; letter-spacing: 3px;">FOUNDER & CHAIRMAN</p>
+            <div style="margin-top: 30px; background: rgba(0,0,0,0.3); padding: 20px; border-radius: 15px; border: 1px solid var(--glass-border); text-align: center;">
+                <p style="font-size: 12px; opacity: 0.8;">"Empowering rural India through high-tech digital literacy protocols."</p>
+            </div>
+        </aside>
+
+        <main class="msg-terminal">
+            <h2 style="font-family:'Orbitron'; font-size: 2.5rem; margin-bottom: 20px; color: var(--neon-blue);">DIRECTIVE_CMD_2026</h2>
+            <div id="terminal-msg" style="font-size: 18px; line-height: 2; color: #ccc; margin-bottom: 40px; border-left: 2px solid var(--gold); padding-left: 25px;">
+                </div>
+            <div style="margin-top: 60px; text-align: right; font-family: 'Orbitron';">
+                <p style="font-size: 32px; color: var(--neon-blue);">S. Maity</p>
+                <p style="color:var(--gold); font-size: 10px; letter-spacing: 5px;">DIGITALLY SIGNED // KEY-ID: BCSM-001</p>
+            </div>
+        </main>
+    </div>
+
+    <footer>
+        <div class="footer-col">
+            <img src="bcsmlogo.png" width="160" style="filter: drop-shadow(0 0 15px var(--neon-blue));">
+            <h2 style="font-family:'Orbitron'; font-size:28px; color:#fff; margin-top:50px;">BCSM GLOBAL</h2>
+        </div>
+        <div class="footer-col">
+            <h3>USER GATEWAYS</h3>
+            <ul>
+                <li>Digital Identity Verification</li>
+                <li>Student Terminal Access</li>
+                <li>Cloud E-Books Library</li>
+            </ul>
+        </div>
+        <div class="footer-col">
+            <h3>COMMAND CENTER</h3>
+            <ul>
+                <li>Corporate Headquarters, India</li>
+                <li>Official Contact: quantum@bcsm.org.in</li>
+                <li>Center Verification Node</li>
+            </ul>
+        </div>
+    </footer>
+
+    <div class="copyright-bar">
+        <p style="font-family:'Orbitron'; font-size: 11px; color: rgba(255,255,255,0.4);">
+            COPYRIGHT © 2007-2026 <span style="color:var(--gold)">BINARY COMPUTER SAKSHARTA MISSION</span> | ALL RIGHTS RESERVED.
+        </p>
+    </div>
+
+    <script>
+        // CURSOR
+        window.addEventListener("mousemove", (e) => {
+            const dot = document.getElementById("cursor-dot");
+            const outline = document.getElementById("cursor-outline");
+            dot.style.left = e.clientX + 'px'; dot.style.top = e.clientY + 'px';
+            outline.animate({ left: e.clientX + 'px', top: e.clientY + 'px' }, { duration: 600, fill: "forwards" });
+        });
+
+        // MATRIX RAIN
+        const canvas = document.getElementById('bg-canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+        const alphabet = "01BCSMQUANTUM";
+        const drops = Array(Math.floor(canvas.width/20)).fill(1);
+        function drawMatrix() {
+            ctx.fillStyle = "rgba(0, 5, 10, 0.1)"; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = "rgba(0, 242, 255, 0.15)"; ctx.font = "15px Orbitron";
+            drops.forEach((y, i) => {
+                const text = alphabet[Math.floor(Math.random()*alphabet.length)];
+                ctx.fillText(text, i*20, y*20);
+                if(y*20 > canvas.height && Math.random() > 0.975) drops[i] = 0;
+                drops[i]++;
+            });
+        }
+        setInterval(drawMatrix, 50);
+
+        // TYPEWRITER
+        const message = "It is with great pride and immense pleasure that I address you. As we step into an era where technology is an integral part of our daily lives, I firmly believe that digital literacy holds the key to unlocking the doors of opportunity and empowerment for individuals, communities, and nations alike. At BCSM, we are committed to making this vision a reality.";
+        let i = 0;
+        function typeWriter() {
+            if (i < message.length) {
+                document.getElementById("terminal-msg").innerHTML += message.charAt(i);
+                i++; setTimeout(typeWriter, 30);
+            }
+        }
+        window.addEventListener('load', typeWriter);
+
+        // SYSTEM TIME
+        setInterval(() => { document.getElementById('time').innerText = new Date().toLocaleTimeString(); }, 1000);
+        function toggleTheme() { document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark'); }
+    </script>
+</body>
+</html>

@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manage Transport Routes</title>
+    <style>
+        /* --- STYLES --- */
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap');
+        :root { --primary-color: #2c3e50; --accent-color: #3498db; --light-gray: #f8f9fa; --border: #dee2e6; }
+        body { font-family: 'Poppins', sans-serif; background-color: var(--light-gray); color: #333; margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; background: #fff; padding: 30px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid var(--primary-color); padding-bottom: 15px; margin-bottom: 25px; }
+        h1 { margin: 0; color: var(--primary-color); font-size: 1.5rem; text-transform: uppercase; }
+        .back-link { text-decoration: none; color: var(--accent-color); font-weight: 600; }
+
+        /* Form */
+        .form-card { background: #fdfdfd; border: 1px solid var(--border); padding: 20px; border-radius: 6px; margin-bottom: 30px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; align-items: end; }
+        .form-group { display: flex; flex-direction: column; }
+        label { margin-bottom: 5px; font-weight: 500; font-size: 0.9rem; }
+        input { padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-size: 1rem; }
+        
+        button.btn-submit { background-color: var(--primary-color); color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-weight: 600; height: 42px; }
+        button.btn-submit:hover { background-color: #1a252f; }
+
+        /* Table */
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        th { background-color: var(--primary-color); color: white; font-weight: 500; }
+        tr:hover { background-color: #f1f1f1; }
+        
+        .action-btn { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8rem; margin-right: 5px; }
+        .btn-delete { background-color: #e74c3c; color: white; }
+        
+        /* Messages */
+        .msg { padding: 10px; border-radius: 4px; margin-bottom: 15px; display: none; text-align: center; }
+        .success { background-color: #d4edda; color: #155724; }
+        .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header">
+        <h1>Transport Routes & Zones</h1>
+        <a href="/admin-dashboard.html" class="back-link">← Dashboard</a>
+    </div>
+
+    <div id="messageBox" class="msg"></div>
+
+    <div class="form-card">
+        <h3>Add New Route</h3>
+        <form id="routeForm">
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Route Name / Zone</label>
+                    <input type="text" id="route_name" placeholder="e.g. Zone A - City Center" required>
+                </div>
+                <div class="form-group">
+                    <label>Monthly Fee (₹)</label>
+                    <input type="number" id="monthly_fee" placeholder="e.g. 500" step="0.01" required>
+                </div>
+                <button type="submit" class="btn-submit">Save Route</button>
+            </div>
+            <div class="form-group" style="margin-top: 10px;">
+                <label>Description (Optional)</label>
+                <input type="text" id="description" placeholder="Vehicle details or stops...">
+            </div>
+        </form>
+    </div>
+
+    <h3>Existing Routes</h3>
+    <table>
+        <thead>
+            <tr>
+                <th>Route Name</th>
+                <th>Monthly Fee</th>
+                <th>Description</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody id="routesTableBody">
+            <tr><td colspan="4" style="text-align:center;">Loading...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    const API_BASE_URL = '/api/transport'; // Updated base URL
+    const token = localStorage.getItem('erp-token');
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        if(!token) window.location.href = '/login.html';
+        fetchAndRenderRoutes();
+    });
+
+    // 1. Fetch Routes
+    async function fetchAndRenderRoutes() {
+        const tbody = document.getElementById('routesTableBody');
+        try {
+            const response = await fetch(`${API_BASE_URL}/routes`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            if(!response.ok) throw new Error("Failed to load routes");
+            
+            const routes = await response.json();
+            tbody.innerHTML = '';
+
+            if(routes.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No routes found. Add one above.</td></tr>';
+                return;
+            }
+
+            routes.forEach(r => {
+                // [FIX IS HERE] Use parseFloat to convert string to number before toFixed
+                const fee = parseFloat(r.monthly_fee || 0).toFixed(2);
+                
+                const row = `
+                    <tr>
+                        <td><strong>${r.route_name}</strong></td>
+                        <td style="color: green; font-weight:bold;">₹${fee}</td>
+                        <td>${r.description || '-'}</td>
+                        <td>
+                            <button class="action-btn btn-delete" onclick="deleteRoute('${r.id}')">Delete</button>
+                        </td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+
+        } catch (error) {
+            console.error(error);
+            tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:red;">Error: ${error.message}</td></tr>`;
+        }
+    }
+
+    // 2. Add Route
+    document.getElementById('routeForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgBox = document.getElementById('messageBox');
+        
+        const data = {
+            route_name: document.getElementById('route_name').value,
+            monthly_fee: parseFloat(document.getElementById('monthly_fee').value),
+            description: document.getElementById('description').value
+        };
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/routes`, {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify(data)
+            });
+
+            if(!response.ok) throw new Error("Failed to create route");
+
+            msgBox.textContent = "Route added successfully!";
+            msgBox.className = "msg success";
+            msgBox.style.display = "block";
+            
+            document.getElementById('routeForm').reset();
+            fetchAndRenderRoutes(); // Refresh table
+
+            setTimeout(() => msgBox.style.display = 'none', 3000);
+
+        } catch (error) {
+            msgBox.textContent = error.message;
+            msgBox.className = "msg error";
+            msgBox.style.display = "block";
+        }
+    });
+
+    // 3. Delete Route
+    async function deleteRoute(id) {
+        if(!confirm("Are you sure you want to delete this route?")) return;
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/routes/${id}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if(!response.ok) throw new Error("Failed to delete route");
+            
+            fetchAndRenderRoutes(); // Refresh
+
+        } catch (error) {
+            alert(error.message);
+        }
+    }
+</script>
+<script src="js/global-config.js"></script>
+</body>
+</html>

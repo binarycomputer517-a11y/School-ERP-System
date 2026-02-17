@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Attempt Management | Admin</title>
+    <style>
+        body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #f4f7f6; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        .controls { display: flex; gap: 15px; margin-bottom: 20px; background: #e9ecef; padding: 15px; border-radius: 8px; }
+        select, input { padding: 10px; border: 1px solid #ddd; border-radius: 5px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background-color: #3498db; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        .btn-reset { background-color: #e74c3c; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.3s; }
+        .btn-reset:hover { background-color: #c0392b; }
+        .status-badge { padding: 5px 10px; border-radius: 20px; font-size: 12px; font-weight: bold; }
+        .submitted { background: #d4edda; color: #155724; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Exam Attempt Management</h1>
+    <p>ছাত্রদের পরীক্ষার এটেম্পট রিসেট করুন যাতে তারা পুনরায় (Retake) পরীক্ষা দিতে পারে।</p>
+
+    <div class="controls">
+        <select id="quiz-filter">
+            <option value="">Select Quiz to View Attempts</option>
+        </select>
+        <button onclick="fetchAttempts()" style="background: #2ecc71; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">Load Attempts</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Student Name</th>
+                <th>Roll</th>
+                <th>Score</th>
+                <th>Violations</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="attempts-table-body">
+            <tr><td colspan="6" style="text-align:center;">Please select a quiz and click Load.</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    const API_BASE = '/api/online-exam';
+    const token = localStorage.getItem('erp-token');
+
+    // ১. কুইজ লিস্ট লোড করা
+    async function loadQuizzes() {
+        try {
+            const response = await fetch(`${API_BASE}/quizzes`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const quizzes = await response.json();
+            const select = document.getElementById('quiz-filter');
+            quizzes.forEach(q => {
+                const opt = document.createElement('option');
+                opt.value = q.id;
+                opt.textContent = q.title;
+                select.appendChild(opt);
+            });
+        } catch (err) { console.error("Error loading quizzes:", err); }
+    }
+
+    // ২. নির্দিষ্ট কুইজের এটেম্পট লিস্ট আনা
+    async function fetchAttempts() {
+        const quizId = document.getElementById('quiz-filter').value;
+        if (!quizId) return alert("Please select a quiz first!");
+
+        const tbody = document.getElementById('attempts-table-body');
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">Loading...</td></tr>';
+
+        try {
+            // এই এন্ডপয়েন্টটি আপনার আগের দেওয়া routes/onlineExam.js এ অ্যাড করা প্রয়োজন হতে পারে
+            // যদি না থাকে আমি পরে লিখে দিচ্ছি
+            const response = await fetch(`${API_BASE}/quizzes/${quizId}/attempts`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const attempts = await response.json();
+
+            if (attempts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;">No attempts found for this quiz.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = attempts.map(a => `
+                <tr>
+                    <td>${a.student_name}</td>
+                    <td>${a.roll_number}</td>
+                    <td>${a.total_score}</td>
+                    <td>${a.violation_count}</td>
+                    <td><span class="status-badge submitted">${a.status}</span></td>
+                    <td>
+                        <button class="btn-reset" onclick="resetAttempt('${a.attempt_id}', '${a.student_name}')">
+                            Reset & Allow Retake
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        } catch (err) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Error loading data.</td></tr>';
+        }
+    }
+
+    // ৩. এটেম্পট রিসেট করা (Retake Logic)
+    async function resetAttempt(attemptId, studentName) {
+        if (!confirm(`আপনি কি নিশ্চিত যে আপনি ${studentName}-এর এটেম্পট মুছে ফেলবেন? এটি ডিলিট করলে ছাত্র আবার পরীক্ষা দিতে পারবে।`)) return;
+
+        try {
+            const response = await fetch(`${API_BASE}/attempts/${attemptId}`, {
+                method: 'DELETE', // আপনার ব্যাকএন্ডে এই DELETE রাউটটি আছে
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (response.ok) {
+                alert("✅ এটেম্পট রিসেট সফল হয়েছে!");
+                fetchAttempts(); // টেবিল রিফ্রেশ করা
+            } else {
+                const err = await response.json();
+                alert("❌ এরর: " + err.message);
+            }
+        } catch (error) {
+            alert("সার্ভার এরর!");
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadQuizzes);
+</script>
+</body>
+</html>

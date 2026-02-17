@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ERP Management Portal - Inventory & Assets</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link rel="stylesheet" href="/css/style.css"> 
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* BASE STYLES */
+        body { 
+            font-family: 'Times New Roman', serif; 
+            margin: 0; padding: 2em; 
+            background-color: #F8F8F8; color: #333; line-height: 1.6;
+        }
+        .container { 
+            max-width: 1300px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; border: 2px solid #333; 
+            box-shadow: 6px 6px 0 #AAA; border-radius: 0; 
+        }
+        h1 { 
+            color: #C0392B; font-weight: bold; text-transform: uppercase; 
+            text-align: center; border-bottom: 5px double #000; 
+            padding-bottom: 15px; margin-bottom: 30px; font-size: 2.2em;
+        }
+        h2 { 
+            color: #005A9C; font-weight: bold; border-bottom: 2px solid #999; 
+            padding-bottom: 5px; margin-top: 25px; margin-bottom: 15px;
+        }
+        
+        /* TAB NAVIGATION */
+        .tab-buttons { 
+            display: flex; margin-bottom: 20px; border-bottom: 2px solid #333; 
+            background-color: #E8E8E8; padding-top: 5px;
+        }
+        .tab-button { 
+            padding: 8px 15px; margin-right: -1px; border: 1px solid #333; 
+            border-bottom: none; background-color: #F0F0F0; cursor: pointer;
+            border-radius: 0; font-weight: bold; transition: all 0.15s; box-shadow: none;
+        }
+        .tab-button.active { 
+            background-color: #005A9C; color: white; border: 2px solid #000; 
+            border-bottom: 2px solid #fff; margin-bottom: -2px; position: relative; z-index: 1;
+        }
+        .tab-content { padding-top: 10px; border-top: none; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+
+        /* 🛑 MAIN TWO-COLUMN LAYOUT */
+        .grid-main { 
+            display: grid; 
+            grid-template-columns: 3fr 1fr; 
+            gap: 30px; 
+        }
+        @media (max-width: 1000px) {
+            .grid-main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* COMMON LAYOUT & FORM STYLES */
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+        .grid-inv-form { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+        .grid-po { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; }
+        .po-item-row { display: flex; align-items: center; margin-bottom: 10px; }
+        .po-item-row select, .po-item-row input { margin-bottom: 0; }
+        .po-item-row input.po-quantity, .po-item-row input.po-price { width: 80px; margin-right: 5px; }
+        .action-btns button { font-size: 11px; }
+
+        label { display: block; margin-top: 10px; font-weight: bold; font-size: 0.9em; }
+        input, select, textarea { 
+            padding: 8px; margin-top: 5px; box-sizing: border-box; border: 1px solid #555; 
+            border-radius: 0; width: 100%; margin-bottom: 10px; display: block;
+        }
+        
+        /* BUTTON STYLES */
+        button { 
+            background-color: #005A9C; color: white; padding: 10px 15px; border: 2px solid #000; 
+            border-radius: 0; cursor: pointer; margin-top: 15px; box-shadow: 2px 2px 0 #000; 
+            font-weight: bold; transition: box-shadow 0.1s, transform 0.1s, background-color 0.3s;
+        }
+        button:hover { 
+            background-color: #003366; box-shadow: 1px 1px 0 #000; transform: translate(1px, 1px);
+        }
+        .inv-btn { background-color: #C0392B; }
+        .inv-btn:hover { background-color: #9A2C1F; }
+        .card { 
+            padding: 20px; border: 1px solid #333; border-radius: 0; margin-top: 20px; 
+            background-color: #fcfdff; 
+        }
+        
+        /* MESSAGE & ERROR STYLES */
+        .message-box { padding: 15px; border-radius: 0; margin-top: 10px; font-weight: bold; border: 1px solid; }
+        .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
+        .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
+        .warning-text { font-size: 0.85em; color: #C0392B; margin-top: 5px; }
+
+        /* TABLE & STATUS STYLES */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; border: 1px solid #333; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #CCC; font-size: 0.9em; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+        
+        .status-Active { color: #28a745; font-weight: bold; }
+        .status-In_Repair { color: #ffc107; font-weight: bold; }
+        .inv-table th { background-color: #333; color: white; }
+        .status-In_Stock { color: #155724; font-weight: bold; }
+        .status-Low_Stock { color: #ff9800; font-weight: bold; }
+        .status-Out_of_Stock { color: #721c24; font-weight: bold; }
+
+        /* MODAL STYLES */
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.7); }
+        .modal-content { background-color: #fff; margin: 5% auto; padding: 20px; border-radius: 0; width: 90%; max-width: 800px; border: 2px solid #333; }
+        .close-btn { color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer; }
+        
+        #po-items-container input { margin-bottom: 8px; }
+
+        /* PREDICTION BOX */
+        .prediction-box { padding: 10px; background-color: #fff3e0; border: 1px solid #ffb74d; margin-top: 10px; font-size: 0.9em; }
+        .prediction-status { font-weight: bold; color: #d84315; }
+        .depreciation-info { font-size: 0.85em; margin-top: 5px; color: #6a6a6a; }
+        
+        /* PO PRINT VIEW */
+        #po-print-view h1 { font-size: 1.8em; color: #000; border-bottom: 3px solid #000; margin-bottom: 15px; text-align: left; text-transform: none; padding-bottom: 5px; }
+        #po-print-view table { margin-top: 15px; font-size: 0.9em; }
+        #po-print-view th, #po-print-view td { border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ERP Management Portal</h1>
+        <p>Current Role: <strong id="user-role-display">Loading...</strong></p>
+
+        <div class="tab-buttons">
+            <button class="tab-button active" onclick="openTab(event, 'inventory')">📦 Inventory (Consumables)</button>
+            <button class="tab-button" onclick="openTab(event, 'assets')">🏢 Fixed Assets</button>
+        </div>
+
+        <div class="tab-content">
+            <div id="inventory" class="tab-pane active">
+                <div class="grid-main">
+                    
+                    <div>
+                        <div class="card">
+                            <h2 style="color: #C0392B;">All Inventory Items</h2>
+                            <table id="inventory-table" class="inv-table">
+                                <thead>
+                                    <tr>
+                                        <th>Name / Category</th>
+                                        <th>Stock</th>
+                                        <th>Threshold</th>
+                                        <th>Status</th>
+                                        <th>Unit Cost</th>
+                                        <th>Prediction (Days)</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inv-items-tbody">
+                                    <tr><td colspan="7">Loading inventory data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="card" style="margin-top: 30px;">
+                            <h2 style="color: #C0392B;">Record Stock Movement</h2>
+                            <form id="movement-form">
+                                <div class="grid-inv-form">
+                                    <div>
+                                        <label for="move-item-id">Item:</label>
+                                        <select id="move-item-id" name="item_id" required></select>
+                                    </div>
+                                    <div>
+                                        <label for="movement-type">Type:</label>
+                                        <select id="movement-type" name="movement_type" required>
+                                            <option value="IN_PURCHASE">IN (Purchase/Restock)</option>
+                                            <option value="IN_RETURN">IN (Return)</option>
+                                            <option value="OUT_ISSUE">OUT (Issue/Use)</option>
+                                            <option value="OUT_DISPOSAL">OUT (Disposal/Write-off)</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="quantity">Quantity:</label>
+                                        <input type="number" id="quantity" name="quantity" min="1" required>
+                                    </div>
+                                </div>
+                                <div class="grid-inv-form">
+                                    <div>
+                                        <label for="recipient-id">Recipient ID (Out):</label>
+                                        <input type="text" id="recipient-id" name="recipient_id" placeholder="Optional User UUID">
+                                    </div>
+                                    <div>
+                                        <label for="reference-id">Ref ID (PO/Ticket):</label>
+                                        <input type="text" id="reference-id" name="reference_id" placeholder="Optional PO or Ticket ID">
+                                    </div>
+                                    <div>
+                                        <label for="inv-notes">Notes:</label>
+                                        <input type="text" id="inv-notes" name="notes" placeholder="Details">
+                                    </div>
+                                </div>
+                                <button type="submit" class="inv-btn">Record Movement</button>
+                                <div id="movement-message" class="message-box" style="display:none;"></div>
+                            </form>
+                        </div>
+                        
+                        <div class="card" style="margin-top: 30px;">
+                            <h2 style="color: #C0392B;">Purchase Order History</h2>
+                            <table id="po-history-table" class="inv-table">
+                                <thead>
+                                    <tr>
+                                        <th>PO ID</th>
+                                        <th>Vendor</th>
+                                        <th>Cost</th>
+                                        <th>Status</th>
+                                        <th>Created Date</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="po-history-tbody">
+                                    <tr><td colspan="6">Loading history...</td></tr>
+                                </tbody>
+                            </table>
+                            <div style="display: flex; justify-content: space-between; gap: 10px;">
+                                <button id="load-po-history-btn" class="inv-btn" style="flex-grow: 1;">Reload History</button>
+                                <button id="export-po-csv-btn" class="inv-btn" style="flex-grow: 1; background-color: #005A9C;">Export CSV</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="card">
+                            <h2 style="color: #C0392B;">Add New Item</h2>
+                            <form id="add-item-form">
+                                <label for="item-name">Name:</label>
+                                <input type="text" name="name" required>
+                                
+                                <div class="grid-inv-form" style="grid-template-columns: 1fr 1fr 1fr;">
+                                    <div><label for="category">Category:</label><input type="text" name="category" required></div>
+                                    <div><label for="unit-cost">Cost (₹):</label><input type="number" name="unit_cost" step="0.01" required></div>
+                                    <div><label for="threshold">Low Limit:</label><input type="number" name="low_stock_threshold" required></div>
+                                </div>
+                                
+                                <label for="location-id">Storage Location:</label>
+                                <input type="text" name="location_id" placeholder="e.g. ROOM-301">
+
+                                <label for="vendor-id">Preferred Vendor:</label>
+                                <select id="vendor-id-select" name="vendor_id"></select>
+
+                                <button type="submit" class="inv-btn">Add Item</button>
+                                <div id="item-message" class="message-box" style="display:none;"></div>
+                            </form>
+                        </div>
+
+                        <div class="card" style="margin-top: 30px;">
+                            <h2 style="color: #C0392B;">Create Purchase Order</h2>
+                            <form id="purchase-order-form">
+                                <div class="grid-po">
+                                    <div>
+                                        <label for="po-vendor-id">Select Vendor:</label>
+                                        <select id="po-vendor-id" name="vendor_id" required></select>
+                                    </div>
+                                    <div>
+                                        <label for="delivery-date">Expected Date:</label>
+                                        <input type="date" id="delivery-date" name="expected_delivery_date" required>
+                                        <p class="warning-text">Must be a future date (DB constraint).</p>
+                                    </div>
+                                </div>
+                                
+                                <label>Items to Order:</label>
+                                <div id="po-items-container"></div>
+                                <button type="button" id="add-po-item-btn" class="inv-btn">Add Item to PO</button>
+
+                                <h3 style="margin-top: 20px;">Total Cost: ₹<span id="po-total-cost">0.00</span></h3>
+                                <input type="hidden" name="total_cost" id="po-total-cost-input">
+
+                                <button type="submit" class="inv-btn">Generate PO</button>
+                                <div id="po-message" class="message-box" style="display:none;"></div>
+                            </form>
+                        </div>
+                        
+                        <div class="card" style="margin-top: 30px;">
+                            <h2 style="color: #C0392B;">Vendor Management</h2>
+                            <form id="add-vendor-form">
+                                <label for="vendor-name-new">Vendor Name:</label>
+                                <input type="text" id="vendor-name-new" name="name" required>
+                                
+                                <div class="grid-inv-form" style="grid-template-columns: 1fr 1fr;">
+                                    <div><label for="contact-person">Contact:</label><input type="text" name="contact_person" required></div>
+                                    <div><label for="vendor-phone">Phone:</label><input type="text" name="phone"></div>
+                                </div>
+                                <label for="vendor-email">Email:</label>
+                                <input type="email" name="email">
+
+                                <button type="submit" class="inv-btn">Register New Vendor</button>
+                                <div id="vendor-message" class="message-box" style="display:none;"></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="assets" class="tab-pane">
+                <div class="grid-main">
+                    
+                    <div>
+                        <div class="card">
+                            <h2>Asset Registry</h2>
+                            <table id="asset-registry-table">
+                                <thead>
+                                    <tr>
+                                        <th>Tag/Name</th>
+                                        <th>Purchase Cost / Value</th>
+                                        <th>Current Location</th>
+                                        <th>Assigned To</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="assets-tbody">
+                                    <tr><td colspan="6">Loading asset data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="card" style="margin-top: 30px;">
+                            <h2>Maintenance Request/Log</h2>
+                            <form id="maintenance-form" class="grid-form">
+                                <div>
+                                    <label for="maint-asset-id">Asset Tag:</label>
+                                    <input type="text" id="maint-asset-tag" placeholder="Enter Asset Tag Number" required>
+                                </div>
+                                <div>
+                                    <label for="maintenance-type">Type:</label>
+                                    <select id="maintenance-type" name="type" required>
+                                        <option value="Repair">Repair (Major Issue)</option>
+                                        <option value="Scheduled">Scheduled Maintenance</option>
+                                        <option value="Calibration">Calibration</option>
+                                        <option value="Upgrade">Upgrade</option>
+                                    </select>
+                                </div>
+                                <div style="grid-column: 1 / 3;">
+                                    <label for="details">Details:</label>
+                                    <textarea id="details" name="details" rows="2" required></textarea>
+                                </div>
+                                <div>
+                                    <label for="scheduled-date">Scheduled Date:</label>
+                                    <input type="date" id="scheduled-date" name="scheduled_date">
+                                </div>
+                                <div>
+                                    <label for="maintenance-cost">Cost (₹):</label>
+                                    <input type="number" id="maintenance-cost" name="maintenance_cost" step="0.01">
+                                </div>
+                                <button type="submit" style="grid-column: 1 / 3;">Log Maintenance/Request</button>
+                            </form>
+                            <div id="maint-message" class="message-box" style="display:none;"></div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <div class="card">
+                            <h2>Register New Asset</h2>
+                            <form id="register-asset-form">
+                                <label for="tag-number">Asset Tag Number:</label>
+                                <input type="text" name="tag_number" required placeholder="e.g., ASSET-IT-001">
+
+                                <label for="name">Name:</label>
+                                <input type="text" name="name" required placeholder="e.g., Dell Optiplex 7000">
+                                
+                                <div class="grid-form">
+                                    <div><label for="asset-category">Category:</label><input type="text" name="category" placeholder="e.g. Desktop"></div>
+                                    <div><label for="purchase-cost">Cost (₹):</label><input type="number" name="purchase_cost" step="0.01" required></div>
+                                </div>
+
+                                <div class="grid-form">
+                                    <div><label for="purchase-date">Purchase Date:</label><input type="date" name="purchase_date" required></div>
+                                    <div><label for="useful-life">Life (Years):</label><input type="number" name="useful_life_years" value="5"></div>
+                                </div>
+                                
+                                <label for="location-id">Initial Location:</label>
+                                <select id="location-id-select" name="current_location_id"></select>
+
+                                <button type="submit">Register Asset</button>
+                                <div id="register-message" class="message-box" style="display:none;"></div>
+                            </form>
+                        </div>
+
+                        <div class="card" style="margin-top: 30px;">
+                            <h2>Assign Asset</h2>
+                            <form id="assign-asset-form">
+                                <label for="assign-asset-id">Asset Tag to Assign:</label>
+                                <input type="text" id="assign-asset-tag" name="asset_tag" required placeholder="Asset Tag Number">
+                                
+                                <label for="user-id">Assign to User (Staff/Student):</label>
+                                <select id="user-id" name="user_id" required style="width: 100%; padding: 8px; margin-bottom: 10px; border: 1px solid #555;">
+                                    <option value="">-- Loading Users... --</option>
+                                </select>
+                                
+                                <label for="assigned-location">Assigned Location:</label>
+                                <select id="assigned-location-select" name="assigned_location_id"></select>
+
+                                <label for="assign-notes">Notes:</label>
+                                <textarea id="assign-notes" name="notes" rows="2"></textarea>
+
+                                <button type="submit">Deploy Asset</button>
+                                <div id="assign-message" class="message-box" style="display:none;"></div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-item-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('edit-item-modal')">×</span>
+            <h3>Edit Item: <span id="edit-item-name-display"></span></h3>
+            <form id="edit-item-form">
+                <input type="hidden" id="edit-item-id" name="id">
+                <label for="edit-name">Name:</label>
+                <input type="text" id="edit-name" name="name" required>
+                <div class="grid-inv-form">
+                    <div><label for="edit-category">Category:</label><input type="text" id="edit-category" name="category" required></div>
+                    <div><label for="edit-unit-cost">Unit Cost:</label><input type="number" id="edit-unit-cost" name="unit_cost" step="0.01" required></div>
+                    <div><label for="edit-threshold">Threshold:</label><input type="number" id="edit-threshold" name="low_stock_threshold" required></div>
+                </div>
+                <label for="edit-location">Location ID:</label>
+                <input type="text" id="edit-location" name="location_id">
+                <label for="edit-vendor">Preferred Vendor:</label>
+                <select id="edit-vendor-id-select" name="vendor_id"></select>
+                <button type="submit" class="inv-btn">Save Changes</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="log-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('log-modal')">×</span>
+            <h3>Movement History for <span id="log-item-name"></span></h3>
+            <table id="movement-log-table">
+                <thead><tr><th>Date</th><th>Type</th><th>Change</th><th>New Stock</th><th>By</th><th>Ref</th></tr></thead>
+                <tbody id="log-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="maint-log-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal('maint-log-modal')">×</span>
+            <h3>Maintenance History for <span id="maint-log-asset-tag"></span></h3>
+            <table id="maintenance-log-table">
+                <thead><tr><th>Date</th><th>Type</th><th>Cost</th><th>Requester</th><th>Details</th></tr></thead>
+                <tbody id="maint-log-tbody"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="po-print-view" style="position: absolute; top: -9999px; left: -9999px; width: 210mm;">
+    <div id="po-print-content"></div>
+</div>
+
+    <script>
+        // Set max date for purchase and expected delivery dates
+        document.addEventListener('DOMContentLoaded', () => {
+            const today = new Date().toISOString().split('T')[0];
+            const futureDateInput = document.getElementById('delivery-date');
+            if (futureDateInput) {
+                futureDateInput.setAttribute('min', today);
+            }
+            document.querySelectorAll('input[name="purchase_date"]').forEach(input => {
+                 input.setAttribute('max', today);
+            });
+        });
+
+        const API_BASE_INV = '/api/inventory';
+        const API_BASE_ASSET = '/api/asset';
+        const TOKEN = localStorage.getItem('erp-token');
+        const USER_ROLE = localStorage.getItem('user-role');
+        
+        // Authorization Check
+        if (!TOKEN || !(USER_ROLE === 'Admin' || USER_ROLE === 'Super Admin' || USER_ROLE === 'Staff')) {
+             window.location.href = '/login'; 
+        }
+
+        // --- GLOBAL VARIABLES ---
+        let allItems = []; let allVendors = []; let allAssets = []; let allLocations = []; 
+        let stockPredictions = []; let poHistoryRecords = [];
+
+        // --- DOM Elements ---
+        const userRoleDisplay = document.getElementById('user-role-display');
+        const invItemsTbody = document.getElementById('inv-items-tbody');
+        const moveItemIdSelect = document.getElementById('move-item-id');
+        const vendorIdSelects = document.querySelectorAll('#vendor-id-select, #po-vendor-id, #edit-vendor-id-select');
+        const poItemsContainer = document.getElementById('po-items-container');
+        const poTotalCostEl = document.getElementById('po-total-cost');
+        const poTotalCostInput = document.getElementById('po-total-cost-input');
+        const assetsTbody = document.getElementById('assets-tbody');
+        const locationIdSelects = document.querySelectorAll('#location-id-select, #assigned-location-select');
+        const poPrintContent = document.getElementById('po-print-content');
+
+        // --- CORE API HANDLER ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                throw new Error('Unauthorized or session expired.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText }));
+                throw new Error(errorBody.message || 'API call failed.');
+            }
+            return response.json();
+        }
+        
+        function showMessage(element, text, type) {
+            element.textContent = text;
+            element.className = `message-box ${type}`;
+            element.style.display = 'block';
+            setTimeout(() => element.style.display = 'none', 5000); // Auto-hide after 5 seconds
+        }
+        
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+        
+        function openTab(evt, tabName) {
+            var i, tabcontent, tablinks;
+            tabcontent = document.getElementsByClassName("tab-pane");
+            for (i = 0; i < tabcontent.length; i++) tabcontent[i].className = tabcontent[i].className.replace(" active", "");
+            tablinks = document.getElementsByClassName("tab-button");
+            for (i = 0; i < tablinks.length; i++) tablinks[i].className = tablinks[i].className.replace(" active", "");
+            document.getElementById(tabName).className += " active";
+            evt.currentTarget.className += " active";
+            
+            if (tabName === 'assets') { loadLocations().then(() => loadAssets()); } 
+            else if (tabName === 'inventory') { loadVendors().then(() => { loadItems(); loadPoHistory(); }); } 
+        }
+
+        // --- DROPDOWN HELPERS ---
+        async function loadUserDropdown() {
+            const userSelect = document.getElementById('user-id');
+            try {
+                const users = await handleApi(`${API_BASE_ASSET}/users-list`);
+                userSelect.innerHTML = '<option value="">-- Select User --</option>';
+                users.forEach(user => {
+                    const option = document.createElement('option');
+                    option.value = user.id;
+                    option.textContent = `${user.display_name} (${user.role})`; 
+                    userSelect.appendChild(option);
+                });
+            } catch (error) {
+                console.warn("Error loading users:", error);
+                userSelect.innerHTML = '<option value="">Error loading users</option>';
+            }
+        }
+
+        function getAssetIdByTag(tag) { return allAssets.find(a => a.tag_number === tag)?.id; }
+
+        async function loadLocations() {
+            try {
+                allLocations = await handleApi(`${API_BASE_ASSET}/locations`);
+                locationIdSelects.forEach(select => {
+                    select.innerHTML = '<option value="">-- Select Location --</option>';
+                    allLocations.forEach(loc => select.innerHTML += `<option value="${loc.id}">${loc.location_name}</option>`);
+                });
+            } catch (error) { console.error("Error loading locations:", error); }
+        }
+
+        async function loadAssets() {
+            assetsTbody.innerHTML = '<tr><td colspan="6">Loading asset data...</td></tr>';
+            try {
+                allAssets = await handleApi(`${API_BASE_ASSET}/all`);
+                assetsTbody.innerHTML = '';
+                allAssets.forEach(asset => {
+                    const statusClass = `status-${asset.status.replace(/\s/g, '_')}`;
+                    const purchaseCost = parseFloat(asset.purchase_cost).toFixed(2);
+                    const depreciation = parseFloat(asset.accumulated_depreciation || 0).toFixed(2);
+                    const bookValue = (purchaseCost - depreciation).toFixed(2);
+                    
+                    assetsTbody.innerHTML += `
+                        <tr>
+                            <td><strong>${asset.tag_number}</strong><br><small>${asset.name}</small></td>
+                            <td>₹${bookValue}<div class="depreciation-info">P: ₹${purchaseCost} / Dep: ₹${depreciation}</div></td>
+                            <td>${asset.location_name || 'Unassigned'}</td>
+                            <td>${asset.assigned_user_name || 'Unassigned'}</td>
+                            <td class="${statusClass}">${asset.status}</td>
+                            <td class="action-btns">
+                                <button onclick="openMaintenanceLogModal('${asset.id}', '${asset.tag_number}')" style="background-color: #ffc107;"><i class="fas fa-wrench"></i> Maint Log</button>
+                                <button onclick="alert('TODO: Implement Edit Asset')" style="background-color: #005A9C;"><i class="fas fa-edit"></i> Edit</button>
+                            </td>
+                        </tr>`;
+                });
+            } catch (error) { assetsTbody.innerHTML = `<tr><td colspan="6" class="error">Failed: ${error.message}</td></tr>`; }
+        }
+
+        window.openMaintenanceLogModal = async function(assetId, assetTag) {
+            document.getElementById('maint-log-asset-tag').textContent = assetTag;
+            const logTbody = document.getElementById('maint-log-tbody');
+            logTbody.innerHTML = '<tr><td colspan="5">Loading...</td></tr>';
+            document.getElementById('maint-log-modal').style.display = 'block';
+            try {
+                const log = await handleApi(`${API_BASE_ASSET}/maintenance/log/${assetId}`);
+                logTbody.innerHTML = log.map(m => `
+                    <tr><td>${new Date(m.scheduled_date || m.created_at).toLocaleDateString()}</td>
+                    <td>${m.maintenance_type}</td><td>₹${parseFloat(m.maintenance_cost).toFixed(2)}</td>
+                    <td>${m.requester_name || 'Admin'}</td><td>${m.details.substring(0, 50)}...</td></tr>
+                `).join('') || '<tr><td colspan="5">No history found.</td></tr>';
+            } catch (error) { logTbody.innerHTML = `<tr><td colspan="5" class="error">${error.message}</td></tr>`; }
+        }
+
+        // --- INVENTORY LOGIC ---
+        async function loadStockPredictions() {
+            try { 
+                stockPredictions = await handleApi(`${API_BASE_INV}/analytics/stock-prediction`); 
+            } 
+            catch (error) { stockPredictions = []; }
+        }
+
+        async function loadVendors() {
+            try {
+                allVendors = await handleApi(`${API_BASE_INV}/vendors`);
+                vendorIdSelects.forEach(select => {
+                    select.innerHTML = '<option value="">-- Select Vendor (Optional) --</option>';
+                    allVendors.forEach(v => select.innerHTML += `<option value="${v.id}">${v.name}</option>`);
+                });
+            } catch (error) { console.error("Error loading vendors:", error); }
+        }
+
+        async function loadItems() {
+            invItemsTbody.innerHTML = '<tr><td colspan="7">Loading inventory data...</td></tr>';
+            moveItemIdSelect.innerHTML = '<option value="">-- Select Item --</option>';
+            try {
+                await loadStockPredictions(); 
+                allItems = await handleApi(`${API_BASE_INV}/items`);
+                invItemsTbody.innerHTML = '';
+                allItems.forEach(item => {
+                    const statusClass = `status-${item.status.replace(/\s/g, '_')}`;
+                    const prediction = stockPredictions.find(p => p.item_id === item.id);
+                    const predictionHtml = renderStockPrediction(item, prediction);
+                    
+                    invItemsTbody.innerHTML += `
+                        <tr>
+                            <td><strong>${item.name}</strong><br><small>Location: ${item.location_name || item.location_id || 'N/A'}</small></td>
+                            <td>${item.current_stock}</td><td>${item.low_stock_threshold}</td>
+                            <td class="${statusClass}">${item.status}</td>
+                            <td>₹${parseFloat(item.unit_cost).toFixed(2)}</td>
+                            <td>${predictionHtml}</td>
+                            <td class="action-btns">
+                                <button onclick="openEditItemModal('${item.id}')" class="inv-btn" style="background-color: #005A9C;"><i class="fas fa-edit"></i> Edit</button>
+                                <button onclick="openLogModal('${item.id}', '${item.name}')" class="inv-btn" style="background-color: #ffc107;"><i class="fas fa-history"></i> History</button>
+                            </td>
+                        </tr>`;
+                    moveItemIdSelect.innerHTML += `<option value="${item.id}">${item.name} (Stock: ${item.current_stock})</option>`;
+                });
+            } catch (error) { invItemsTbody.innerHTML = `<tr><td colspan="7" class="error">Failed: ${error.message}</td></tr>`; }
+        }
+        
+        function renderStockPrediction(item, prediction) {
+            if (!prediction || parseFloat(prediction.daily_usage) === 0) return `<div class="prediction-box">No recent usage.</div>`;
+            const days = parseInt(prediction.days_to_threshold, 10);
+            const suggestedQty = parseInt(prediction.suggested_po_qty, 10);
+            let message = '';
+            if (item.current_stock <= item.low_stock_threshold && suggestedQty > 0) message = `<span class="prediction-status" style="color: #c0392b;">THRESHOLD HIT:</span> Order ${suggestedQty}.`;
+            else if (days < 90) message = `Depletion in <span class="prediction-status">${days} days</span>.`;
+            else return `<div class="prediction-box">Stable usage.</div>`;
+            return `<div class="prediction-box">${message}<div style="margin-top: 5px; font-size: 0.8em;">(Usage: ${parseFloat(prediction.daily_usage).toFixed(2)}/day)</div></div>`;
+        }
+
+        window.openEditItemModal = function(itemId) {
+            const item = allItems.find(i => i.id === itemId);
+            if (!item) return;
+            document.getElementById('edit-item-name-display').textContent = item.name;
+            document.getElementById('edit-item-id').value = item.id;
+            document.getElementById('edit-name').value = item.name;
+            document.getElementById('edit-category').value = item.category;
+            document.getElementById('edit-unit-cost').value = parseFloat(item.unit_cost).toFixed(2);
+            document.getElementById('edit-threshold').value = item.low_stock_threshold;
+            document.getElementById('edit-location').value = item.location_name || item.location_id || '';
+            document.getElementById('edit-vendor-id-select').value = item.vendor_id || '';
+            document.getElementById('edit-item-modal').style.display = 'block';
+        };
+
+        window.openLogModal = async function(itemId, itemName) {
+            document.getElementById('log-item-name').textContent = itemName;
+            const logTbody = document.getElementById('log-tbody');
+            logTbody.innerHTML = '<tr><td colspan="6">Loading...</td></tr>';
+            document.getElementById('log-modal').style.display = 'block';
+            try {
+                const log = await handleApi(`${API_BASE_INV}/movement/${itemId}`);
+                logTbody.innerHTML = log.map(m => `<tr><td>${new Date(m.created_at).toLocaleDateString()}</td>
+                    <td>${m.movement_type.replace('_', ' ')}</td><td>${m.quantity_changed > 0 ? '+' : ''}${m.quantity_changed}</td>
+                    <td>${m.current_stock_after}</td><td>${m.recorded_by_name || 'Admin'}</td><td>${m.notes || m.reference_id || 'N/A'}</td></tr>`).join('');
+            } catch (error) { logTbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; }
+        }
+
+        function updatePoTotal() {
+            let total = 0;
+            const itemInputs = poItemsContainer.querySelectorAll('.po-item-row');
+            itemInputs.forEach(row => {
+                const quantity = parseFloat(row.querySelector('.po-quantity').value) || 0;
+                const price = parseFloat(row.querySelector('.po-price').value) || 0;
+                total += quantity * price;
+            });
+            poTotalCostEl.textContent = total.toFixed(2);
+            poTotalCostInput.value = total.toFixed(2);
+        }
+
+        function addPoItemInput() {
+            const itemRow = document.createElement('div');
+            itemRow.className = 'po-item-row';
+            itemRow.innerHTML = `
+                <select class="po-item-id" style="width: 35%;" required><option value="">-- Select Item --</option>${allItems.map(i => `<option value="${i.id}" data-cost="${i.unit_cost}">${i.name} (Stock: ${i.current_stock})</option>`).join('')}</select>
+                <input type="number" class="po-quantity" placeholder="Qty" value="1" min="1" style="width: 15%; margin-left: 5px;" required>
+                <input type="number" class="po-price" step="0.01" placeholder="Price" value="0.00" style="width: 20%; margin-left: 5px;" required>
+                <button type="button" onclick="this.parentNode.remove(); updatePoTotal();" style="background-color: #e74c3c; padding: 5px 10px; margin: 0 0 0 10px; width: 25%;">Remove</button>`;
+            const inputs = itemRow.querySelectorAll('.po-quantity, .po-price, .po-item-id');
+            inputs.forEach(input => input.addEventListener('change', (e) => {
+                if (e.target.classList.contains('po-item-id')) {
+                    const priceInput = itemRow.querySelector('.po-price');
+                    priceInput.value = parseFloat(e.target.options[e.target.selectedIndex].dataset.cost || 0).toFixed(2);
+                }
+                updatePoTotal();
+            }));
+            poItemsContainer.appendChild(itemRow);
+        }
+
+        async function loadPoHistory() {
+            const tbody = document.getElementById('po-history-tbody');
+            tbody.innerHTML = '<tr><td colspan="6">Fetching records...</td></tr>';
+            try {
+                poHistoryRecords = await handleApi(`${API_BASE_INV}/purchase-order/history`);
+                tbody.innerHTML = poHistoryRecords.map(po => `
+                    <tr><td>${po.id.slice(0, 8)}...</td><td>${po.vendor_name}</td><td>₹${parseFloat(po.total_cost).toFixed(2)}</td>
+                    <td><span class="status-${po.status.replace(/\s/g, '_')}">${po.status}</span></td><td>${new Date(po.created_at).toLocaleDateString()}</td>
+                    <td><button onclick="generatePoPdf('${po.id}')" class="inv-btn" style="padding: 3px 6px;">Print/PDF</button></td></tr>`).join('');
+            } catch (error) { tbody.innerHTML = `<tr><td colspan="6" class="error">${error.message}</td></tr>`; }
+        }
+
+        function exportPoHistoryToCsv() {
+            if (poHistoryRecords.length === 0) return alert('Load history first.');
+            const headers = ['ID', 'Vendor', 'Cost', 'Status', 'Delivery', 'CreatedBy', 'Date'];
+            const rows = poHistoryRecords.map(r => [`"${r.id}"`,`"${r.vendor_name}"`,r.total_cost,r.status,r.expected_delivery_date,r.created_by_name,new Date(r.created_at).toLocaleDateString()].join(','));
+            const blob = new Blob([headers.join(',') + '\n' + rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = 'PO_History.csv';
+            link.click();
+        }
+
+        // FIX: Finalized PDF generation logic with aggressive html2canvas settings
+        async function generatePoPdf(poId) {
+            const poData = poHistoryRecords.find(p => p.id === poId);
+            if (!poData) return;
+            const items = poData.ordered_items_json || [];
+            
+            // 1. Build the items table rows
+            const itemsRows = items.map((item, i) => `
+                <tr>
+                    <td style="padding:10px;border:1px solid #333">${i + 1}</td>
+                    <td style="padding:10px;border:1px solid #333">${item.item_name || item.item_id.slice(0, 8)}</td>
+                    <td style="padding:10px;border:1px solid #333">${item.quantity}</td>
+                    <td style="padding:10px;border:1px solid #333">₹${parseFloat(item.price).toFixed(2)}</td>
+                    <td style="padding:10px;border:1px solid #333">₹${(item.quantity * item.price).toFixed(2)}</td>
+                </tr>`).join('');
+            
+            // 2. Build the final HTML structure
+            const poHtml = `
+                <div style="width:100%;padding:30px;font-family:'Times New Roman',serif;color:#333;">
+                    <h1 style="font-size:2.2em;color:#C0392B;text-align:center;border-bottom:5px double #000;margin-bottom:30px;">PURCHASE ORDER</h1>
+                    <div style="display:flex;justify-content:space-between;margin-bottom:15px;">
+                        <div><strong>PO:</strong> ${poData.id.slice(0, 8).toUpperCase()}<br><strong>Date:</strong> ${new Date(poData.created_at).toLocaleDateString()}</div>
+                        <div style="text-align:right;"><strong>Status:</strong> ${poData.status}<br><strong>Delivery:</strong> ${poData.expected_delivery_date || 'N/A'}</div>
+                    </div>
+                    <div style="margin-bottom:20px;border:1px solid #333;padding:15px;background-color:#F0F0F0;">
+                        <strong>Vendor:</strong> ${poData.vendor_name}<br><strong>Created By:</strong> ${poData.created_by_name}
+                    </div>
+                    <table style="width:100%;border-collapse:collapse;border:1px solid #333;">
+                        <thead style="background:#333;color:white;"><tr><th style="padding:10px;border:1px solid #333">#</th><th style="padding:10px;border:1px solid #333">Item</th><th style="padding:10px;border:1px solid #333">Qty</th><th style="padding:10px;border:1px solid #333">Price</th><th style="padding:10px;border:1px solid #333">Total</th></tr></thead>
+                        <tbody>
+                            ${itemsRows}
+                            <tr><td colspan="4" style="text-align:right;font-weight:bold;padding:10px;border:1px solid #333;background:#E8E8E8;">GRAND TOTAL</td><td style="padding:10px;border:1px solid #333">₹${parseFloat(poData.total_cost).toFixed(2)}</td></tr>
+                        </tbody>
+                    </table>
+                    <div style="margin-top: 50px; font-size: 0.9em; text-align: right;">
+                        <strong>Authorized Signature:</strong> ______________________
+                    </div>
+                </div>`;
+
+            // 3. Insert and wait for rendering
+            poPrintContent.innerHTML = poHtml;
+            // CRITICAL: Wait 100ms for the DOM to update before PDF generation
+            await new Promise(r => setTimeout(r, 100)); 
+
+            // 4. Generate the PDF with aggressive settings
+            html2pdf().set({ 
+                margin: 0.5, 
+                filename: `PO_${poData.id.slice(0, 8)}.pdf`, 
+                html2canvas: {
+                    scale: 2,           // Higher resolution capture
+                    dpi: 192,           // Higher DPI
+                    letterRendering: true,
+                    useCORS: true       // Allows capture of images from the /uploads folder
+                },
+                jsPDF: { 
+                    unit: 'in', 
+                    format: 'A4' 
+                } 
+            }).from(document.getElementById('po-print-view')).save();
+        }
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Set max date for purchase and min date for expected delivery (Moved inside DOMContentLoaded for reliability)
+            const today = new Date().toISOString().split('T')[0];
+            const futureDateInput = document.getElementById('delivery-date');
+            if (futureDateInput) {
+                futureDateInput.setAttribute('min', today);
+            }
+            document.querySelectorAll('input[name="purchase_date"]').forEach(input => {
+                 input.setAttribute('max', today);
+            });
+            
+            userRoleDisplay.textContent = USER_ROLE;
+            
+            // Listeners
+            document.getElementById('load-po-history-btn').addEventListener('click', loadPoHistory);
+            document.getElementById('export-po-csv-btn').addEventListener('click', exportPoHistoryToCsv);
+            document.getElementById('add-po-item-btn').addEventListener('click', () => addPoItemInput());
+            
+            // Form Submissions
+            document.getElementById('register-asset-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await handleApi(`${API_BASE_ASSET}/register`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+                    showMessage(document.getElementById('register-message'), `✅ ${res.message}`, 'success'); e.target.reset(); loadAssets();
+                } catch (err) { showMessage(document.getElementById('register-message'), `❌ ${err.message}`, 'error'); }
+            });
+
+            document.getElementById('assign-asset-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const assetTag = e.target.elements.asset_tag.value.trim();
+                const assetId = getAssetIdByTag(assetTag);
+                if (!assetId) return showMessage(document.getElementById('assign-message'), `❌ Asset Tag "${assetTag}" not found in registry.`, 'error');
+                const data = { asset_id: assetId, user_id: e.target.elements.user_id.value, assigned_location_id: e.target.elements.assigned_location_id.value, notes: e.target.elements.notes.value };
+                try {
+                    const res = await handleApi(`${API_BASE_ASSET}/assign`, { method: 'POST', body: JSON.stringify(data) });
+                    showMessage(document.getElementById('assign-message'), `✅ ${res.message}`, 'success'); e.target.reset(); loadAssets();
+                } catch (err) { showMessage(document.getElementById('assign-message'), `❌ ${err.message}`, 'error'); }
+            });
+
+            document.getElementById('maintenance-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const assetTag = e.target.elements['maint-asset-tag'].value.trim();
+                const assetId = getAssetIdByTag(assetTag);
+                if (!assetId) return showMessage(document.getElementById('maint-message'), `❌ Asset Tag "${assetTag}" not found.`, 'error');
+                const data = { asset_id: assetId, type: e.target.elements.type.value, details: e.target.elements.details.value, maintenance_cost: e.target.elements.maintenance_cost.value, scheduled_date: e.target.elements.scheduled_date.value };
+                try {
+                    const res = await handleApi(`${API_BASE_ASSET}/maintenance`, { method: 'POST', body: JSON.stringify(data) });
+                    showMessage(document.getElementById('maint-message'), `✅ ${res.message}`, 'success'); e.target.reset();
+                } catch (err) { showMessage(document.getElementById('maint-message'), `❌ ${err.message}`, 'error'); }
+            });
+
+            document.getElementById('add-item-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await handleApi(`${API_BASE_INV}/items`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+                    showMessage(document.getElementById('item-message'), `✅ ${res.message}`, 'success'); e.target.reset(); loadItems();
+                } catch (err) { showMessage(document.getElementById('item-message'), `❌ ${err.message}`, 'error'); }
+            });
+
+            document.getElementById('movement-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = Object.fromEntries(new FormData(e.target)); data.quantity = parseInt(data.quantity);
+                try {
+                    const res = await handleApi(`${API_BASE_INV}/move`, { method: 'POST', body: JSON.stringify(data) });
+                    showMessage(document.getElementById('movement-message'), `✅ ${res.message}`, 'success'); e.target.reset(); loadItems();
+                } catch (err) { showMessage(document.getElementById('movement-message'), `❌ ${err.message}`, 'error'); }
+            });
+
+            document.getElementById('add-vendor-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                try {
+                    const res = await handleApi(`${API_BASE_INV}/vendors`, { method: 'POST', body: JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+                    showMessage(document.getElementById('vendor-message'), `✅ ${res.message}`, 'success'); e.target.reset(); loadVendors();
+                } catch (err) { showMessage(document.getElementById('vendor-message'), `❌ ${err.message}`, 'error'); }
+            });
+
+            document.getElementById('purchase-order-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const itemsOrdered = [];
+                e.target.querySelectorAll('.po-item-row').forEach(row => {
+                    const itemSelect = row.querySelector('.po-item-id');
+                    const item_id = itemSelect.value;
+                    const item_name = itemSelect.options[itemSelect.selectedIndex].textContent.split(' (')[0]; 
+                    const quantity = parseFloat(row.querySelector('.po-quantity').value);
+                    const price = parseFloat(row.querySelector('.po-price').value);
+                    if (item_id && quantity > 0) itemsOrdered.push({ item_id, quantity, price, item_name });
+                });
+                if (itemsOrdered.length === 0) return showMessage(document.getElementById('po-message'), '❌ Add at least one item.', 'error');
+                const data = { vendor_id: e.target.elements.vendor_id.value, items_ordered: itemsOrdered, expected_delivery_date: e.target.elements.expected_delivery_date.value, total_cost: poTotalCostInput.value };
+                try {
+                    const res = await handleApi(`${API_BASE_INV}/purchase-order`, { method: 'POST', body: JSON.stringify(data) });
+                    showMessage(document.getElementById('po-message'), `✅ PO Submitted!`, 'success'); e.target.reset(); poItemsContainer.innerHTML=''; updatePoTotal(); loadPoHistory();
+                } catch (err) { showMessage(document.getElementById('po-message'), `❌ ${err.message}`, 'error'); }
+            });
+            
+            document.getElementById('edit-item-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const data = Object.fromEntries(new FormData(e.target)); const id = data.id; delete data.id;
+                try { 
+                    await handleApi(`${API_BASE_INV}/items/${id}`, { method: 'PUT', body: JSON.stringify(data) }); 
+                    closeModal('edit-item-modal'); loadItems(); showMessage(document.getElementById('item-message'), `✅ Item updated successfully.`, 'success'); 
+                } 
+                catch (err) { showMessage(document.getElementById('item-message'), `❌ ${err.message}`, 'error'); }
+            });
+
+            // Init Load
+            loadUserDropdown();
+            loadLocations().then(() => loadAssets());
+            // Load Vendors, Items, AND PO History concurrently
+            loadVendors().then(() => {
+                loadItems();
+                loadPoHistory(); // Load history automatically on initialization
+            });
+            document.querySelector('.tab-button').click();
+        });
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

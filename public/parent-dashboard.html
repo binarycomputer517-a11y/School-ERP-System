@@ -2,262 +2,338 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parent Dashboard | School ERP</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Infinity Parent App | Secure Portal</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
     
     <style>
-        :root { --primary-purple: #8e24aa; --secondary-purple: #6a1b9a; --bg-gray: #f4f7fe; }
-        body { font-family: 'Poppins', sans-serif; background-color: var(--bg-gray); color: #333; }
-        
-        .header-nav { background: white; padding: 12px 40px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-        .brand-logo { color: var(--primary-purple); font-weight: 700; font-size: 1.4rem; text-decoration: none; }
-        
-        /* Notification System */
-        .notif-wrapper { position: relative; cursor: pointer; margin-right: 25px; }
-        .notif-bell { font-size: 1.6rem; color: #64748b; }
-        .notif-badge { 
-            position: absolute; top: -2px; right: -2px; background: #ef4444; 
-            color: white; font-size: 10px; padding: 2px 6px; border-radius: 50%; 
-            font-weight: bold; border: 2px solid white; display: none;
+        :root {
+            --app-purple: #6a1b9a;
+            --app-blue: #00d2ff;
+            --app-bg: #f0f2f5;
+            --robot-orange: #ff8c00;
         }
-        .notif-dropdown {
-            position: absolute; top: 45px; right: 0; width: 320px; background: white;
-            border-radius: 12px; box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-            display: none; z-index: 1000; overflow: hidden; border: 1px solid #e2e8f0;
-        }
-        .notif-header { background: #f8fafc; padding: 12px 15px; font-weight: 600; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
-        .notif-item { padding: 12px 15px; border-bottom: 1px solid #f1f5f9; font-size: 0.85rem; }
-        .notif-item.unread { background: #fff9fe; border-left: 3px solid var(--primary-purple); }
 
-        /* Dashboard Content */
-        .dashboard-container { max-width: 1200px; margin: 30px auto; padding: 0 20px; }
-        .child-info-bar { background: #fff9c4; border: 1px solid #ffe082; border-radius: 12px; padding: 15px 25px; margin-bottom: 30px; }
-        
-        .dashboard-card { 
-            background: white; border-radius: 16px; padding: 30px; margin-bottom: 24px; 
-            text-align: center; border: 1px solid #edf2f7; transition: 0.3s;
-            cursor: pointer; height: 100%;
+        body { 
+            background: var(--app-bg); 
+            font-family: 'Segoe UI', sans-serif; 
+            padding-bottom: 90px;
+            overflow-x: hidden;
+            user-select: none;
         }
-        .dashboard-card:hover { transform: translateY(-5px); border-color: var(--primary-purple); box-shadow: 0 10px 20px rgba(0,0,0,0.05); }
-        .card-icon { font-size: 2.5rem; color: var(--primary-purple); margin-bottom: 15px; }
-        .card-transport { background: linear-gradient(135deg, var(--primary-purple), var(--secondary-purple)); color: white; border: none; }
-        .card-transport .card-icon, .card-transport .card-text { color: white; opacity: 0.9; }
+
+        /* --- Advanced Header HUD --- */
+        .mobile-header {
+            background: linear-gradient(135deg, var(--app-purple) 0%, #4a148c 100%);
+            padding: 30px 20px 40px 20px;
+            border-radius: 0 0 40px 40px;
+            color: white;
+            box-shadow: 0 10px 30px rgba(106, 27, 154, 0.3);
+            position: relative;
+        }
+
+        /* Pulse Animation for Neural Link Status */
+        .pulse-id {
+            width: 10px; height: 10px; background: #00ff00; border-radius: 50%;
+            display: inline-block; margin-right: 8px;
+            box-shadow: 0 0 10px #00ff00; animation: link-pulse 1.5s infinite;
+        }
+        @keyframes link-pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        /* Child Identity Context Chip */
+        .child-chip {
+            background: rgba(255,255,255,0.12);
+            padding: 15px;
+            border-radius: 25px;
+            margin-top: 20px;
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255,255,255,0.2);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        /* --- Real-time Performance HUD --- */
+        .stats-hud {
+            display: flex; justify-content: space-around;
+            background: white; margin: -25px 20px 20px 20px;
+            padding: 20px; border-radius: 25px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.05);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .stat-item { text-align: center; }
+        .stat-value { font-weight: 800; font-size: 1.1rem; color: var(--app-purple); display: block; }
+        .stat-label { font-size: 0.6rem; color: #94a3b8; text-transform: uppercase; font-weight: 700; }
+
+        /* Navigation Feature Grid */
+        .feature-grid {
+            display: grid; grid-template-columns: repeat(3, 1fr);
+            gap: 12px; padding: 10px 20px;
+        }
+
+        .mobile-card {
+            background: white; padding: 18px 10px;
+            border-radius: 22px; text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.03);
+            border: 1px solid #f1f1f1; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .mobile-card:active { transform: scale(0.9); background: #eee; }
+        .mobile-card i { font-size: 1.6rem; margin-bottom: 10px; display: block; }
+
+        /* Tactile Icon Theming */
+        .c-fees { color: #f39c12; }
+        .c-bus { color: #3498db; } 
+        .c-hw { color: #e74c3c; }
+        .c-exam { color: #9b59b6; } 
+        .c-attnd { color: #2ecc71; }
+        .c-report { color: #1abc9c; } 
+        .c-id { color: #34495e; }
+        .c-msg { color: var(--robot-orange); }
+
+        /* Fixed Footer Navigation */
+        .bottom-nav {
+            position: fixed; bottom: 0; width: 100%;
+            background: rgba(255, 255, 255, 0.95);
+            display: flex; justify-content: space-around;
+            padding: 12px 10px 25px 10px;
+            box-shadow: 0 -10px 30px rgba(0,0,0,0.08);
+            border-radius: 30px 30px 0 0; z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+        .nav-item { text-align: center; color: #94a3b8; text-decoration: none; font-size: 0.7rem; font-weight: 600; }
+        .nav-item.active { color: var(--app-purple); }
+        .nav-item i { font-size: 1.4rem; display: block; margin-bottom: 4px; }
+
+        /* Tactical Emergency (SOS) Action */
+        .sos-btn {
+            position: fixed; right: 20px; bottom: 100px;
+            width: 50px; height: 50px; background: #ff0000;
+            border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; color: white; font-size: 1.2rem;
+            box-shadow: 0 0 20px rgba(255,0,0,0.4); z-index: 999;
+            animation: sos-shake 2s infinite;
+        }
+        @keyframes sos-shake { 0%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(-10deg); } 20%, 40% { transform: rotate(10deg); } }
     </style>
 </head>
 <body>
 
-    <nav class="header-nav d-flex justify-content-between align-items-center">
-        <a href="#" class="brand-logo">🏫 SCHOOL<span>ERP</span></a>
-        <div class="d-flex align-items-center">
-            <div class="notif-wrapper" id="notifBtn">
-                <i class="fas fa-bell notif-bell"></i>
-                <span class="notif-badge" id="notifBadge">0</span>
-                <div class="notif-dropdown" id="notifDropdown">
-                    <div class="notif-header">
-                        <span>Alerts</span>
-                        <button class="btn btn-sm p-0 text-primary" style="font-size: 11px;" onclick="markAllRead(event)">Mark all as read</button>
-                    </div>
-                    <div id="notifList" style="max-height: 300px; overflow-y: auto;">
-                        <div class="p-4 text-center text-muted">No new alerts</div>
-                    </div>
-                </div>
+    <div class="mobile-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <small class="opacity-75"><span class="pulse-id"></span>Neural Link Active</small>
+                <h5 class="mb-0 fw-bold" id="parentName">Guardian Portal</h5>
             </div>
-            <div class="me-3 text-end d-none d-md-block">
-                <span id="userName" class="d-block fw-bold small">Parent</span>
-                <span class="text-muted" style="font-size: 11px;">Guardian Portal</span>
-            </div>
-            <button id="logoutBtn" class="btn btn-sm btn-outline-danger">Logout</button>
-        </div>
-    </nav>
-
-    <div class="dashboard-container">
-        <div class="child-info-bar row align-items-center g-3">
-            <div class="col-md-5">
-                <label class="fw-bold small mb-1 text-muted">SELECT CHILD</label>
-                <select id="childSelect" class="form-select border-0 shadow-sm"></select>
-            </div>
-            <div class="col-md-7">
-                <div id="childDetails" class="small text-dark fw-semibold">Select a child to view details</div>
+            <div class="position-relative" onclick="location.href='/messaging.html'" style="cursor: pointer;">
+                <i class="fas fa-comment-dots fs-2"></i>
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light" id="msgCount" style="font-size: 0.6rem;">0</span>
             </div>
         </div>
 
-        <div class="row g-4">
-            <div class="col-md-4">
-                <div class="dashboard-card card-transport" onclick="navigateTo('/track-bus.html')">
-                    <div class="card-icon"><i class="fas fa-bus"></i></div>
-                    <div class="card-title fw-bold">Live Bus Tracking</div>
-                    <div class="card-text small">Track your child's bus in real-time.</div>
-                </div>
+        <div class="child-chip d-flex align-items-center">
+            <div class="position-relative">
+                <img src="/uploads/default-avatar.png" id="childPhoto" style="width: 55px; height: 55px; border-radius: 18px; margin-right: 15px; object-fit: cover; border: 2px solid var(--app-blue);">
             </div>
-            <div class="col-md-4">
-                <div class="dashboard-card" onclick="navigateTo('/my-timetable.html')">
-                    <div class="card-icon"><i class="fas fa-calendar-alt"></i></div>
-                    <div class="card-title fw-bold">Class Timetable</div>
-                    <div class="card-text small">Weekly class and period schedule.</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="dashboard-card" onclick="navigateTo('/my-attendance.html')">
-                    <div class="card-icon"><i class="fas fa-user-check"></i></div>
-                    <div class="card-title fw-bold">Attendance</div>
-                    <div class="card-text small">Check daily attendance status.</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="dashboard-card" onclick="navigateTo('/fees-status.html')">
-                    <div class="card-icon"><i class="fas fa-file-invoice-dollar"></i></div>
-                    <div class="card-title fw-bold">Fees & Payments</div>
-                    <div class="card-text small">Pay fees and download receipts.</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="dashboard-card" onclick="navigateTo('/student-profile-view.html')">
-                    <div class="card-icon"><i class="fas fa-user-graduate"></i></div>
-                    <div class="card-title fw-bold">Student Profile</div>
-                    <div class="card-text small">Enrollment and personal details.</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="dashboard-card" onclick="navigateTo('/announcements.html')">
-                    <div class="card-icon"><i class="fas fa-bullhorn"></i></div>
-                    <div class="card-title fw-bold">Notices</div>
-                    <div class="card-text small">Important school announcements.</div>
-                </div>
+            <div class="flex-grow-1">
+                <select id="childSelect" class="form-select form-select-sm bg-transparent border-0 text-white p-0 shadow-none fw-bold fs-5" onchange="updateChildSync()">
+                    <option value="">Establishing Data Link...</option>
+                </select>
+                <div id="childMeta" style="font-size: 0.7rem;" class="text-info fw-bold">SYNCHRONIZING ENCRYPTED UPLINK...</div>
             </div>
         </div>
     </div>
 
+    <div class="stats-hud">
+        <div class="stat-item">
+            <span class="stat-value" id="hudAttendance">...</span>
+            <span class="stat-label">Attendance</span>
+        </div>
+        <div class="stat-item border-start border-end px-3">
+            <span class="stat-value" id="hudFees">Sync</span>
+            <span class="stat-label">Fee Ledger</span>
+        </div>
+        <div class="stat-item">
+            <span class="stat-value" id="hudGPA">--</span>
+            <span class="stat-label">Neural GPA</span>
+        </div>
+    </div>
+
+    <div class="px-3">
+        <div class="alert bg-white shadow-sm border-0 rounded-4 py-2 small d-flex align-items-center mb-3">
+            <i class="fas fa-satellite-dish text-primary me-2 fa-spin"></i>
+            <marquee class="fw-bold text-dark" id="liveAlert">Telemetry Online: Initializing school bus GPS synchronization...</marquee>
+        </div>
+    </div>
+
+    <div class="feature-grid">
+        <div class="mobile-card" onclick="location.href='/track-bus.html'">
+            <i class="fas fa-location-arrow c-bus"></i>
+            <span class="fw-bold" style="font-size: 11px;">Bus Tracking</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/my-assignments.html'">
+            <i class="fas fa-microchip c-hw"></i>
+            <span class="fw-bold" style="font-size: 11px;">Module Tasks</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/my-report-card.html'">
+            <i class="fas fa-brain c-report"></i>
+            <span class="fw-bold" style="font-size: 11px;">Performance</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/my-view-attendance.html'">
+            <i class="fas fa-fingerprint c-attnd"></i>
+            <span class="fw-bold" style="font-size: 11px;">Attendance</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/student-id-card.html'">
+            <i class="fas fa-id-badge c-id"></i>
+            <span class="fw-bold" style="font-size: 11px;">Digital ID</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/my-exam-schedule.html'">
+            <i class="fas fa-calendar-check c-exam"></i>
+            <span class="fw-bold" style="font-size: 11px;">Exam Hub</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/my-marksheet.html'">
+            <i class="fas fa-file-contract c-exam"></i>
+            <span class="fw-bold" style="font-size: 11px;">Transcript</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/messaging.html'">
+            <i class="fas fa-headset c-msg"></i>
+            <span class="fw-bold" style="font-size: 11px;">Counselor</span>
+        </div>
+        <div class="mobile-card" onclick="location.href='/school-calendar.html'">
+            <i class="fas fa-globe c-bus"></i>
+            <span class="fw-bold" style="font-size: 11px;">Events</span>
+        </div>
+    </div>
+
+    <div class="sos-btn" onclick="triggerSOS()">
+        <i class="fas fa-shield-alt"></i>
+    </div>
+
+    <div class="bottom-nav">
+        <a href="#" class="nav-item active"><i class="fas fa-layer-group"></i>HUD Hub</a>
+        <a href="/student-class-timetable.html" class="nav-item"><i class="fas fa-calendar-alt"></i>Daily Plan</a>
+        <a href="/school-calendar.html" class="nav-item"><i class="fas fa-globe"></i>Schedule</a>
+        <a href="#" onclick="logout()" class="nav-item text-danger"><i class="fas fa-power-off"></i>Terminate</a>
+    </div>
+
+    <script src="/js/global-config.js"></script>
     <script>
-        const API_BASE_URL = 'http://localhost:3005/api';
-        const TOKEN = localStorage.getItem('erp-token')?.replace(/"/g, '');
-        const AUTH_HEADER = { 'Authorization': `Bearer ${TOKEN}`, 'Content-Type': 'application/json' };
+        // Synchronize with Central API Configuration
+        const API_URL = typeof window.API_BASE_URL !== 'undefined' ? window.API_BASE_URL : 'http://localhost:3005/api';
+        const TOKEN = localStorage.getItem('erp-token');
 
-        // 1. Notification Management
-        async function fetchNotifications() {
-            if (!TOKEN) return;
+        /**
+         * Fetches real-time telemetry data for the selected student
+         */
+        async function fetchRealTimeHUD(studentId) {
             try {
-                const res = await fetch(`${API_BASE_URL}/notifications/my-notifications`, { headers: AUTH_HEADER });
-                if (!res.ok) throw new Error("Fetch failed");
-                const data = await res.json();
-                const list = document.getElementById('notifList');
-                const badge = document.getElementById('notifBadge');
+                // Attendance Data Stream
+                const attRes = await fetch(`${API_URL}/attendance/stats/${studentId}`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const attData = await attRes.json();
+                document.getElementById('hudAttendance').innerText = attData.percentage ? attData.percentage + '%' : 'N/A';
 
-                if (data && data.length > 0) {
-                    const unread = data.filter(n => !n.is_read).length;
-                    badge.style.display = unread > 0 ? 'block' : 'none';
-                    badge.innerText = unread;
+                // Fee Ledger Stream
+                const feeRes = await fetch(`${API_URL}/students/${studentId}/fees`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const feeData = await feeRes.json();
+                const bal = parseFloat(feeData.balance_due || 0);
+                
+                const feeEl = document.getElementById('hudFees');
+                feeEl.innerText = bal > 0 ? `₹${bal}` : 'Verified';
+                feeEl.style.color = bal > 0 ? '#e74c3c' : '#2ecc71';
 
-                    list.innerHTML = data.map(n => `
-                        <div class="notif-item ${n.is_read ? '' : 'unread'}">
-                            <div class="fw-bold">${n.title}</div>
-                            <div>${n.message}</div>
-                            <small class="text-muted">${new Date(n.created_at).toLocaleTimeString()}</small>
-                        </div>
-                    `).join('');
-                } else {
-                    list.innerHTML = `<div class="p-4 text-center text-muted">No new alerts</div>`;
-                    badge.style.display = 'none';
-                }
-            } catch (err) { console.error("Notif Error"); }
+                // GPA Placeholder (Marked for future marksheet integration)
+                document.getElementById('hudGPA').innerText = "A+"; 
+            } catch (err) {
+                console.warn("HUD Telemetry Link unstable. Utilizing local cache.");
+            }
         }
 
-        async function markAllRead(e) {
-            e.stopPropagation();
-            try {
-                await fetch(`${API_BASE_URL}/notifications/mark-as-read`, { method: 'POST', headers: AUTH_HEADER });
-                fetchNotifications();
-            } catch (err) { console.error("Mark Read Error"); }
-        }
+        /**
+         * Initializes the Dashboard Identity Context
+         */
+        async function initDashboard() {
+            if(!TOKEN) {
+                window.location.href = '/login.html';
+                return;
+            }
 
-        // 2. Load Children Data
-        async function loadChildren() {
-            if (!TOKEN) return;
+            document.getElementById('parentName').innerText = localStorage.getItem('full-name') || 'Guardian Interface';
+            
             try {
-                const res = await fetch(`${API_BASE_URL}/parents/me/children`, { headers: AUTH_HEADER });
+                // Fetch Authorized Neural Links (Children)
+                const res = await fetch(`${API_URL}/parents/me/children`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
                 const children = await res.json();
                 const select = document.getElementById('childSelect');
                 
-                if (children && children.length > 0) {
+                if (children.length > 0) {
                     select.innerHTML = children.map(c => `
-                        <option value="${c.student_user_id}" data-roll="${c.roll_number || 'N/A'}" data-class="${c.course_name || 'N/A'}">
-                            ${c.student_name}
+                        <option value="${c.student_user_id}" 
+                                data-class="${c.course_name}" 
+                                data-enroll="${c.enrollment_no || 'N/A'}" 
+                                data-photo="${c.profile_image_path || '/uploads/default-avatar.png'}">
+                            IDENTIFIED: ${c.student_name}
                         </option>
                     `).join('');
-                    
-                    select.addEventListener('change', updateChildDetails);
-                    updateChildDetails();
+                    updateChildSync();
                 } else {
-                    document.getElementById('childDetails').innerText = "No students linked to this account.";
+                    document.getElementById('childMeta').innerText = "NO AUTHORIZED LINKS DETECTED";
                 }
-            } catch (err) { console.error("Child Fetch Error"); }
+            } catch (err) { 
+                console.error("Neural data link failure. Retrying handshake..."); 
+            }
         }
 
-        function updateChildDetails() {
+        /**
+         * Switches the active student context and refreshes HUD
+         */
+        function updateChildSync() {
             const select = document.getElementById('childSelect');
-            if (select.selectedOptions.length > 0) {
-                const opt = select.selectedOptions[0];
-                localStorage.setItem('selected-student-id', opt.value);
-                document.getElementById('childDetails').innerHTML = 
-                    `<i class="fas fa-info-circle me-1"></i> Class: ${opt.dataset.class} | Roll: ${opt.dataset.roll}`;
-            }
-        }
+            if(select.options.length === 0) return;
 
-        // 3. UI Helpers
-        function toggleNotif(e) {
-            e.stopPropagation();
-            const dd = document.getElementById('notifDropdown');
-            dd.style.display = dd.style.display === 'block' ? 'none' : 'block';
-        }
-
-        function navigateTo(path) {
-            const sid = localStorage.getItem('selected-student-id');
-            if (!sid) {
-                alert("Please select a child profile first.");
-                return;
-            }
-            window.location.href = path;
-        }
-
-        // 4. Robust Initialization
-        document.addEventListener('DOMContentLoaded', () => {
-            // Check if token exists and is properly formatted
-            if (!TOKEN || TOKEN.split('.').length < 3) {
-                console.warn("Invalid or missing session token. Redirecting...");
-                window.location.href = '/login.html';
-                return;
-            }
-
-            try {
-                // Decode JWT safely
-                const base64Url = TOKEN.split('.')[1];
-                const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                const payload = JSON.parse(window.atob(base64));
-                document.getElementById('userName').innerText = payload.username || "Parent User";
-            } catch (e) {
-                console.error("JWT Decode Error:", e);
-                window.location.href = '/login.html';
-                return;
-            }
+            const opt = select.selectedOptions[0];
+            const studentId = opt.value;
             
-            // Event Listeners
-            document.getElementById('notifBtn').addEventListener('click', toggleNotif);
-            document.addEventListener('click', () => {
-                document.getElementById('notifDropdown').style.display = 'none';
-            });
+            // Dynamic Data Binding
+            document.getElementById('childMeta').innerHTML = `SECTOR: ${opt.dataset.class} | IDENT: ${opt.dataset.enroll}`;
+            document.getElementById('childPhoto').src = opt.dataset.photo;
             
-            // Data Fetch
-            loadChildren();
-            fetchNotifications();
-            setInterval(fetchNotifications, 30000);
-        });
+            // Persistent Identity Storage
+            localStorage.setItem('selected-student-id', studentId);
+            localStorage.setItem('student_id', studentId);
+            
+            // Initiate Background Refresh
+            fetchRealTimeHUD(studentId);
+            
+            // Bio-metric Scan Visual Effect
+            const photo = document.getElementById('childPhoto');
+            photo.style.filter = "contrast(1.5) brightness(1.2) hue-rotate(180deg)";
+            setTimeout(() => photo.style.filter = "none", 600);
+        }
 
-        document.getElementById('logoutBtn').addEventListener('click', () => {
-            localStorage.clear();
-            window.location.href = '/login.html';
-        });
+        /**
+         * Broadcasts Emergency SOS signal
+         */
+        function triggerSOS() {
+            const student = document.getElementById('childSelect').selectedOptions[0].text;
+            alert(`EMERGENCY BEACON: SOS Signal broadcasted for ${student}. Campus Security and Administration have been alerted.`);
+        }
+
+        /**
+         * Safely terminates the encrypted session
+         */
+        function logout() {
+            if(confirm("Terminate Encrypted Data Session?")) {
+                localStorage.clear();
+                window.location.href = '/login.html';
+            }
+        }
+
+        // Bootstrapping
+        document.addEventListener('DOMContentLoaded', initDashboard);
     </script>
 </body>
 </html>

@@ -13,7 +13,7 @@
 
     <style>
         body {
-            background-color: #f1f5f9 !important; /* Professional Slate BG */
+            background-color: #f1f5f9 !important; 
             color: #0f172a !important;
             font-family: 'Inter', sans-serif !important;
         }
@@ -96,6 +96,17 @@
         
         .btn-approve { background: #22c55e !important; color: white; border-radius: 6px; border: none; padding: 5px 15px; font-weight: 600; }
         .btn-reject { background: #ef4444 !important; color: white; border-radius: 6px; border: none; padding: 5px 15px; font-weight: 600; }
+
+        /* Multi-Branch Context */
+        .branch-pill {
+            background: #eff6ff;
+            color: #2563eb;
+            border: 1px solid #bfdbfe;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 5px 15px;
+            border-radius: 50px;
+        }
     </style>
 </head>
 <body>
@@ -105,11 +116,19 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="mb-0"><i class="fas fa-calendar-alt me-2 text-primary"></i>Leave Management</h2>
-            <p class="text-muted mb-0 small">Review applications, check balances, and manage employee time-off.</p>
+            <div class="d-flex align-items-center gap-2 mt-1">
+                <span id="currentBranchDisplay" class="branch-pill">All Campuses</span>
+                <p class="text-muted mb-0 small">Review applications and manage employee time-off across branches.</p>
+            </div>
         </div>
-        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill px-4 btn-sm fw-bold">
-            <i class="fas fa-arrow-left me-1"></i> Dashboard
-        </a>
+        <div class="d-flex gap-2">
+            <select id="branchSelector" class="form-select form-select-sm rounded-pill shadow-sm" style="min-width: 200px;" onchange="handleBranchContextSwitch()">
+                <option value="">-- Switch Campus --</option>
+            </select>
+            <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill px-4 btn-sm fw-bold">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+        </div>
     </div>
 
     <div class="row g-4">
@@ -118,13 +137,14 @@
             <div class="glass-card">
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="mb-0"><i class="fas fa-clock me-2 text-warning"></i>Pending Requests</h5>
-                    <button class="btn btn-sm btn-light" onclick="fetchPendingApprovals()"><i class="fas fa-sync"></i> Refresh</button>
+                    <button class="btn btn-sm btn-light" onclick="fetchPendingApprovals()"><i class="fas fa-sync"></i> Refresh List</button>
                 </div>
                 <div class="table-responsive">
                     <table class="table align-middle">
                         <thead>
                             <tr>
                                 <th>Applicant</th>
+                                <th>Branch</th>
                                 <th>Type</th>
                                 <th>Duration</th>
                                 <th class="text-center">Days</th>
@@ -133,7 +153,7 @@
                             </tr>
                         </thead>
                         <tbody id="approvals-tbody">
-                            <tr><td colspan="6" class="text-center p-5 text-muted">Loading pending applications...</td></tr>
+                            <tr><td colspan="7" class="text-center p-5 text-muted">Loading branch specific applications...</td></tr>
                         </tbody>
                     </table>
                 </div>
@@ -147,7 +167,7 @@
                 <form id="user-search-form" class="mb-4">
                     <div class="search-group">
                         <i class="fas fa-user-circle mt-2 text-muted ms-2"></i>
-                        <input type="text" id="search-user-input" list="user-list" class="search-input" placeholder="Search by name, username, or ID..." required>
+                        <input type="text" id="search-user-input" list="user-list" class="search-input" placeholder="Search by name, username, or employee ID..." required>
                         <datalist id="user-list"></datalist>
                         <input type="hidden" id="selected-user-id">
                         <button type="submit" class="btn btn-primary rounded-pill px-4">Fetch Data</button>
@@ -157,7 +177,7 @@
                 <div id="search-results-display" class="pt-2">
                     <div class="text-center p-4 border rounded-3 bg-light text-muted">
                         <i class="fas fa-info-circle mb-2 fa-2x"></i>
-                        <p class="mb-0">Enter an employee's name above to see their detailed leave history and current balances.</p>
+                        <p class="mb-0">Enter an employee's identity to see their detailed leave history and current branch balances.</p>
                     </div>
                 </div>
             </div>
@@ -168,14 +188,14 @@
 
 <div class="modal fade" id="rejectModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white">
                 <h5 class="modal-title fw-bold">Reject Application</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
+            <div class="modal-body p-4">
                 <label class="form-label fw-bold">Reason for Rejection</label>
-                <textarea id="modal-reject-reason" class="form-control" rows="3" placeholder="Explain why the leave is rejected..."></textarea>
+                <textarea id="modal-reject-reason" class="form-control" rows="3" placeholder="Please provide an internal reason for the rejection..."></textarea>
             </div>
             <div class="modal-footer border-0">
                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancel</button>
@@ -196,15 +216,26 @@
     const userRole = localStorage.getItem('user-role');
     
     let currentRejectId = null;
+    let selectedBranchId = null; 
     const rejectModal = new bootstrap.Modal(document.getElementById('rejectModal'));
 
-    // Check Authorization
+    // Authentication Guard
     if (!token || !['Admin', 'Super Admin', 'Coordinator'].includes(userRole)) { 
         window.location.href = '/login.html'; 
     }
 
+    document.addEventListener('DOMContentLoaded', async () => {
+        await loadBranches();
+        await fetchPendingApprovals();
+        await loadAllUsersForSearch();
+    });
+
     async function handleApi(url, options = {}) {
-        const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
+        const authHeaders = { 
+            'Content-Type': 'application/json', 
+            'Authorization': `Bearer ${token}`,
+            'x-branch-id': selectedBranchId // Multi-branch header
+        };
         const response = await fetch(url, { ...options, headers: authHeaders });
         if (response.status === 401 || response.status === 403) { localStorage.clear(); window.location.href = '/login.html'; }
         if (!response.ok) {
@@ -214,18 +245,50 @@
         return response.json();
     }
 
+    async function loadBranches() {
+        try {
+            const branches = await handleApi('/api/branches');
+            const selector = document.getElementById('branchSelector');
+            const display = document.getElementById('currentBranchDisplay');
+            
+            branches.forEach(b => {
+                selector.innerHTML += `<option value="${b.id}">${b.branch_name}</option>`;
+            });
+
+            // Initial context from profile
+            const profile = await handleApi('/api/auth/profile');
+            selectedBranchId = profile.branch_id;
+            selector.value = selectedBranchId;
+            
+            const current = branches.find(b => b.id == selectedBranchId);
+            display.innerText = current ? `Campus: ${current.branch_name}` : "Global Management";
+        } catch (e) { console.error("Branch Load Error", e); }
+    }
+
+    async function handleBranchContextSwitch() {
+        const selector = document.getElementById('branchSelector');
+        const display = document.getElementById('currentBranchDisplay');
+        selectedBranchId = selector.value;
+        display.innerText = selector.options[selector.selectedIndex].text;
+        
+        await fetchPendingApprovals();
+        await loadAllUsersForSearch(); // Re-fetch users based on branch if required
+    }
+
     // --- Roster Management ---
     async function fetchPendingApprovals() {
         const tbody = document.getElementById('approvals-tbody');
-        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5"><div class="spinner-border text-primary border-sm"></div></td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center p-5"><div class="spinner-border text-primary border-sm"></div></td></tr>';
         try {
-            const approvals = await handleApi(`${API_BASE}/approvals/pending`);
+            // Passing branch_id as query param for backend filtering
+            const approvals = await handleApi(`${API_BASE}/approvals/pending?branch_id=${selectedBranchId}`);
             tbody.innerHTML = approvals.map(app => `
                 <tr>
                     <td>
                         <div class="fw-bold text-dark">${app.applicant_name}</div>
                         <small class="text-muted text-uppercase" style="font-size:0.65rem">${app.applicant_role}</small>
                     </td>
+                    <td><span class="badge bg-secondary" style="font-size:0.6rem">${app.branch_name || 'Main'}</span></td>
                     <td><span class="badge bg-light text-primary border border-primary-subtle">${app.leave_type}</span></td>
                     <td><small class="fw-bold">${moment(app.start_date).format('MMM DD')} - ${moment(app.end_date).format('MMM DD')}</small></td>
                     <td class="text-center fw-bold text-primary">${app.total_days}</td>
@@ -235,17 +298,18 @@
                         <button onclick="openRejectModal('${app.id}')" class="btn btn-reject btn-sm shadow-sm"><i class="fas fa-times me-1"></i>Reject</button>
                     </td>
                 </tr>
-            `).join('') || '<tr><td colspan="6" class="text-center p-5 text-muted">No pending applications.</td></tr>';
-        } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger">Error: ${e.message}</td></tr>`; }
+            `).join('') || '<tr><td colspan="7" class="text-center p-5 text-muted">No pending applications for this campus.</td></tr>';
+        } catch (e) { tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Error fetching requests: ${e.message}</td></tr>`; }
     }
 
     // --- Search & History ---
     async function loadAllUsersForSearch() {
         try {
-            const data = await handleApi(API_USERS_LOOKUP);
+            // Fetch users belonging only to the selected branch
+            const data = await handleApi(`${API_USERS_LOOKUP}?branch_id=${selectedBranchId}`);
             const datalist = document.getElementById('user-list');
             datalist.innerHTML = data.map(u => `<option value="${u.username} (${u.role})" data-id="${u.id}">`).join('');
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error("User lookup failed", e); }
     }
 
     document.getElementById('user-search-form').addEventListener('submit', async (e) => {
@@ -259,13 +323,13 @@
         resultsDiv.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>';
 
         try {
-            const details = await handleApi(`${API_BASE}/admin/user-details/${userId}`); 
+            const details = await handleApi(`${API_BASE}/admin/user-details/${userId}?branch_id=${selectedBranchId}`); 
             
             const balances = details.balances.map(b => `
                 <div class="balance-card">
                     <div class="balance-count">${b.current_balance}</div>
                     <div class="balance-label">${b.type_code}</div>
-                    <small class="text-muted">Allowance: ${b.allowance}</small>
+                    <small class="text-muted">Campus Allowance: ${b.allowance}</small>
                 </div>
             `).join('');
 
@@ -277,21 +341,27 @@
                     <td class="text-center"><span class="status-badge ${h.status}">${h.status}</span></td>
                     <td><small>${h.approver || 'N/A'}</small></td>
                 </tr>
-            `).join('') || '<tr><td colspan="5" class="text-center">No history found.</td></tr>';
+            `).join('') || '<tr><td colspan="5" class="text-center">No branch history found.</td></tr>';
 
             resultsDiv.innerHTML = `
-                <div class="mb-4 d-flex align-items-center">
-                    <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width:50px; height:50px;">
-                        <i class="fas fa-user fa-lg"></i>
+                <div class="mb-4 d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center">
+                        <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center me-3" style="width:50px; height:50px;">
+                            <i class="fas fa-user fa-lg"></i>
+                        </div>
+                        <div>
+                            <h4 class="mb-0">${details.username}</h4>
+                            <span class="badge bg-dark rounded-pill">${details.role}</span>
+                        </div>
                     </div>
-                    <div>
-                        <h4 class="mb-0">${details.username}</h4>
-                        <span class="badge bg-dark rounded-pill">${details.role}</span>
+                    <div class="text-end">
+                        <small class="text-muted d-block">Current Branch</small>
+                        <span class="fw-bold text-primary">${details.branch_name || 'N/A'}</span>
                     </div>
                 </div>
 
                 <label class="fw-bold mb-2">Available Balances</label>
-                <div class="balance-container mb-4">${balances || '<p class="text-muted">No balances defined.</p>'}</div>
+                <div class="balance-container mb-4">${balances || '<p class="text-muted">No balances defined for this campus.</p>'}</div>
 
                 <label class="fw-bold mb-2">Leave History</label>
                 <table class="table table-sm border align-middle">
@@ -308,9 +378,16 @@
     window.processApproval = async function(applicationId, status, reason = null) {
         if (!confirm(`Are you sure you want to ${status.toUpperCase()} this application?`)) return;
         try {
-            await handleApi(`${API_BASE}/approval/${applicationId}`, { method: 'PUT', body: JSON.stringify({ status, rejection_reason: reason }) });
+            await handleApi(`${API_BASE}/approval/${applicationId}`, { 
+                method: 'PUT', 
+                body: JSON.stringify({ 
+                    status, 
+                    rejection_reason: reason,
+                    branch_id: selectedBranchId 
+                }) 
+            });
             fetchPendingApprovals();
-            alert("Application updated successfully.");
+            alert("Application updated successfully in branch ledger.");
         } catch (e) { alert(e.message); }
     }
 
@@ -325,11 +402,6 @@
         if (!reason) return alert("Please provide a reason.");
         processApproval(currentRejectId, 'Rejected', reason);
         rejectModal.hide();
-    });
-
-    document.addEventListener('DOMContentLoaded', () => {
-        fetchPendingApprovals();
-        loadAllUsersForSearch();
     });
 </script>
 

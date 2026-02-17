@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fleet Command Centre | BCSM ERP</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css"> 
+    <style>
+        :root {
+            --danger: #ef4444; --warning: #f59e0b; --success: #10b981;
+            --info: #3b82f6; --slate-800: #1e293b; --glass: rgba(255, 255, 255, 0.8);
+            --slate-300: #cbd5e1; --primary-blue: #005A9C;
+        }
+
+        body { background: #f1f5f9; color: var(--slate-800); font-family: 'Inter', sans-serif; margin: 0; }
+        .glass-card { background: var(--glass); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.3); border-radius: 16px; padding: 20px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+
+        /* Stats Grid */
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 25px; }
+        .stat-card { background: white; padding: 15px; border-radius: 12px; position: relative; overflow: hidden; border-top: 4px solid #ddd; }
+        .stat-card h4 { margin: 0; font-size: 11px; color: #64748b; text-transform: uppercase; }
+        .stat-card .val { font-size: 24px; font-weight: 800; display: block; margin-top: 5px; }
+        .stat-card i { position: absolute; right: -10px; bottom: -10px; font-size: 50px; opacity: 0.1; }
+
+        .route-chip { font-size: 10px; background: #e2e8f0; padding: 2px 6px; border-radius: 10px; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; margin-top: 4px; }
+        .route-dot { width: 8px; height: 8px; border-radius: 50%; }
+        
+        /* Table Styles */
+        .filter-bar { display: flex; gap: 10px; align-items: center; margin-bottom: 15px; flex-wrap: wrap; }
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; }
+        th { padding: 15px; font-size: 11px; color: #64748b; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; text-align: left; }
+        td { padding: 15px; border-bottom: 1px solid #e2e8f0; vertical-align: middle; }
+
+        /* Progress Bar */
+        .progress-bar { width: 100%; height: 8px; background: #e2e8f0; border-radius: 4px; margin-top: 5px; overflow: hidden; }
+        .progress-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; }
+
+        .pulse-red { animation: pulse 2s infinite; color: var(--danger) !important; font-weight: bold; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        .doc-icon { cursor: pointer; transition: 0.2s; font-size: 18px; }
+        .doc-icon:hover { transform: scale(1.2); }
+        .doc-missing { color: var(--slate-300); cursor: not-allowed; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; justify-content: center; align-items: center; z-index: 2000; padding: 20px; }
+        .modal-content { background: white; padding: 25px; border-radius: 12px; width: 100%; max-width: 650px; max-height: 90vh; overflow-y: auto; }
+        .form-section { grid-column: span 2; background: #f8fafc; padding: 10px; font-weight: bold; font-size: 13px; border-radius: 6px; border-left: 4px solid var(--info); margin-top: 10px; }
+        .btn-icon { background: none; border: none; cursor: pointer; padding: 8px; font-size: 16px; }
+        
+        .driver-info { font-size: 11px; color: #64748b; line-height: 1.4; }
+        .driver-name { font-weight: 600; color: var(--primary-blue); display: block; }
+    </style>
+</head>
+<body>
+
+    <nav class="glass-nav">
+        <div class="brand">
+            <h2>FLEET <span style="color:var(--secondary-orange)">COMMAND</span></h2>
+        </div>
+        <div class="nav-actions">
+            <a href="/driver.html" class="btn btn-info btn-sm"><i class="fas fa-map-marked-alt"></i> Add Driver</a>
+            <a href="/track-bus.html" class="btn btn-info btn-sm"><i class="fas fa-map-marked-alt"></i> Live Map</a>
+            <a href="/assign-driver.html" class="btn btn-warning btn-sm"><i class="fas fa-user-plus"></i> Assign drivers</a>
+            <a href="/assign-transport.html" class="btn btn-warning btn-sm"><i class="fas fa-user-plus"></i> Assign Students</a>
+            <a href="/admin-multi-bus-monitor.html" class="btn btn-warning btn-sm"><i class="fas fa-user-plus"></i> Multi Bus Monitor</a>
+            <button class="btn btn-primary btn-sm" onclick="openAddModal()"><i class="fas fa-plus"></i> New Vehicle</button>
+
+        </div>
+    </nav>
+
+    <div class="container-fluid" style="padding: 20px;">
+        <div class="stats-grid">
+            <div class="stat-card" style="border-color: var(--info)">
+                <h4>Total Fleet</h4><span class="val" id="stat-total">0</span><i class="fas fa-bus"></i>
+            </div>
+            <div class="stat-card" style="border-color: var(--success)">
+                <h4>On Trip</h4><span class="val" id="stat-trips">0</span><i class="fas fa-route"></i>
+            </div>
+            <div class="stat-card" style="border-color: var(--danger)">
+                <h4>Critical Alerts</h4><span class="val" id="stat-alerts">0</span><i class="fas fa-exclamation-triangle"></i>
+            </div>
+            <div class="stat-card" style="border-color: var(--warning)">
+                <h4>Avg Occupancy</h4><span class="val" id="stat-util">0%</span><i class="fas fa-users"></i>
+            </div>
+        </div>
+
+        <div class="glass-card">
+            <div class="filter-bar">
+                <input type="text" id="busSearch" placeholder="Search Plate, Route or Driver..." onkeyup="searchBus()" style="padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1; flex: 1;">
+                <select id="statusFilter" onchange="searchBus()" style="padding: 10px; border-radius: 8px; border: 1px solid #cbd5e1;">
+                    <option value="">All Status</option>
+                    <option value="available">Available</option>
+                    <option value="on_trip">On Trip</option>
+                    <option value="maintenance">Maintenance</option>
+                </select>
+                <button class="btn btn-sm btn-outline" onclick="syncFleet()"><i class="fas fa-sync-alt"></i></button>
+                <button class="btn btn-success btn-sm" onclick="exportToCSV()"><i class="fas fa-file-export"></i></button>
+            </div>
+
+            <table>
+                <thead>
+                    <tr>
+                        <th>Vehicle & Route</th>
+                        <th>Model & Driver</th>
+                        <th>Load Factor</th>
+                        <th>Compliance</th>
+                        <th style="text-align: center;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="fleet-list">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="busModal" class="modal-overlay">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 id="modalTitle">Vehicle Registration</h3>
+                <button onclick="closeModal()" style="border:none; background:none; cursor:pointer; font-size:24px;">&times;</button>
+            </div>
+            <hr>
+            <form id="busForm" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px;">
+                <div class="form-section">1. Basic Details</div>
+                <div class="form-group"><label>Vehicle No *</label><input type="text" id="v_no" class="form-control" placeholder="WB-01-XXXX" required></div>
+                <div class="form-group"><label>Capacity *</label><input type="number" id="v_cap" class="form-control" required></div>
+                <div class="form-group"><label>Model Name</label><input type="text" id="v_model" class="form-control"></div>
+                <div class="form-group"><label>Emergency Phone</label><input type="text" id="v_phone" class="form-control"></div>
+                
+                <div class="form-section">2. Compliance Expiry Dates</div>
+                <div class="form-group"><label>Insurance</label><input type="date" id="v_ins" class="form-control" required></div>
+                <div class="form-group"><label>Fitness</label><input type="date" id="v_fit" class="form-control" required></div>
+                <div class="form-group"><label>Pollution (PUC)</label><input type="date" id="v_puc" class="form-control" required></div>
+                <div class="form-group"><label>State Permit</label><input type="date" id="v_lic" class="form-control" required></div>
+
+                <div class="form-section">3. Document Uploads</div>
+                <div class="form-group">
+                    <label>RC/Permit File</label>
+                    <input type="file" id="file_permit" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Insurance File</label>
+                    <input type="file" id="file_docs" class="form-control">
+                </div>
+
+                <div id="statusSection" class="form-group" style="grid-column: span 2; display:none;">
+                    <label>Operational Status</label>
+                    <select id="v_status" class="form-control">
+                        <option value="available">Available</option>
+                        <option value="on_trip">On Trip</option>
+                        <option value="maintenance">Maintenance</option>
+                    </select>
+                </div>
+
+                <div style="grid-column: span 2; display: flex; gap: 10px; margin-top: 15px;">
+                    <button type="submit" class="btn btn-primary" style="flex: 2; padding: 12px;">Save Vehicle</button>
+                    <button type="button" class="btn" onclick="closeModal()" style="flex: 1; background:#64748b; color:white;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/transport/vehicles';
+        let fleetData = [];
+        let editMode = false;
+        let currentBusId = null;
+
+        const fmtInputDate = (d) => d ? new Date(d).toISOString().split('T')[0] : '';
+
+        function viewDoc(path) {
+            if (!path || path === "undefined" || path === "null") {
+                alert("⚠️ No document uploaded for this vehicle.");
+                return;
+            }
+            window.open(`/uploads/${path}`, '_blank');
+        }
+
+        async function syncFleet() {
+            try {
+                const token = localStorage.getItem('erp-token')?.replace(/"/g, '');
+                const res = await fetch(API, { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                fleetData = await res.json();
+                renderTable(fleetData);
+                updateStats();
+            } catch (e) { console.error("Sync Error:", e); }
+        }
+
+        function renderTable(data) {
+            const list = document.getElementById('fleet-list');
+            list.innerHTML = data.map(bus => {
+                const pct = Math.round((bus.occupied_seats / bus.seating_capacity) * 100) || 0;
+                const barColor = pct > 90 ? 'var(--danger)' : pct > 70 ? 'var(--warning)' : 'var(--success)';
+                
+                return `
+                    <tr>
+                        <td>
+                            <div style="font-weight:700; color: var(--slate-800);">${bus.vehicle_no}</div>
+                            <div class="route-chip"><span class="route-dot" style="background:#3b82f6"></span> ${bus.route_name || 'No Route'}</div>
+                        </td>
+                        <td>
+                            <div style="font-size:13px; font-weight:600;">${bus.model || 'Standard Bus'}</div>
+                            <div class="driver-info">
+                                <span class="driver-name"><i class="fas fa-user-circle"></i> ${bus.driver_name || 'Unassigned'}</span>
+                                <span><i class="fas fa-phone-alt"></i> ${bus.driver_phone || 'N/A'}</span>
+                            </div>
+                        </td>
+                        <td style="width: 150px;">
+                            <div style="display:flex; justify-content:space-between; font-size:10px; font-weight:bold;">
+                                <span>${bus.occupied_seats || 0}/${bus.seating_capacity} Seats</span>
+                                <span>${pct}%</span>
+                            </div>
+                            <div class="progress-bar"><div class="progress-fill" style="width:${pct}%; background:${barColor}"></div></div>
+                        </td>
+                        <td>
+                            <div style="display:flex; gap:15px; align-items: center;">
+                                <i class="fas fa-file-pdf doc-icon ${bus.permit_path ? 'text-info' : 'doc-missing'}" 
+                                   onclick="viewDoc('${bus.permit_path}')" title="Permit/RC"></i>
+                                
+                                <i class="fas fa-shield-virus doc-icon ${bus.doc_path ? 'text-info' : 'doc-missing'}" 
+                                   onclick="viewDoc('${bus.doc_path}')" title="Insurance"></i>
+                                
+                                <i class="fas fa-exclamation-circle ${bus.is_ins_expired || bus.is_fit_expired ? 'pulse-red' : 'text-success'}" 
+                                   title="Status: ${bus.is_ins_expired ? 'Expired' : 'Valid'}"></i>
+                            </div>
+                        </td>
+                        <td style="text-align:center;">
+                            <div style="display: flex; gap: 5px; justify-content: center;">
+                                <button class="btn-icon" onclick="openEditModal('${bus.id}')" title="Edit"><i class="fas fa-edit" style="color:var(--info)"></i></button>
+                                <a href="/assign-driver.html" class="btn-icon" title="Change Driver"><i class="fas fa-user-cog" style="color:var(--warning)"></i></a>
+                                <button class="btn-icon" onclick="deleteBus('${bus.id}', '${bus.vehicle_no}')" title="Delete"><i class="fas fa-trash-alt" style="color:var(--danger)"></i></button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateStats() {
+            document.getElementById('stat-total').innerText = fleetData.length;
+            document.getElementById('stat-trips').innerText = fleetData.filter(b => b.status === 'on_trip').length;
+            document.getElementById('stat-alerts').innerText = fleetData.filter(b => b.is_ins_expired || b.is_fit_expired || b.is_license_expired).length;
+            const avg = fleetData.length ? (fleetData.reduce((s, b) => s + (b.occupied_seats/b.seating_capacity), 0) / fleetData.length) * 100 : 0;
+            document.getElementById('stat-util').innerText = Math.round(avg) + '%';
+        }
+
+        function openAddModal() {
+            editMode = false; currentBusId = null;
+            document.getElementById('busForm').reset();
+            document.getElementById('modalTitle').innerText = "Register New Vehicle";
+            document.getElementById('statusSection').style.display = 'none';
+            document.getElementById('v_no').disabled = false;
+            document.getElementById('busModal').style.display = 'flex';
+        }
+
+        function openEditModal(id) {
+            editMode = true; currentBusId = id;
+            const bus = fleetData.find(b => b.id == id);
+            if(!bus) return;
+
+            document.getElementById('modalTitle').innerText = "Update: " + bus.vehicle_no;
+            document.getElementById('v_no').value = bus.vehicle_no;
+            document.getElementById('v_no').disabled = true;
+            document.getElementById('v_cap').value = bus.seating_capacity;
+            document.getElementById('v_model').value = bus.model || '';
+            document.getElementById('v_phone').value = bus.driver_phone || '';
+            document.getElementById('v_ins').value = fmtInputDate(bus.insurance_expiry);
+            document.getElementById('v_fit').value = fmtInputDate(bus.fitness_expiry);
+            document.getElementById('v_puc').value = fmtInputDate(bus.pollution_expiry);
+            document.getElementById('v_lic').value = fmtInputDate(bus.license_expiry);
+            document.getElementById('v_status').value = bus.status || 'available';
+            
+            document.getElementById('statusSection').style.display = 'block';
+            document.getElementById('busModal').style.display = 'flex';
+        }
+
+        function closeModal() { document.getElementById('busModal').style.display = 'none'; }
+
+        document.getElementById('busForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const fd = new FormData();
+            fd.append('vehicle_no', document.getElementById('v_no').value);
+            fd.append('seating_capacity', document.getElementById('v_cap').value);
+            fd.append('model', document.getElementById('v_model').value);
+            fd.append('driver_phone', document.getElementById('v_phone').value);
+            fd.append('insurance_expiry', document.getElementById('v_ins').value);
+            fd.append('fitness_expiry', document.getElementById('v_fit').value);
+            fd.append('pollution_expiry', document.getElementById('v_puc').value);
+            fd.append('license_expiry', document.getElementById('v_lic').value);
+            if(editMode) fd.append('status', document.getElementById('v_status').value);
+
+            const fp = document.getElementById('file_permit').files[0];
+            const fd_ = document.getElementById('file_docs').files[0];
+            if(fp) fd.append('permit_file', fp);
+            if(fd_) fd.append('doc_file', fd_);
+
+            try {
+                const token = localStorage.getItem('erp-token')?.replace(/"/g, '');
+                const res = await fetch(editMode ? `${API}/${currentBusId}` : API, {
+                    method: editMode ? 'PUT' : 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` },
+                    body: fd
+                });
+                if(res.ok) { closeModal(); syncFleet(); } else { alert("Operation failed."); }
+            } catch (e) { alert("Server connection error."); }
+        });
+
+        async function deleteBus(id, name) {
+            if(!confirm(`Delete vehicle ${name} permanently?`)) return;
+            const token = localStorage.getItem('erp-token')?.replace(/"/g, '');
+            await fetch(`${API}/${id}`, { 
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            syncFleet();
+        }
+
+        function searchBus() {
+            const term = document.getElementById('busSearch').value.toLowerCase();
+            const status = document.getElementById('statusFilter').value;
+            renderTable(fleetData.filter(b => 
+                (b.vehicle_no.toLowerCase().includes(term) || 
+                 (b.driver_name && b.driver_name.toLowerCase().includes(term)) ||
+                 (b.route_name && b.route_name.toLowerCase().includes(term))) && 
+                (status === "" || b.status === status)
+            ));
+        }
+
+        function exportToCSV() {
+            let csv = "Vehicle No,Status,Capacity,Route,Driver,Phone\n";
+            fleetData.forEach(b => csv += `${b.vehicle_no},${b.status},${b.seating_capacity},${b.route_name || 'N/A'},${b.driver_name || 'N/A'},${b.driver_phone || 'N/A'}\n`);
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = 'Fleet_Inventory.csv'; a.click();
+        }
+
+        window.onload = syncFleet;
+    </script>
+</body>
+</html>

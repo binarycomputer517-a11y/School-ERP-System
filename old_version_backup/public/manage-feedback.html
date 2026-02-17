@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feedback & Suggestions Management</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        /* --- General Layout & Typography --- */
+        body { font-family: 'Poppins', sans-serif; background-color: #f4f7f6; color: #333; padding: 20px; }
+        .container { max-width: 1200px; margin: 20px auto; padding: 40px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); }
+        h1 { color: #8E44AD; font-weight: 700; border-bottom: 2px solid #8E44AD; padding-bottom: 10px; margin-bottom: 20px; font-size: 2em; }
+        .back-link { display: inline-block; margin-bottom: 20px; text-decoration: none; color: #3498db; }
+        
+        /* --- Controls & Filters --- */
+        .filter-controls { display: flex; gap: 15px; margin-bottom: 20px; padding: 15px; background: #f8f8f8; border-radius: 6px; }
+        .form-control { padding: 8px 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        
+        /* --- Table --- */
+        .feedback-table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 0.9em; }
+        .feedback-table th, .feedback-table td { border: 1px solid #eee; padding: 12px; text-align: left; vertical-align: top; }
+        .feedback-table th { background-color: #f4f4f4; color: #333; font-weight: 600; }
+        
+        /* Status Badges */
+        .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 600; }
+        .status-New { background-color: #F39C12; color: white; }
+        .status-In-Progress { background-color: #3498DB; color: white; }
+        .status-Resolved { background-color: #2ECC71; color: white; }
+        .status-Rejected { background-color: #E74C3C; color: white; }
+        
+        /* Category Styles */
+        .category-badge { background-color: #eee; padding: 2px 6px; border-radius: 4px; font-size: 0.8em; }
+
+        /* Action Buttons */
+        .btn-action { padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 0.85em; margin-right: 5px; }
+        .btn-view { background-color: #005A9C; color: white; border: none; }
+        .btn-resolve { background-color: #2ECC71; color: white; border: none; }
+    </style>
+</head>
+<body>
+
+<script>
+    // --- Authentication and Authorization Check ---
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role');
+    const API_FEEDBACK = '/api/feedback'; 
+    
+    // Only allow Admin, Super Admin, or a designated staff role
+    const AUTH_ROLES = ['Super Admin', 'Admin', 'HR Staff'];
+
+    if (!TOKEN || !AUTH_ROLES.includes(USER_ROLE)) {
+        alert('Access Denied. Only authorized staff can manage feedback.');
+        window.location.href = '/admin-dashboard.html';
+    }
+    
+    let allFeedback = [];
+    
+    // --- Helper Functions ---
+    async function handleApi(url, options = {}) {
+        options.headers = { 
+            'Authorization': `Bearer ${TOKEN}`,
+            'Content-Type': 'application/json',
+            ...options.headers 
+        };
+        const response = await fetch(url, options);
+        if (response.status === 401 || response.status === 403) {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+        return response;
+    }
+
+    function formatDate(timestamp) {
+        if (!timestamp) return 'N/A';
+        return new Date(timestamp).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    }
+
+    // --- RENDER & FETCH DATA ---
+    async function fetchFeedback() {
+        const listEl = document.getElementById('feedback-list');
+        listEl.innerHTML = '<tr><td colspan="6" style="text-align: center;">Loading feedback...</td></tr>';
+        
+        const filterStatus = document.getElementById('filter-status').value;
+        const filterCategory = document.getElementById('filter-category').value;
+        const filterSearch = document.getElementById('filter-search').value;
+        
+        let url = `${API_FEEDBACK}?status=${filterStatus}&category=${filterCategory}&search=${filterSearch}`;
+
+        try {
+            const response = await handleApi(url, { method: 'GET' });
+            if (!response.ok) throw new Error('Failed to fetch feedback list.');
+            
+            allFeedback = await response.json();
+            
+            if (allFeedback.length === 0) {
+                listEl.innerHTML = '<tr><td colspan="6" style="text-align: center;">No matching feedback found.</td></tr>';
+                return;
+            }
+
+            listEl.innerHTML = allFeedback.map(item => `
+                <tr data-id="${item.id}">
+                    <td>${item.id.slice(0, 8)}</td>
+                    <td>${item.submitted_by || 'Anonymous'} (${item.user_role || 'N/A'})</td>
+                    <td><span class="category-badge">${item.category || 'General'}</span></td>
+                    <td>${item.subject || item.message.substring(0, 50) + '...'}</td>
+                    <td>${formatDate(item.created_at)}</td>
+                    <td>
+                        <span class="status-badge status-${item.status.replace(/\s/g, '-') || 'New'}">${item.status || 'New'}</span>
+                    </td>
+                    <td>
+                        <button class="btn-action btn-view" onclick="viewDetails('${item.id}')"><i class="fas fa-eye"></i> View</button>
+                        ${item.status !== 'Resolved' ? `<button class="btn-action btn-resolve" onclick="updateStatus('${item.id}', 'Resolved')"><i class="fas fa-check"></i> Resolve</button>` : ''}
+                    </td>
+                </tr>
+            `).join('');
+
+        } catch (e) {
+            listEl.innerHTML = `<tr><td colspan="6" style="text-align: center; color: red;">Error: ${e.message}</td></tr>`;
+        }
+    }
+
+    // --- VIEW DETAILS (Modal/Alert Simulation) ---
+    function viewDetails(id) {
+        const item = allFeedback.find(f => f.id === id);
+        if (!item) return;
+        
+        alert(`
+            Feedback Details:
+            -----------------------------------
+            ID: ${item.id}
+            From: ${item.submitted_by} (${item.user_role})
+            Category: ${item.category}
+            Status: ${item.status}
+            Date: ${formatDate(item.created_at)}
+            
+            Subject: ${item.subject}
+            -----------------------------------
+            Message:
+            ${item.message}
+            -----------------------------------
+            ${item.staff_response ? 'Response: ' + item.staff_response : ''}
+        `);
+    }
+
+    // --- UPDATE STATUS ---
+    async function updateStatus(id, newStatus) {
+        if (!confirm(`Confirm change status for feedback ${id.slice(0, 8)} to "${newStatus}"?`)) {
+            return;
+        }
+
+        try {
+            const response = await handleApi(`${API_FEEDBACK}/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ status: newStatus })
+            });
+
+            if (!response.ok) throw new Error('Failed to update status.');
+
+            alert(`Status updated to ${newStatus}.`);
+            fetchFeedback(); // Re-fetch to update table
+        } catch (e) {
+            alert(`Error: ${e.message}`);
+        }
+    }
+    
+    // Expose functions globally for HTML buttons
+    window.fetchFeedback = fetchFeedback;
+    window.viewDetails = viewDetails;
+    window.updateStatus = updateStatus;
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', fetchFeedback);
+</script>
+
+<div class="container">
+    <a href="/admin-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+    <h1><i class="fas fa-comment-dots"></i> Feedback & Suggestions Management</h1>
+    <p>Review and manage all student, parent, and teacher submissions. Ensure timely resolution for system improvements and user satisfaction.</p>
+
+    <div class="filter-controls">
+        <select id="filter-status" class="form-control" onchange="fetchFeedback()">
+            <option value="">All Statuses</option>
+            <option value="New">New</option>
+            <option value="In-Progress">In-Progress</option>
+            <option value="Resolved">Resolved</option>
+            <option value="Rejected">Rejected</option>
+        </select>
+        
+        <select id="filter-category" class="form-control" onchange="fetchFeedback()">
+            <option value="">All Categories</option>
+            <option value="Academic">Academic</option>
+            <option value="Technical">Technical</option>
+            <option value="Facility">Facility/Hostel</option>
+            <option value="Finance">Finance</option>
+        </select>
+        
+        <input type="text" id="filter-search" class="form-control" placeholder="Search by subject or content" onkeyup="fetchFeedback()">
+        
+        <button class="btn-action btn-view" onclick="fetchFeedback()"><i class="fas fa-sync"></i> Refresh</button>
+    </div>
+
+    <table class="feedback-table">
+        <thead>
+            <tr>
+                <th style="width: 8%;">ID</th>
+                <th style="width: 15%;">Submitted By</th>
+                <th style="width: 10%;">Category</th>
+                <th style="width: 35%;">Summary/Subject</th>
+                <th style="width: 10%;">Date</th>
+                <th style="width: 10%;">Status</th>
+                <th style="width: 12%;">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="feedback-list">
+            </tbody>
+    </table>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+</body>
+</html>

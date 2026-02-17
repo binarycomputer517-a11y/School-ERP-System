@@ -42,7 +42,7 @@
 
         .filter-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 15px;
             padding: 20px;
             background: #f8fafc;
@@ -94,18 +94,33 @@
         .att-a { background-color: #ffebee; color: #c62828; font-weight: bold; }
 
         .btn-primary-bcsm { background: #2563eb; color: white; border: none; font-weight: 600; border-radius: 50px; padding: 8px 24px; }
+        
+        .branch-badge {
+            background: #f1f5f9;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: #475569;
+            border: 1px solid #cbd5e1;
+        }
     </style>
 </head>
 <body>
 
-<div class="container-fluid" style="max-width: 1400px; padding: 30px;">
+<div class="container-fluid" style="max-width: 1500px; padding: 30px;">
     
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h2 class="mb-0"><i class="fas fa-calendar-check me-2 text-primary"></i>Attendance Management v3.2</h2>
-            <p class="text-muted small mb-0">Universal Marking (Manual, Biometric, Face Recognition)</p>
+            <h2 class="mb-0"><i class="fas fa-calendar-check me-2 text-primary"></i>Attendance Management v3.5</h2>
+            <p class="text-muted small mb-0">Multi-Branch Sync (Manual, Biometric, Face Recognition)</p>
         </div>
-        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill px-4 btn-sm fw-bold">Dashboard</a>
+        <div class="d-flex gap-2">
+            <select id="globalBranchSelector" class="form-select form-select-sm rounded-pill shadow-sm" style="width: 200px;" onchange="handleBranchSwitch()">
+                <option value="">-- All Branches --</option>
+            </select>
+            <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill px-4 btn-sm fw-bold">Dashboard</a>
+        </div>
     </div>
 
     <div class="glass-card p-2 mb-4">
@@ -141,7 +156,7 @@
 
                 <div class="filter-grid">
                     <div>
-                        <label class="form-label text-dark">User Role</label>
+                        <label class="form-label text-dark fw-bold small">User Role</label>
                         <select id="markingRoleSelect" class="form-select" onchange="updateMarkingFilters()">
                             <option value="">Select Role</option>
                             <option value="Student">Student</option>
@@ -150,15 +165,15 @@
                         </select>
                     </div>
                     <div id="markingDynamicFilterWrapper">
-                        <label class="form-label text-dark">Batch/Dept</label>
+                        <label class="form-label text-dark fw-bold small">Batch/Dept</label>
                         <select id="markingDynamicFilter" class="form-select"><option value="">Select Role First</option></select>
                     </div>
                     <div>
-                        <label class="form-label text-dark">Date</label>
+                        <label class="form-label text-dark fw-bold small">Date</label>
                         <input type="date" id="attendanceDate" class="form-control">
                     </div>
                     <div class="d-flex align-items-end">
-                        <button class="btn btn-primary-bcsm w-100 fw-bold" onclick="loadRoster()">
+                        <button class="btn btn-primary-bcsm w-100 fw-bold shadow-sm" onclick="loadRoster()">
                             <i class="fas fa-users-viewfinder me-2"></i>Load Roster
                         </button>
                     </div>
@@ -175,13 +190,13 @@
                     </div>
                 </div>
 
-                <div id="statusIndicator" class="px-4 py-2 small fw-bold text-secondary"></div>
+                <div id="statusIndicator" class="px-4 py-2 small fw-bold text-secondary border-bottom"></div>
 
-                <div class="table-responsive">
+                <div class="table-responsive" style="max-height: 500px;">
                     <table class="table table-hover align-middle mb-0">
-                        <thead>
+                        <thead class="sticky-top bg-light">
                             <tr>
-                                <th class="ps-4">Name & Identifier</th>
+                                <th class="ps-4">Name & Branch</th>
                                 <th class="text-center">Status</th>
                                 <th class="text-center">Remarks</th>
                                 <th class="text-center">Mark Method</th>
@@ -205,7 +220,7 @@
             <div class="glass-card p-4">
                 <div class="filter-grid mb-4">
                     <div>
-                        <label class="form-label">User Role</label>
+                        <label class="form-label fw-bold small">User Role</label>
                         <select id="reportRoleSelect" class="form-select" onchange="updateConsolidatedFilters()">
                             <option value="">Select Role</option>
                             <option value="Student">Student</option>
@@ -215,11 +230,11 @@
                     </div>
                     <div id="dynamicFilterWrapper"></div>
                     <div>
-                        <label class="form-label">Month</label>
+                        <label class="form-label fw-bold small">Month</label>
                         <select id="reportMonth" class="form-select"></select>
                     </div>
                     <div>
-                        <label class="form-label">Year</label>
+                        <label class="form-label fw-bold small">Year</label>
                         <input type="number" id="reportYear" class="form-control">
                     </div>
                     <div class="d-flex align-items-end">
@@ -248,10 +263,10 @@
 
 <div class="modal fade" id="remarksModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header border-0 bg-light">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-0 bg-primary text-white">
                 <h6 class="fw-bold mb-0">Attendance Remark</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-4">
                 <textarea id="remarks-text" class="form-control mb-3" rows="3" placeholder="Enter reason for leave/late..."></textarea>
@@ -262,6 +277,8 @@
     </div>
 </div>
 
+
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <script src="js/global-config.js?v=2.3.1"></script>
 
@@ -271,14 +288,33 @@
     let remarksModal;
     let reportDataGlobal = [];
     let monitorInterval = null;
+    let currentSelectedBranch = "";
 
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener('DOMContentLoaded', async () => {
         remarksModal = new bootstrap.Modal(document.getElementById('remarksModal'));
         document.getElementById('attendanceDate').valueAsDate = new Date();
         document.getElementById('reportYear').value = new Date().getFullYear();
+        
+        await loadBranches();
         populateMonths();
         handleModeChange();
     });
+
+    async function loadBranches() {
+        try {
+            const branches = await authApi('/api/branches');
+            const sel = document.getElementById('globalBranchSelector');
+            branches.forEach(b => {
+                sel.innerHTML += `<option value="${b.id}">${b.branch_name}</option>`;
+            });
+        } catch(e) { console.error("Branch Load Fail", e); }
+    }
+
+    function handleBranchSwitch() {
+        currentSelectedBranch = document.getElementById('globalBranchSelector').value;
+        // রস্টার রিসেট
+        document.getElementById('attendanceTbody').innerHTML = '<tr><td colspan="4" class="text-center p-5 text-muted">Branch context changed. Load Roster again.</td></tr>';
+    }
 
     function populateMonths() {
         const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -287,7 +323,14 @@
     }
 
     async function authApi(url, method = 'GET', body = null) {
-        const options = { method, headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }};
+        const options = { 
+            method, 
+            headers: { 
+                'Authorization': `Bearer ${token}`, 
+                'Content-Type': 'application/json',
+                'x-branch-id': currentSelectedBranch // হেডারে ব্রাঞ্চ আইডি পাঠানো হচ্ছে
+            }
+        };
         if (body) options.body = JSON.stringify(body);
         const res = await fetch(url, options);
         if (!res.ok) throw new Error("API Connection Error");
@@ -317,8 +360,10 @@
         const role = document.getElementById('markingRoleSelect').value;
         const wrapper = document.getElementById('markingDynamicFilterWrapper');
         if(!role) return;
-        wrapper.innerHTML = `<label class="form-label text-dark">Select ${role==='Student'?'Batch':'Department'}</label><select id="markingDynamicFilter" class="form-select"></select>`;
-        const data = await authApi(role==='Student' ? '/api/attendance/batches' : '/api/attendance/departments');
+        wrapper.innerHTML = `<label class="form-label text-dark fw-bold small">Select ${role==='Student'?'Batch':'Department'}</label><select id="markingDynamicFilter" class="form-select shadow-sm"></select>`;
+        
+        // ব্রাঞ্চ আইডি প্যারামিটার হিসেবে পাঠানো
+        const data = await authApi(role==='Student' ? `/api/attendance/batches?branch_id=${currentSelectedBranch}` : `/api/attendance/departments?branch_id=${currentSelectedBranch}`);
         const sel = document.getElementById('markingDynamicFilter');
         sel.innerHTML = '<option value="">-- Choose --</option>' + data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
     }
@@ -334,22 +379,23 @@
 
         const fetchAndShow = async () => {
             try {
-                const data = await authApi(`${API_BASE}/report/roster/universal?role=${role.toLowerCase()}&filter_id=${fid}&date=${date}`);
+                const data = await authApi(`${API_BASE}/report/roster/universal?role=${role.toLowerCase()}&filter_id=${fid}&date=${date}&branch_id=${currentSelectedBranch}`);
                 renderRoster(data, mode);
             } catch(e) { console.error(e); }
         };
 
         await fetchAndShow();
-        if(mode !== 'manual') monitorInterval = setInterval(fetchAndShow, 15000); // 15s Auto refresh for Live modes
+        if(mode !== 'manual') monitorInterval = setInterval(fetchAndShow, 15000); 
     }
 
     function renderRoster(users, mode) {
         const tbody = document.getElementById('attendanceTbody');
-        if(!users.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4">No users found for this selection.</td></tr>'; return; }
+        if(!users.length) { tbody.innerHTML = '<tr><td colspan="4" class="text-center p-4">No users found for this campus selection.</td></tr>'; return; }
 
         tbody.innerHTML = users.map(u => {
             const status = u.status || 'unmarked';
             const methodIcon = u.mark_method === 'manual' ? '✏️' : '🤖';
+            const branchName = u.branch_name || 'N/A';
             
             let statusHtml = '';
             let remarksHtml = '';
@@ -364,8 +410,8 @@
                         <input type="radio" name="st-${u.user_id}" id="l-${u.user_id}" value="late" class="status-radio radio-l" ${status==='late'?'checked':''}>
                         <label for="l-${u.user_id}" class="status-label label-l">L</label>
                     </div>`;
-                remarksHtml = `<button class="btn btn-sm btn-light" onclick="openRemarksModal('${u.user_id}')"><i class="far fa-comment-dots"></i></button>
-                               <div id="rem-text-${u.user_id}" class="small text-muted">${u.remarks || ''}</div>`;
+                remarksHtml = `<button class="btn btn-sm btn-light border" onclick="openRemarksModal('${u.user_id}')"><i class="far fa-comment-dots"></i></button>
+                               <div id="rem-text-${u.user_id}" class="small text-muted mt-1">${u.remarks || ''}</div>`;
             } else {
                 statusHtml = `<span class="status-badge ${status}">${status}</span>`;
                 remarksHtml = `<span class="small text-muted">${u.remarks || '-'}</span>`;
@@ -374,13 +420,13 @@
             return `
             <tr data-user-id="${u.user_id}">
                 <td class="ps-4">
-                    <strong>${u.full_name}</strong><br>
+                    <strong>${u.full_name}</strong> <span class="branch-badge ms-2">${branchName}</span><br>
                     <small class="text-muted">ID: ${u.user_identifier || u.user_id}</small>
                 </td>
                 <td class="text-center">${statusHtml}</td>
                 <td class="text-center">${remarksHtml}</td>
                 <td class="text-center">
-                    <span class="badge bg-light text-dark border">${u.mark_method || 'manual'} ${methodIcon}</span>
+                    <span class="badge bg-light text-dark border p-1" style="font-size:0.7rem;">${u.mark_method || 'manual'} ${methodIcon}</span>
                 </td>
             </tr>`;
         }).join('');
@@ -398,7 +444,8 @@
                 records.push({ 
                     user_id: uid, 
                     status: checked.value, 
-                    remarks: document.getElementById(`rem-text-${uid}`).innerText 
+                    remarks: document.getElementById(`rem-text-${uid}`).innerText,
+                    branch_id: currentSelectedBranch 
                 });
             }
         });
@@ -409,11 +456,12 @@
                 role: document.getElementById('markingRoleSelect').value,
                 filter_id: document.getElementById('markingDynamicFilter').value,
                 attendance_date: document.getElementById('attendanceDate').value,
+                branch_id: currentSelectedBranch,
                 records 
             });
-            alert("Attendance Database Updated!"); 
+            alert("Attendance Database Updated Successfully!"); 
             loadRoster();
-        } catch(e) { alert("Save Failed."); }
+        } catch(e) { alert("Save Failed. Contact Central IT."); }
     }
 
     window.openRemarksModal = (uid) => {
@@ -433,9 +481,9 @@
         const role = document.getElementById('reportRoleSelect').value;
         const wrapper = document.getElementById('dynamicFilterWrapper');
         if(!role) return;
-        wrapper.innerHTML = `<label class="form-label">Filter ${role==='Student'?'Batch':'Dept'}</label><select id="dynamicFilter" class="form-select"></select>`;
-        const data = await authApi(role==='Student' ? '/api/attendance/batches' : '/api/attendance/departments');
-        document.getElementById('dynamicFilter').innerHTML = '<option value="">All</option>' + data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
+        wrapper.innerHTML = `<label class="form-label fw-bold small">Filter ${role==='Student'?'Batch':'Dept'}</label><select id="dynamicFilter" class="form-select shadow-sm"></select>`;
+        const data = await authApi(role==='Student' ? `/api/attendance/batches?branch_id=${currentSelectedBranch}` : `/api/attendance/departments?branch_id=${currentSelectedBranch}`);
+        document.getElementById('dynamicFilter').innerHTML = '<option value="">All Units</option>' + data.map(d => `<option value="${d.id}">${d.name}</option>`).join('');
     }
 
     async function generateConsolidatedReport() {
@@ -446,13 +494,13 @@
         if(!role) return alert("Select User Role");
 
         const viewport = document.getElementById('report-viewport');
-        viewport.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div></div>';
+        viewport.innerHTML = '<div class="text-center p-5"><div class="spinner-border text-primary"></div><p class="mt-2">Aggregating Campus Data...</p></div>';
         
         try {
-            const data = await authApi(`${API_BASE}/report/consolidated?role=${role.toLowerCase()}&month=${month}&year=${year}&optional_filter_id=${fid}`);
+            const data = await authApi(`${API_BASE}/report/consolidated?role=${role.toLowerCase()}&month=${month}&year=${year}&optional_filter_id=${fid}&branch_id=${currentSelectedBranch}`);
             reportDataGlobal = data.users;
             renderReportTable(data.users, month, year);
-        } catch(e) { viewport.innerHTML = '<p class="text-danger text-center">Error fetching report.</p>'; }
+        } catch(e) { viewport.innerHTML = '<p class="text-danger text-center">Error fetching campus reports.</p>'; }
     }
 
     function renderReportTable(users, month, year) {
@@ -488,15 +536,15 @@
 
     function exportCSV() {
         if(!reportDataGlobal.length) return alert("No data to export");
-        let csv = "Name,Identifier,Attendance_Percentage\n";
+        let csv = "Name,Identifier,Branch,Attendance_Percentage\n";
         reportDataGlobal.forEach(u => {
             const pCount = u.attendance.filter(a => a.status==='present'||a.status==='late').length;
-            csv += `"${u.full_name}","${u.user_identifier}",${((pCount/31)*100).toFixed(1)}%\n`;
+            csv += `"${u.full_name}","${u.user_identifier}","${u.branch_name}",${((pCount/31)*100).toFixed(1)}%\n`;
         });
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url; a.download = `attendance_report_${Date.now()}.csv`; a.click();
+        a.href = url; a.download = `campus_attendance_${Date.now()}.csv`; a.click();
     }
 </script>
 </body>

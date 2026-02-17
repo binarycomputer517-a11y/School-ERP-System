@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Student Schedule | Academic Portal</title>
+    
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        :root { 
+            --primary: #003366; 
+            --accent: #FF9933; 
+            --success: #138808; 
+            --bg-light: #f1f5f9;
+        }
+
+        body { 
+            font-family: 'Outfit', sans-serif; 
+            background: var(--bg-light); 
+            color: #1e293b;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Mobile-Optimized Header */
+        .smart-header { 
+            background: linear-gradient(135deg, var(--primary) 0%, #001a33 100%); 
+            color: white; 
+            padding: 30px 0 70px 0; 
+            border-radius: 0 0 30px 30px;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        /* Day Tabs - Mobile Horizontal Scroll */
+        .tabs-wrapper {
+            margin-top: -35px;
+            position: sticky;
+            top: 80px; /* Offset to sit below header content */
+            z-index: 1001;
+            padding: 0 15px;
+        }
+
+        .day-tabs { 
+            background: white; 
+            padding: 6px; 
+            border-radius: 16px; 
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1); 
+            display: flex; 
+            overflow-x: auto; 
+            gap: 8px;
+            scrollbar-width: none;
+        }
+        
+        .day-tabs::-webkit-scrollbar { display: none; }
+
+        .day-tab { 
+            padding: 10px 18px; 
+            border-radius: 12px; 
+            cursor: pointer; 
+            white-space: nowrap; 
+            font-weight: 600; 
+            color: #64748b;
+            font-size: 0.9rem;
+            transition: all 0.2s ease;
+            flex: 1;
+            text-align: center;
+        }
+
+        .day-tab.active { 
+            background: var(--primary); 
+            color: white; 
+        }
+
+        /* Vertical Stack for Mobile Slots */
+        .slot-card { 
+            background: white; 
+            border-radius: 20px; 
+            padding: 20px; 
+            border: 1px solid #e2e8f0; 
+            margin-bottom: 15px;
+            transition: transform 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .slot-card.ongoing { 
+            border-left: 5px solid var(--success); 
+            background: #ffffff;
+        }
+        
+        .slot-card.passed { 
+            opacity: 0.7; 
+            background: #f8fafc;
+        }
+
+        .time-badge {
+            font-size: 0.8rem;
+            font-weight: 700;
+            padding: 5px 12px;
+            border-radius: 8px;
+            background: #f1f5f9;
+            color: var(--primary);
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .ongoing .time-badge {
+            background: var(--success);
+            color: white;
+        }
+
+        .live-glow { 
+            width: 7px; height: 7px; 
+            background: #fff; 
+            border-radius: 50%; 
+            margin-right: 6px;
+            animation: pulse 1.5s infinite; 
+        }
+
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
+
+        .btn-join {
+            width: 100%; /* Full width buttons for mobile thumbs */
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 10px;
+            margin-top: 15px;
+        }
+
+        .no-schedule {
+            text-align: center;
+            padding: 80px 20px;
+            color: #94a3b8;
+        }
+        
+        /* Floating Action Button for Dashboard if needed */
+        .mobile-back-btn {
+            background: rgba(255,255,255,0.2);
+            backdrop-filter: blur(5px);
+            border: none;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 50px;
+            font-size: 0.8rem;
+            text-decoration: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="smart-header">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h4 class="fw-bold mb-0">My Schedule</h4>
+                    <span class="opacity-75 small"><i class="fas fa-clock me-1"></i> Today's Sessions</span>
+                </div>
+                <a href="/student-dashboard.html" class="mobile-back-btn">
+                    <i class="fas fa-home"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="tabs-wrapper">
+            <div class="day-tabs" id="tabs">
+                </div>
+        </div>
+
+        <div id="schedule-feed" class="mt-4 pb-5">
+            <div class="text-center py-5">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p class="mt-2 text-muted">Fetching today's classes...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+        let currentDay = DAYS[Math.max(0, new Date().getDay() - 1)]; 
+        let scheduleData = [];
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            renderTabs();
+            await loadData();
+        });
+
+        function renderTabs() {
+            const tabsContainer = document.getElementById('tabs');
+            tabsContainer.innerHTML = DAYS.map(d => `
+                <div class="day-tab ${d === currentDay ? 'active' : ''}" onclick="setDay(this, '${d}')">
+                    ${d.substring(0, 3)}
+                </div>
+            `).join('');
+            
+            const activeTab = tabsContainer.querySelector('.active');
+            activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        }
+
+        function setDay(el, d) {
+            currentDay = d;
+            document.querySelectorAll('.day-tab').forEach(t => t.classList.remove('active'));
+            el.classList.add('active');
+            renderFeed();
+        }
+
+        async function loadData() {
+            const token = localStorage.getItem('erp-token');
+            if(!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/timetable/student/me', { 
+                    headers: { 'Authorization': `Bearer ${token}` } 
+                });
+                scheduleData = await res.json();
+                renderFeed();
+            } catch (error) {
+                document.getElementById('schedule-feed').innerHTML = `
+                    <div class="no-schedule">
+                        <i class="fas fa-wifi mb-3"></i>
+                        <h5>Connection Error</h5>
+                        <p>Check your internet and try again.</p>
+                        <button onclick="loadData()" class="btn btn-primary btn-sm rounded-pill mt-2">Retry</button>
+                    </div>`;
+            }
+        }
+
+        function renderFeed() {
+            const feed = document.getElementById('schedule-feed');
+            const filtered = scheduleData.filter(s => s.day_of_week === currentDay);
+            
+            if (filtered.length === 0) {
+                feed.innerHTML = `
+                    <div class="no-schedule">
+                        <i class="fas fa-coffee"></i>
+                        <h5>No classes for ${currentDay}</h5>
+                        <p>Relax or work on assignments!</p>
+                    </div>`;
+                return;
+            }
+
+            feed.innerHTML = filtered.map(s => {
+                const state = getSlotState(s.start_time, s.end_time);
+                const isOngoing = state === 'ongoing';
+                
+                return `
+                    <div class="slot-card ${state}">
+                        <div class="d-flex justify-content-between align-items-start mb-3">
+                            <div class="time-badge">
+                                ${isOngoing ? '<span class="live-glow"></span>' : ''}
+                                ${formatTime(s.start_time)} - ${formatTime(s.end_time)}
+                            </div>
+                            <span class="badge ${state === 'passed' ? 'bg-light text-muted' : (isOngoing ? 'bg-success' : 'bg-primary-subtle text-primary')} rounded-pill px-3">
+                                ${state.toUpperCase()}
+                            </span>
+                        </div>
+                        
+                        <h5 class="fw-bold mb-2 text-dark">${s.subject_name}</h5>
+                        
+                        <div class="row g-0">
+                            <div class="col-7 text-muted small">
+                                <i class="fas fa-user-tie me-2"></i>${s.teacher_name || 'Staff'}
+                            </div>
+                            <div class="col-5 text-muted small text-end">
+                                <i class="fas fa-map-marker-alt me-1"></i>${s.room_number || 'TBA'}
+                            </div>
+                        </div>
+                        
+                        ${state !== 'passed' ? `
+                            <button class="btn btn-primary btn-join">
+                                <i class="fas fa-video me-2"></i> Join Session
+                            </button>
+                        ` : ''}
+                    </div>`;
+            }).join('');
+        }
+
+        function getSlotState(start, end) {
+            const now = new Date();
+            const todayIndex = now.getDay();
+            const dayMap = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+            const todayName = dayMap[todayIndex];
+
+            if(todayName !== currentDay) return 'upcoming';
+
+            const cur = now.getHours() * 60 + now.getMinutes();
+            const [sh, sm] = start.split(':').map(Number);
+            const [eh, em] = end.split(':').map(Number);
+            
+            const startTotal = sh * 60 + sm;
+            const endTotal = eh * 60 + em;
+
+            if(cur > endTotal) return 'passed';
+            if(cur >= startTotal && cur <= endTotal) return 'ongoing';
+            return 'upcoming';
+        }
+
+        function formatTime(timeStr) {
+            const [h, m] = timeStr.split(':');
+            const hour = parseInt(h);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const displayHour = hour % 12 || 12;
+            return `${displayHour}:${m}${ampm}`;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bus Attendance | ERP Portal</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .attendance-container {
+            max-width: 800px;
+            margin: 20px auto;
+        }
+        
+        /* Interactive Student Card */
+        .student-card {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 18px;
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            transition: 0.3s ease;
+        }
+        
+        .student-card:hover {
+            background: white;
+            transform: scale(1.02);
+        }
+
+        /* Trip Toggle Styling */
+        .trip-toggle {
+            display: flex;
+            gap: 10px;
+            background: rgba(0,0,0,0.05);
+            padding: 5px;
+            border-radius: 50px;
+        }
+        
+        .trip-toggle label {
+            padding: 8px 20px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: 0.3s;
+            margin: 0;
+            font-size: 0.8rem;
+        }
+
+        .trip-toggle input[type="radio"] { display: none; }
+        
+        .trip-toggle input[type="radio"]:checked + label {
+            background: var(--primary-dark);
+            color: white;
+            box-shadow: var(--shadow-sm);
+        }
+
+        .action-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 5px;
+        }
+    </style>
+</head>
+<body class="container-fluid">
+
+<nav class="glass-nav mb-4">
+    <div style="display: flex; align-items: center; gap: 15px;">
+        <img src="" class="global-school-logo" height="40" alt="Logo">
+        <h2 class="global-school-name" style="margin:0; font-size: 1.1rem; color: var(--primary-dark);">ERP System</h2>
+    </div>
+    <div class="nav-links">
+        <a href="manage-transport.html" class="btn btn-outline-primary" style="padding: 8px 15px;">
+            <i class="fas fa-bus"></i> Management
+        </a>
+    </div>
+</nav>
+
+<div class="attendance-container">
+    <div class="glass-card mb-4">
+        <div class="row align-items-center">
+            <div class="col-md-7">
+                <label>Select Route</label>
+                <select id="route-select" class="form-control" onchange="loadStudents()">
+                    <option value="">-- Choose Assigned Route --</option>
+                </select>
+            </div>
+            <div class="col-md-5 mt-3 mt-md-0 d-flex flex-column align-items-md-end">
+                <label>Active Trip</label>
+                <div class="trip-toggle">
+                    <input type="radio" id="pickup" name="trip" value="pickup" checked onchange="loadStudents()">
+                    <label for="pickup">Pickup</label>
+                    <input type="radio" id="drop" name="trip" value="drop" onchange="loadStudents()">
+                    <label for="drop">Drop</label>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="student-list-container">
+        <div class="glass-card text-center text-muted py-5">
+            <i class="fas fa-id-badge fa-3x mb-3" style="opacity: 0.2;"></i>
+            <p>Select a route to begin attendance tracking</p>
+        </div>
+    </div>
+</div>
+
+<div id="bg-text-pattern" style="position: fixed; top:0; left:0; width:100%; height:100%; z-index:-1; pointer-events:none;"></div>
+
+<script src="js/global-config.js"></script>
+<script>
+    async function loadRoutes() {
+        try {
+            const res = await window.authFetch('/api/transport/routes');
+            const routes = await res.json();
+            const select = document.getElementById('route-select');
+            routes.forEach(r => {
+                const opt = document.createElement('option');
+                opt.value = r.id;
+                opt.textContent = r.route_name;
+                select.appendChild(opt);
+            });
+        } catch (err) {
+            console.error("Route Sync Error", err);
+        }
+    }
+
+    async function loadStudents() {
+        const routeId = document.getElementById('route-select').value;
+        const container = document.getElementById('student-list-container');
+        
+        if (!routeId) return;
+
+        container.innerHTML = '<div class="skeleton" style="height: 100px; margin-bottom: 10px; border-radius: 12px;"></div>'.repeat(5);
+
+        try {
+            const res = await window.authFetch(`/api/transport/routes/${routeId}/attendance-sheet`);
+            const students = await res.json();
+
+            if (students.length === 0) {
+                container.innerHTML = '<div class="glass-card text-center py-4">No students assigned to this route.</div>';
+                return;
+            }
+
+            container.innerHTML = students.map(s => `
+                <div class="student-card no-print">
+                    <div>
+                        <div style="font-weight: 700; color: var(--primary-dark);">${s.student_name}</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">Roll No: ${s.roll_number || 'N/A'}</div>
+                    </div>
+                    
+                    <div class="action-group">
+                        ${getStatusBadge(s.current_status)}
+                        <button class="btn" style="background: var(--secondary-green); color: white; padding: 6px 12px; font-size: 0.7rem;" 
+                                onclick="markAttendance('${s.student_id}', '${routeId}', 'Boarded')">
+                            BOARD
+                        </button>
+                        <button class="btn" style="background: var(--secondary-orange); color: white; padding: 6px 12px; font-size: 0.7rem;" 
+                                onclick="markAttendance('${s.student_id}', '${routeId}', 'Alighted')">
+                            ALIGHT
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            
+        } catch (err) {
+            container.innerHTML = '<div class="badge badge-danger w-100 p-3">Failed to load student data</div>';
+        }
+    }
+
+    function getStatusBadge(status) {
+        if (!status) return '';
+        const color = status === 'Boarded' ? 'var(--secondary-green)' : 'var(--secondary-orange)';
+        const bgColor = status === 'Boarded' ? 'rgba(19, 136, 8, 0.1)' : 'rgba(255, 153, 51, 0.1)';
+        
+        return `
+            <span class="badge" style="background: ${bgColor}; color: ${color}; border: 1px solid ${color};">
+                <span class="status-dot" style="background: ${color};"></span>
+                ${status}
+            </span>`;
+    }
+
+    async function markAttendance(studentId, routeId, status) {
+        try {
+            const response = await window.authFetch('/api/transport/attendance', {
+                method: 'POST',
+                body: JSON.stringify({ student_id: studentId, route_id: routeId, status: status })
+            });
+
+            if (response.ok) {
+                // Subtle reload to update status badges
+                loadStudents();
+            }
+        } catch (err) {
+            console.error("Attendance Update Error", err);
+        }
+    }
+
+    window.onload = loadRoutes;
+</script>
+
+</body>
+</html>

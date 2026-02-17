@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PTM Portal | Enterprise</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Times New Roman', serif; margin: 0; padding: 2em; background-color: #EFEFEF; color: #333; }
+        .container { max-width: 1200px; margin: auto; padding: 40px; background-color: #FFFFFF; border: 2px solid #333; box-shadow: 6px 6px 0 #AAA; }
+        h1 { color: #C0392B; text-align: center; border-bottom: 5px double #000; padding-bottom: 15px; margin-bottom: 20px; letter-spacing: 1px; }
+        h2 { color: #005A9C; border-bottom: 2px solid #555; padding-bottom: 8px; margin-top: 0; font-size: 1.3em; }
+        
+        .grid-main { display: grid; grid-template-columns: 2fr 1fr; gap: 30px; }
+        .card { padding: 25px; border: 1px solid #005A9C; background-color: #f7faff; margin-bottom: 25px; box-shadow: 3px 3px 0 #ddd; }
+        
+        label { display: block; margin-top: 15px; font-weight: bold; font-size: 0.9em; text-transform: uppercase; }
+        input, select, textarea { width: 100%; padding: 10px; margin-top: 5px; border: 1px solid #555; background: #FFF; font-family: 'Times New Roman', serif; border-radius: 0; box-sizing: border-box; }
+        
+        button { background-color: #005A9C; color: white; padding: 10px 20px; border: 2px solid #000; border-radius: 0; cursor: pointer; margin-top: 20px; box-shadow: 2px 2px 0 #000; font-weight: bold; text-transform: uppercase; }
+        button:hover { background-color: #003366; box-shadow: 1px 1px 0 #000; transform: translate(1px, 1px); }
+        button.btn-danger { background-color: #C0392B; }
+        button.btn-success { background-color: #28a745; }
+        button.btn-icon { padding: 5px 10px; margin: 0; }
+
+        .stats-bar { display: flex; justify-content: space-around; background: #333; color: white; padding: 10px; margin-bottom: 20px; border: 2px solid #000; }
+        .stat-item { text-align: center; } .stat-val { font-size: 1.5em; font-weight: bold; color: #ffeb3b; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; border: 2px solid #333; }
+        th, td { padding: 10px; text-align: left; border: 1px solid #999; }
+        th { background-color: #333; color: white; text-transform: uppercase; }
+        
+        .status-Open { color: #28a745; font-weight: bold; }
+        .status-Scheduled { color: #005A9C; font-weight: bold; }
+        .status-Completed { color: #555; text-decoration: underline; }
+        
+        .message-box { padding: 15px; margin-top: 20px; border: 2px solid #000; font-weight: bold; text-align: center; display: none; }
+        .success { background-color: #d4edda; color: #155724; } .error { background-color: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Parent-Teacher Meeting Portal</h1>
+        <p style="border-bottom: 1px solid #ccc; padding-bottom: 10px;">Role: <strong id="user-role-display" style="color: #005A9C;">...</strong></p>
+
+        <div id="staff-view" style="display:none;">
+            <div class="stats-bar">
+                <div class="stat-item"><div class="stat-val" id="stat-open">0</div><small>Open</small></div>
+                <div class="stat-item"><div class="stat-val" id="stat-scheduled">0</div><small>Booked</small></div>
+                <div class="stat-item"><div class="stat-val" id="stat-completed">0</div><small>Done</small></div>
+            </div>
+
+            <div class="grid-main">
+                <div>
+                    <div class="card">
+                        <h2>Bulk Availability Generator</h2>
+                        <form id="bulk-form">
+                            <label style="color:#C0392B;">Generate For:</label>
+                            <select id="bulk-teacher-select" name="teacher_id" required style="border: 2px solid #C0392B; background:#fff5f5;">
+                                <option value="">Loading Staff...</option>
+                            </select>
+
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <div><label>Date:</label><input type="date" name="date" required></div>
+                                <div><label>Type:</label><select name="type"><option>In-Person</option><option>Virtual</option></select></div>
+                                <div><label>Start Time:</label><input type="time" name="start_time" value="09:00" required></div>
+                                <div><label>End Time:</label><input type="time" name="end_time" value="12:00" required></div>
+                            </div>
+                            <label>Duration (Min):</label><input type="number" name="duration" value="15" required>
+                            <label>Link (Optional):</label><input type="url" name="link" placeholder="https://zoom...">
+                            
+                            <button type="submit" class="btn-success">Generate Slots</button>
+                            <div id="bulk-message" class="message-box"></div>
+                        </form>
+                    </div>
+
+                    <div class="card">
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h2>Manage Slots</h2>
+                            <select id="view-teacher-select" style="width:200px; margin:0;" onchange="loadTeacherData(this.value)">
+                                <option value="">Select View...</option>
+                            </select>
+                        </div>
+                        <table id="teacher-slots-table">
+                            <thead><tr><th>Time</th><th>Student / Status</th><th>Type</th><th>Actions</th></tr></thead>
+                            <tbody id="slots-tbody"><tr><td colspan="4" style="text-align:center;">Select a teacher above to manage.</td></tr></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="card">
+                        <h2>Feedback & Close</h2>
+                        <form id="feedback-form">
+                            <label>Schedule ID:</label><input type="text" id="schedule-id-feedback" name="schedule_id" required readonly style="background:#eee;">
+                            <label>Status:</label>
+                            <select name="meeting_status" required>
+                                <option value="Completed">Completed</option>
+                                <option value="Parent Absent">Parent Absent</option>
+                            </select>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+                                <div><label>Academic (1-5):</label><input type="number" id="ac-score" name="academic_score" min="1" max="5"></div>
+                                <div><label>Behavior (1-5):</label><input type="number" id="be-score" name="behavior_score" min="1" max="5"></div>
+                            </div>
+                            <label>Goals:</label><textarea name="goals_discussed" rows="3" id="goals-box"></textarea>
+                            <label>Notes:</label><textarea name="parent_comments" rows="2" id="notes-box"></textarea>
+                            <button type="button" class="btn-success" onclick="autoGenerateFeedback()" style="width:100%; margin-top:10px; font-size:0.8em;">✨ Auto-Fill Template</button>
+                            <button type="submit">Finalize</button>
+                            <div id="feedback-message" class="message-box"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="student-view" class="card" style="display:none;">
+            <div class="grid-main">
+                <div>
+                    <h2>Book an Appointment</h2>
+                    <form id="booking-lookup-form">
+                        <label>Select Teacher:</label>
+                        <select id="booking-teacher-select" onchange="loadOpenSlots(this.value)"><option>Loading...</option></select>
+                    </form>
+                    <div id="booking-slots" style="margin-top:20px;">
+                        <p style="color:#666; font-style:italic;">Select a teacher to view available times.</p>
+                    </div>
+                </div>
+                <div>
+                    <h2>My Bookings</h2>
+                    <div id="report-results"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API = '/api/ptm';
+        const TOKEN = localStorage.getItem('erp-token');
+        const ROLE = localStorage.getItem('user-role');
+        const RAW_UID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
+        const UID = (RAW_UID && RAW_UID !== 'undefined' && RAW_UID !== 'null') ? RAW_UID : null;
+
+        const els = {
+            bulkSelect: document.getElementById('bulk-teacher-select'),
+            viewSelect: document.getElementById('view-teacher-select'),
+            bookingSelect: document.getElementById('booking-teacher-select'),
+            tbody: document.getElementById('slots-tbody')
+        };
+
+        // --- Auth & Init ---
+        async function api(url, opts={}) {
+            if(!TOKEN) { alert("Please log in."); window.location.href='/login.html'; return; }
+            const res = await fetch(url, {...opts, headers: {'Content-Type':'application/json', 'Authorization':`Bearer ${TOKEN}`}});
+            if(!res.ok) throw new Error((await res.json()).message || "Error");
+            return res.json();
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('user-role-display').innerText = ROLE || 'Guest';
+            
+            // 1. Load Teachers List First
+            try {
+                const staff = await api(`${API}/lookup/teachers`);
+                const staffOpts = '<option value="">-- Select Teacher --</option>' + 
+                    staff.map(t => `<option value="${t.id}">${t.username} (${t.role})</option>`).join('');
+                
+                // Populate all relevant dropdowns
+                if(els.bulkSelect) els.bulkSelect.innerHTML = staffOpts;
+                if(els.viewSelect) els.viewSelect.innerHTML = staffOpts;
+                if(els.bookingSelect) els.bookingSelect.innerHTML = staffOpts;
+
+                // 2. Setup View based on Role
+                if (ROLE === 'Teacher' || ROLE === 'Admin') {
+                    document.getElementById('staff-view').style.display = 'block';
+                    
+                    // If current user is in the list, auto-select them
+                    if(UID && staff.some(u => u.id === UID)) {
+                        els.bulkSelect.value = UID;
+                        els.viewSelect.value = UID;
+                        loadTeacherData(UID);
+                    }
+                } else {
+                    document.getElementById('student-view').style.display = 'block';
+                    loadStudentView();
+                }
+            } catch(e) { console.error("Init Error:", e); }
+        });
+
+        // --- Teacher Logic ---
+        async function loadTeacherData(tid) {
+            if(!tid) return;
+            loadSlots(tid);
+            try {
+                const stats = await api(`${API}/stats/${tid}`);
+                document.getElementById('stat-open').innerText = stats.open_slots;
+                document.getElementById('stat-scheduled').innerText = stats.scheduled;
+                document.getElementById('stat-completed').innerText = stats.completed;
+            } catch(e) {}
+        }
+
+        async function loadSlots(tid) {
+            els.tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">Loading...</td></tr>';
+            try {
+                const data = await api(`${API}/teacher/${tid}/slots`);
+                if(data.length === 0) { els.tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;">No slots found for this teacher.</td></tr>'; return; }
+                
+                els.tbody.innerHTML = data.map(r => `
+                    <tr style="${r.status==='Open'?'background:#f0fff4':''}">
+                        <td>${new Date(r.meeting_time).toLocaleString([], {weekday:'short', hour:'2-digit', minute:'2-digit'})}</td>
+                        <td>
+                            ${r.student_name ? `<strong>${r.student_name}</strong>` : '<span class="status-Open">-- OPEN SLOT --</span>'}<br>
+                            ${r.agenda ? `<small>Topic: ${r.agenda}</small>` : ''}
+                        </td>
+                        <td>${r.meeting_type}</td>
+                        <td>
+                            ${r.status === 'Open' ? `<button class="btn-danger btn-icon" onclick="cancelMeeting('${r.id}')"><i class="fas fa-trash"></i></button>` : ''}
+                            ${r.status === 'Scheduled' ? `<button onclick="document.getElementById('schedule-id-feedback').value='${r.id}'" class="btn-icon">📝</button>` : ''}
+                            ${r.has_feedback ? '✅' : ''}
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) { els.tbody.innerHTML = `<tr><td colspan="4" class="error">${e.message}</td></tr>`; }
+        }
+
+        // Bulk Generator
+        document.getElementById('bulk-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = document.getElementById('bulk-message');
+            // ID comes from the new visible select box
+            const tid = els.bulkSelect.value;
+            
+            if(!tid) { msg.textContent = "Error: Please select a teacher above."; msg.style.display='block'; return; }
+
+            try {
+                // Manually construct body to include the selected teacher_id
+                const formData = new FormData(e.target);
+                const data = Object.fromEntries(formData);
+                data.teacher_id = tid; // Ensure this is set from dropdown
+
+                const res = await api(`${API}/generate-slots`, { method:'POST', body:JSON.stringify(data) });
+                msg.textContent = `✅ ${res.message}`; msg.className = 'message-box success'; msg.style.display = 'block';
+                
+                // Refresh view if viewing same teacher
+                if(els.viewSelect.value === tid) loadTeacherData(tid);
+                else {
+                    els.viewSelect.value = tid; // Switch view to target
+                    loadTeacherData(tid);
+                }
+            } catch(e) { msg.textContent = `❌ ${e.message}`; msg.className = 'message-box error'; msg.style.display = 'block'; }
+        });
+
+        // Feedback
+        document.getElementById('feedback-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const msg = document.getElementById('feedback-message');
+            try {
+                await api(`${API}/feedback/${new FormData(e.target).get('schedule_id')}`, { method:'POST', body:JSON.stringify(Object.fromEntries(new FormData(e.target))) });
+                msg.textContent = "✅ Saved!"; msg.className = 'message-box success'; msg.style.display = 'block'; e.target.reset();
+                if(els.viewSelect.value) loadTeacherData(els.viewSelect.value);
+            } catch(e) { msg.textContent = `❌ ${e.message}`; msg.className = 'message-box error'; msg.style.display = 'block'; }
+        });
+
+        function autoGenerateFeedback() {
+            const ac = document.getElementById('ac-score').value;
+            const be = document.getElementById('be-score').value;
+            if(!ac || !be) return alert("Enter scores first!");
+            const txt = `Student demonstrates ${ac>3?'strong':'developing'} academic understanding. Behavior is ${be>3?'exemplary':'needs improvement'}.`;
+            document.getElementById('notes-box').value = txt;
+            document.getElementById('goals-box').value = "Consistency in homework.";
+        }
+
+        async function cancelMeeting(id) {
+            if(!confirm("Delete slot?")) return;
+            try { await api(`${API}/cancel/${id}`, {method:'POST', body:JSON.stringify({reason:'Removed'})}); loadTeacherData(els.viewSelect.value); } catch(e){ alert(e.message); }
+        }
+
+        // --- Student Logic ---
+        async function loadStudentView() {
+            if(!UID) return document.getElementById('report-results').innerHTML = '<p class="error">User ID missing.</p>';
+            
+            const div = document.getElementById('report-results');
+            div.innerHTML = 'Loading...';
+            
+            try {
+                const bookings = await api(`${API}/student/${UID}/report`);
+                div.innerHTML = bookings.length ? bookings.map(r => `
+                    <div class="card" style="padding:15px; margin-bottom:15px;">
+                        <div style="display:flex; justify-content:space-between;">
+                            <h3 style="margin:0; color:#005A9C;">${new Date(r.meeting_time).toLocaleDateString()}</h3>
+                            <span class="status-${r.status}">${r.status}</span>
+                        </div>
+                        <p><strong>Time:</strong> ${new Date(r.meeting_time).toLocaleTimeString()} (${r.teacher_name})</p>
+                        ${r.meeting_link ? `<a href="${r.meeting_link}" target="_blank">Join Link</a>` : ''}
+                        ${r.has_feedback ? `<p style="background:#eee; padding:5px;">Feedback: ${r.parent_comments}</p>` : ''}
+                    </div>
+                `).join('') : '<p>No bookings.</p>';
+            } catch(e) { div.innerHTML = e.message; }
+        }
+
+        async function loadOpenSlots(tid) {
+            if(!tid) return;
+            const div = document.getElementById('booking-slots');
+            div.innerHTML = 'Loading...';
+            try {
+                const slots = await api(`${API}/teacher/${tid}/open`);
+                if(slots.length === 0) { div.innerHTML = "<p>No open slots.</p>"; return; }
+                
+                div.innerHTML = slots.map(s => `
+                    <div style="border:1px solid #ccc; padding:10px; margin-bottom:5px; background:#fff; display:flex; justify-content:space-between; align-items:center;">
+                        <span>${new Date(s.meeting_time).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} (${s.meeting_type})</span>
+                        <button onclick="bookSlot('${s.id}')" class="btn-success" style="margin:0; padding:5px 10px;">Book</button>
+                    </div>
+                `).join('');
+            } catch(e) { div.innerHTML = "Error."; }
+        }
+
+        async function bookSlot(slotId) {
+            const agenda = prompt("Topic:");
+            if(!agenda) return;
+            try {
+                await api(`${API}/book/${slotId}`, { method:'POST', body:JSON.stringify({ student_id: UID, agenda }) });
+                alert("✅ Booked!");
+                loadStudentView(); document.getElementById('booking-slots').innerHTML = "";
+            } catch(e) { alert(e.message); }
+        }
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

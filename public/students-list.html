@@ -3,200 +3,274 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Student Management | ERP System</title>
+    <title>Advanced Student Registry | Enterprise ERP</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
     <style>
         :root {
             --primary-indigo: #6366f1;
-            --success-green: #27ae60;
-            --danger-red: #e11d48;
+            --indigo-dark: #4f46e5;
+            --success-green: #10b981;
+            --danger-red: #f43f5e;
+            --warning-amber: #f59e0b;
+            --text-slate: #475569;
+            --border-color: #e2e8f0;
         }
 
         body {
             background-color: #f8fafc;
             font-family: 'Inter', 'Montserrat', sans-serif;
+            font-size: 13px;
+            color: #1e293b;
         }
 
-        /* Avatar Styling */
+        /* --- Advanced Table Styling --- */
+        .table-glass {
+            border-collapse: separate;
+            border-spacing: 0;
+            table-layout: auto !important; /* কলামগুলো কন্টেন্ট অনুযায়ী জায়গা নেবে */
+            width: 100%;
+        }
+
+        .table-glass thead th {
+            background-color: #f1f5f9 !important;
+            color: var(--text-slate);
+            font-weight: 700;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            padding: 14px 10px !important;
+            border-bottom: 2px solid var(--border-color);
+            white-space: nowrap;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .table-glass tbody td {
+            padding: 10px 10px !important;
+            vertical-align: middle;
+            border-bottom: 1px solid #f1f5f9;
+            white-space: nowrap; /* টেক্সট ভেঙে নিচে যাবে না */
+            transition: background 0.2s;
+            max-width: 250px; /* অতিরিক্ত বড় কলাম নিয়ন্ত্রণ */
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .student-row:hover td {
+            background-color: #f1f5f9 !important;
+        }
+
+        /* --- Components --- */
+        .glass-card {
+            background: white;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+
         .avatar-circle {
-            width: 38px;
-            height: 38px;
-            background-color: #eef2ff;
+            width: 32px;
+            height: 32px;
+            background-color: #eff6ff;
             color: var(--primary-indigo);
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            font-size: 0.85rem;
-            border: 2px solid white;
+            font-size: 11px;
+            border: 1.5px solid #fff;
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
         }
 
-        /* ERP Table Styling */
-        .table-glass th {
-            background-color: #f1f5f9 !important;
-            color: #475569;
-            font-weight: 600;
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            letter-spacing: 0.025em;
-            border-bottom: 2px solid #e2e8f0;
+        .avatar-sm {
+            width: 28px;
+            height: 28px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 1px solid var(--border-color);
         }
 
-        .table-glass td {
-            padding: 10px 12px !important; 
-            font-size: 0.85rem; 
-            vertical-align: middle;
-            color: #1e293b;
-        }
-
-        /* Quick Unlock Button */
-        .btn-unlock {
+        .badge-status {
+            font-size: 10px;
             padding: 4px 10px;
-            font-size: 11px;
-            font-weight: 700;
-            background-color: var(--success-green);
-            color: white;
-            border: none;
             border-radius: 6px;
-            cursor: pointer;
-            transition: all 0.2s;
-            box-shadow: 0 2px 4px rgba(39, 174, 96, 0.2);
-        }
-        
-        .btn-unlock:hover {
-            background-color: #219150;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 6px rgba(39, 174, 96, 0.3);
+            font-weight: 700;
+            text-transform: uppercase;
+            display: inline-block;
         }
 
-        .student-row:hover {
-            background-color: #f8fafc !important;
+        .status-active { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; }
+        .status-restricted { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+        .status-pending { background: #fef3c7; color: #b45309; border: 1px solid #fde68a; }
+
+        .form-control:focus, .form-select:focus {
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+            border-color: var(--primary-indigo);
         }
 
-        .glass-card {
-            background: white;
-            border-radius: 12px;
-            border: 1px solid #e2e8f0;
+        /* --- Animations --- */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .fade-in-up {
+            animation: fadeIn 0.4s ease-out forwards;
+        }
+
+        @media print {
+            .no-print { display: none !important; }
+            .glass-card { border: none; box-shadow: none; }
+            body { background: white; }
         }
     </style>
 </head>
 <body>
 
-<div class="container-fluid px-4" style="max-width: 1600px; padding-top: 25px;">
+<div class="container-fluid px-4 py-4" style="max-width: 1850px;">
     
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
+    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+        <div class="fade-in-up">
             <h2 class="fw-bold text-dark mb-1 fs-4">
-                <i class="fas fa-user-graduate text-indigo me-2"></i>Student Records
+                <i class="fas fa-shield-halved text-primary me-2"></i>Enterprise Student Registry
             </h2>
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb mb-0 small">
-                    <li class="breadcrumb-item"><a href="/admin-dashboard.html" class="text-decoration-none">Dashboard</a></li>
-                    <li class="breadcrumb-item active">Student Management</li>
+                    <li class="breadcrumb-item"><a href="/admin-dashboard.html" class="text-decoration-none text-muted">Core Portal</a></li>
+                    <li class="breadcrumb-item active fw-bold text-primary">Student Management</li>
                 </ol>
             </nav>
         </div>
-        <div class="d-flex gap-2">
-            <a href="/add-student.html" class="btn btn-sm btn-primary rounded-3 px-3 shadow-sm">
-                <i class="fas fa-plus me-1"></i> Add Student
+        <div class="d-flex gap-2 fade-in-up">
+            <button onclick="location.reload()" class="btn btn-sm btn-light border rounded-3 px-3" title="Refresh Data">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <a href="/add-student.html" class="btn btn-sm btn-primary rounded-3 px-3 shadow-sm fw-bold">
+                <i class="fas fa-user-plus me-1"></i> New Enrollment
             </a>
-            <button id="generate-bulk-id-btn" class="btn btn-sm btn-outline-dark rounded-3 px-3" disabled>
-                <i class="fas fa-id-card me-1"></i> Bulk ID Cards
+            <button onclick="alert('Please click the Edit icon (✏️) next to a specific student in the table below to modify their record.')" class="btn btn-sm btn-outline-primary rounded-3 px-3 shadow-sm fw-bold">
+                <i class="fas fa-edit me-1"></i> How to Edit
+            </button>
+            <button id="generate-bulk-id-btn" class="btn btn-sm btn-dark rounded-3 px-3 fw-bold" disabled>
+                <i class="fas fa-print me-1"></i> Bulk ID Cards
             </button>
         </div>
     </div>
 
-    <div class="glass-card mb-4 p-3 shadow-sm">
+    <div class="glass-card mb-4 p-4 no-print fade-in-up">
         <div class="row g-3 align-items-end">
-            <div class="col-lg-3 col-md-4">
-                <label class="form-label fw-bold small text-muted mb-1">Search Database</label>
-                <div class="input-group input-group-sm shadow-sm rounded-3">
-                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
-                    <input type="text" id="search-input" class="form-control border-start-0 ps-1" placeholder="Search by name, ID or mobile...">
+            <div class="col-xl-3 col-lg-4">
+                <label class="form-label fw-bold small text-muted mb-2">Global Smart Search</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white border-end-0"><i class="fas fa-fingerprint text-muted"></i></span>
+                    <input type="text" id="search-input" class="form-control border-start-0 ps-1" placeholder="Search by name, enrollment, or mobile...">
                 </div>
             </div>
 
-            <div class="col-lg-2 col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1">Course/Class</label>
-                <select id="course-filter" class="form-select form-select-sm shadow-sm rounded-3">
-                    <option value="">All Courses</option>
+            <div class="col-xl-2 col-lg-2">
+                <label class="form-label fw-bold small text-muted mb-2">Center Unit</label>
+                <select id="branch-filter" class="form-select fw-semibold">
+                    <option value="">All Branches</option>
                 </select>
             </div>
 
-            <div class="col-lg-2 col-md-3">
-                <label class="form-label fw-bold small text-muted mb-1">Access Status</label>
-                <select id="status-filter" class="form-select form-select-sm shadow-sm rounded-3">
-                    <option value="">All Status</option>
-                    <option value="active">Active (Unlocked)</option>
-                    <option value="expired">Restricted (Unpaid)</option>
-                    <option value="deactivated">Disabled</option>
+            <div class="col-xl-2 col-lg-2">
+                <label class="form-label fw-bold small text-muted mb-2">Course Track</label>
+                <select id="course-filter" class="form-select fw-semibold">
+                    <option value="">All Tracks</option>
                 </select>
             </div>
 
-            <div class="col-lg-5 col-md-2 text-end">
-                <div id="data-status" class="small fw-semibold text-primary mb-2"></div>
+            <div class="col-xl-2 col-lg-2">
+                <label class="form-label fw-bold small text-muted mb-2">Portal Access</label>
+                <select id="status-filter" class="form-select fw-semibold">
+                    <option value="">Global Status</option>
+                    <option value="Enrolled">Active (Unlocked)</option>
+                    <option value="Restricted">Restricted (Unpaid)</option>
+                    <option value="Inactive">Deactivated</option>
+                </select>
+            </div>
+
+            <div class="col-xl-3 col-lg-2 text-end">
+                <div id="data-status" class="badge bg-soft-primary text-primary px-3 py-2 border border-primary-subtle rounded-pill">
+                    <i class="fas fa-database me-2"></i>Live Connection Active
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="glass-card overflow-hidden shadow-sm">
-        <div class="table-responsive">
+    <div class="glass-card overflow-hidden shadow-sm fade-in-up">
+        <div class="table-responsive" style="max-height: 70vh;">
             <table class="table table-hover table-glass mb-0" id="students-table">
                 <thead>
                     <tr>
-                        <th class="text-center" style="width: 50px;">
-                            <div class="form-check d-flex justify-content-center">
-                                <input class="form-check-input" type="checkbox" id="select-all-checkbox">
-                            </div>
+                        <th class="text-center" style="width: 45px;">
+                            <input class="form-check-input" type="checkbox" id="select-all-checkbox">
                         </th>
-                        <th data-sort="admission_id" style="width: 120px;">Admission ID</th>
-                        <th data-sort="first_name">Student Profile</th>
-                        <th data-sort="course_name">Academic Info</th>
-                        <th style="width: 150px;">Contact No.</th>
-                        <th class="text-end" data-sort="total_fees_due" style="width: 140px;">Pending Fee</th>
-                        <th class="text-center" style="width: 160px;">Portal Access</th>
-                        <th class="text-center" style="width: 130px;">Actions</th>
+                        <th>S.No</th>
+                        <th>Center</th>
+                        <th>Application ID</th>
+                        <th>Enrollment No.</th>
+                        <th>Portal Password</th>
+                        <th>Student Name</th>
+                        <th>Guardian Name</th>
+                        <th>Primary Mobile</th>
+                        <th>Course Code</th>
+                        <th class="text-end">Reg. Fee</th>
+                        <th class="text-center">Upgrade</th>
+                        <th>Admission Date</th>
+                        <th>System Status</th>
+                        <th class="text-center">Operations</th>
                     </tr>
                 </thead>
                 <tbody id="students-table-body">
                     <tr>
-                        <td colspan="8" class="text-center p-5 text-muted">
-                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
-                            Loading student database...
+                        <td colspan="15" class="text-center p-5">
+                            <div class="d-flex flex-column align-items-center">
+                                <div class="spinner-grow text-primary mb-3" role="status"></div>
+                                <span class="fw-bold text-muted">Retrieving Encrypted Student Records...</span>
+                            </div>
                         </td>
                     </tr>
                 </tbody>
             </table>
         </div>
         
-        <div class="d-flex justify-content-between align-items-center px-3 py-2 border-top bg-light">
-            <span class="text-muted small" id="record-count">Records: 0</span>
+        <div class="d-flex justify-content-between align-items-center px-4 py-3 border-top bg-light">
+            <div class="d-flex align-items-center gap-3">
+                <span class="text-dark fw-bold small" id="record-count">Records Found: 0</span>
+                <span class="text-muted small">|</span>
+                <span class="text-muted small">Academic Session: 2025-26</span>
+            </div>
             <div id="pagination-controls"></div>
         </div>
     </div>
 </div>
 
 <div class="modal fade" id="unlockModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-sm modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg rounded-4">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg rounded-4 overflow-hidden">
+            <div class="modal-header bg-success text-white border-0 py-3">
+                <h6 class="modal-title fw-bold"><i class="fas fa-unlock-keyhole me-2"></i>Access Unlock Protocol</h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
             <div class="modal-body text-center p-4">
-                <div class="mb-3">
-                    <i class="fas fa-check-circle text-success fa-3x"></i>
+                <div class="avatar-circle mx-auto mb-3" style="width: 60px; height: 60px; font-size: 24px; background: #dcfce7; color: #15803d;">
+                    <i class="fas fa-receipt"></i>
                 </div>
-                <h6 class="fw-bold mb-2">Verify Rs. 1,000 Payment?</h6>
+                <h6 class="fw-bold mb-2">Verify Registration Collection?</h6>
                 <p class="text-muted small mb-4">
-                    Confirming will mark registration fee as paid and grant instant portal access to <span id="target-student" class="text-dark fw-bold"></span>.
+                    Confirm payment of <strong class="text-dark">Rs. 1,000</strong> to grant instant portal access for <span id="target-student" class="text-primary fw-bold"></span>.
                 </p>
                 <div class="d-grid gap-2">
-                    <button type="button" id="confirm-unlock-btn" class="btn btn-success fw-bold rounded-3">Confirm & Unlock</button>
-                    <button type="button" class="btn btn-link btn-sm text-muted text-decoration-none" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" id="confirm-unlock-btn" class="btn btn-success fw-bold py-2 rounded-3">Confirm & Grant Access</button>
+                    <button type="button" class="btn btn-light btn-sm text-muted fw-bold" data-bs-dismiss="modal">Decline</button>
                 </div>
             </div>
         </div>
@@ -204,7 +278,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-<script src="js/global-config.js?v=2.3.1"></script>
+<script src="js/global-config.js?v=2.4.0"></script>
 <script src="/students-list.js" defer></script> 
 
 </body>

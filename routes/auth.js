@@ -1,4 +1,5 @@
 // routes/auth.js
+// Version 3.1.0 - Full Profile Sync & Branch Asset Integration
 const express = require('express');
 const router = express.Router();
 const jwt = require('jsonwebtoken');
@@ -13,14 +14,16 @@ const USERS_TABLE = 'users';
 
 /**
  * Helper: Finds user and verifies access rights
- * Logic: Checks manual deactivation and payment-based restriction.
+ * DEEP CHECK UPDATE: Joined with 'branches' to fetch 'manager_photo' for the dashboard.
  */
 async function findUserAndVerifyPassword(loginInput, password) {
     try {
         const userResult = await pool.query(
-            `SELECT id, username, password_hash, role, branch_id, status, is_active, is_paid 
-             FROM ${USERS_TABLE} 
-             WHERE (username = $1 OR email = $1)`,
+            `SELECT u.id, u.username, u.full_name, u.password_hash, u.role, u.branch_id, 
+                    u.status, u.is_active, u.is_paid, b.manager_photo 
+             FROM ${USERS_TABLE} u
+             LEFT JOIN branches b ON u.branch_id = b.id
+             WHERE (u.username = $1 OR u.email = $1)`,
             [loginInput]
         );
 
@@ -33,7 +36,6 @@ async function findUserAndVerifyPassword(loginInput, password) {
         }
 
         // 🛡️ Registration/Payment Gatekeeper
-        // If status is 'expired' and they haven't paid, block access.
         if (user.status === 'expired' && user.is_paid === false) {
             return { 
                 error: 'Your profile is currently restricted. Please complete your Rs. 1,000 registration fee to unlock all portal features.' 
@@ -50,7 +52,9 @@ async function findUserAndVerifyPassword(loginInput, password) {
     }
 }
 
+// =========================================================
 // 1. LOGIN ROUTE (POST /api/auth/login)
+// =========================================================
 router.post('/login', async (req, res) => {
     const loginInput = req.body.username || req.body.email; 
     const password = req.body.password;
@@ -66,7 +70,6 @@ router.post('/login', async (req, res) => {
         const user = result.user;
         let studentProfileId = null; 
         
-        // Fetch Student UUID if user is a student
         if (user.role === 'Student') {
             const studentRes = await pool.query(`SELECT student_id FROM students WHERE user_id = $1`, [user.id]);
             studentProfileId = studentRes.rows[0]?.student_id || null;
@@ -81,13 +84,15 @@ router.post('/login', async (req, res) => {
         
         const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '30d' }); 
         
-        // Update last login timestamp
         await pool.query('UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE id = $1::uuid', [user.id]);
         
+        // Return rich profile data to frontend
         return res.status(200).json({
             token,
             role: user.role, 
             username: user.username,
+            fullName: user.full_name, // Synchronized Full Name
+            photo: user.manager_photo || '/uploads/default-avatar.png', // Synchronized Photo
             'user-id': user.id, 
             userBranchId: user.branch_id,
             student_id: studentProfileId 
@@ -99,8 +104,50 @@ router.post('/login', async (req, res) => {
     }
 });
 
-// 🚀 QUICK ACTIVATE STUDENT (One-Click Approval)
-// Path: POST /api/auth/activate-student
+// =========================================================
+// 2. PROFILE SYNC (GET /api/auth/profile)
+// =========================================================
+router.get('/profile', authenticateToken, async (req, res) => {
+    try {
+        const query = `
+            SELECT u.id, u.username, u.full_name, u.role, u.branch_id, u.status, u.is_active, b.manager_photo 
+            FROM ${USERS_TABLE} u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            WHERE u.id = $1
+        `;
+        const result = await pool.query(query, [req.user.id]);
+
+        if (result.rowCount === 0) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const user = result.rows[0];
+
+        if (!user.is_active) {
+            return res.status(403).json({ message: "Account is inactive." });
+        }
+
+        res.json({
+            success: true,
+            user: {
+                id: user.id,
+                username: user.username,
+                full_name: user.full_name,
+                role: user.role,
+                branch_id: user.branch_id,
+                photo: user.manager_photo || '/uploads/default-avatar.png',
+                status: user.status
+            }
+        });
+    } catch (error) {
+        console.error('Profile Route Error:', error);
+        res.status(500).json({ message: 'Internal Server Error.' });
+    }
+});
+
+// =========================================================
+// 3. QUICK ACTIVATE STUDENT (POST /api/auth/activate-student)
+// =========================================================
 router.post('/activate-student', authenticateToken, async (req, res) => {
     const { username } = req.body;
     const userRole = (req.user.role || '').toLowerCase();
@@ -126,13 +173,15 @@ router.post('/activate-student', authenticateToken, async (req, res) => {
     }
 });
 
-// 2. REGISTRATION (POST /api/auth/register)
+// =========================================================
+// 4. REGISTRATION (POST /api/auth/register)
+// =========================================================
 router.post('/register', async (req, res) => {
     const { username, password, role, email } = req.body;
     try {
         const saltRounds = 10;
         const passwordHash = await bcrypt.hash(password, saltRounds);
-        const defaultBranchId = 'a1b2c3d4-e5f6-7890-abcd-ef0123456789'; 
+        const defaultBranchId = 'cc3caa3a-3d01-4300-b826-2df7eb671e10'; // Updated to valid system UUID
 
         const query = `
             INSERT INTO ${USERS_TABLE} (username, email, password_hash, role, is_active, status, is_paid, branch_id)
@@ -147,52 +196,83 @@ router.post('/register', async (req, res) => {
     }
 });
 
-// 3. FORGOT PASSWORD (POST /api/auth/forgot-password)
+// =========================================================
+// 5. FORGOT PASSWORD (POST /api/auth/forgot-password)
+// =========================================================
 router.post('/forgot-password', async (req, res) => {
     const { email } = req.body;
     try {
-        const result = await pool.query(`SELECT id, email FROM users WHERE email = $1 AND is_active = TRUE`, [email]);
+        const result = await pool.query(
+            `SELECT id, email FROM users WHERE email = $1 AND is_active = TRUE`, 
+            [email]
+        );
         const user = result.rows[0];
         
-        // Always return success message for security to prevent email enumeration
         if (!user) return res.json({ message: 'If an account exists, a reset link has been sent.' });
 
         const resetToken = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: '1h' }); 
+        
         await pool.query(
             `UPDATE users SET reset_password_token = $1, reset_token_expiry = $2 WHERE id = $3::uuid`,
             [resetToken, moment().add(60, 'minutes').toISOString(), user.id]
         );
         
-        await sendPasswordResetEmail(user.email, `https://portal.bcsm.org.in/reset-password.html?token=${resetToken}`); 
-        res.json({ message: 'Reset email sent.' });
+        const protocol = req.protocol; 
+        const host = req.get('host'); 
+        const resetLink = `${protocol}://${host}/reset-password.html?token=${resetToken}`;
+        
+        sendPasswordResetEmail(user.email, resetLink).catch(err => console.error("Email Error:", err));
+        
+        res.json({ message: 'Reset email sent successfully.' });
     } catch (err) {
-        res.status(500).json({ message: 'Error processing request.' });
+        console.error("Forgot Password Error:", err);
+        res.status(500).json({ message: 'Internal server error.' });
     }
 });
 
-// 4. RESET PASSWORD (POST /api/auth/reset-password)
+// =========================================================
+// 6. RESET PASSWORD (POST /api/auth/reset-password)
+// =========================================================
 router.post('/reset-password', async (req, res) => {
     const { token, password } = req.body; 
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(password, saltRounds);
 
         const result = await pool.query(`
-            UPDATE users SET password_hash = $1, reset_password_token = NULL, reset_token_expiry = NULL 
-            WHERE reset_password_token = $2 AND id = $3::uuid
+            UPDATE users 
+            SET password_hash = $1, 
+                reset_password_token = NULL, 
+                reset_token_expiry = NULL 
+            WHERE reset_password_token = $2 
+              AND id = $3::uuid 
+              AND reset_token_expiry > CURRENT_TIMESTAMP
         `, [hashedPassword, token, decoded.id]);
 
-        if (result.rowCount === 0) return res.status(400).json({ message: 'Invalid or used token.' });
-        res.json({ message: 'Password updated successfully.' });
+        if (result.rowCount === 0) {
+            return res.status(400).json({ message: 'Invalid, used, or expired token.' });
+        }
+
+        res.json({ message: 'Password updated successfully. You can now log in.' });
     } catch (err) {
-        res.status(400).json({ message: 'Invalid or expired token.' });
+        console.error("Reset Password Error:", err);
+        res.status(400).json({ message: 'Invalid or expired token. Please request a new link.' });
     }
 });
 
-// 5. GET ME (GET /api/auth/me)
+// =========================================================
+// 7. GET ME (BACKUP)
+// =========================================================
 router.get('/me', authenticateToken, async (req, res) => {
     try {
-        const user = await pool.query('SELECT id, username, role, email, status, is_active FROM users WHERE id = $1', [req.user.id]);
+        const user = await pool.query(
+            `SELECT u.id, u.username, u.role, u.email, u.status, u.is_active, u.branch_id, b.manager_photo 
+             FROM users u 
+             LEFT JOIN branches b ON u.branch_id = b.id 
+             WHERE u.id = $1`, 
+            [req.user.id]
+        );
         if (user.rows.length === 0) return res.status(404).json({ message: 'User not found' });
         res.json({ user: user.rows[0] });
     } catch (err) {

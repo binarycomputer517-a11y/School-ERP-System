@@ -166,8 +166,8 @@ router.delete('/quizzes/:id', authenticateToken, authorize(['Super Admin', 'Admi
  * =================================================================
  */
 
-// Student Dashboard: List available quizzes
-router.get('/student/:userId/quizzes', authenticateToken, async (req, res) => {
+// Student Dashboard: List available quizzes (UPDATED for Parent support)
+router.get('/student/:userId/quizzes', authenticateToken, authorize(['Student', 'Parent', 'Super Admin', 'Admin']), async (req, res) => {
     const { userId } = req.params;
     try {
         const studentRes = await pool.query(
@@ -200,7 +200,7 @@ router.get('/student/:userId/quizzes', authenticateToken, async (req, res) => {
 });
 
 // Student: Start/Load Attempt
-router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
+router.get('/attempt/:quizId', authenticateToken, authorize(['Student']), async (req, res) => {
     const { quizId } = req.params;
     const userId = req.user.id;
     try {
@@ -250,7 +250,7 @@ router.get('/attempt/:quizId', authenticateToken, async (req, res) => {
 });
 
 // Student: Submit Answers
-router.post('/submit/:quizId', authenticateToken, async (req, res) => {
+router.post('/submit/:quizId', authenticateToken, authorize(['Student']), async (req, res) => {
     const { quizId } = req.params;
     const { answers, violations } = req.body;
     const userId = req.user.id;
@@ -311,11 +311,22 @@ router.post('/submit/:quizId', authenticateToken, async (req, res) => {
     } finally { client.release(); }
 });
 
-// Student Result Page (Single Result)
-router.get('/results/:quizId', authenticateToken, async (req, res) => {
+// Student Result Page (Single Result) - UPDATED for Parent Support
+router.get('/results/:quizId', authenticateToken, authorize(['Student', 'Parent', 'Super Admin', 'Admin']), async (req, res) => {
     const { quizId } = req.params;
+    const { student_id: queryStudentId } = req.query; // Optional param for parents
     const userId = req.user.id;
+    
     try {
+        // 
+        let studentFilterClause = 's.user_id::text = $1';
+        let filterValue = userId;
+
+        if (req.user.role.toLowerCase() === 'parent' && queryStudentId) {
+            studentFilterClause = 's.student_id::text = $1';
+            filterValue = queryStudentId;
+        }
+
         const summaryQuery = `
             SELECT sea.*, oq.title, 
                    ${SQL_MAX_MARKS} as max_marks,
@@ -328,10 +339,10 @@ router.get('/results/:quizId', authenticateToken, async (req, res) => {
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
             LEFT JOIN subjects sub ON oq.subject_id = sub.id
-            WHERE s.user_id::text = $1 AND sea.quiz_id::text = $2 
+            WHERE ${studentFilterClause} AND sea.quiz_id::text = $2 
             ORDER BY sea.end_time DESC LIMIT 1`;
         
-        const summary = await pool.query(summaryQuery, [userId, quizId]);
+        const summary = await pool.query(summaryQuery, [filterValue, quizId]);
         if (summary.rowCount === 0) return res.status(404).json({ message: 'Result not found' });
         
         const details = await pool.query(
@@ -525,19 +536,30 @@ router.delete('/attempts/:attemptId', authenticateToken, authorize(['Super Admin
     } catch (e) { res.status(500).json({ message: 'Delete Error' }); }
 });
 
-// Consolidated Report Card
-router.get('/student/consolidated-report', authenticateToken, async (req, res) => {
+// Consolidated Report Card (UPDATED for Parent Support)
+router.get('/student/consolidated-report', authenticateToken, authorize(['Student', 'Parent', 'Super Admin', 'Admin']), async (req, res) => {
     try {
+        const { student_id: queryStudentId } = req.query;
         const userId = req.user.id;
+
+        // Determine target student ID
+        let studentFilterClause = 's.user_id::text = $1';
+        let filterValue = userId;
+
+        if (req.user.role.toLowerCase() === 'parent' && queryStudentId) {
+            studentFilterClause = 's.student_id::text = $1';
+            filterValue = queryStudentId;
+        }
+
         const studentQuery = `
             SELECT s.first_name, s.last_name, s.roll_number, s.profile_image_path,
                    c.course_name, b.batch_name, s.student_id 
             FROM students s
             LEFT JOIN courses c ON s.course_id = c.id
             LEFT JOIN batches b ON s.batch_id = b.id
-            WHERE s.user_id::text = $1`;
+            WHERE ${studentFilterClause}`;
         
-        const studentRes = await pool.query(studentQuery, [userId]);
+        const studentRes = await pool.query(studentQuery, [filterValue]);
         if (studentRes.rows.length === 0) return res.status(404).json({ message: "Student profile not found" });
 
         const studentData = studentRes.rows[0];
@@ -561,11 +583,21 @@ router.get('/student/consolidated-report', authenticateToken, async (req, res) =
     }
 });
 
-// Student Exam Schedule
-router.get('/student/schedule', authenticateToken, async (req, res) => {
+// Student Exam Schedule (UPDATED for Parent Support)
+router.get('/student/schedule', authenticateToken, authorize(['Student', 'Parent', 'Super Admin', 'Admin']), async (req, res) => {
     try {
+        const { student_id: queryStudentId } = req.query;
         const userId = req.user.id;
-        const studentRes = await pool.query(`SELECT course_id FROM students WHERE user_id::text = $1`, [userId]);
+
+        let studentFilterClause = 'user_id::text = $1';
+        let filterValue = userId;
+
+        if (req.user.role.toLowerCase() === 'parent' && queryStudentId) {
+            studentFilterClause = 'student_id::text = $1';
+            filterValue = queryStudentId;
+        }
+
+        const studentRes = await pool.query(`SELECT course_id FROM students WHERE ${studentFilterClause}`, [filterValue]);
         if (studentRes.rowCount === 0) return res.status(404).json({ message: "Student profile not found" });
 
         const { course_id } = studentRes.rows[0];

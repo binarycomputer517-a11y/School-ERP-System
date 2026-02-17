@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Transaction History | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        .amount-text {
+            font-family: 'Consolas', monospace;
+            font-weight: 700;
+            color: var(--primary-dark);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width: 1200px; padding-top: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-history me-2"></i>Transaction History</h2>
+            <p class="text-muted mb-0 small">View and manage all payment records</p>
+        </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="glass-card">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label fw-bold small">Start Date</label>
+                <input type="date" id="startDate" class="form-control">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label fw-bold small">End Date</label>
+                <input type="date" id="endDate" class="form-control">
+            </div>
+            <div class="col-md-4">
+                <button class="btn btn-primary w-100 rounded-pill shadow-sm" onclick="loadHistory()">
+                    <i class="fas fa-filter me-2"></i> Filter Records
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card p-0 overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-glass table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Student Name</th>
+                        <th>Receipt ID</th>
+                        <th>Mode</th>
+                        <th class="text-end">Amount</th>
+                        <th class="text-center">Action</th>
+                    </tr>
+                </thead>
+                <tbody id="historyTableBody">
+                    <tr><td colspan="6" class="text-center p-5 text-muted"><i class="fas fa-spinner fa-spin me-2"></i> Loading initial data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="p-3 bg-light border-top d-flex justify-content-end align-items-center">
+            <span class="text-muted me-2">Total Collected:</span>
+            <span class="h4 mb-0 fw-bold text-success" id="totalCollected">₹0.00</span>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const token = localStorage.getItem('erp-token');
+        if (!token) window.location.href = '/login.html';
+
+        // Set Default Dates
+        const today = new Date();
+        document.getElementById('endDate').valueAsDate = today;
+        const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+        document.getElementById('startDate').valueAsDate = firstDay;
+
+        loadHistory();
+    });
+
+    async function loadHistory() {
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        const tbody = document.getElementById('historyTableBody');
+        const totalDisplay = document.getElementById('totalCollected');
+
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5 text-muted"><div class="spinner-border text-primary"></div></td></tr>';
+
+        try {
+            const response = await window.authFetch(`/api/finance/history?startDate=${start}&endDate=${end}`);
+            
+            if(!response.ok) throw new Error("Failed to fetch data");
+            
+            const data = await response.json();
+            tbody.innerHTML = '';
+            
+            let totalSum = 0;
+
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5 text-muted">No transactions found for this period.</td></tr>';
+                totalDisplay.innerText = '₹0.00';
+                return;
+            }
+
+            data.forEach(row => {
+                const amount = parseFloat(row.amount);
+                totalSum += amount;
+
+                // Robust ID Selection
+                // Use row.id (UUID) or row.payment_id (if API sends that) for the link
+                const safeId = row.id || row.payment_id;
+                
+                // Display the user-friendly Transaction ID if available
+                const displayRef = row.transaction_id || safeId || 'N/A';
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${new Date(row.payment_date).toLocaleDateString()}</td>
+                        <td>
+                            <div class="fw-bold">${row.student_name || 'Unknown'}</div>
+                            <small class="text-muted" style="font-size:11px;">ID: ${row.student_roll || 'N/A'}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">${displayRef}</span>
+                        </td>
+                        <td><span class="badge bg-info bg-opacity-10 text-info border border-info">${row.payment_mode}</span></td>
+                        <td class="text-end amount-text">₹${amount.toFixed(2)}</td>
+                        <td class="text-center">
+                            <button class="btn btn-sm btn-outline-primary rounded-pill px-3" onclick="viewReceipt('${safeId}')">
+                                <i class="fas fa-print me-1"></i> Print
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            if(window.formatCurrency) {
+                totalDisplay.innerText = window.formatCurrency(totalSum);
+            } else {
+                totalDisplay.innerText = '₹' + totalSum.toFixed(2);
+            }
+
+        } catch (err) {
+            console.error(err);
+            tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger p-4">Error loading data.</td></tr>';
+        }
+    }
+
+    // ✅ UPDATED RECEIPT FUNCTION
+    // Opens the new 'print-receipt.html' template in a new tab
+    function viewReceipt(identifier) {
+        if(!identifier || identifier === 'undefined') {
+            alert("Error: Receipt ID is missing. Please reload the page.");
+            return;
+        }
+        // Open the dedicated receipt page
+        window.open(`/print-receipt.html?id=${identifier}`, '_blank');
+    }
+</script>
+
+</body>
+</html>

@@ -19,6 +19,7 @@ const morgan = require('morgan');
 // --- Custom Modules ---
 const { initializeDatabase, pool } = require('./database'); 
 const { startNotificationService } = require('./notificationService');
+const { startAutoReminders } = require('./services/autoReminder');
 const { multerInstance } = require('./multerConfig');
 const { authenticateToken } = require('./authMiddleware'); 
 
@@ -40,11 +41,13 @@ const usersRouter = require('./routes/users');
 const vmsRouter = require('./routes/vms'); 
 const verifyRouter = require('./routes/verify'); 
 const settingsRouter = require('./routes/settings');
+const { generateAndSendDailyReport } = require('./routes/daily-report-automation');
 const mediaRouter = require('./routes/media');
 const announcementsRouter = require('./routes/announcements');
 const noticesRouter = require('./routes/notices');
 const messagingRouter = require('./routes/messaging');
 const studentsRouter = require('./routes/students');
+const parentsRouter = require('./routes/parents');
 const admissionRouter = require('./routes/admission');
 const teachersRouter = require('./routes/teachers');
 const utilsRouter = require('./routes/utils');
@@ -87,6 +90,7 @@ const reportsRouter = require('./routes/reports');
 const feedbackRouter = require('./routes/feedback');
 const placementsRouter = require('./routes/placements');
 const healthRouter = require('./routes/health');
+const aiRouter = require('./routes/ai');
 
 // 🚀 MERGED ROUTER IMPORTS & FIXES
 const examsRouter = require('./routes/exams'); 
@@ -121,30 +125,46 @@ app.set('upload', multerInstance);
 // ===================================
 app.use(morgan('dev'));
 
-// ✅ UPDATED & MOBILE-FRIENDLY CORS CONFIGURATION
+// ✅ UPDATED & ROBUST CORS CONFIGURATION
 const allowedOrigins = [
     'https://bcsm.org.in',       
     'https://www.bcsm.org.in',
     'https://portal.bcsm.org.in', 
+    'https://www.portal.bcsm.org.in', // Added to prevent www vs non-www mismatch
     'http://localhost:3000',
-    'http://localhost',           // অ্যান্ড্রয়েড এম্যুলেটরের জন্য
-    'capacitor://localhost'       // আইওএস/অ্যান্ড্রয়েড অ্যাপের জন্য
+    'http://localhost:3005',
+    'http://localhost',           
+    'capacitor://localhost'       
 ];
 
 app.use(cors({
     origin: function (origin, callback) {
-        // origin না থাকলেও এলাউ করবে (যেমন: মোবাইল অ্যাপ বা লোকাল রিকোয়েস্ট)
+        // 1. Allow if no origin (e.g., Mobile Apps, Server-to-Server or Postman)
         if (!origin) return callback(null, true);
         
-        if (allowedOrigins.indexOf(origin) !== -1 || origin.startsWith('http://localhost')) {
+        // 2. Check if origin is in the allowed list or is a localhost variation
+        const isAllowed = allowedOrigins.includes(origin) || 
+                  origin.startsWith('http://localhost') || 
+                  origin.startsWith('http://127.0.0.1') ||
+                  origin.startsWith('capacitor://');
+
+        if (isAllowed) {
             callback(null, true);
         } else {
+            console.error('🔥 CORS Blocked for Origin:', origin);
             callback(new Error('Not allowed by CORS'));
         }
     },
     credentials: true, 
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization']
+    allowedHeaders: [
+    'Content-Type', 
+    'Authorization', 
+    'X-Requested-With', 
+    'Accept', 
+    'Origin',
+    'active-branch-id'
+    ]
 }));
 
 // বাকি মিডলওয়্যারগুলো আগের মতোই থাকবে
@@ -272,13 +292,139 @@ app.use('/api/public/verify', verifyRouter);
 app.use('/api/health-records', healthRouter);
 app.use('/api/inventory', inventoryRouter); 
 app.use('/api/asset', assetRouter);
-
+app.use('/api/public/students', studentsRouter);
 
 
 // --- B. PROTECTED ROUTES (JWT Token Required) ---
 // All routes mounted below require a valid Bearer Token
 app.use('/api', authenticateToken);
+app.use('/api/chat', aiRouter);
+// =========================================================
+// ✅ FINAL ADVANCED VERSION: MULTI-ROLE PROFILE API
+// =========================================================
+/**
+ * @route   GET /api/users/profile/:id?
+ * @desc    Fetch profile data for ID Cards. Supports self-view 
+ * and Super Admin filtering via specific User UUID.
+ * @access  Private (Requires JWT Token)
+ */
+app.get(['/api/users/profile', '/api/users/profile/:id'], authenticateToken, async (req, res) => {
+    try {
+        const loggedInUser = req.user;
+        const targetId = req.params.id;
+        
+        let queryId = loggedInUser.id;
 
+        // 🛡️ SECURITY & SYNTAX GATEWAY
+        if (targetId) {
+            // 1. Role Check: Only Super Admin can query other IDs
+            if (loggedInUser.role.toLowerCase() !== 'super admin') {
+                return res.status(403).json({ 
+                    success: false, 
+                    message: "Security Violation: Administrative privileges required to filter by ID." 
+                });
+            }
+
+            // 2. UUID Validation: Prevent SQL syntax errors (like the previous 500 error)
+            const uuidPattern = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+            if (!uuidPattern.test(targetId)) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: "Invalid ID Format: Please provide a valid User UUID." 
+                });
+            }
+            queryId = targetId;
+        }
+
+        // 3. ENHANCED QUERY: Using LEFT JOIN to prevent 404s on unassigned managers
+        const query = `
+            SELECT 
+                u.id, 
+                u.username, 
+                u.role, 
+                u.email, 
+                u.phone_number,
+                u.branch_id,
+                b.branch_name, 
+                b.branch_code, 
+                b.logo_url as branch_logo,
+                -- Fallback chain for Name and Photo
+                COALESCE(u.full_name, u.username) as full_name,
+                COALESCE(b.manager_photo, 'uploads/default-avatar.png') as profile_image_path,
+                COALESCE(b.manager_phone, u.phone_number) as manager_contact
+            FROM users u
+            LEFT JOIN branches b ON u.branch_id = b.id
+            WHERE u.id = $1 AND u.deleted_at IS NULL
+            LIMIT 1
+        `;
+        
+        const result = await pool.query(query, [queryId]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ 
+                success: false, 
+                message: "Identity not found. Ensure the provided ID exists in the Users table." 
+            });
+        }
+
+        res.status(200).json(result.rows[0]);
+
+    } catch (err) {
+        console.error('❌ Advanced Profile Fetch Error:', err.message);
+        res.status(500).json({ 
+            success: false, 
+            error: "Internal Server Error during profile retrieval." 
+        });
+    }
+});
+/**
+ * ✅ UPDATED: MANUAL REPORT TRIGGER
+ * এটি এখন Super Admin এবং Branch Admin (যেমন wb02_admin) উভয়কেই অনুমতি দেবে।
+ */
+app.get('/api/finance/trigger-daily-report', authenticateToken, async (req, res) => {
+    try {
+        // 🛡️ রোল চেক আপডেট: super admin অথবা admin হলেই রিপোর্ট জেনারেট হবে
+        const allowedRoles = ['super admin', 'admin'];
+        
+        if (!allowedRoles.includes(req.user.role.toLowerCase())) {
+            return res.status(403).json({ message: "Access denied. Only Admins can generate reports." });
+        }
+
+        console.log(`📊 Report triggered by: ${req.user.username} (Role: ${req.user.role})`);
+        
+        await generateAndSendDailyReport();
+        res.json({ success: true, message: "Daily Report generation triggered! Check your email." });
+    } catch (err) {
+        console.error("Manual Trigger Error:", err);
+        res.status(500).json({ message: "Failed to trigger report." });
+    }
+});
+
+/**
+ * 2. TEST EMAIL DELIVERY (Fixed Path)
+ */
+app.post('/api/utils/test-email', async (req, res) => {
+    // ✅ সংশোধন: মেইলার ফাইল থেকে ইমপোর্ট করুন
+    const { sendEmailWithAttachment } = require('./utils/mailer');
+    
+    try {
+        await sendEmailWithAttachment({
+            to: 'casudam1989@gmail.com',
+            subject: '🚀 ERP System: Email Service Test',
+            html: `
+                <div style="font-family: Arial, sans-serif; padding: 20px; border: 2px solid #005A9C;">
+                    <h2 style="color: #005A9C;">Connection Successful!</h2>
+                    <p>Your SMTP settings are working perfectly for the BCSM Portal.</p>
+                    <p>Timestamp: <b>${new Date().toLocaleString()}</b></p>
+                </div>
+            `
+        });
+        res.json({ success: true, message: "Test email sent successfully! Check your inbox." });
+    } catch (error) {
+        console.error("Test Email Error:", error);
+        res.status(500).json({ success: false, message: "Email failed to send." });
+    }
+});
 // ==========================================
 // CUSTOM ROUTE 1: Student Fee Clearance Check
 // ==========================================
@@ -441,6 +587,7 @@ app.use('/api/messaging', messagingRouter);
 
 // Academic Modules
 app.use('/api/students', studentsRouter);
+app.use('/api/parents', parentsRouter);
 app.use('/api/admission', admissionRouter);
 app.use('/api/teachers', teachersRouter);
 app.use('/api/courses', coursesRouter);
@@ -589,12 +736,12 @@ cron.schedule('0 * * * *', async () => {
 });
 
 
-
 // ===================================
 // 8. SERVER STARTUP
 // ===================================
 async function startServer() {
     try {
+        // Ensure directories exist
         UPLOAD_DIRS.forEach(dir => {
             if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
         });
@@ -602,12 +749,20 @@ async function startServer() {
             fs.mkdirSync(BACKUP_DIR, { recursive: true });
         }
         
+        // 1. Initialize Database
         await initializeDatabase();
         console.log("✅ Database initialized successfully.");
 
+        // 2. Start Listening
         server.listen(PORT, () => {
             console.log(`🚀 Server running on http://localhost:${PORT}`);
+            
+            // 3. Initialize Background Workers
             startNotificationService();
+            
+            // ✅ NEW: Start Monthly Auto-Pilot (Every 2nd of the Month)
+            startAutoReminders(); 
+            console.log("✅ Institutional Auto-Reminders: Background worker initialized.");
         });
 
     } catch (error) {
@@ -616,10 +771,22 @@ async function startServer() {
     }
 }
 
+// Graceful Shutdown
 process.on('SIGINT', async () => {
     console.log('\n🛑 Shutting down gracefully...');
     await pool.end();
     process.exit(0);
+});
+
+// Existing Daily Report Automation
+cron.schedule('0 21 * * *', async () => {
+    try {
+        console.log('--- 📊 Starting Scheduled Daily Report Automation ---');
+        await generateAndSendDailyReport();
+        console.log('✅ Scheduled Report Task Completed.');
+    } catch (err) {
+        console.error('❌ Scheduled Report Task Failed:', err);
+    }
 });
 
 startServer();

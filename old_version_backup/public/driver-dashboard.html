@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Console | School ERP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #005A9C;
+            --accent: #f59e0b;
+            --bg-light: #f8fafc;
+            --text-dark: #1e293b;
+            --danger: #e11d48;
+            --success: #10b981;
+            --card-shadow: 0 4px 20px rgba(0,0,0,0.06);
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: var(--bg-light);
+            margin: 0;
+            color: var(--text-dark);
+            overflow-x: hidden;
+        }
+
+        /* Top Alert for Service */
+        #maintenance-alert {
+            display: none;
+            background: linear-gradient(to right, #be123c, #e11d48);
+            color: white;
+            text-align: center;
+            padding: 14px;
+            font-weight: 600;
+            font-size: 0.9em;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+        }
+
+        /* Real-time Notification Container */
+        #notification-zone {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            width: 320px;
+        }
+
+        .driver-toast {
+            background: white;
+            border-left: 5px solid var(--success);
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            margin-bottom: 10px;
+            animation: slideIn 0.5s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(110%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 25px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom-left-radius: 20px;
+            border-bottom-right-radius: 20px;
+            box-shadow: 0 4px 10px rgba(0,90,156,0.2);
+        }
+
+        .dashboard-container {
+            max-width: 1000px;
+            margin: -20px auto 40px;
+            padding: 0 20px;
+        }
+
+        .info-bar {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        .info-card {
+            background: white;
+            padding: 18px;
+            border-radius: 16px;
+            box-shadow: var(--card-shadow);
+            border-bottom: 3px solid var(--accent);
+        }
+
+        .info-card h3 { margin: 0; font-size: 0.75em; color: #64748b; text-transform: uppercase; }
+        .info-card p { margin: 5px 0 0; font-size: 1.15em; font-weight: 700; color: var(--primary); }
+
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 15px;
+        }
+
+        .menu-card {
+            background: white;
+            padding: 30px 10px;
+            border-radius: 20px;
+            text-align: center;
+            text-decoration: none;
+            color: var(--text-dark);
+            box-shadow: var(--card-shadow);
+            transition: 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            border: 1px solid transparent;
+            position: relative;
+        }
+
+        .menu-card:hover {
+            transform: translateY(-8px);
+            border-color: var(--primary);
+        }
+
+        /* Waiting Badge */
+        .badge-count {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: var(--danger);
+            color: white;
+            font-size: 0.75em;
+            font-weight: 700;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid white;
+            display: none; /* Hidden by default */
+        }
+
+        .menu-card.trip-active {
+            background: #ecfdf5;
+            border: 2px solid var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        .menu-card .icon { font-size: 2.8em; margin-bottom: 15px; }
+        .menu-card span { font-weight: 600; font-size: 0.9em; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .btn-logout {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            border: 1.5px solid rgba(255,255,255,0.5);
+            padding: 8px 20px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        @media (max-width: 600px) {
+            .card-grid { grid-template-columns: 1fr 1fr; }
+            .header { padding: 30px 20px; flex-direction: column; gap: 15px; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="maintenance-alert"></div>
+    <div id="notification-zone"></div>
+
+    <div class="header">
+        <div>
+            <h1 style="margin:0; font-size: 1.8em; letter-spacing: -0.5px;">Driver Console</h1>
+            <p id="current-date" style="margin:5px 0 0; opacity: 0.8; font-size: 0.9em;"></p>
+        </div>
+        <button class="btn-logout" onclick="logout()">Logout</button>
+    </div>
+
+    <div class="dashboard-container">
+        <div class="info-bar">
+            <div class="info-card">
+                <h3>Assigned Driver</h3>
+                <p id="driver-name">...</p>
+            </div>
+            <div class="info-card">
+                <h3>Vehicle Number</h3>
+                <p id="bus-no">...</p>
+            </div>
+            <div class="info-card">
+                <h3>Current Route</h3>
+                <p id="route-name">...</p>
+            </div>
+        </div>
+
+        <div class="card-grid">
+            <a href="/start-trip.html" id="trip-card" class="menu-card">
+                <span class="icon">🏁</span><span id="trip-label">Start Trip</span>
+            </a>
+            
+            <a href="/route-students.html" class="menu-card">
+                <div id="waiting-badge" class="badge-count">0</div>
+                <span class="icon">🧑‍🎓</span><span>Pickup List</span>
+            </a>
+
+            <a href="/fuel-logs.html" class="menu-card">
+                <span class="icon">⛽</span><span>Fuel Log</span>
+            </a>
+            <a href="/vehicle-maintenance.html" class="menu-card">
+                <span class="icon">🔧</span><span>Maintenance</span>
+            </a>
+            <a href="/emergency-sos.html" class="menu-card" style="background: #fff1f2; border-color: #fecaca;">
+                <span class="icon">🆘</span><span style="color: var(--danger);">SOS Alert</span>
+            </a>
+            <a href="/driver-id-card.html" class="menu-card">
+                <span class="icon">🪪</span><span>ID Profile</span>
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const role = localStorage.getItem('user-role');
+        let lastWaitingCount = 0;
+
+        if (!token || (role && role.toLowerCase() !== 'driver')) {
+            window.location.href = '/login.html';
+        }
+
+        async function initDashboard() {
+            const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+            document.getElementById('current-date').innerText = new Date().toLocaleDateString(undefined, options);
+
+            if (localStorage.getItem('active_trip_route')) {
+                const tripCard = document.getElementById('trip-card');
+                tripCard.classList.add('trip-active');
+                document.getElementById('trip-label').innerText = "Continue Trip";
+            }
+
+            try {
+                const response = await fetch('/api/transport/driver/status', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (response.status === 401) logout();
+                const data = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('driver-name').innerText = data.full_name;
+                    document.getElementById('bus-no').innerText = data.vehicle_number || 'No Bus Assigned';
+                    document.getElementById('route-name').innerText = data.route_name || 'Standby';
+                    
+                    checkMaintenance();
+                    // Start checking for students immediately after loading profile
+                    syncWaitingStudents(); 
+                    setInterval(syncWaitingStudents, 15000); // Sync every 15 seconds
+                }
+            } catch (err) {
+                console.error("Dashboard data load failed.");
+            }
+        }
+
+        // --- NEW: Presence Notification Logic ---
+        async function syncWaitingStudents() {
+            try {
+                const res = await fetch('/api/transport/driver/waiting-list', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+
+                const data = await res.json(); 
+                // data format expected: { count: 3, latest_name: "John Doe" }
+                
+                const badge = document.getElementById('waiting-badge');
+                
+                if (data.count > 0) {
+                    badge.innerText = data.count;
+                    badge.style.display = 'flex';
+
+                    // If a new student joined the waiting list, notify the driver
+                    if (data.count > lastWaitingCount) {
+                        notifyDriver(`🙋 ${data.latest_name} is waiting at the stop!`);
+                    }
+                    lastWaitingCount = data.count;
+                } else {
+                    badge.style.display = 'none';
+                    lastWaitingCount = 0;
+                }
+            } catch (e) { console.warn("Waiting list sync failed"); }
+        }
+
+        function notifyDriver(message) {
+            const zone = document.getElementById('notification-zone');
+            const toast = document.createElement('div');
+            toast.className = 'driver-toast';
+            toast.innerHTML = `<span>${message}</span>`;
+            
+            zone.appendChild(toast);
+
+            // Optional: Play a short notification sound
+            const audio = new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3');
+            audio.volume = 0.5;
+            audio.play().catch(() => {}); 
+
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = '0.5s';
+                setTimeout(() => toast.remove(), 500);
+            }, 5000);
+        }
+
+        async function checkMaintenance() {
+            try {
+                const res = await fetch('/api/transport/my-vehicle-health', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) return;
+
+                const vehicle = await res.json();
+                const diff = vehicle.current_km - vehicle.last_service_km;
+
+                if (diff >= 5000) {
+                    const alertBox = document.getElementById('maintenance-alert');
+                    alertBox.style.display = 'block';
+                    alertBox.innerHTML = `⚠️ Service Overdue by ${diff} KM. Please schedule maintenance.`;
+                }
+            } catch (e) { }
+        }
+
+        function logout() {
+            localStorage.clear();
+            window.location.href = '/login.html';
+        }
+
+        window.onload = initDashboard;
+    </script>
+</body>
+</html>

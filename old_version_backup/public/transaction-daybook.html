@@ -1,0 +1,353 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Transaction Daybook</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&family=Poppins:wght@400;500;600&display=swap');
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f6f9;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 20px auto;
+            background: #fff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.1);
+            border-top: 5px solid #C0392B; /* Red Theme */
+        }
+
+        .header-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            color: #C0392B;
+            text-transform: uppercase;
+            font-size: 1.8rem;
+            margin: 0;
+        }
+
+        /* Dynamic School Name Styling */
+        .global-school-name {
+            color: #C0392B;
+            text-transform: uppercase;
+            font-size: 1rem;
+            font-weight: 500;
+        }
+
+        .back-link {
+            text-decoration: none;
+            color: #3498db;
+            font-weight: 600;
+        }
+
+        /* Filter Box */
+        .filter-box {
+            background-color: #f1f1f1;
+            padding: 15px;
+            border-radius: 5px;
+            display: flex;
+            gap: 20px;
+            align-items: flex-end;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: #555;
+        }
+
+        input, select {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 1rem;
+        }
+
+        .btn-view {
+            padding: 9px 20px;
+            background-color: #2980b9; /* Blue */
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn-view:hover { background-color: #1c5980; }
+
+        /* Table */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20px;
+        }
+
+        thead {
+            background-color: #3498db; /* Blue Header */
+            color: white;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            font-size: 0.9rem;
+        }
+
+        th { font-weight: 600; text-transform: uppercase; font-size: 0.8rem; }
+        tr:hover { background-color: #f9f9f9; }
+
+        /* Badges */
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .badge-inc { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; } /* Income */
+        .badge-exp { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; } /* Expense */
+
+        /* Footer Totals */
+        .footer-totals {
+            display: flex;
+            justify-content: flex-end;
+            gap: 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            margin-top: 10px;
+            padding-top: 15px;
+            border-top: 2px solid #eee;
+        }
+        .total-inc { color: #27ae60; }
+        .total-exp { color: #c0392b; }
+        .net-bal { color: #2c3e50; }
+
+        .loading { text-align: center; color: #666; padding: 20px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="header-row">
+        <div>
+            <h1>Daily Transaction Daybook</h1>
+            <span class="global-school-name">Loading School Name...</span>
+        </div>
+        <a href="/finance-dashboard.html" class="back-link"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+    </div>
+
+    <div class="filter-box">
+        <div class="form-group">
+            <label for="daybookDate">Select Date:</label>
+            <input type="date" id="daybookDate">
+        </div>
+        <div class="form-group">
+            <label for="accountMode">Account/Mode:</label>
+            <select id="accountMode">
+                <option value="All">All Accounts</option>
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="UPI">UPI</option>
+                <option value="Bank Transfer">Bank Transfer</option>
+                <option value="Expense">Expense/Debit</option>
+            </select>
+        </div>
+        <button class="btn-view" onclick="loadDaybook()">View Daybook</button>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Txn ID</th>
+                <th>Category</th>
+                <th>Description / Payer</th>
+                <th>Mode</th>
+                <th>Amount (₹)</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody id="daybookBody">
+            <tr><td colspan="6" class="loading">Select a date and click View.</td></tr>
+        </tbody>
+    </table>
+
+    <div class="footer-totals">
+        <span class="total-inc">Total Income: ₹<span id="sumIncome">0.00</span></span>
+        <span class="total-exp">Total Expense: ₹<span id="sumExpense">0.00</span></span>
+        <span class="net-bal">Net Balance: ₹<span id="sumNet">0.00</span></span>
+    </div>
+</div>
+
+<script>
+    const API_BASE_URL = '/api';
+    const token = localStorage.getItem('erp-token');
+
+    // Helper: Format to INR
+    const formatCurrency = (amount) => {
+        return parseFloat(amount).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+    };
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        if(!token) window.location.href = '/login.html';
+        
+        // Set today's date
+        document.getElementById('daybookDate').valueAsDate = new Date();
+        loadDaybook();
+    });
+
+    async function loadDaybook() {
+        const dateInput = document.getElementById('daybookDate').value;
+        const modeFilter = document.getElementById('accountMode').value;
+        const tbody = document.getElementById('daybookBody');
+
+        if (!dateInput) {
+            alert("Please select a date.");
+            return;
+        }
+
+        tbody.innerHTML = '<tr><td colspan="6" class="loading"><i class="fas fa-spinner fa-spin"></i> Fetching transactions...</td></tr>';
+
+        try {
+            // 1. Fetch Income (Fees) for the selected Date - CRITICAL FIX: Changed /fees/ to /finance/
+            const feesRes = await fetch(`${API_BASE_URL}/finance/history?startDate=${dateInput}&endDate=${dateInput}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            
+            // 2. Fetch Expenses for the selected Date (Using GL Export Route) - CRITICAL FIX: Changed /fees/ to /finance/
+            const expenseRes = await fetch(`${API_BASE_URL}/finance/reports/gl-export?startDate=${dateInput}&endDate=${dateInput}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!feesRes.ok || !expenseRes.ok) throw new Error("Failed to fetch data from one or more endpoints.");
+            
+            const feesData = await feesRes.json();
+            const expenseData = await expenseRes.json();
+
+            // 3. Map Data to Combined Transactions (Filter by Type later)
+            let transactions = [];
+            
+            // Map Income (Fees)
+            feesData.forEach(f => {
+                transactions.push({
+                    id: f.transaction_id || f.payment_id || 'N/A',
+                    category: 'Fee Collection',
+                    desc: `${f.student_name || 'Student'} (Ref: ${f.transaction_id})`,
+                    mode: f.payment_mode,
+                    amount: parseFloat(f.amount),
+                    type: 'Income',
+                    date: f.payment_date
+                });
+            });
+
+            // Map Expenses (from GL Export)
+            expenseData
+                .filter(e => e.type === 'Expense') // Only take the debit entries (Expenses)
+                .forEach(e => {
+                    transactions.push({
+                        id: e.reference_id || 'EXP-' + e.date.substring(5, 10).replace('-', ''), 
+                        category: e.category,
+                        desc: e.description,
+                        mode: 'N/A', // Set mode to N/A for cash/bank expenses
+                        amount: parseFloat(e.debit),
+                        type: 'Expense',
+                        date: e.date
+                    });
+                });
+            
+            // Sort by date/timestamp to maintain ledger order
+            transactions.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+            // 4. Filter by Mode (Combined Fix)
+            if (modeFilter !== 'All') {
+                if (modeFilter === 'Expense') {
+                    // Show only Expense type transactions
+                    transactions = transactions.filter(t => t.type === 'Expense');
+                } else {
+                    // Filter Income transactions by specific mode (Cash, Card, etc.)
+                    transactions = transactions.filter(t => 
+                        t.type === 'Income' && t.mode && t.mode.toLowerCase() === modeFilter.toLowerCase()
+                    );
+                }
+            } else {
+                // If 'All' is selected, filter out anything that is neither Income nor Expense
+                transactions = transactions.filter(t => t.type === 'Income' || t.type === 'Expense');
+            }
+
+            // 5. Render & Calculate
+            renderTable(transactions);
+
+        } catch (error) {
+            console.error("Daybook Load Error:", error);
+            tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red; padding:20px;"><i class="fas fa-exclamation-triangle"></i> Error loading: ${error.message}</td></tr>`;
+        }
+    }
+
+    function renderTable(data) {
+        const tbody = document.getElementById('daybookBody');
+        tbody.innerHTML = '';
+
+        let totalIncome = 0;
+        let totalExpense = 0;
+
+        if (data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">No transactions found for this date.</td></tr>';
+        } else {
+            data.forEach(txn => {
+                if (txn.type === 'Income') totalIncome += txn.amount;
+                if (txn.type === 'Expense') totalExpense += txn.amount;
+
+                const badgeClass = txn.type === 'Income' ? 'badge-inc' : 'badge-exp';
+                const typeIcon = txn.type === 'Income' ? '<i class="fas fa-arrow-circle-down"></i>' : '<i class="fas fa-arrow-circle-up"></i>';
+                
+                // Ensure ID doesn't break layout if too long
+                const displayId = txn.id.length > 15 ? txn.id.substring(0, 12) + '...' : txn.id;
+                const modeDisplay = txn.type === 'Expense' ? '—' : txn.mode; // Display dash for Expense mode
+
+                const row = `
+                    <tr>
+                        <td title="${txn.id}">${displayId}</td>
+                        <td>${txn.category}</td>
+                        <td>${txn.desc}</td>
+                        <td>${modeDisplay}</td>
+                        <td style="font-weight:bold;">${typeIcon} ₹${formatCurrency(txn.amount)}</td>
+                        <td><span class="badge ${badgeClass}">${txn.type}</span></td>
+                    </tr>
+                `;
+                tbody.innerHTML += row;
+            });
+        }
+
+        // Update Totals
+        document.getElementById('sumIncome').innerText = formatCurrency(totalIncome);
+        document.getElementById('sumExpense').innerText = formatCurrency(totalExpense);
+        document.getElementById('sumNet').innerText = formatCurrency(totalIncome - totalExpense);
+    }
+</script>
+<script src="js/global-config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+</body>
+</html>

@@ -11,7 +11,9 @@ const { authenticateToken, authorize } = require('../authMiddleware');
 const moment = require('moment');
 const uuid = require('uuid');
 const uuidv4 = uuid.v4;
-const PDFDocument = require('pdfkit');
+const PDFDocument = require('pdfkit'); 
+const axios = require('axios');
+const { transporter } = require('../services/emailService');
 
 // --- Database Table Constants ---
 const DB = {
@@ -32,7 +34,8 @@ const DB = {
     BUDGET_CATS: 'budget_categories',
     BUDGETS: 'annual_budgets',
     EXPENSES: 'expenses',
-    // ✅ FIX: Corrected table name for global settings
+    EMAIL_LOGS: 'email_logs',
+    
     SETTINGS: 'erp_settings' 
 };
 
@@ -72,7 +75,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
                 fs.structure_name,
                 COALESCE(fs.admission_fee, 0) AS admission,
                 COALESCE(fs.registration_fee, 0) AS registration,
-                COALESCE(fs.examination_fee, 0) AS exam,
+                COALESCE(fs.exam_fee, 0) AS exam,
                 COALESCE(fs.course_duration_months, 12) AS duration, 
                 COALESCE(fs.transport_fee, 0) AS transport_struct_monthly,
                 COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly
@@ -122,7 +125,7 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
             
             addItem('Admission Fee', student.admission);
             addItem('Registration Fee', student.registration);
-            addItem('Examination Fee', student.exam);
+            addItem('exam_fee', student.exam);
             
             if (student.transport_struct_monthly > 0) {
                 addItem(`Transport Fee (${duration} Months)`, student.transport_struct_monthly * duration);
@@ -175,36 +178,64 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
     } finally { client.release(); }
 });
 /**
- * 2.2 FEE COLLECTION (With Auto-Activation Logic)
+ * 2.2 FEE COLLECTION (With Multi-Branch Security & Auto-Activation)
+ * @desc   বিকাশ বা ক্যাশ কালেকশন করার সময় ব্রাঞ্চ ভ্যালিডেশন চেক করে
  */
 router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff', 'super admin']), async (req, res) => {
     const { student_id, amount_paid, payment_mode, notes } = req.body;
     const collectedBy = req.user.id;
+    const userBranchId = req.user.branch_id; // লগইন করা ইউজারের ব্রাঞ্চ আইডি
+    const userRole = req.user.role; // ইউজারের রোল
     const payAmount = parseFloat(amount_paid);
 
-    if (!student_id || !payAmount || payAmount <= 0) return res.status(400).json({ message: 'Invalid payment details.' });
+    if (!student_id || !payAmount || payAmount <= 0) {
+        return res.status(400).json({ message: 'Invalid payment details.' });
+    }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
+        // 🛡️ SECURITY STEP: স্টুডেন্টের ব্রাঞ্চ ভ্যালিডেশন
+        const studentInfo = await client.query(`
+            SELECT branch_id FROM ${DB.STUDENTS} WHERE student_id = $1::uuid
+        `, [student_id]);
+
+        if (studentInfo.rowCount === 0) {
+            throw new Error("Student not found.");
+        }
+
+        const studentBranchId = studentInfo.rows[0].branch_id;
+
+        // যদি ইউজার 'super admin' না হয় এবং ব্রাঞ্চ আইডি না মিলে, তবে অ্যাক্সেস ডিনাইড
+        if (userRole !== 'super admin' && studentBranchId !== userBranchId) {
+            return res.status(403).json({ 
+                message: 'Access Denied: You cannot collect fees for a student from another branch.' 
+            });
+        }
+
         // 1. Fetch pending invoices
         const openInvoices = await client.query(`
-            SELECT id, total_amount, paid_amount, (total_amount - paid_amount) AS balance_due
-            FROM ${DB.INVOICES} WHERE student_id = $1::uuid AND status != 'Paid' AND status != 'Waived'
+            SELECT id, total_amount, paid_amount, (total_amount - parseFloat(paid_amount)) AS balance_due
+            FROM ${DB.INVOICES} 
+            WHERE student_id = $1::uuid AND status != 'Paid' AND status != 'Waived'
             ORDER BY due_date ASC;
         `, [student_id]);
 
         let totalDue = openInvoices.rows.reduce((acc, i) => acc + parseFloat(i.balance_due), 0);
         
         if (totalDue <= 0) throw new Error("No pending dues found for this student.");
-        if (payAmount > (totalDue + 0.01)) throw new Error(`Overpayment detected. Total Due: ${totalDue.toFixed(2)}`);
+        
+        // ওভারপেমেন্ট চেক (Safety Margin: 0.01)
+        if (payAmount > (totalDue + 0.01)) {
+            throw new Error(`Overpayment detected. Total Due: ₹${totalDue.toFixed(2)}`);
+        }
 
         let remaining = payAmount;
-        let paymentId = null;
-        const batchRef = 'MANUAL-' + uuidv4().substring(0,8).toUpperCase();
+        let firstPaymentId = null;
+        const batchRef = 'PAY-' + uuidv4().substring(0,8).toUpperCase();
 
-        // 2. Distribute payment across invoices
+        // 2. Distribute payment across invoices (FIFO Method)
         for (const inv of openInvoices.rows) {
             if (remaining <= 0) break;
             const due = parseFloat(inv.balance_due);
@@ -216,18 +247,22 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
                     VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6) RETURNING id;
                 `, [inv.id, paying, payment_mode, batchRef, collectedBy, notes]);
                 
-                if (!paymentId) paymentId = pRes.rows[0].id; 
+                if (!firstPaymentId) firstPaymentId = pRes.rows[0].id; 
 
                 const newPaid = parseFloat(inv.paid_amount) + paying;
                 const newStatus = (newPaid >= (parseFloat(inv.total_amount) - 0.01)) ? 'Paid' : 'Partial';
                 
-                await client.query(`UPDATE ${DB.INVOICES} SET paid_amount = paid_amount + $1, status = $2 WHERE id = $3::uuid`, [paying, newStatus, inv.id]);
+                await client.query(`
+                    UPDATE ${DB.INVOICES} 
+                    SET paid_amount = paid_amount + $1, status = $2 
+                    WHERE id = $3::uuid
+                `, [paying, newStatus, inv.id]);
+
                 remaining -= paying;
             }
         }
 
         // --- 🛑 3. AUTO-ACTIVATION CHECK ---
-        // Calculate the new total paid amount for this student
         const totalPaidRes = await client.query(`
             SELECT COALESCE(SUM(amount), 0) as total_collected 
             FROM ${DB.PAYMENTS} p
@@ -237,27 +272,33 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
 
         const totalCollected = parseFloat(totalPaidRes.rows[0].total_collected);
 
-        // If total payment is 1000 or more, activate the user account
+        // টাকা ১০০০ বা তার বেশি হলে অ্যাকাউন্ট অটোমেটিক অ্যাক্টিভ হবে
         if (totalCollected >= 1000) {
             await client.query(`
                 UPDATE ${DB.USERS} 
                 SET status = 'active', is_paid = true 
                 WHERE id = (SELECT user_id FROM ${DB.STUDENTS} WHERE student_id = $1::uuid)
             `, [student_id]);
-            console.log(`[Activation] Student ${student_id} activated. Total Paid: ${totalCollected}`);
         }
 
         await client.query('COMMIT');
-        res.status(201).json({ message: `Payment Recorded: ₹${payAmount}`, receipt_number: paymentId });
+        res.status(201).json({ 
+            success: true,
+            message: `Payment successfully recorded: ₹${payAmount}`, 
+            receipt_number: batchRef, // Batch reference can be used as Receipt No
+            activation: totalCollected >= 1000 ? 'Student Account Activated' : 'Pending Activation'
+        });
+
     } catch (error) {
         await client.query('ROLLBACK');
         console.error("Collection Error:", error.message);
-        res.status(400).json({ message: error.message || 'Payment Failed' });
-    } finally { client.release(); }
+        res.status(400).json({ message: error.message || 'Payment processing failed.' });
+    } finally {
+        client.release();
+    }
 });
-/**
- * 2.3 REFUND MANAGEMENT
- */
+ //* 2.3 REFUND MANAGEMENT
+ //*//
 router.get('/student-refund-info/:studentId', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
     try {
         const q = `SELECT (COALESCE((SELECT SUM(amount) FROM ${DB.PAYMENTS} p JOIN ${DB.INVOICES} i ON p.invoice_id = i.id WHERE i.student_id = $1::uuid), 0) - COALESCE((SELECT SUM(total_amount) FROM ${DB.INVOICES} WHERE student_id = $1::uuid), 0)) AS refundable_balance`;
@@ -276,15 +317,19 @@ router.post('/refund', authenticateToken, authorize(['admin', 'finance']), async
 });
 
 /**
- * 2.4 LIST STUDENTS ELIGIBLE FOR REFUND (FINAL FIX - Schema Aligned)
+ * 2.4 LIST STUDENTS ELIGIBLE FOR REFUND (Enterprise Final - Super Admin Bypass)
+ * @route   GET /api/finance/list-for-refund
+ * @desc    Fetch students with payment history for potential refund processing.
+ * @access  Private (Admin, Finance, and Super Admin)
  */
-router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
+router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
     try {
+        // Optimized query to handle null identification fields (Fixes the N/A issue)
         const query = `
             SELECT DISTINCT 
                 s.student_id, 
                 u.username AS student_name, 
-                s.roll_number,
+                COALESCE(s.enrollment_no, s.roll_number, s.admission_id, 'PENDING') AS roll_number,
                 c.course_name
             FROM ${DB.PAYMENTS} p
             JOIN ${DB.STUDENTS} s ON p.student_id = s.student_id
@@ -294,11 +339,14 @@ router.get('/list-for-refund', authenticateToken, authorize(['admin', 'finance']
         `;
         
         const result = await pool.query(query);
-        res.json(result.rows);
+        res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error("Refund List Error:", error);
-        res.status(500).json({ message: 'Failed to fetch student list for refund.' });
+        console.error("Institutional Refund Registry Sync Failure:", error.message);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to synchronize student refund telemetry: ' + error.message 
+        });
     }
 });
 // =========================================================
@@ -320,45 +368,44 @@ router.get('/invoice/:invoiceId/items', authenticateToken, async (req, res) => {
     } catch (e) { res.status(500).json({ message: 'Error' }); }
 });
 
-//**
- //* 3.2 SMART STUDENT DASHBOARD (Auto-Generate & Summary)
- //* Updated to support direct branch_id storage for accurate branch-wise reporting.
- //*/
+/**
+ * 3.2 SMART STUDENT DASHBOARD (Auto-Generate & Summary)
+ * ✅ FIX: Calculations now correctly include Tuition Fee * Duration
+ * ✅ FIX: Added course_name and batch_name to final response
+ */
 router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
     const client = await pool.connect();
     try {
         const { studentId } = req.params;
         const adminId = req.user.id; 
-        const userBranchId = req.user.branch_id; // Fallback from Admin's token
+        const userBranchId = req.user.branch_id; 
 
         const issueDate = moment().format('YYYY-MM-DD');
         const dueDate = moment().add(30, 'days').format('YYYY-MM-DD');
 
         await client.query('BEGIN');
 
-        // 1. Fetch Student, Structure, Duration AND Assignments (Including branch_id)
+        // 1. Fetch Student Details and Linked Fee Structure
         const sRes = await client.query(`
             SELECT 
                 s.student_id, u.username, s.roll_number, s.branch_id,
                 c.course_name, b.batch_name,
                 fs.id AS fee_structure_id, fs.structure_name,
-                COALESCE(fs.course_duration_months, 12) AS duration,
+                COALESCE(fs.course_duration_months, 1) AS duration,
                 COALESCE(fs.admission_fee, 0) AS admission,
                 COALESCE(fs.registration_fee, 0) AS registration,
-                COALESCE(fs.examination_fee, 0) AS exam,
-                COALESCE(fs.transport_fee, 0) AS transport_struct_monthly, 
-                COALESCE(fs.hostel_fee, 0) AS hostel_struct_monthly,     
-                r.route_name,
+                COALESCE(fs.exam_fee, 0) AS exam,
+                COALESCE(fs.tuition_fee, 0) AS monthly_tuition,
+                COALESCE(fs.transport_fee, 0) AS transport_monthly, 
+                COALESCE(fs.hostel_fee, 0) AS hostel_monthly,     
                 ta.is_active AS transport_active,
-                hr.room_fee AS hostel_monthly_rate,
-                hr.rate_name AS hostel_room_name
+                hr.room_fee AS hostel_room_rate
             FROM ${DB.STUDENTS} s 
             JOIN ${DB.USERS} u ON s.user_id = u.id 
             LEFT JOIN ${DB.COURSES} c ON s.course_id = c.id 
             LEFT JOIN ${DB.BATCHES} b ON s.batch_id = b.id
             LEFT JOIN ${DB.FEE_STRUCT} fs ON s.course_id = fs.course_id AND s.batch_id = fs.batch_id
             LEFT JOIN student_transport_assignments ta ON s.student_id = ta.student_id AND ta.is_active = TRUE
-            LEFT JOIN ${DB.ROUTES} r ON ta.bus_route_id = r.id
             LEFT JOIN student_hostel_assignments ha ON s.student_id = ha.student_id
             LEFT JOIN ${DB.HOSTEL} hr ON ha.hostel_rate_id = hr.id
             WHERE s.student_id = $1::uuid
@@ -366,12 +413,12 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
         if (!sRes.rows[0]) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Student not found' });
+            return res.status(404).json({ message: 'Student record not found' });
         }
         
         const student = sRes.rows[0];
 
-        // 2. CHECK & AUTO-GENERATE INVOICE LOGIC
+        // 2. AUTO-GENERATE INVOICE LOGIC (If no invoice exists for this structure)
         if (student.fee_structure_id) {
             const invCheck = await client.query(`
                 SELECT id FROM ${DB.INVOICES} 
@@ -380,53 +427,31 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
             if (invCheck.rowCount === 0) {
                 const duration = parseInt(student.duration);
+                
+                // Calculate Totals
+                const totalTuition = parseFloat(student.monthly_tuition) * duration;
+                const totalTransport = (student.transport_active) ? (parseFloat(student.transport_monthly) * duration) : 0;
+                const hostelMonthly = student.hostel_room_rate || student.hostel_monthly;
+                const totalHostel = parseFloat(hostelMonthly || 0) * duration;
 
-                // Transport Calculation
-                let totalTransport = 0;
-                if (student.transport_active) {
-                    totalTransport = parseFloat(student.transport_struct_monthly || 0) * duration;
-                } else if (parseFloat(student.transport_struct_monthly) > 0) {
-                    totalTransport = parseFloat(student.transport_struct_monthly) * duration;
-                }
-
-                // Hostel Calculation
-                let totalHostel = 0;
-                let hostelRate = student.hostel_monthly_rate || student.hostel_struct_monthly;
-                if (parseFloat(hostelRate) > 0) {
-                    totalHostel = parseFloat(hostelRate) * duration;
-                }
-
-                // Grand Total
-                let totalAmount = totalTransport + totalHostel +
+                const totalAmount = totalTuition + totalTransport + totalHostel +
                     parseFloat(student.admission) + parseFloat(student.registration) + parseFloat(student.exam);
 
                 if (totalAmount > 0) {
-                    // 🛡️ BRANCH SECURE INSERT: Storing branch_id directly in the invoice
                     const invRes = await client.query(`
                         INSERT INTO ${DB.INVOICES} 
                         (student_id, branch_id, invoice_number, issue_date, due_date, total_amount, status, created_by, fee_structure_id)
                         VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6, 'Pending', $7::uuid, $8::uuid) 
                         RETURNING id;
-                    `, [
-                        student.student_id, 
-                        student.branch_id || userBranchId, // Enforce branch ID
-                        generateInvoiceNumber(), 
-                        issueDate, 
-                        dueDate, 
-                        totalAmount, 
-                        adminId, 
-                        student.fee_structure_id
-                    ]);
+                    `, [student.student_id, student.branch_id || userBranchId, generateInvoiceNumber(), issueDate, dueDate, totalAmount, adminId, student.fee_structure_id]);
                     
                     const newInvId = invRes.rows[0].id;
-
-                    // Insert Line Items
                     const items = [
                         { d: 'Admission Fee', a: student.admission },
                         { d: 'Registration Fee', a: student.registration },
-                        { d: 'Examination Fee', a: student.exam }
+                        { d: 'Exam Fee', a: student.exam },
+                        { d: `Tuition Fee (${duration} Months)`, a: totalTuition }
                     ];
-
                     if (totalTransport > 0) items.push({ d: `Transport Fee (${duration} Months)`, a: totalTransport });
                     if (totalHostel > 0) items.push({ d: `Hostel Fee (${duration} Months)`, a: totalHostel });
 
@@ -441,31 +466,44 @@ router.get('/student/:studentId', authenticateToken, authorize(FEE_ROLES), async
 
         await client.query('COMMIT');
 
-        // 3. FETCH TOTALS & HISTORY
+        // 3. FETCH AGGREGATED TOTALS & PAYMENT HISTORY
         const invoiceStats = await pool.query(`
-            SELECT COALESCE(SUM(total_amount), 0) AS total_invoiced, COALESCE(SUM(paid_amount), 0) AS total_paid
-            FROM ${DB.INVOICES} WHERE student_id = $1::uuid AND status != 'Waived'
+            SELECT 
+                COALESCE(SUM(total_amount), 0) AS total_invoiced, 
+                COALESCE(SUM(paid_amount), 0) AS total_paid
+            FROM ${DB.INVOICES} 
+            WHERE student_id = $1::uuid AND status != 'Waived'
         `, [studentId]);
 
         const history = await pool.query(`
             SELECT p.transaction_id AS receipt_number, p.amount AS amount_paid, p.payment_mode, p.payment_date 
-            FROM ${DB.PAYMENTS} p JOIN ${DB.INVOICES} i ON p.invoice_id = i.id 
-            WHERE i.student_id = $1::uuid ORDER BY p.payment_date DESC
+            FROM ${DB.PAYMENTS} p 
+            JOIN ${DB.INVOICES} i ON p.invoice_id = i.id 
+            WHERE i.student_id = $1::uuid 
+            ORDER BY p.payment_date DESC
         `, [studentId]);
+
+        // 4. PREPARE FINAL JSON RESPONSE
+        const totalInvoiced = parseFloat(invoiceStats.rows[0].total_invoiced);
+        const totalPaid = parseFloat(invoiceStats.rows[0].total_paid);
 
         res.json({
             student_name: student.username,
-            total_fees: parseFloat(invoiceStats.rows[0].total_invoiced),
-            total_paid: parseFloat(invoiceStats.rows[0].total_paid),
-            balance: parseFloat(invoiceStats.rows[0].total_invoiced) - parseFloat(invoiceStats.rows[0].total_paid),
+            course_name: student.course_name || 'N/A',
+            batch_name: student.batch_name || 'N/A',
+            total_fees: totalInvoiced,
+            total_paid: totalPaid,
+            balance: totalInvoiced - totalPaid,
             payments: history.rows
         });
 
     } catch (error) { 
         await client.query('ROLLBACK');
         console.error("Dashboard Error:", error);
-        res.status(500).json({ message: 'Sync failed' }); 
-    } finally { client.release(); }
+        res.status(500).json({ message: 'Failed to sync student dashboard' }); 
+    } finally { 
+        client.release(); 
+    }
 });
 
 /**
@@ -1139,48 +1177,74 @@ router.get('/reports/gl-export', authenticateToken, authorize(['admin', 'finance
 });
 
 // =========================================================
-// SECTION 6: ADMIN UTILITIES (WAIVERS, DEFAULTERS)
+// SECTION 6: INSTITUTIONAL UTILITIES (WAIVERS, DEFAULTERS, REMINDERS)
 // =========================================================
 
-// 6.1 WAIVER REQUESTS
+/**
+ * 6.1 FETCH WAIVER REQUEST REGISTRY
+ * @route   GET /api/finance/waiver-requests
+ */
 router.get('/waiver-requests', authenticateToken, authorize(FEE_ROLES), async (req, res) => {
-    try { const r = await pool.query(`SELECT * FROM ${DB.WAIVERS} ORDER BY request_date DESC`); res.json(r.rows); } catch (e) { res.status(500).json({message:'Error'}); }
+    try { 
+        const result = await pool.query(`SELECT * FROM ${DB.WAIVERS} ORDER BY request_date DESC`); 
+        res.json(result.rows); 
+    } catch (e) { 
+        res.status(500).json({ message: 'Institutional Registry Error: Failed to fetch waivers.' }); 
+    }
 });
 
+/**
+ * @route   PUT /api/finance/waiver-requests/:requestId/status
+ * @desc    Updates waiver status and synchronizes student ledger totals.
+ */
 router.put('/waiver-requests/:requestId/status', authenticateToken, authorize(['admin', 'super admin']), async (req, res) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const { requestId } = req.params; const { newStatus, amount } = req.body;
+        const { requestId } = req.params; 
+        const { newStatus, amount } = req.body;
+        
         await client.query(`UPDATE ${DB.WAIVERS} SET status=$1, processed_by=$2::uuid WHERE id=$3::uuid`, [newStatus, req.user.id, requestId]);
         
         if (newStatus === 'Approved' && amount > 0) {
             const wRes = await client.query(`SELECT student_id FROM ${DB.WAIVERS} WHERE id=$1::uuid`, [requestId]);
             const inv = await client.query(`SELECT id FROM ${DB.INVOICES} WHERE student_id=$1::uuid AND status!='Paid' LIMIT 1`, [wRes.rows[0].student_id]);
-            if (inv.rows[0]) await client.query(`UPDATE ${DB.INVOICES} SET total_amount=total_amount-$1, discount_amount=COALESCE(discount_amount,0)+$1 WHERE id=$2::uuid`, [amount, inv.rows[0].id]);
+            
+            if (inv.rows[0]) {
+                await client.query(`
+                    UPDATE ${DB.INVOICES} 
+                    SET total_amount = total_amount - $1, 
+                        discount_amount = COALESCE(discount_amount, 0) + $1 
+                    WHERE id = $2::uuid`, 
+                [amount, inv.rows[0].id]);
+            }
         }
-        await client.query('COMMIT'); res.json({message: `Waiver ${newStatus}`});
-    } catch (e) { await client.query('ROLLBACK'); res.status(500).json({message: e.message}); } finally { client.release(); }
+        
+        await client.query('COMMIT'); 
+        res.json({ success: true, message: `Institutional Waiver ${newStatus} successfully.` });
+    } catch (e) { 
+        await client.query('ROLLBACK'); 
+        res.status(500).json({ message: "Waiver processing failure: " + e.message }); 
+    } finally { 
+        client.release(); 
+    }
 });
 
 /**
- * 6.2 DEFAULTERS LIST (Branch-Aware Version)
- * @route   GET /api/finance/defaulters
- * @desc    Fetch a list of students with overdue invoices, isolated by branch
- * @access  Private (Admin, Finance)
+ * 6.2 DEFAULTERS REGISTRY (Updated with Email Telemetry)
  */
-router.get('/defaulters', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {
-    // 1. EXTRACTION: Identify user scope from JWT
+router.get('/defaulters', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
     const { branch_id, role } = req.user;
 
     try {
-        // 2. BASE SQL: Joins Students, Users, Courses, and Batches to provide a full profile
         let query = `
             SELECT 
                 s.student_id, 
-                u.username AS student_name,      
-                s.roll_number, 
-                COALESCE(u.phone_number, 'N/A') AS parent_phone, 
+                u.username AS student_name,
+                COALESCE(u.email, s.email, 'NOT PROVIDED') AS email, -- ✅ ADDED THIS LINE
+                COALESCE(s.enrollment_no, s.roll_number, s.admission_id, 'PENDING') AS roll_number, 
+                COALESCE(u.phone_number, s.phone_number, 'NOT PROVIDED') AS parent_phone, 
+                s.last_finance_reminder_sent,
                 c.course_name, 
                 b.batch_name,                    
                 COUNT(i.id)::int AS pending_invoices_count, 
@@ -1194,16 +1258,17 @@ router.get('/defaulters', authenticateToken, authorize(['admin', 'finance']), as
         `;
 
         const params = [];
-
-        // 3. MULTI-TENANCY SECURITY: Branch isolation
-        if (role !== 'super admin' && branch_id) {
+        if (role.toLowerCase() !== 'super admin' && branch_id) {
             query += ` AND s.branch_id = $1::uuid`;
             params.push(branch_id);
         }
 
-        // 4. GROUPING & PRIORITY: Group by student and sort by the highest debt first
+        // ⚠️ CRITICAL: You MUST add u.email and s.email to the GROUP BY clause
         query += `
-            GROUP BY s.student_id, u.username, s.roll_number, u.phone_number, c.course_name, b.batch_name
+            GROUP BY 
+                s.student_id, u.username, u.email, s.email, s.enrollment_no, 
+                s.roll_number, s.admission_id, u.phone_number, s.phone_number,
+                s.last_finance_reminder_sent, c.course_name, b.batch_name
             HAVING SUM(i.total_amount - i.paid_amount) > 0
             ORDER BY total_due DESC
         `;
@@ -1212,15 +1277,14 @@ router.get('/defaulters', authenticateToken, authorize(['admin', 'finance']), as
         res.status(200).json(result.rows);
 
     } catch (error) {
-        console.error('Defaulters List API Error:', error.message);
-        res.status(500).json({ 
-            message: 'Failed to fetch defaulters list.',
-            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
-        });
+        console.error('Institutional Defaulter Sync Failure:', error.message);
+        res.status(500).json({ success: false, message: 'Defaulter telemetry synchronization failure.' });
     }
 });
-
-// 6.3 FINANCE AUDIT LOGS
+/**
+ * 6.3 FINANCE AUDIT LOGS
+ * @desc Comprehensive history of payment collections and billing events.
+ */
 router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 'finance']), async (req, res) => {
     const { startDate, endDate } = req.query;
     const start = startDate || moment().startOf('month').format('YYYY-MM-DD');
@@ -1229,17 +1293,9 @@ router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 
     try {
         const query = `
             SELECT * FROM (
-                -- 1. PAYMENT ACTIONS
                 SELECT 
-                    p.payment_date AS timestamp,
-                    'PAYMENT_COLLECTED' AS action_type,
-                    u.username AS performed_by,
-                    (
-                        'Collected ₹' || COALESCE(p.amount::text, '0') || 
-                        ' from ' || COALESCE(s.first_name, 'Student') || ' ' || COALESCE(s.last_name, '') ||
-                        ' (Roll: ' || COALESCE(s.roll_number, 'N/A') || ')' ||
-                        ' via ' || COALESCE(p.payment_mode, 'Unknown')
-                    ) AS details,
+                    p.payment_date AS timestamp, 'PAYMENT_COLLECTED' AS action_type, u.username AS performed_by,
+                    ('Collected ₹' || COALESCE(p.amount::text, '0') || ' from ' || COALESCE(s.first_name, 'Student') || ' ' || COALESCE(s.last_name, '') || ' (ID: ' || COALESCE(s.roll_number, 'N/A') || ') via ' || COALESCE(p.payment_mode, 'Unknown')) AS details,
                     p.transaction_id AS reference_id
                 FROM ${DB.PAYMENTS} p
                 JOIN ${DB.USERS} u ON p.collected_by = u.id
@@ -1249,86 +1305,150 @@ router.get('/audit-logs', authenticateToken, authorize(['admin', 'super admin', 
 
                 UNION ALL
 
-                -- 2. INVOICE ACTIONS
                 SELECT 
-                    i.created_at AS timestamp,
-                    'INVOICE_GENERATED' AS action_type,
-                    u.username AS performed_by,
-                    (
-                        'Generated Bill of ₹' || COALESCE(i.total_amount::text, '0') || 
-                        ' for ' || COALESCE(s.first_name, 'Student') || ' ' || COALESCE(s.last_name, '') ||
-                        ' (Roll: ' || COALESCE(s.roll_number, 'N/A') || ')'
-                    ) AS details,
+                    i.created_at AS timestamp, 'INVOICE_GENERATED' AS action_type, u.username AS performed_by,
+                    ('Generated Bill of ₹' || COALESCE(i.total_amount::text, '0') || ' for ' || COALESCE(s.first_name, 'Student') || ' ' || COALESCE(s.last_name, '') || ' (ID: ' || COALESCE(s.roll_number, 'N/A') || ')') AS details,
                     i.invoice_number AS reference_id
                 FROM ${DB.INVOICES} i
                 JOIN ${DB.USERS} u ON i.created_by = u.id
                 JOIN ${DB.STUDENTS} s ON i.student_id = s.student_id
                 WHERE i.created_at::date >= $1 AND i.created_at::date <= $2
-            ) audit_data
-            ORDER BY timestamp DESC
+            ) audit_data ORDER BY timestamp DESC
         `;
-
         const result = await pool.query(query, [start, end]);
         res.status(200).json(result.rows);
-
     } catch (error) {
-        console.error('Audit Log Error:', error);
-        res.status(500).json({ message: 'Failed to fetch audit logs.' });
+        res.status(500).json({ message: 'Failed to synchronize institutional audit logs.' });
     }
 });
 
-
-// --- Helper: Safely Convert String to UUID or Null ---
-function toUUID(value) {
-    if (!value || typeof value !== 'string' || value.trim() === '') return null;
-    return value.trim();
-}
-
 /**
- * 3.4 GET STUDENT RECEIPTS LIST (Final Fix Applied)
- * @route   GET /api/finance/student/:studentId/receipts
- * @desc    Get a list of successfully completed payments (receipts) for a student.
- * @access  Private (Student Self-View, Admin)
+ * 6.4 BROADCAST DUES REMINDERS (Nodemailer Integration & Registry Stamping)
+ * @route   POST /api/finance/reminders/send
+ * @desc    Dispatches institutional email reminders, logs status, and updates last notified timestamp.
+ * @access  Private (Admin, Finance, and Super Admin)
  */
-router.get('/student/:studentId/receipts', authenticateToken, authorize(['Student', 'Admin', 'Finance', 'Super Admin']), async (req, res) => {
-    const studentId = req.params.studentId;
-    const safeStudentId = toUUID(studentId);
+router.post('/reminders/send', authenticateToken, authorize(['admin', 'finance', 'super admin']), async (req, res) => {
+    const { studentIds } = req.body;
 
-    if (!safeStudentId) {
-        return res.status(400).json({ message: 'Invalid Student ID.' });
+    if (!studentIds || !Array.isArray(studentIds) || studentIds.length === 0) {
+        return res.status(400).json({ success: false, message: "Recipient selection required." });
     }
 
     try {
+        // 1. Fetch Contact Intelligence & Outstanding Balances
         const query = `
-            SELECT
-                p.id AS receipt_id, 
-                p.payment_date,
-                p.amount,
-                p.payment_mode,
-                p.transaction_id,
-                
-                COALESCE(p.transaction_id, p.id::text) AS receipt_number, 
-                
-                i.invoice_number,
-                i.status 
-            FROM ${DB.PAYMENTS} p
-            JOIN ${DB.INVOICES} i ON p.invoice_id = i.id
-            WHERE i.student_id = $1::uuid AND i.status != 'Waived'
-            ORDER BY p.payment_date DESC;
+            SELECT s.student_id, u.username AS student_name, u.email,
+            COALESCE(s.enrollment_no, s.roll_number, 'N/A') as roll_number,
+            (SELECT SUM(total_amount - paid_amount) FROM ${DB.INVOICES} WHERE student_id = s.student_id AND status != 'Paid') as balance
+            FROM ${DB.STUDENTS} s JOIN ${DB.USERS} u ON s.user_id = u.id
+            WHERE s.student_id = ANY($1::uuid[])
         `;
-        
-        const result = await pool.query(query, [safeStudentId]); 
-        res.status(200).json(result.rows);
+        const { rows } = await pool.query(query, [studentIds]);
+
+        const telemetry = [];
+        for (const student of rows) {
+            if (!student.email) {
+                telemetry.push({ id: student.student_id, status: 'Skipped (Missing Email)' });
+                continue;
+            }
+
+            const mailOptions = {
+                from: `"Institutional Finance Office" <${process.env.EMAIL_USER}>`,
+                to: student.email,
+                subject: `URGENT: Outstanding Arrears Notification - ${student.student_name}`,
+                html: `
+                    <div style="font-family: sans-serif; border: 1px solid #e5e7eb; padding: 25px; border-radius: 12px; max-width: 600px;">
+                        <h2 style="color: #4f46e5;">Institutional Payment Reminder</h2>
+                        <p>Dear Parent/Guardian,</p>
+                        <p>This is a formal notification regarding the outstanding arrears for <b>${student.student_name}</b> (ID: ${student.roll_number}).</p>
+                        <div style="background-color: #fef2f2; padding: 20px; border-radius: 10px; margin: 25px 0; border-left: 6px solid #ef4444;">
+                            <p style="margin: 0; color: #991b1b; font-weight: bold; font-size: 16px;">
+                                Net Outstanding Arrears: ₹${parseFloat(student.balance).toLocaleString('en-IN')}
+                            </p>
+                        </div>
+                        <p>Please clear these dues immediately via the Student Portal HUD Hub.</p>
+                        <a href="https://portal.bcsm.org.in" style="background-color: #4f46e5; color: white; padding: 12px 25px; text-decoration: none; border-radius: 50px; display: inline-block; font-weight: bold;">SYNC LEDGER & PAY NOW</a>
+                        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+                        <p style="font-size: 10px; color: #6b7280; text-align: center;">Institutional Finance Registry | 2026 Telemetry Node</p>
+                    </div>`
+            };
+
+            try {
+                // ✅ DISPATCH: Calling your existing Nodemailer service
+                await transporter.sendMail(mailOptions); 
+                
+                // ✅ TELEMETRY STAMP: Update the student's last notified timestamp in the registry
+                await pool.query(
+                    `UPDATE ${DB.STUDENTS} SET last_finance_reminder_sent = CURRENT_TIMESTAMP WHERE student_id = $1`,
+                    [student.student_id]
+                );
+
+                // ✅ AUDIT: Logging success in your DB 'email_logs' table
+                await pool.query(
+                    `INSERT INTO email_logs (recipient_email, subject, status, reference_id) VALUES ($1, $2, 'Success', $3)`,
+                    [student.email, mailOptions.subject, student.student_id]
+                );
+
+                console.log(`✅ Telemetry Sync: Notification dispatched and stamped for ${student.email}`);
+                telemetry.push({ id: student.student_id, status: 'Sent' });
+            } catch (err) {
+                // ✅ FAILURE LOGGING
+                await pool.query(
+                    `INSERT INTO email_logs (recipient_email, subject, status, error_message, reference_id) VALUES ($1, $2, 'Failed', $3, $4)`,
+                    [student.email, mailOptions.subject, err.message, student.student_id]
+                );
+                telemetry.push({ id: student.student_id, status: 'Failed' });
+            }
+        }
+
+        res.status(200).json({ success: true, message: "Institutional broadcast processed.", results: telemetry });
 
     } catch (error) {
-        console.error('Error fetching student receipts:', error);
-        res.status(500).json({ 
-            message: 'Failed to retrieve fee receipt history.', 
-            error: error.message 
-        });
+        console.error("Broadcast telemetry sync failed:", error.message);
+        res.status(500).json({ success: false, message: "Broadcast telemetry sync failed." });
     }
 });
 
+/**
+ * 3.4 GET STUDENT RECEIPTS (Production Version)
+ * @route   GET /api/finance/student/receipts
+ */
+router.get('/student/receipts', authenticateToken, async (req, res) => {
+    try {
+        const studentId = req.query.student_id; 
+
+        // Tactical Guard: Check for empty or malformed ID
+        if (!studentId || studentId === 'null') {
+            return res.status(200).json([]); // Return empty list, not 404
+        }
+
+        // Optimized Query using the direct student_id column confirmed in your schema
+        const query = `
+            SELECT 
+                p.id, 
+                p.amount, 
+                p.payment_date, 
+                p.payment_mode, 
+                p.transaction_id, 
+                i.invoice_number,
+                COALESCE(i.title, 'General Academic Fee') as fee_type
+            FROM fee_payments p
+            LEFT JOIN student_invoices i ON p.invoice_id = i.id
+            WHERE p.student_id = $1::uuid
+            ORDER BY p.payment_date DESC;
+        `;
+
+        const result = await pool.query(query, [studentId.trim()]);
+        
+        // Success: Always send back the rows array
+        res.status(200).json(result.rows); 
+
+    } catch (err) {
+        console.error("🔥 Telemetry Sync Error:", err.message);
+        res.status(500).json({ success: false, message: "Database link error." });
+    }
+});
 // ==========================================
 // GET: Student Payment History
 // ==========================================
@@ -1503,7 +1623,7 @@ router.get('/student/:studentId/scholarships', authenticateToken, async (req, re
 
 // --- DEPENDENCIES ---
 // Ensure these are at the VERY TOP of your routes/fees.js file
-const axios = require('axios'); 
+ 
 const { sendPaymentEmail } = require('../utils/mailer'); 
 
 /**
@@ -1669,75 +1789,132 @@ router.get('/receipt/:idOrTxn', async (req, res) => {
 
 /**
  * @route   GET /api/finance/receipt/:id
- * @desc    Fetch receipt data OR generate PDF based on query parameter
+ * @desc    Fetch receipt JSON for UI OR generate professional PDF for download
+ * @access  Protected (Supports Header Auth & Query Token for Downloads)
  */
 router.get('/receipt/:id', async (req, res) => {
-    // 1. Unified Authentication (Headers or Query for browser downloads)
+    // 1. Unified Authentication Logic
+    // Browser <a> tags cannot send headers, so we allow token via query string
     const token = req.headers.authorization?.split(' ')[1] || req.query.token;
-    if (!token) return res.status(401).json({ message: 'Unauthorized' });
+    
+    if (!token) {
+        return res.status(401).json({ success: false, message: 'Unauthorized: No token provided' });
+    }
 
     try {
         const jwt = require('jsonwebtoken');
-        jwt.verify(token, process.env.JWT_SECRET);
+        // Verify token validity
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const requestBy = decoded.id;
 
         const { id } = req.params;
         
-        // 2. Prevent UUID Syntax Error: Detect ID type
+        // 2. Data Integrity: Detect if ID is a Database UUID or a Transaction String (Cashfree/Manual)
         const isUUID = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
 
         const query = `
             SELECT 
                 fp.id, fp.transaction_id, fp.payment_date, fp.amount, fp.payment_mode,
                 s.first_name, s.last_name, s.enrollment_no, s.roll_number,
-                c.course_name,
+                c.course_name, b.batch_name,
                 si.invoice_number, 
                 si.title as fee_description
             FROM fee_payments fp
-            JOIN student_invoices si ON fp.invoice_id = si.id
+            JOIN student_invoices i ON fp.invoice_id = i.id
+            JOIN student_invoices si ON fp.invoice_id = si.id -- Double join for safety
             JOIN students s ON si.student_id = s.student_id
             LEFT JOIN courses c ON s.course_id = c.id
+            LEFT JOIN batches b ON s.batch_id = b.id
             WHERE ${isUUID ? 'fp.id = $1::uuid' : 'fp.transaction_id = $1'}
+            LIMIT 1
         `;
 
         const result = await pool.query(query, [id]);
-        if (result.rows.length === 0) return res.status(404).json({ message: "Receipt not found" });
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: "Receipt record not found." });
+        }
 
         const data = result.rows[0];
 
-        // 3. Conditional Output: JSON or PDF
+        // 3. Output Logic: If 'token' is in query, user wants a PDF download
         if (req.query.token) {
-            // GENERATE PDF
-            const doc = new PDFDocument({ margin: 50, size: 'A4' });
+            const doc = new PDFDocument({ 
+                size: 'A4', 
+                margin: 50,
+                info: { Title: `Receipt-${data.transaction_id || data.id}` }
+            });
+
+            // Set response headers for PDF stream
             res.setHeader('Content-Type', 'application/pdf');
-            res.setHeader('Content-Disposition', `attachment; filename=Receipt_${data.transaction_id || 'Fee'}.pdf`);
+            res.setHeader('Content-Disposition', `inline; filename=Receipt_${data.transaction_id || 'Fee'}.pdf`);
+            
             doc.pipe(res);
 
-            // PDF Content Layout
-            doc.fontSize(22).fillColor('#4f46e5').text('FEE PAYMENT RECEIPT', { align: 'center' }).moveDown();
-            doc.fontSize(10).fillColor('#64748b').text(`Receipt Number: ${data.invoice_number || 'N/A'}`, { align: 'right' });
+            // --- PDF STYLING & CONTENT ---
+            // Header Section
+            doc.fontSize(22).fillColor('#4f46e5').text('OFFICIAL FEE RECEIPT', { align: 'center' }).moveDown(0.5);
+            
+            // Branch/School Branding (Can be dynamic)
+            doc.fontSize(10).fillColor('#64748b').text('Institution: BCSM Portal System', { align: 'left' });
+            doc.text(`Receipt No: ${data.invoice_number || 'N/A'}`, { align: 'right' });
             doc.text(`Transaction ID: ${data.transaction_id || data.id}`, { align: 'right' });
-            doc.text(`Date: ${new Date(data.payment_date).toLocaleDateString()}`, { align: 'right' }).moveDown();
+            doc.text(`Date: ${new Date(data.payment_date).toLocaleDateString('en-IN')}`, { align: 'right' }).moveDown();
             
-            doc.rect(50, doc.y, 500, 2).fill('#4f46e5').moveDown();
+            // Visual Divider
+            doc.rect(50, doc.y, 500, 2).fill('#4f46e5').moveDown(1.5);
             
-            doc.fillColor('#1e293b').fontSize(12).text(`Student: ${data.first_name} ${data.last_name}`, { continued: true });
-            doc.text(`  |  Roll: ${data.roll_number || 'N/A'}`, { align: 'left' });
-            doc.text(`Course: ${data.course_name || 'N/A'}`).moveDown();
+            // Student Details
+            doc.fillColor('#1e293b').fontSize(12).font('Helvetica-Bold')
+               .text(`Student Name: ${data.first_name} ${data.last_name}`);
+            doc.font('Helvetica').fontSize(10)
+               .text(`Enrollment No: ${data.enrollment_no || 'N/A'}`)
+               .text(`Roll Number: ${data.roll_number || 'N/A'}`)
+               .text(`Course/Batch: ${data.course_name} (${data.batch_name || 'General'})`)
+               .moveDown(1.5);
             
-            doc.fontSize(14).text(`Description: ${data.fee_description || 'School Fee Payment'}`);
-            doc.moveDown();
-            doc.fontSize(18).fillColor('#22c55e').text(`TOTAL PAID: INR ${data.amount}`, { align: 'right' });
+            // Payment Summary Table-like structure
+            doc.rect(50, doc.y, 500, 25).fill('#f1f5f9');
+            doc.fillColor('#475569').fontSize(10).font('Helvetica-Bold').text('Description', 60, doc.y - 17);
+            doc.text('Amount Paid', 450, doc.y - 17, { align: 'right' });
+            
+            doc.moveDown(0.8).fillColor('#1e293b').font('Helvetica')
+               .text(data.fee_description || 'General School Fee Payment', 60);
+            doc.fontSize(12).font('Helvetica-Bold')
+               .text(`INR ${parseFloat(data.amount).toLocaleString('en-IN')}`, 450, doc.y - 12, { align: 'right' });
+
+            doc.moveDown(2);
+            doc.rect(50, doc.y, 500, 1).fill('#cbd5e1').moveDown(0.5);
+            
+            // Footer & Verification
+            doc.fontSize(14).fillColor('#16a34a').text(`Payment Status: SUCCESSFUL`, { align: 'center' }).moveDown();
+            doc.fontSize(8).fillColor('#94a3b8')
+               .text('This is a computer-generated receipt and does not require a physical signature.', { align: 'center' })
+               .text(`Generated on: ${new Date().toLocaleString()}`, { align: 'center' });
             
             doc.end();
+
         } else {
-            // RETURN JSON for Frontend UI
-            res.json(data);
+            // Standard JSON response for Frontend Dashboard UI
+            res.json({ success: true, data: data });
         }
 
     } catch (err) {
-        console.error("Receipt System Error:", err.message);
-        res.status(500).json({ message: "Internal Server Error" });
+        console.error("🔥 Final Receipt API Error:", err.message);
+        res.status(500).json({ success: false, message: "Internal Server Error processing receipt." });
     }
 });
+
+
+router.get('/student/receipts', authenticateToken, async (req, res) => {
+    try {
+        const studentId = req.query.student_id;
+        const result = await pool.query('SELECT * FROM fee_payments WHERE student_id = $1::uuid', [studentId]);
+        res.status(200).json(result.rows);
+    } catch (err) {
+        res.status(500).json({ error: "Finance Registry Sync Failed" });
+    }
+});
+
 module.exports = router;
 

@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Class Students | Elite ERP</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        :root { --primary: #5e35b1; --secondary: #005a9c; --bg: #f4f7fe; }
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: var(--bg); color: #1e293b; font-size: 14px; }
+        
+        .container { max-width: 1100px; margin: 30px auto; padding: 30px; background: #fff; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+        
+        h1 { color: var(--primary); font-weight: 800; margin-bottom: 25px; border-bottom: 3px solid #eee; padding-bottom: 15px; display: flex; align-items: center; gap: 12px; }
+        
+        .dashboard-link { color: var(--secondary); text-decoration: none; font-weight: 700; transition: 0.3s; }
+        .dashboard-link:hover { opacity: 0.7; transform: translateX(-5px); }
+
+        /* Filter Section Styling */
+        #filter-section {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px; margin-bottom: 25px; padding: 20px; background: #f8fafc; border-radius: 15px; border: 1px solid #e2e8f0;
+        }
+        .form-select { border-radius: 10px; border: 1px solid #cbd5e1; font-weight: 500; }
+
+        /* Table Styling */
+        .table-responsive { border-radius: 15px; overflow: hidden; border: 1px solid #e2e8f0; }
+        .table thead th { background-color: var(--primary); color: white; border: none; padding: 15px; text-transform: uppercase; font-size: 12px; letter-spacing: 0.5px; }
+        .table tbody td { padding: 15px; vertical-align: middle; border-color: #f1f5f9; }
+        
+        .student-name { font-weight: 700; color: #1e293b; font-size: 15px; }
+        .batch-info { font-size: 12px; color: #64748b; font-weight: 500; }
+        
+        .action-button { width: 35px; height: 35px; border-radius: 10px; display: inline-flex; align-items: center; justify-content: center; transition: 0.3s; }
+        .action-button:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        
+        #loading-indicator { font-weight: 600; color: var(--primary); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a href="/teacher-dashboard.html" class="dashboard-link mb-3 d-inline-block">
+            <i class="fas fa-chevron-left me-2"></i>Back to Dashboard
+        </a>
+        
+        <h1><i class="fas fa-user-graduate"></i> Students Assigned to My Classes</h1>
+
+        <div id="filter-section">
+            <div>
+                <label class="form-label fw-bold small text-muted">Course</label>
+                <select id="courseSelect" class="form-select" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="form-label fw-bold small text-muted">Batch</label>
+                <select id="batchSelect" class="form-select" onchange="applyFilters()"></select>
+            </div>
+            <div>
+                <label class="form-label fw-bold small text-muted">Subject</label>
+                <select id="subjectSelect" class="form-select" onchange="applyFilters()"></select>
+            </div>
+        </div>
+
+        <div id="loading-indicator" class="text-center p-5">
+            <div class="spinner-border spinner-border-sm me-2"></div> Fetching roster from server...
+        </div>
+        
+        <p id="error-message" class="alert alert-danger" style="display: none; border-radius: 12px;"></p>
+        
+        <div class="table-responsive shadow-sm">
+            <table class="table table-hover mb-0" style="display: none;" id="student-table">
+                <thead>
+                    <tr>
+                        <th width="60">#</th>
+                        <th>Student Details</th>
+                        <th>Class Context</th>
+                        <th>Roll No.</th>
+                        <th>Assigned Subject</th>
+                        <th width="120">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="student-list-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    
+
+    <script>
+        const API_BASE_URL = '/api';
+        const TOKEN = localStorage.getItem('erp-token');
+        const USER_ROLE = localStorage.getItem('user-role');
+        
+        const studentListBody = document.getElementById('student-list-body');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const studentTable = document.getElementById('student-table');
+        const errorMessage = document.getElementById('error-message');
+        
+        const courseSelect = document.getElementById('courseSelect');
+        const batchSelect = document.getElementById('batchSelect');
+        const subjectSelect = document.getElementById('subjectSelect');
+
+        let allStudents = [];
+
+        async function loadAllData() {
+            // সিকিউরিটি চেক
+            if (!TOKEN || USER_ROLE !== 'Teacher') {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            try {
+                // আপনার সার্ভার লগ অনুযায়ী এন্ডপয়েন্ট: /api/teachers/me/students
+                const response = await fetch(`${API_BASE_URL}/teachers/me/students`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+
+                if (!response.ok) throw new Error("Failed to fetch student data");
+
+                const data = await response.json();
+                loadingIndicator.style.display = 'none';
+
+                if (data && data.length > 0) {
+                    allStudents = data;
+                    populateFilters(data);
+                    renderStudents(data);
+                    studentTable.style.display = 'table';
+                } else {
+                    showError("No students found in your assigned classes.");
+                }
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function populateFilters(students) {
+            const filters = { course: new Set(), batch: new Set(), subject: new Set() };
+            
+            students.forEach(s => {
+                if(s.course_name) filters.course.add(JSON.stringify({id: s.course_id, name: s.course_name}));
+                if(s.batch_name) filters.batch.add(JSON.stringify({id: s.batch_id, name: s.batch_name}));
+                if(s.subject_name) filters.subject.add(JSON.stringify({id: s.subject_id, name: s.subject_name}));
+            });
+
+            const renderOption = (set, element, label) => {
+                element.innerHTML = `<option value="">All ${label}</option>`;
+                [...set].forEach(item => {
+                    const obj = JSON.parse(item);
+                    element.innerHTML += `<option value="${obj.id}">${obj.name}</option>`;
+                });
+            };
+
+            renderOption(filters.course, courseSelect, 'Courses');
+            renderOption(filters.batch, batchSelect, 'Batches');
+            renderOption(filters.subject, subjectSelect, 'Subjects');
+        }
+
+        function applyFilters() {
+            const cVal = courseSelect.value;
+            const bVal = batchSelect.value;
+            const sVal = subjectSelect.value;
+
+            const filtered = allStudents.filter(s => {
+                return (!cVal || s.course_id === cVal) &&
+                       (!bVal || s.batch_id === bVal) &&
+                       (!sVal || s.subject_id === sVal);
+            });
+
+            renderStudents(filtered);
+        }
+
+        function renderStudents(students) {
+            studentListBody.innerHTML = '';
+            students.forEach((s, index) => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="fw-bold text-muted">${index + 1}</td>
+                    <td>
+                        <div class="student-name">${s.student_full_name}</div>
+                        <div class="batch-info"><i class="far fa-envelope me-1"></i>${s.email || 'No email'}</div>
+                    </td>
+                    <td><span class="badge bg-light text-dark border">${s.course_name}</span><br><small class="fw-bold text-primary">${s.batch_name}</small></td>
+                    <td class="fw-bold text-secondary">${s.roll_number || 'N/A'}</td>
+                    <td class="text-primary fw-bold">${s.subject_name}</td>
+                    <td>
+                        <button class="btn btn-info action-button text-white" onclick="viewStudent('${s.student_user_id}')" title="Profile">
+                            <i class="fas fa-user-circle"></i>
+                        </button>
+                        <button class="btn btn-warning action-button text-white" onclick="takeAttendance('${s.course_id}', '${s.batch_id}')" title="Attendance">
+                            <i class="fas fa-calendar-check"></i>
+                        </button>
+                    </td>
+                `;
+                studentListBody.appendChild(row);
+            });
+        }
+
+        function takeAttendance(cId, bId) {
+            // সরাসরি take-attendance.html এ রিডাইরেক্ট করবে
+            window.location.href = `/take-attendance.html?course=${cId}&batch=${bId}`;
+        }
+
+        function viewStudent(id) {
+            window.location.href = `/student-profile-view.html?id=${id}`;
+        }
+
+        function showError(msg) {
+            loadingIndicator.style.display = 'none';
+            errorMessage.textContent = msg;
+            errorMessage.style.display = 'block';
+        }
+
+        document.addEventListener('DOMContentLoaded', loadAllData);
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

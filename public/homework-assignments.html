@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Assignments & Grading | BCSM</title>
     
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -34,6 +34,15 @@
             gap: 5px;
         }
         .submission-file-link:hover { text-decoration: underline; }
+        .branch-badge {
+            font-size: 0.65rem;
+            background: #eef2ff;
+            color: #6366f1;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -43,7 +52,7 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-chalkboard-teacher me-2"></i>Assignments & Grading</h2>
-            <p class="text-muted mb-0 small">Create tasks, track submissions, and grade students</p>
+            <p class="text-muted mb-0 small">Create tasks and grade students for your specific branch</p>
         </div>
         <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
             <i class="fas fa-arrow-left me-2"></i> Dashboard
@@ -73,6 +82,13 @@
                     <div class="glass-card h-100">
                         <h5 class="fw-bold text-primary mb-3"><i class="fas fa-pen-fancy me-2"></i>New Assignment</h5>
                         <form id="assignment-form">
+                            <div class="mb-3" id="branch-select-container" style="display: none;">
+                                <label class="form-label fw-bold small text-primary">Assign to Branch</label>
+                                <select id="branch-select" class="form-select bg-light border-primary-subtle">
+                                    <option value="">-- Select Branch --</option>
+                                </select>
+                            </div>
+
                             <div class="mb-3">
                                 <label class="form-label fw-bold small">Course</label>
                                 <select id="course-select" class="form-select" required onchange="loadBatches(this.value)">
@@ -114,15 +130,18 @@
 
                 <div class="col-lg-8">
                     <div class="glass-card h-100 p-0 overflow-hidden">
-                        <div class="p-3 border-bottom bg-light">
+                        <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
                             <h6 class="fw-bold mb-0">Active Assignments</h6>
+                            <select id="filter-branch-manage" class="form-select form-select-sm w-auto rounded-pill" style="display:none;" onchange="fetchAssignments()">
+                                <option value="">All Branches</option>
+                            </select>
                         </div>
                         <div class="table-responsive">
                             <table class="table table-glass table-hover mb-0">
                                 <thead class="table-light">
                                     <tr>
-                                        <th>Title</th>
-                                        <th>Course & Subject</th>
+                                        <th>Assignment Details</th>
+                                        <th>Target</th>
                                         <th>Deadline</th>
                                         <th class="text-center">Marks</th>
                                         <th class="text-center">Actions</th>
@@ -141,7 +160,12 @@
         <div class="tab-pane fade" id="pills-grading">
             <div class="glass-card p-0 overflow-hidden">
                 <div class="p-3 border-bottom d-flex justify-content-between align-items-center">
-                    <h5 class="fw-bold text-primary mb-0">Pending Reviews</h5>
+                    <div class="d-flex align-items-center gap-3">
+                        <h5 class="fw-bold text-primary mb-0">Pending Reviews</h5>
+                        <select id="filter-branch-grading" class="form-select form-select-sm rounded-pill" style="display:none;" onchange="fetchPendingSubmissions()">
+                            <option value="">Filter by Branch</option>
+                        </select>
+                    </div>
                     <button class="btn btn-sm btn-outline-primary rounded-pill" onclick="fetchPendingSubmissions()">
                         <i class="fas fa-sync-alt me-1"></i> Refresh
                     </button>
@@ -151,7 +175,7 @@
                         <thead class="table-light">
                             <tr>
                                 <th>Student Info</th>
-                                <th>Assignment Title</th>
+                                <th>Assignment Info</th>
                                 <th>Submitted At</th>
                                 <th>Attachment</th>
                                 <th>Grading</th>
@@ -174,21 +198,36 @@
 
 <script>
     const API_BASE = '/api/online-learning';
+    let currentUser = null;
 
     document.addEventListener('DOMContentLoaded', () => {
         const token = localStorage.getItem('erp-token');
-        if (!token) window.location.href = '/login.html';
+        if (!token) { window.location.href = '/login.html'; return; }
+
+        try {
+            currentUser = JSON.parse(atob(token.split('.')[1]));
+            initBranchUI();
+        } catch(e) { console.error("Session Error"); }
         
         loadDependencies();
         fetchAssignments();
     });
 
+    function initBranchUI() {
+        if (currentUser.role === 'Super Admin') {
+            document.getElementById('branch-select-container').style.display = 'block';
+            document.getElementById('filter-branch-manage').style.display = 'block';
+            document.getElementById('filter-branch-grading').style.display = 'block';
+        }
+    }
+
     // 1. Load Dropdowns
     async function loadDependencies() {
         try {
-            const [coursesRes, subjectsRes] = await Promise.all([
+            const [coursesRes, subjectsRes, branchesRes] = await Promise.all([
                 window.authFetch('/api/academicswithfees/courses'),
-                window.authFetch('/api/academicswithfees/subjects')
+                window.authFetch('/api/academicswithfees/subjects'),
+                currentUser.role === 'Super Admin' ? window.authFetch('/api/branches') : Promise.resolve(null)
             ]);
             
             const courses = await coursesRes.json();
@@ -203,22 +242,31 @@
             sSelect.innerHTML = '<option value="">Select Subject</option>';
             subjects.forEach(s => sSelect.innerHTML += `<option value="${s.id || s.subject_id}">${s.subject_name}</option>`);
 
+            if (branchesRes) {
+                const branches = await branchesRes.json();
+                const bSelect = document.getElementById('branch-select');
+                const bFilterM = document.getElementById('filter-branch-manage');
+                const bFilterG = document.getElementById('filter-branch-grading');
+                
+                branches.forEach(b => {
+                    const opt = `<option value="${b.id}">${b.branch_name}</option>`;
+                    bSelect.innerHTML += opt;
+                    bFilterM.innerHTML += opt;
+                    bFilterG.innerHTML += opt;
+                });
+            }
+
         } catch (e) { console.error("Dependency Load Error:", e); }
     }
 
     async function loadBatches(courseId) {
         const bSelect = document.getElementById('batch-select');
         bSelect.innerHTML = '<option value="">Loading...</option>';
-        
-        if(!courseId) {
-            bSelect.innerHTML = '<option value="">-- All Batches --</option>';
-            return;
-        }
+        if(!courseId) { bSelect.innerHTML = '<option value="">-- All Batches --</option>'; return; }
 
         try {
             const res = await window.authFetch(`/api/academicswithfees/courses/${courseId}/batches`);
             const batches = await res.json();
-            
             bSelect.innerHTML = '<option value="">-- All Batches --</option>';
             batches.forEach(b => bSelect.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`);
         } catch(e) { console.error(e); }
@@ -238,7 +286,8 @@
             title: document.getElementById('title').value,
             due_date: document.getElementById('due_date').value,
             max_marks: document.getElementById('max_marks').value,
-            content_type: 'ASSIGNMENT'
+            content_type: 'ASSIGNMENT',
+            branch_id: document.getElementById('branch-select')?.value || currentUser.branch_id
         };
 
         try {
@@ -252,7 +301,7 @@
                 e.target.reset();
                 fetchAssignments();
             } else {
-                alert("Failed to publish.");
+                alert("Failed to publish. Check branch settings.");
             }
         } catch(err) { alert("Network Error"); }
         finally {
@@ -263,19 +312,28 @@
 
     async function fetchAssignments() {
         const tbody = document.getElementById('assignments-tbody');
+        const branchFilter = document.getElementById('filter-branch-manage').value;
+        
         try {
             const res = await window.authFetch(`${API_BASE}/modules`);
-            const data = await res.json();
+            let data = await res.json();
             
+            if (branchFilter) {
+                data = data.filter(a => a.branch_id === branchFilter);
+            }
+
             if(data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-muted">No assignments created yet.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center p-4 text-muted">No assignments found for this branch.</td></tr>';
                 return;
             }
 
             tbody.innerHTML = data.map(a => `
                 <tr>
-                    <td class="fw-bold">${a.title}</td>
-                    <td><small>${a.course_name} <br> <span class="text-muted">${a.subject_name || '-'}</span></small></td>
+                    <td>
+                        ${currentUser.role === 'Super Admin' ? `<span class="branch-badge mb-1">${a.branch_name || 'Global'}</span>` : ''}
+                        <div class="fw-bold text-dark">${a.title}</div>
+                    </td>
+                    <td><small class="text-primary fw-bold">${a.course_name}</small><br><small class="text-muted">${a.subject_name || '-'}</small></td>
                     <td>${new Date(a.due_date).toLocaleDateString()}</td>
                     <td class="text-center"><span class="badge bg-light text-dark border">${a.max_marks || 0}</span></td>
                     <td class="text-center">
@@ -286,88 +344,85 @@
         } catch (e) { tbody.innerHTML = '<tr><td colspan="5" class="text-center text-danger">Error loading data.</td></tr>'; }
     }
 
-    async function deleteAssignment(id) {
-        if(!confirm("Delete this assignment? Submissions will be lost.")) return;
-        try {
-            await window.authFetch(`${API_BASE}/modules/${id}`, { method: 'DELETE' });
-            fetchAssignments();
-        } catch(e) { alert("Error deleting."); }
-    }
-
     // 3. Grading Logic
     async function fetchPendingSubmissions() {
         const tbody = document.getElementById('review-tbody');
+        const branchFilter = document.getElementById('filter-branch-grading').value;
         tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5"><div class="spinner-border text-primary"></div></td></tr>';
 
         try {
             const res = await window.authFetch(`${API_BASE}/submissions/pending`);
-            if (res.status === 404) throw new Error("Grading module not configured.");
-            
-            const data = await res.json();
+            let data = await res.json();
+
+            if (branchFilter) {
+                data = data.filter(sub => sub.branch_id === branchFilter);
+            }
 
             if(data.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5 text-success"><i class="fas fa-check-circle fa-2x mb-3"></i><br>All caught up! No pending reviews.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-5 text-success"><i class="fas fa-check-circle fa-2x mb-3"></i><br>No pending reviews for this branch.</td></tr>';
                 return;
             }
 
             tbody.innerHTML = data.map(sub => `
                 <tr>
                     <td>
-                        <div class="fw-bold text-dark">${sub.student_name}</div>
-                        <small class="text-muted">ID: ${sub.student_id ? sub.student_id.substring(0,6) : 'N/A'}</small>
+                        ${currentUser.role === 'Super Admin' ? `<span class="branch-badge">${sub.branch_name || 'N/A'}</span>` : ''}
+                        <div class="fw-bold text-dark mt-1">${sub.student_name}</div>
+                        <small class="text-muted">ID: ${sub.student_id ? sub.student_id.substring(0,8) : 'N/A'}</small>
                     </td>
-                    <td>${sub.assignment_title}</td>
-                    <td><small>${new Date(sub.submitted_at).toLocaleString()}</small></td>
+                    <td>
+                        <div class="fw-bold small">${sub.assignment_title}</div>
+                        <div class="x-small text-primary">${sub.course_name}</div>
+                    </td>
+                    <td><small>${new Date(sub.submitted_at).toLocaleString([], {dateStyle:'short', timeStyle:'short'})}</small></td>
                     <td>
                         ${sub.submission_file_url ? 
                             `<a href="${sub.submission_file_url}" target="_blank" class="submission-file-link">
-                                <i class="fas fa-file-alt"></i> Open File
+                                <i class="fas fa-file-download"></i> View Work
                              </a>` : 
                             '<span class="text-muted small">No File</span>'
                         }
                     </td>
                     <td>
                         <div class="d-flex flex-column gap-2">
-                            <input type="number" id="marks-${sub.id}" class="form-control form-control-sm" placeholder="Score (Max ${sub.max_marks})">
-                            <input type="text" id="feedback-${sub.id}" class="form-control form-control-sm" placeholder="Feedback...">
+                            <input type="number" id="marks-${sub.id}" class="form-control form-control-sm" placeholder="Score / ${sub.max_marks}">
                         </div>
                     </td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-primary rounded-pill px-3" onclick="gradeSubmission('${sub.id}')">
-                            Submit Grade
+                            Grade
                         </button>
                     </td>
                 </tr>
             `).join('');
 
-        } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger p-4">Error: ${e.message}</td></tr>`;
-        }
+        } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="text-center text-danger p-4">Error fetching data.</td></tr>`; }
     }
 
     async function gradeSubmission(subId) {
         const marks = document.getElementById(`marks-${subId}`).value;
-        const feedback = document.getElementById(`feedback-${subId}`).value;
-
         if(!marks) return alert("Please enter a score.");
 
         try {
             const res = await window.authFetch(`${API_BASE}/submissions/grade`, {
                 method: 'POST',
-                body: JSON.stringify({ submission_id: subId, marks, feedback })
+                body: JSON.stringify({ submission_id: subId, marks })
             });
 
             if(res.ok) {
-                // Remove row with animation
-                const btn = document.activeElement;
-                const row = btn.closest('tr');
-                row.style.opacity = '0.5';
-                row.innerHTML = '<td colspan="6" class="text-center text-success fw-bold p-3">Graded Successfully!</td>';
-                setTimeout(() => fetchPendingSubmissions(), 1000);
+                fetchPendingSubmissions();
             } else {
                 alert("Failed to submit grade.");
             }
         } catch(e) { alert("Network Error"); }
+    }
+
+    async function deleteAssignment(id) {
+        if(!confirm("Delete this assignment? This cannot be undone.")) return;
+        try {
+            await window.authFetch(`${API_BASE}/modules/${id}`, { method: 'DELETE' });
+            fetchAssignments();
+        } catch(e) { alert("Error deleting."); }
     }
 </script>
 

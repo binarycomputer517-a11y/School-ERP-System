@@ -12,39 +12,70 @@
     <link rel="stylesheet" href="css/style.css">
 
     <style>
+        /* --- MULTI-BRANCH BRANDING STYLES --- */
+        .branch-header-card {
+            background: #fff;
+            border: 2px solid #333;
+            box-shadow: 4px 4px 0 #AAA;
+            padding: 15px;
+            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .branch-logo-frame {
+            width: 70px;
+            height: 70px;
+            border: 1px solid #ddd;
+            padding: 5px;
+            background: #fff;
+            object-fit: contain;
+        }
+        .branch-details h4 { margin: 0; color: #005A9C; font-weight: 800; text-transform: uppercase; font-size: 1.1rem; }
+        .branch-details p { margin: 0; font-size: 0.8rem; color: #666; font-family: 'Poppins', sans-serif; }
+
         .balance-card {
             background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border-left: 5px solid var(--primary-dark);
+            border-left: 5px solid var(--primary-dark, #005A9C);
             padding: 20px;
             border-radius: 10px;
             margin-bottom: 20px;
         }
         .balance-positive { color: #198754; font-weight: 800; font-size: 1.5rem; }
         .balance-negative { color: #dc3545; font-weight: 800; font-size: 1.5rem; }
+        
+        .glass-card { background: white; border: 1px solid #ddd; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border-radius: 12px; }
+        .section-title { border-bottom: 2px solid #005A9C; padding-bottom: 10px; margin-bottom: 20px; font-weight: 700; font-size: 1rem; color: #333; }
+        
+        .student-select-wrapper .ss-main { padding: 10px; border-radius: 8px; }
+        #history-tbody tr { vertical-align: middle; }
     </style>
 </head>
 <body>
 
-<div class="container" style="max-width: 1200px; padding-top: 30px;">
+<div class="container" style="max-width: 1200px; padding-top: 20px; padding-bottom: 40px;">
     
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-cash-register me-2"></i>Fee Collection Terminal</h2>
-            <p class="text-muted mb-0 small">Collect fees and manage student accounts</p>
+    <div class="branch-header-card" id="branch-branding">
+        <img src="/uploads/media/default-logo.png" id="terminal-branch-logo" class="branch-logo-frame" alt="Branch Logo">
+        <div class="branch-details">
+            <h4 id="terminal-branch-name">BCSM Main Campus</h4>
+            <p id="terminal-branch-address">Loading branch infrastructure...</p>
         </div>
-        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
-            <i class="fas fa-arrow-left me-2"></i> Dashboard
-        </a>
+        <div class="ms-auto text-end">
+            <a href="/admin-dashboard.html" class="btn btn-sm btn-outline-dark rounded-pill px-3 fw-bold">
+                <i class="fas fa-arrow-left me-1"></i> Exit Terminal
+            </a>
+        </div>
     </div>
 
     <div class="row g-4">
         <div class="col-md-7">
-            <div class="glass-card">
+            <div class="glass-card shadow-sm">
                 <h5 class="section-title"><i class="fas fa-user-check me-2"></i>1. Select Student</h5>
                 <div class="mb-4">
-                    <label class="form-label fw-bold">Student Name / Roll No</label>
-                    <select id="student-select" class="form-select" onchange="loadStudentDetails(this.value)">
-                        <option value="">-- Loading Students... --</option>
+                    <label class="form-label fw-bold small text-uppercase text-muted">Student Name / Enrollment No</label>
+                    <select id="student-select" class="form-select form-select-lg" onchange="loadStudentDetails(this.value)">
+                        <option value="">-- Search & Select Student --</option>
                     </select>
                 </div>
 
@@ -53,35 +84,35 @@
                     
                     <div class="row g-3">
                         <div class="col-md-6">
-                            <label class="form-label fw-bold small">Payment Date</label>
+                            <label class="form-label fw-bold small">Collection Date</label>
                             <input type="date" id="payment-date" class="form-control" readonly disabled>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label fw-bold small">Payment Mode</label>
                             <select id="pay-mode" class="form-select">
-                                <option value="Cash">Cash</option>
-                                <option value="UPI">UPI / GPay / PhonePe</option>
-                                <option value="Bank Transfer">Bank Transfer (NEFT)</option>
+                                <option value="Cash">Cash Payment</option>
+                                <option value="UPI">UPI (GPay/PhonePe/Paytm)</option>
+                                <option value="Bank Transfer">Bank Transfer (NEFT/IMPS)</option>
                                 <option value="Cheque">Cheque</option>
-                                <option value="Card">Card</option>
+                                <option value="Card">Debit/Credit Card</option>
                             </select>
                         </div>
                         <div class="col-12">
                             <label class="form-label fw-bold small">Amount to Collect (INR)</label>
-                            <div class="input-group">
-                                <span class="input-group-text fw-bold">₹</span>
-                                <input type="number" id="pay-amount" class="form-control fw-bold" placeholder="0.00" min="1">
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text fw-bold bg-light">₹</span>
+                                <input type="number" id="pay-amount" class="form-control fw-bold text-primary" placeholder="0.00" min="1" step="0.01">
                             </div>
                         </div>
                         <div class="col-12">
                             <label class="form-label fw-bold small">Remarks / Transaction ID</label>
-                            <textarea id="pay-notes" class="form-control" rows="2" placeholder="Optional notes..."></textarea>
+                            <textarea id="pay-notes" class="form-control" rows="2" placeholder="e.g. Received for Jan Month, Txn ID: 12345..."></textarea>
                         </div>
                     </div>
 
                     <div class="mt-4">
-                        <button class="btn btn-primary w-100 py-3 rounded-pill shadow" onclick="processPayment()" id="collect-btn">
-                            <span id="btn-text" class="fw-bold"><i class="fas fa-check-circle me-2"></i> COLLECT PAYMENT</span>
+                        <button class="btn btn-primary w-100 py-3 rounded-pill shadow-sm" onclick="processPayment()" id="collect-btn">
+                            <span id="btn-text" class="fw-bold fs-5"><i class="fas fa-check-circle me-2"></i> CONFIRM & COLLECT</span>
                             <span id="btn-spinner" class="spinner-border spinner-border-sm" style="display:none;"></span>
                         </button>
                     </div>
@@ -90,26 +121,26 @@
         </div>
 
         <div class="col-md-5">
-            <div class="glass-card h-100">
+            <div class="glass-card h-100 shadow-sm">
                 <h5 class="section-title"><i class="fas fa-file-invoice-dollar me-2"></i>Account Summary</h5>
                 
                 <div id="student-info-box">
                     <div class="text-center py-5 text-muted border rounded border-dashed">
                         <i class="fas fa-user-graduate fa-3x mb-3 opacity-25"></i><br>
-                        Select a student to view details.
+                        Search for a student to load account summary and ledger.
                     </div>
                 </div>
 
                 <div id="history-section" style="display: none;" class="mt-4">
                     <h6 class="fw-bold border-bottom pb-2 mb-3">Recent Transactions</h6>
-                    <div class="table-responsive" style="max-height: 300px; overflow-y: auto;">
+                    <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
                         <table class="table table-sm table-hover" style="font-size: 0.85rem;">
-                            <thead class="table-light">
+                            <thead class="table-light sticky-top">
                                 <tr>
                                     <th>Date</th>
                                     <th>Mode</th>
                                     <th class="text-end">Amount</th>
-                                    <th class="text-center">Receipt</th>
+                                    <th class="text-center">Action</th>
                                 </tr>
                             </thead>
                             <tbody id="history-tbody"></tbody>
@@ -129,34 +160,69 @@
         const token = localStorage.getItem('erp-token');
         if (!token) window.location.href = '/login.html';
         
+        // Set Today's Date
         document.getElementById('payment-date').valueAsDate = new Date();
-        loadStudentList();
+        
+        // Initialize Branding and Student List
+        syncBranchBranding().then(() => {
+            loadStudentList();
+        });
     });
 
-    // 1. Load Student List
+    /**
+     * ✅ Multi-Branch Branding Sync
+     */
+    async function syncBranchBranding() {
+        const activeBranchId = localStorage.getItem('active_branch_id');
+        if (!activeBranchId) return;
+
+        try {
+            const res = await window.authFetch(`/api/branches/${activeBranchId}`);
+            if (res.ok) {
+                const branch = await res.json();
+                document.getElementById('terminal-branch-name').innerText = branch.branch_name;
+                document.getElementById('terminal-branch-address').innerText = 
+                    `${branch.address || ''} ${branch.city || ''} | PIN: ${branch.pin_code || 'N/A'}`;
+                
+                if (branch.logo_url) {
+                    document.getElementById('terminal-branch-logo').src = branch.logo_url;
+                }
+            }
+        } catch (err) {
+            console.error("Branding Sync Error", err);
+        }
+    }
+
+    /**
+     * 1. Load Student List (Branch Filtered)
+     */
     async function loadStudentList() {
         try {
-            const response = await window.authFetch('/api/students');
+            const activeBranchId = localStorage.getItem('active_branch_id');
+            const response = await window.authFetch(`/api/students?branch_id=${activeBranchId}`);
             const students = await response.json();
             
             const select = document.getElementById('student-select');
             
+            // Sort by Name
             students.sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
 
-            select.innerHTML = '<option value="">-- Select Student --</option>';
+            select.innerHTML = '<option value="">-- Search Student --</option>';
             students.forEach(s => {
                 const opt = document.createElement('option');
                 opt.value = s.student_id; 
-                opt.text = `${s.first_name} ${s.last_name} (Roll: ${s.roll_number || 'N/A'})`;
+                opt.text = `${s.first_name} ${s.last_name || ''} (Roll: ${s.enrollment_no || 'N/A'})`;
                 select.appendChild(opt);
             });
 
         } catch (error) {
-            console.error('Error loading students:', error);
+            console.error('Student Load Error:', error);
         }
     }
 
-    // 2. Fetch Student Details (FIXED TABLE LOGIC)
+    /**
+     * 2. Fetch Account Details & History
+     */
     async function loadStudentDetails(studentId) {
         const infoBox = document.getElementById('student-info-box');
         const paymentForm = document.getElementById('payment-form');
@@ -169,94 +235,87 @@
             return;
         }
 
-        infoBox.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary"></div></div>';
+        infoBox.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-primary spinner-border-sm"></div><p class="small mt-2">Loading Ledger...</p></div>';
 
         try {
-            // Fetch Financial Data
             const financeRes = await window.authFetch(`/api/finance/student/${studentId}`);
             const data = await financeRes.json();
 
-            console.log("Finance Data:", data); // Debugging
-
-            // Calculate Balance
             const totalDue = parseFloat(data.balance || 0); 
             const totalPaid = parseFloat(data.total_paid || 0);
             const totalBilled = parseFloat(data.total_fees || 0);
 
+            // Display Balance Card
             let balanceHtml = '';
             if(totalDue > 0) {
-                balanceHtml = `<div class="balance-card"><small class="text-uppercase fw-bold text-danger">Total Due</small><div class="balance-negative">₹${totalDue.toFixed(2)}</div></div>`;
+                balanceHtml = `<div class="balance-card"><small class="text-uppercase fw-bold text-danger">Outstanding Balance</small><div class="balance-negative">₹${totalDue.toLocaleString('en-IN', {minimumFractionDigits: 2})}</div></div>`;
             } else {
-                balanceHtml = `<div class="balance-card"><small class="text-uppercase fw-bold text-success">Cleared</small><div class="balance-positive">₹0.00</div></div>`;
+                balanceHtml = `<div class="balance-card"><small class="text-uppercase fw-bold text-success">Account Cleared</small><div class="balance-positive">₹0.00</div></div>`;
             }
 
-            // Render Info
             infoBox.innerHTML = `
                 <div class="mb-3">
-                    <h5 class="fw-bold mb-0 text-dark">${data.student_name || 'Student'}</h5>
-                    <p class="text-muted small mb-0">${data.course_name || 'N/A'} (${data.batch_name || '-'})</p>
+                    <h5 class="fw-bold mb-0 text-dark">${data.student_name || 'N/A'}</h5>
+                    <p class="text-muted small mb-0">${data.course_name || 'No Course'} - ${data.batch_name || 'No Batch'}</p>
                 </div>
                 ${balanceHtml}
-                <div class="row g-2 small text-muted">
-                    <div class="col-6">Total Billed: <span class="fw-bold text-dark">₹${totalBilled.toFixed(2)}</span></div>
-                    <div class="col-6">Total Paid: <span class="fw-bold text-dark">₹${totalPaid.toFixed(2)}</span></div>
+                <div class="row g-2 small text-muted border-top pt-3 mt-2">
+                    <div class="col-6">Total Billed: <span class="fw-bold text-dark">₹${totalBilled.toLocaleString('en-IN')}</span></div>
+                    <div class="col-6">Total Paid: <span class="fw-bold text-dark">₹${totalPaid.toLocaleString('en-IN')}</span></div>
                 </div>
             `;
 
-            // ✅ CRITICAL FIX: HISTORY TABLE
+            // Process History Table
             const tbody = document.getElementById('history-tbody');
             tbody.innerHTML = '';
             
-            // Detect payments array
-            let paymentsList = [];
-            if (Array.isArray(data)) paymentsList = data;
-            else if (data.payments && Array.isArray(data.payments)) paymentsList = data.payments;
+            let payments = data.payments || (Array.isArray(data) ? data : []);
 
-            if (paymentsList.length > 0) {
-                paymentsList.forEach(p => {
-                    // FIX: Added 'receipt_number' to the check list
-                    const receiptRef = p.receipt_number || p.transaction_id || p.id || p.paymentId; 
+            if (payments.length > 0) {
+                payments.forEach(p => {
+                    const rID = p.receipt_number || p.transaction_id || p.id;
+                    const pDate = new Date(p.payment_date || p.created_at).toLocaleDateString('en-GB');
                     
-                    // FIX: Added 'total_amount' to amount check
-                    const amountValue = parseFloat(p.amount || p.amount_paid || p.total_amount || 0);
-
-                    // Render row (Even if ID is missing, show row for debugging)
-                    const printBtn = receiptRef 
-                        ? `<button class="btn btn-sm btn-outline-primary py-0" onclick="viewReceipt('${receiptRef}')"><i class="fas fa-print"></i></button>`
-                        : `<span class="text-muted small">N/A</span>`;
-
                     tbody.innerHTML += `
                         <tr>
-                            <td>${new Date(p.payment_date || p.created_at || Date.now()).toLocaleDateString()}</td>
-                            <td>${p.payment_mode || 'Cash'}</td>
-                            <td class="text-end fw-bold">₹${amountValue.toFixed(2)}</td>
-                            <td class="text-center">${printBtn}</td>
+                            <td class="fw-medium">${pDate}</td>
+                            <td><span class="badge bg-light text-dark border">${p.payment_mode || 'Cash'}</span></td>
+                            <td class="text-end fw-bold">₹${parseFloat(p.amount_paid || p.amount || 0).toFixed(2)}</td>
+                            <td class="text-center">
+                                <button class="btn btn-sm btn-link text-primary p-0" onclick="viewReceipt('${rID}')">
+                                    <i class="fas fa-print"></i> Print
+                                </button>
+                            </td>
                         </tr>
                     `;
                 });
             } else {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No recent transactions found.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No transactions recorded yet.</td></tr>';
             }
 
-            // Show Form
             paymentForm.style.display = 'block';
             historySection.style.display = 'block';
-            
-            // Auto-fill amount if due
             document.getElementById('pay-amount').value = totalDue > 0 ? totalDue.toFixed(2) : '';
 
         } catch (error) {
-            console.error(error);
-            infoBox.innerHTML = '<p class="text-danger text-center">Error loading details.</p>';
+            console.error("Ledger Fetch Error:", error);
+            infoBox.innerHTML = '<div class="alert alert-danger small">Failed to load account ledger.</div>';
         }
     }
 
-    // 3. Process Payment
+    /**
+     * 3. Process Collection Action
+     */
     async function processPayment() {
         const studentId = document.getElementById('student-select').value;
         const amount = document.getElementById('pay-amount').value;
+        const activeBranchId = localStorage.getItem('active_branch_id');
         
-        if (!amount || parseFloat(amount) <= 0) return alert('Enter valid amount');
+        if (!amount || parseFloat(amount) <= 0) {
+            return alert('Please enter a valid payment amount.');
+        }
+
+        if(!confirm(`Confirm payment collection of ₹${amount}?`)) return;
 
         const btn = document.getElementById('collect-btn');
         const spinner = document.getElementById('btn-spinner');
@@ -273,27 +332,30 @@
                     student_id: studentId,
                     amount_paid: amount,
                     payment_mode: document.getElementById('pay-mode').value,
-                    notes: document.getElementById('pay-notes').value
+                    notes: document.getElementById('pay-notes').value,
+                    branch_id: activeBranchId
                 })
             });
 
             const result = await response.json();
 
             if (response.ok) {
-                alert('Payment Successful!');
-                // Check all possible ID fields
+                alert('✅ Payment Processed Successfully!');
                 const receiptRef = result.receipt_number || result.transaction_id || result.id;
                 
-                if(receiptRef) viewReceipt(receiptRef);
-
+                // Refresh View
                 loadStudentDetails(studentId);
                 document.getElementById('pay-amount').value = '';
+                document.getElementById('pay-notes').value = '';
+
+                // Open Receipt in New Tab
+                if(receiptRef) viewReceipt(receiptRef);
             } else {
-                alert(result.message || 'Payment Failed');
+                alert('❌ Error: ' + (result.message || 'Payment Failed'));
             }
         } catch (error) {
-            console.error(error);
-            alert('Network Error');
+            console.error("Submission Error:", error);
+            alert('Fatal Error: Connectivity lost.');
         } finally {
             btn.disabled = false;
             spinner.style.display = 'none';
@@ -301,10 +363,12 @@
         }
     }
 
-    // 4. View Receipt
+    /**
+     * View/Print Receipt
+     */
     function viewReceipt(identifier) {
         if(!identifier || identifier === 'undefined') {
-            alert("Error: Receipt ID missing.");
+            alert("Error: Receipt reference not found.");
             return;
         }
         window.open(`/print-receipt.html?id=${identifier}`, '_blank');

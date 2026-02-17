@@ -93,27 +93,36 @@ router.put('/config', authenticateToken, authorize(ADMIN_ROLE), async (req, res)
 
 /**
  * @route   GET /api/library/catalog
- * @desc    Get full catalog list for admin view.
+ * @desc    Get full catalog list for admin view (Branch-Aware).
  * @access  Private (Admin, Teacher, Super Admin)
  */
 router.get('/catalog', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
+    // 🔥 FIX: Extract branch_id from query (for Super Admin) or user token (for Branch Admin)
+    const branchId = req.query.branch_id || req.user.branch_id;
+
+    if (!branchId) {
+        return res.status(400).json({ message: 'Branch context is required.' });
+    }
+
     try {
         const query = `
             SELECT 
                 lc.*,
-                (SELECT COUNT(id) FROM ${INVENTORY_TABLE} WHERE book_id = lc.id AND is_active = TRUE) AS total_copies,
-                (SELECT COUNT(id) FROM ${INVENTORY_TABLE} WHERE book_id = lc.id AND status = 'Available' AND is_active = TRUE) AS available_copies
+                (SELECT COUNT(id) FROM ${INVENTORY_TABLE} 
+                 WHERE book_id = lc.id AND is_active = TRUE) AS total_copies,
+                (SELECT COUNT(id) FROM ${INVENTORY_TABLE} 
+                 WHERE book_id = lc.id AND status = 'Available' AND is_active = TRUE) AS available_copies
             FROM ${CATALOG_TABLE} lc
+            WHERE lc.branch_id = $1 -- 🔥 Mandatory Branch Filter
             ORDER BY lc.title;
         `;
-        const result = await pool.query(query);
+        const result = await pool.query(query, [branchId]);
         res.json(result.rows);
     } catch (error) {
-        console.error('Error fetching catalog:', error);
-        res.status(500).json({ message: 'Failed to retrieve catalog.' });
+        console.error('Catalog Fetch Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve branch catalog.' });
     }
 });
-
 /**
  * @route   POST /api/library/catalog
  * @desc    Add a new book to the master catalog.
@@ -812,6 +821,64 @@ router.get('/fines/student/:studentId', authenticateToken, authorize(MANAGER_ROL
         console.error("Finance Integration Fine Fetch Error:", error);
         // Return 404 here can confuse the fee-collection module, so return 500 or 200 with 0.
         res.status(500).json({ message: 'Failed to retrieve pending fines for finance module.' });
+    }
+});
+//**
+ //* @route   GET /api/library/history
+// * @desc    Librarian Master History View (Branch-Aware)
+ //*/
+router.get('/history', authenticateToken, authorize(MANAGER_ROLES), async (req, res) => {
+    // Priority: Query param (Super Admin selector) > Token (Branch Admin)
+    const branchId = req.query.branch_id || req.user.branch_id;
+    const { studentId, accessionNo } = req.query;
+
+    if (!branchId) {
+        return res.status(400).json({ error: "Branch context is required." });
+    }
+
+    try {
+        let query = `
+            SELECT
+                circ.id, 
+                u.username, 
+                circ.issue_date, 
+                circ.due_date, 
+                circ.return_date, 
+                circ.fine_amount, 
+                circ.payment_status as status,
+                lc.title, 
+                bi.accession_number
+            FROM ${CIRCULATION_TABLE} circ
+            JOIN ${INVENTORY_TABLE} bi ON circ.inventory_id = bi.id
+            JOIN ${CATALOG_TABLE} lc ON bi.book_id = lc.id
+            JOIN ${USER_TABLE} u ON circ.student_id = u.id 
+            WHERE lc.branch_id = $1
+        `;
+        
+        const values = [branchId];
+        
+        // Add optional filters
+        if (studentId && studentId !== 'null' && studentId !== '') {
+            values.push(studentId);
+            query += ` AND circ.student_id = $${values.length}`;
+        }
+        
+        if (accessionNo && accessionNo !== 'null' && accessionNo !== '') {
+            values.push(accessionNo);
+            query += ` AND bi.accession_number = $${values.length}`;
+        }
+
+        query += ` ORDER BY circ.issue_date DESC`;
+
+        const result = await pool.query(query, values);
+        
+        // Always return rows array to prevent frontend .map() errors
+        res.json(result.rows || []);
+
+    } catch (err) {
+        console.error("Library History Backend Error:", err.message);
+        // Return empty array on error so the frontend doesn't crash, but status 500
+        res.status(500).json([]); 
     }
 });
 

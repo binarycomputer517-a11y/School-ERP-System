@@ -1,10 +1,14 @@
-// routes/admission.js
+/**
+ * js/routes/admission.js
+ * -----------------------------
+ * Manages the Student Admission Lifecycle.
+ * Workflow: Submission -> Fee Payment -> Review -> Enrollment (Student Creation).
+ */
 
 const express = require('express');
 const router = express.Router();
 const { pool } = require('../database');
 const { authenticateToken, authorize } = require('../authMiddleware');
-const moment = require('moment');
 
 // Database Table Constants
 const APPLICATIONS_TABLE = 'applications';
@@ -14,12 +18,10 @@ const COURSES_TABLE = 'courses';
 const BATCHES_TABLE = 'batches'; 
 const STUDENTS_TABLE = 'students'; 
 
-
-// Constants
+// Configuration Constants
 const APPLICATION_FEE_AMOUNT = 50.00;
 const APPLICATION_STATUSES = ['Draft', 'Submitted', 'Under Review', 'Accepted', 'Rejected', 'Enrolled'];
 const APPROVER_ROLES = ['Super Admin', 'Admin', 'Coordinator', 'Registrar'];
-
 
 // =========================================================
 // 1. APPLICATION SUBMISSION (POST)
@@ -29,15 +31,16 @@ router.post('/apply', async (req, res) => {
         applicant_name, applicant_email, course_id, dob, parent_name, parent_contact, batch_id
     } = req.body;
 
+    // Validate essential applicant data
     if (!applicant_name || !applicant_email || !course_id || !dob || !parent_name) {
-        return res.status(400).json({ message: 'Missing required applicant details (Name, Email, Course, DOB, Parent).' });
+        return res.status(400).json({ message: 'Missing required applicant details (Name, Email, Course, DOB, or Parent).' });
     }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Insert Application Record
+        // 1. Primary Application Record Entry
         const applicationQuery = `
             INSERT INTO ${APPLICATIONS_TABLE} 
             (applicant_name, applicant_email, course_id, batch_id, dob, parent_name, parent_contact, status, application_date)
@@ -56,7 +59,7 @@ router.post('/apply', async (req, res) => {
         
         const applicationId = result.rows[0].id;
         
-        // 2. Insert Application Fee Requirement
+        // 2. Generate Application Fee Invoice (Set to Pending)
         const feeQuery = `
             INSERT INTO ${APPLICATION_FEES_TABLE} 
             (application_id, amount, status)
@@ -67,7 +70,7 @@ router.post('/apply', async (req, res) => {
 
         await client.query('COMMIT');
         res.status(201).json({ 
-            message: 'Application submitted successfully. Fee payment is pending.', 
+            message: 'Application submitted successfully. Processing fee is now pending.', 
             application_id: applicationId,
             required_fee: APPLICATION_FEE_AMOUNT,
             fee_invoice_id: feeResult.rows[0].fee_id
@@ -75,16 +78,15 @@ router.post('/apply', async (req, res) => {
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Admission Application Error:', error);
-        res.status(500).json({ message: 'Failed to submit application.' });
+        console.error('Admission Submission Registry Error:', error);
+        res.status(500).json({ message: 'Failed to synchronize application with registry.' });
     } finally {
         client.release();
     }
 });
 
-
 // =========================================================
-// 2. FEE PAYMENT & STATUS UPDATE (PUT)
+// 2. FEE PAYMENT & STATUS SYNCHRONIZATION (PUT)
 // =========================================================
 router.put('/fee/:feeId/pay', async (req, res) => {
     const { feeId } = req.params;
@@ -93,26 +95,26 @@ router.put('/fee/:feeId/pay', async (req, res) => {
     try {
         await client.query('BEGIN');
 
-        // 1. Update Fee Status
+        // 1. Verify and Update Fee Ledger
         const feeUpdateQuery = `
             UPDATE ${APPLICATION_FEES_TABLE} 
             SET status = 'Paid', payment_date = CURRENT_TIMESTAMP, transaction_id = $1
             WHERE id = $2 AND status = 'Pending'
             RETURNING application_id;
         `;
-        const updateResult = await client.query(updateQuery, [
+        const updateResult = await client.query(feeUpdateQuery, [
             req.body.transaction_id || `TRX-${new Date().getTime()}`, 
             feeId
         ]);
 
         if (updateResult.rowCount === 0) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Fee invoice not found or already paid.' });
+            return res.status(404).json({ message: 'Fee invoice not found or already processed.' });
         }
         
         const applicationId = updateResult.rows[0].application_id;
 
-        // 2. Update Application Status
+        // 2. Escalate Application to "Under Review" post-payment
         await client.query(
             `UPDATE ${APPLICATIONS_TABLE} SET status = 'Under Review', updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND status = 'Submitted'`,
             [applicationId]
@@ -120,22 +122,21 @@ router.put('/fee/:feeId/pay', async (req, res) => {
 
         await client.query('COMMIT');
         res.status(200).json({ 
-            message: 'Fee payment successful. Application status updated to "Under Review".', 
+            message: 'Fee payment verified. Application moved to institutional review.', 
             application_id: applicationId 
         });
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Fee Payment Error:', error);
-        res.status(500).json({ message: 'Failed to process payment.' });
+        console.error('Payment Gateway Integration Error:', error);
+        res.status(500).json({ message: 'Failed to process payment synchronization.' });
     } finally {
         client.release();
     }
 });
 
-
 // =========================================================
-// 3. ADMIN/COORDINATOR WORKFLOW (PUT)
+// 3. ADMINISTRATIVE WORKFLOW & ENROLLMENT (PUT)
 // =========================================================
 router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES), async (req, res) => {
     const { applicationId } = req.params;
@@ -143,45 +144,41 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
     const adminId = req.user.id; 
     let newUserId = null; 
 
-    if (!APPLICATION_STATUSES.includes(new_status) || new_status === 'Submitted' || new_status === 'Draft') {
-        return res.status(400).json({ message: 'Invalid or restricted status transition.' });
+    // Validate state transition
+    if (!APPLICATION_STATUSES.includes(new_status) || ['Submitted', 'Draft'].includes(new_status)) {
+        return res.status(400).json({ message: 'Unauthorized or invalid status transition.' });
     }
     if (new_status === 'Rejected' && !reason) {
-        return res.status(400).json({ message: 'Rejection reason is required.' });
+        return res.status(400).json({ message: 'A formal reason is required for application rejection.' });
     }
 
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        // 1. Fetch current application details
-        const appRes = await client.query(
-            `SELECT * FROM ${APPLICATIONS_TABLE} WHERE id = $1`, 
-            [applicationId]
-        );
+        const appRes = await client.query(`SELECT * FROM ${APPLICATIONS_TABLE} WHERE id = $1`, [applicationId]);
         if (appRes.rowCount === 0) {
             await client.query('ROLLBACK');
-            return res.status(404).json({ message: 'Application not found.' });
+            return res.status(404).json({ message: 'Target application not found in registry.' });
         }
         const application = appRes.rows[0];
 
-        // 2. Update Application Status (This is where 'Accepted' is set)
+        // 1. Update Decision Metadata
         const updateQuery = `
             UPDATE ${APPLICATIONS_TABLE} SET
                 status = $1, review_notes = $2, reviewer_id = $3, updated_at = CURRENT_TIMESTAMP
             WHERE id = $4 
             RETURNING applicant_name, applicant_email, status;
         `;
-        const result = await client.query(updateQuery, [new_status, reason || null, adminId, applicationId]);
+        await client.query(updateQuery, [new_status, reason || null, adminId, applicationId]);
 
-        // 3. SPECIAL CASE: Enrollment (Create Student/User)
+        // 2. ENROLLMENT LOGIC: Automated Student & User Account Generation
         if (new_status === 'Enrolled' && application.status === 'Accepted') {
             
-            // Check if user already exists (by email)
+            // Validate Identity Uniqueness
             let existingUser = await client.query(`SELECT id FROM ${USERS_TABLE} WHERE email = $1`, [application.applicant_email]);
             
             if (existingUser.rowCount === 0) {
-                // Create new User account
                 const defaultUsername = application.applicant_email.split('@')[0] + Math.floor(Math.random() * 100);
                 const tempPasswordHash = '$2a$10$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'; 
 
@@ -197,15 +194,14 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
                     application.dob
                 ]);
                 newUserId = newUserResult.rows[0].id;
-
             } else {
                 newUserId = existingUser.rows[0].id;
             }
             
-            // Link the user ID back to the application record 
+            // Link Identity to Application
             await client.query(`UPDATE ${APPLICATIONS_TABLE} SET user_id = $1 WHERE id = $2`, [newUserId, applicationId]);
 
-            // *** CRITICAL STEP: Create the Student profile ***
+            // Synchronize Data with Students Profile Table
             await client.query(
                 `INSERT INTO ${STUDENTS_TABLE} (user_id, first_name, last_name, email, phone_number, dob, course_id, batch_id) 
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8) ON CONFLICT (user_id) DO NOTHING`,
@@ -220,36 +216,31 @@ router.put('/review/:applicationId', authenticateToken, authorize(APPROVER_ROLES
                     application.batch_id
                 ]
             );
-
         }
 
-
         await client.query('COMMIT');
-        
-        // 💡 FIX: Return the new user ID for front-end redirect
         res.status(200).json({ 
-            message: `Application status updated to "${new_status}".`, 
+            message: `Application status finalized as "${new_status}".`, 
             application_id: applicationId,
             new_status: new_status,
-            new_user_id: newUserId // This is the ID used for the Add-Student redirect
+            new_user_id: newUserId 
         });
 
     } catch (error) {
         await client.query('ROLLBACK');
-        console.error('Admission Review Error (Status Write Failure):', error);
-        res.status(500).json({ message: 'Failed to update application status.' });
+        console.error('Institutional Review Registry Failure:', error);
+        res.status(500).json({ message: 'Failed to process application status update.' });
     } finally {
         client.release();
     }
 });
 
-
 // =========================================================
-// 4. VIEWING ROUTES (GET)
+// 4. DATA RETRIEVAL ROUTES (GET)
 // =========================================================
 
 /**
- * @route   GET /api/admission/applications/pending
+ * Fetches all applications currently awaiting institutional review.
  */
 router.get('/applications/pending', authenticateToken, authorize(APPROVER_ROLES), async (req, res) => {
     try {
@@ -268,7 +259,7 @@ router.get('/applications/pending', authenticateToken, authorize(APPROVER_ROLES)
                 af.amount AS fee_amount,
                 af.id AS fee_id
             FROM ${APPLICATIONS_TABLE} a
-            /* CRITICAL FIX: Explicitly cast the Foreign Key columns to UUID */
+            /* CAST: Ensures UUID compatibility between application and reference tables */
             LEFT JOIN ${COURSES_TABLE} c ON a.course_id::uuid = c.id
             LEFT JOIN ${BATCHES_TABLE} b ON a.batch_id::uuid = b.id
             LEFT JOIN ${APPLICATION_FEES_TABLE} af ON a.id = af.application_id
@@ -278,13 +269,13 @@ router.get('/applications/pending', authenticateToken, authorize(APPROVER_ROLES)
         const result = await pool.query(query);
         res.status(200).json(result.rows);
     } catch (error) {
-        console.error('CRASHING ADMISSION QUERY ERROR:', error);
-        res.status(500).json({ message: 'Failed to retrieve pending applications.' });
+        console.error('Pending Registry Retrieval Error:', error);
+        res.status(500).json({ message: 'Failed to retrieve the pending application queue.' });
     }
 });
 
 /**
- * @route   GET /api/admission/application/:applicationId
+ * Fetches specific application details by unique identifier.
  */
 router.get('/application/:applicationId', async (req, res) => {
     const { applicationId } = req.params;
@@ -305,13 +296,13 @@ router.get('/application/:applicationId', async (req, res) => {
         const result = await pool.query(query, [applicationId]);
         
         if (result.rowCount === 0) {
-            return res.status(404).json({ message: 'Application not found.' });
+            return res.status(404).json({ message: 'Application record not found.' });
         }
         
         res.status(200).json(result.rows[0]);
     } catch (error) {
-        console.error('Application Details Fetch Error:', error);
-        res.status(500).json({ message: 'Failed to retrieve application details.' });
+        console.error('Application Metadata Retrieval Failure:', error);
+        res.status(500).json({ message: 'Failed to retrieve detailed application metadata.' });
     }
 });
 

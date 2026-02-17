@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admission Portal | BCSM ERP</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        /* --- THEME SPECIFIC OVERRIDES --- */
+        body {
+            padding-top: 30px;
+            padding-bottom: 60px;
+        }
+
+        .main-header {
+            text-align: center;
+            margin-bottom: 40px;
+            color: white;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+        }
+
+        .main-header h1 {
+            font-weight: 800;
+            font-size: 2.8rem;
+            text-transform: uppercase;
+            letter-spacing: -1px;
+            margin-bottom: 5px;
+        }
+
+        /* Status Badges - Glass Style */
+        .status-badge {
+            padding: 5px 12px;
+            border-radius: 50px;
+            font-weight: 700;
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .status-Submitted { background: #3498db; color: white; }
+        .status-Under_Review { background: #f1c40f; color: #000; }
+        .status-Accepted { background: #2ecc71; color: white; }
+        .status-Rejected { background: #e74c3c; color: white; }
+        .status-Enrolled { background: #9b59b6; color: white; }
+        .status-Paid { background: #138808; color: white; }
+        .status-Pending { background: #FF9933; color: white; }
+
+        /* Form styling inside Glass */
+        .form-label { color: var(--primary-dark); font-weight: 700; font-size: 0.8rem; }
+        
+        #tracking-result {
+            background: rgba(255,255,255,0.5);
+            border-radius: 12px;
+            padding: 20px;
+            border-left: 5px solid var(--primary-dark);
+            margin-top: 20px;
+        }
+
+        .admin-table-container {
+            border-radius: 15px;
+            overflow: hidden;
+            border: 1px solid var(--glass-border);
+        }
+
+        /* Modal Customization */
+        .modal-content {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(15px);
+            border-radius: 20px;
+            border: 1px solid var(--glass-border);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <header class="main-header">
+        <h1>Admission Command Center</h1>
+        <p class="lead">Official Student Intake & Application Management</p>
+    </header>
+
+    <section id="admin-view" class="glass-card d-none">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="section-title mb-0">Managerial Review Queue</h2>
+            <div class="d-flex gap-2">
+                <span class="badge bg-primary rounded-pill px-3 py-2">Role: <span id="admin-role-display">...</span></span>
+                <a href="/admin-dashboard.html" class="btn btn-sm btn-dark">Exit to Dashboard</a>
+            </div>
+        </div>
+        
+        <div class="admin-table-container">
+            <table class="table table-glass table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Applicant</th>
+                        <th>Target Grade</th>
+                        <th>Submitted</th>
+                        <th>Finance</th>
+                        <th>Status</th>
+                        <th class="text-end">Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="applications-tbody">
+                    <tr><td colspan="6" class="text-center p-5">Connecting to central records...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <div class="row g-4 mt-2">
+        <div class="col-lg-8">
+            <section class="glass-card">
+                <h2 class="section-title"><i class="fas fa-file-signature me-2"></i>New Registration Form</h2>
+                <form id="application-form">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Student Full Name</label>
+                            <input type="text" id="applicant-name" class="form-control" placeholder="Legal Name" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Email Address</label>
+                            <input type="email" id="applicant-email" class="form-control" placeholder="contact@example.com" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Date of Birth</label>
+                            <input type="date" id="dob" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Admission For Grade/Course</label>
+                            <select id="course-id" class="form-select" required>
+                                <option value="">Loading grades...</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Parent/Guardian Name</label>
+                            <input type="text" id="parent-name" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Emergency Contact Number</label>
+                            <input type="text" id="parent-contact" class="form-control" placeholder="+91 00000 00000">
+                        </div>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 mt-4 shadow" id="submit-btn">
+                        <i class="fas fa-paper-plane me-2"></i>Submit Application (₹500.00 Processing Fee)
+                    </button>
+                    <div id="application-message" class="mt-3"></div>
+                </form>
+            </section>
+        </div>
+
+        <div class="col-lg-4">
+            <section class="glass-card">
+                <h2 class="section-title"><i class="fas fa-search-location me-2"></i>Track Application</h2>
+                <p class="small text-muted">Enter your details to check live progress.</p>
+                <form id="tracking-form">
+                    <div class="mb-3">
+                        <label class="form-label">Application ID (UUID)</label>
+                        <input type="text" id="track-id" class="form-control" placeholder="Paste ID here">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Verified Email</label>
+                        <input type="email" id="track-email" class="form-control" placeholder="Registered email">
+                    </div>
+                    <button type="submit" class="btn btn-dark w-100 fw-bold">Fetch Status</button>
+                </form>
+
+                <div id="tracking-result" class="d-none">
+                    </div>
+                <div id="tracking-message" class="mt-2"></div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<div id="review-modal" class="modal fade" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content shadow-lg border-0">
+            <div class="modal-header border-0 pb-0">
+                <h5 class="modal-title fw-800 text-primary">Executive Review</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4">
+                <p class="text-muted mb-1">Processing decision for:</p>
+                <h4 id="applicant-name-modal" class="fw-bold mb-4">...</h4>
+                
+                <form id="review-form">
+                    <div class="mb-3">
+                        <label class="form-label">Change Status To:</label>
+                        <select id="new-status" class="form-select border-2" required>
+                            <option value="Under Review">Under Review</option>
+                            <option value="Accepted">Accept & Invite for Interview</option>
+                            <option value="Rejected">Decline Application</option>
+                        </select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label">Audit Notes / Reason</label>
+                        <textarea id="review-reason" class="form-control" rows="3" placeholder="Notes for internal audit..."></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary w-100 py-2 fw-bold shadow">Apply Decision</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js"></script>
+
+<script>
+    const API_BASE = '/api/admission';
+    const COURSES_API_BASE = '/api/courses';
+    const TOKEN = localStorage.getItem('erp-token');
+    const USER_ROLE = localStorage.getItem('user-role');
+    
+    let modalInstance;
+
+    // --- Core API Helper ---
+    async function handleApi(url, options = {}) {
+        const authHeaders = { 'Content-Type': 'application/json' };
+        if (TOKEN) authHeaders['Authorization'] = `Bearer ${TOKEN}`;
+
+        const response = await fetch(url, { ...options, headers: authHeaders });
+        if (response.status === 401 || (response.status === 403 && TOKEN)) {
+            localStorage.clear(); window.location.href = '/login';
+            throw new Error('Unauthorized access. Please login again.');
+        }
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({ message: 'System Error' }));
+            throw new Error(err.message);
+        }
+        return response.json();
+    }
+
+    // --- 1. Load Courses ---
+    async function loadCourses() {
+        const select = document.getElementById('course-id');
+        try {
+            const courses = await handleApi(COURSES_API_BASE);
+            select.innerHTML = '<option value="">-- Choose Grade/Course --</option>';
+            courses.forEach(c => select.innerHTML += `<option value="${c.course_id || c.id}">${c.course_name || c.name}</option>`);
+        } catch (e) { select.innerHTML = '<option value="">Grades Unavailable</option>'; }
+    }
+
+    // --- 2. Registration Handler ---
+    document.getElementById('application-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msg = document.getElementById('application-message');
+        const btn = document.getElementById('submit-btn');
+        btn.disabled = true;
+        msg.innerHTML = '<div class="alert alert-info py-2 small">Encrypting application data...</div>';
+
+        const data = {
+            applicant_name: document.getElementById('applicant-name').value,
+            applicant_email: document.getElementById('applicant-email').value,
+            course_id: document.getElementById('course-id').value,
+            dob: document.getElementById('dob').value,
+            parent_name: document.getElementById('parent-name').value,
+            parent_contact: document.getElementById('parent-contact').value,
+        };
+
+        try {
+            const res = await handleApi(`${API_BASE}/apply`, { method: 'POST', body: JSON.stringify(data) });
+            msg.innerHTML = `<div class="alert alert-success shadow-sm">
+                <i class="fas fa-check-circle me-2"></i> Application Successful! <br>
+                <strong>ID:</strong> <code>${res.application_id}</code> (Save this ID to track status)
+            </div>`;
+            e.target.reset();
+        } catch (e) { msg.innerHTML = `<div class="alert alert-danger shadow-sm">${e.message}</div>`; }
+        finally { btn.disabled = false; }
+    });
+
+    // --- 3. Status Tracker ---
+    document.getElementById('tracking-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const resDiv = document.getElementById('tracking-result');
+        const msgDiv = document.getElementById('tracking-message');
+        const id = document.getElementById('track-id').value.trim();
+        const email = document.getElementById('track-email').value.trim();
+
+        try {
+            const data = await handleApi(`${API_BASE}/application/${id}`);
+            if (data.applicant_email !== email) throw new Error('Email verification failed.');
+
+            resDiv.classList.remove('d-none');
+            resDiv.innerHTML = `
+                <div class="border-bottom pb-2 mb-3 d-flex justify-content-between align-items-center">
+                    <span class="fw-bold">Applicant Progress</span>
+                    <span class="status-badge status-${data.status.replace(/\s/g, '_')}">${data.status}</span>
+                </div>
+                <p class="small mb-1"><strong>Name:</strong> ${data.applicant_name}</p>
+                <p class="small mb-1"><strong>Grade:</strong> ${data.course_id}</p>
+                <p class="small mb-1"><strong>Fee status:</strong> ${data.fee_status}</p>
+                <p class="small mb-0"><strong>Submitted:</strong> ${new Date(data.created_at).toLocaleDateString()}</p>
+            `;
+            msgDiv.innerHTML = '';
+        } catch (e) { 
+            msgDiv.innerHTML = `<span class="text-danger small"><i class="fas fa-times me-1"></i> ${e.message}</span>`;
+            resDiv.classList.add('d-none');
+        }
+    });
+
+    // --- 4. Admin Management Logic ---
+    async function fetchAdminData() {
+        const tbody = document.getElementById('applications-tbody');
+        try {
+            const apps = await handleApi(`${API_BASE}/applications/pending`);
+            if (!apps.length) { tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">No pending items found.</td></tr>'; return; }
+
+            tbody.innerHTML = apps.map(a => {
+                const isAccepted = a.status === 'Accepted';
+                const isPaid = a.fee_status === 'Paid';
+                
+                return `
+                <tr>
+                    <td><div class="fw-bold">${a.applicant_name}</div><div class="small text-muted">${a.applicant_email}</div></td>
+                    <td class="small fw-600">${a.course_name || 'N/A'}</td>
+                    <td class="small text-secondary">${new Date(a.application_date).toLocaleDateString()}</td>
+                    <td><span class="status-badge status-${a.fee_status}">${a.fee_status}</span></td>
+                    <td><span class="status-badge status-${a.status.replace(/\s/g, '_')}">${a.status}</span></td>
+                    <td class="text-end">
+                        <div class="btn-group shadow-sm">
+                            <button onclick="openReviewModal('${a.id}', '${a.applicant_name}')" class="btn btn-outline-primary btn-sm"><i class="fas fa-edit"></i> Review</button>
+                            <button onclick="enroll('${a.id}')" class="btn btn-success btn-sm ${!isAccepted ? 'disabled' : ''}"><i class="fas fa-graduation-cap"></i> Enroll</button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        } catch (e) { tbody.innerHTML = `<tr><td colspan="6" class="text-danger text-center">${e.message}</td></tr>`; }
+    }
+
+    let currentAppId;
+    window.openReviewModal = (id, name) => {
+        currentAppId = id;
+        document.getElementById('applicant-name-modal').innerText = name;
+        modalInstance.show();
+    };
+
+    document.getElementById('review-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            await handleApi(`${API_BASE}/review/${currentAppId}`, { 
+                method: 'PUT', 
+                body: JSON.stringify({ new_status: document.getElementById('new-status').value, reason: document.getElementById('review-reason').value }) 
+            });
+            modalInstance.hide();
+            fetchAdminData();
+            alert('Decision saved successfully!');
+        } catch (e) { alert(e.message); }
+    });
+
+    window.enroll = async (id) => {
+        if (!confirm("Proceed with Student Enrollment? This will create a permanent User account.")) return;
+        try {
+            const res = await handleApi(`${API_BASE}/review/${id}`, { method: 'PUT', body: JSON.stringify({ new_status: 'Enrolled' }) });
+            window.location.href = `/Add-Student.html?appId=${id}&userId=${res.new_user_id}`;
+        } catch (e) { alert(e.message); }
+    };
+
+    // --- Initialization ---
+    document.addEventListener('DOMContentLoaded', () => {
+        modalInstance = new bootstrap.Modal(document.getElementById('review-modal'));
+        loadCourses();
+        if (['Admin', 'Coordinator', 'Super Admin'].includes(USER_ROLE)) {
+            document.getElementById('admin-view').classList.remove('d-none');
+            document.getElementById('admin-role-display').innerText = USER_ROLE;
+            fetchAdminData();
+        }
+    });
+</script>
+</body>
+</html>

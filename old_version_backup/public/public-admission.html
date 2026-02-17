@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Online Admission Portal | BCSM</title>
+    
+    <style>
+        :root {
+            --primary-color: #005A9C; 
+            --accent-color: #C0392B; 
+            --success-color: #27AE60;
+            --font-main: 'Segoe UI', Arial, sans-serif;
+        }
+        body { font-family: var(--font-main); background-color: #f0f2f5; padding: 20px; color: #333; }
+        .admission-box { max-width: 850px; margin: 0 auto; background: #fff; border: 1px solid #ccc; padding: 40px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        h1 { text-align: center; color: var(--primary-color); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 30px; border-bottom: 2px solid var(--primary-color); padding-bottom: 10px; }
+        
+        .alert-info { background: #e7f3ff; border: 1px solid #b6d4fe; padding: 15px; border-radius: 5px; color: #084298; margin-bottom: 25px; font-size: 0.95em; }
+        
+        .form-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .full-row { grid-column: span 2; }
+        
+        label { display: block; margin-bottom: 8px; font-weight: 600; font-size: 14px; }
+        input, select, textarea { width: 100%; padding: 12px; border: 1px solid #cbd5e0; border-radius: 4px; box-sizing: border-box; font-size: 15px; transition: border 0.3s; }
+        input:focus { border-color: var(--primary-color); outline: none; }
+        
+        .section-title { grid-column: span 2; background: #f8f9fa; padding: 10px; margin-top: 20px; border-left: 5px solid var(--primary-color); font-weight: bold; }
+        
+        .submit-btn { width: 100%; background: var(--primary-color); color: white; border: none; padding: 18px; font-size: 18px; font-weight: bold; border-radius: 5px; cursor: pointer; margin-top: 30px; transition: background 0.3s; }
+        .submit-btn:hover { background: #004475; }
+        .submit-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+        @media (max-width: 600px) { .form-grid { grid-template-columns: 1fr; } .full-row, .section-title { grid-column: span 1; } }
+    </style>
+</head>
+<body>
+
+<div class="admission-box">
+    <h1>Student Admission Form</h1>
+
+    <div class="alert-info">
+        <strong>📌 Registration Rule:</strong> After submitting this form, you must pay the application fee of <strong>₹50.00</strong>. If payment is not completed within 24 hours, your application will be automatically expired.
+    </div>
+
+    <form id="publicAdmissionForm">
+        <div class="form-grid">
+            <div class="section-title">👤 Applicant Information</div>
+            
+            <div class="full-row">
+                <label>Full Name *</label>
+                <input type="text" name="applicant_name" required placeholder="As per Aadhaar/Certificate">
+            </div>
+
+            <div>
+                <label>Email Address *</label>
+                <input type="email" name="applicant_email" required placeholder="Valid email for login">
+            </div>
+
+            <div>
+                <label>Date of Birth *</label>
+                <input type="date" name="dob" required>
+            </div>
+
+            <div class="section-title">👨‍👩‍👦 Guardian Details</div>
+
+            <div>
+                <label>Parent/Guardian Name *</label>
+                <input type="text" name="parent_name" required>
+            </div>
+
+            <div>
+                <label>Contact Number *</label>
+                <input type="tel" name="parent_contact" required placeholder="10-digit mobile number">
+            </div>
+
+            <div class="section-title">🎓 Academic Choice</div>
+
+            <div class="full-row">
+                <label>Select Course *</label>
+                <select id="course_id" name="course_id" required>
+                    <option value="">-- Loading Courses... --</option>
+                </select>
+            </div>
+
+            <div class="full-row">
+                <label>Select Batch (Optional)</label>
+                <select id="batch_id" name="batch_id">
+                    <option value="">-- Select Course First --</option>
+                </select>
+            </div>
+        </div>
+
+        <button type="submit" id="submitBtn" class="submit-btn">Submit Application & Pay Fee</button>
+    </form>
+</div>
+
+
+
+<script>
+    const API_BASE = '/api/public/admission';
+
+    // ১. কোর্স লোড করা (টোকেন ছাড়া)
+    async function initDropdowns() {
+        try {
+            const res = await fetch('/api/academicswithfees/courses');
+            if (res.status === 401) {
+                alert("Server error: Course list is restricted. Please contact Admin.");
+                return;
+            }
+            const courses = await res.json();
+            const cSelect = document.getElementById('course_id');
+            cSelect.innerHTML = '<option value="">-- Select Course --</option>';
+            courses.forEach(c => {
+                cSelect.innerHTML += `<option value="${c.id}">${c.course_name}</option>`;
+            });
+        } catch (e) {
+            console.error("Initialization Error:", e);
+        }
+    }
+
+    // ২. কোর্স পরিবর্তনের পর ব্যাচ লোড করা
+    document.getElementById('course_id').addEventListener('change', async (e) => {
+        const courseId = e.target.value;
+        const bSelect = document.getElementById('batch_id');
+        if (!courseId) return;
+
+        try {
+            const res = await fetch(`/api/academicswithfees/batches/${courseId}`);
+            const batches = await res.json();
+            bSelect.innerHTML = '<option value="">-- Select Batch --</option>';
+            batches.forEach(b => {
+                bSelect.innerHTML += `<option value="${b.id}">${b.batch_name}</option>`;
+            });
+        } catch (e) {
+            console.error("Batch load error");
+        }
+    });
+
+    // ৩. ফর্ম সাবমিট করা
+    document.getElementById('publicAdmissionForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        
+        const submitBtn = document.getElementById('submitBtn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Submitting Application...";
+
+        const formData = new FormData(e.target);
+        const data = Object.fromEntries(formData.entries());
+
+        try {
+            const response = await fetch(`${API_BASE}/apply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            const result = await response.json();
+
+            if (response.ok) {
+                alert(`Success! \nApplication ID: ${result.application_id} \nPlease proceed to pay the ₹50 fee.`);
+                // পেমেন্ট পেজে রিডাইরেক্ট করুন
+                window.location.href = `/pay-fee.html?feeId=${result.fee_id}`;
+            } else {
+                alert("Error: " + result.message);
+                submitBtn.disabled = false;
+                submitBtn.textContent = "Submit Application & Pay Fee";
+            }
+        } catch (err) {
+            alert("Network error occurred.");
+            submitBtn.disabled = false;
+        }
+    });
+
+    window.onload = initDropdowns;
+</script>
+
+</body>
+</html>

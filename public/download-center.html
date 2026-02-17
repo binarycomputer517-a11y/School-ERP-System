@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Download Center | BCSM Portal</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        /* --- CLASSIC ERP THEME (Times New Roman) --- */
+        body {
+            font-family: 'Times New Roman', serif;
+            background-color: #f1f3f6;
+            padding-bottom: 50px;
+        }
+
+        .container { max-width: 1000px; margin-top: 30px; }
+
+        /* --- Header Style --- */
+        .portal-header {
+            background: #005A9C;
+            color: white;
+            padding: 20px;
+            border: 2px solid #000;
+            box-shadow: 4px 4px 0px #333;
+            margin-bottom: 30px;
+        }
+
+        /* --- Download Grid & Cards --- */
+        .download-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        .download-card {
+            background: #fff;
+            border: 2px solid #333;
+            padding: 25px 15px;
+            text-align: center;
+            transition: all 0.2s;
+            box-shadow: 4px 4px 0px #888;
+            position: relative;
+        }
+
+        .download-card:hover:not(.locked) {
+            transform: translate(-3px, -3px);
+            box-shadow: 7px 7px 0px #005A9C;
+            border-color: #005A9C;
+        }
+
+        .download-card i {
+            font-size: 3em;
+            color: #005A9C;
+            margin-bottom: 15px;
+        }
+
+        .download-card h4 {
+            font-size: 1.1em;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-bottom: 15px;
+        }
+
+        .btn-download {
+            background-color: #C0392B;
+            color: white;
+            border: 2px solid #000;
+            padding: 8px 20px;
+            font-weight: bold;
+            font-size: 0.85em;
+            box-shadow: 2px 2px 0px #000;
+        }
+
+        /* --- Locked State --- */
+        .locked {
+            filter: grayscale(1);
+            opacity: 0.6;
+            cursor: not-allowed;
+            border-style: dashed;
+        }
+
+        .lock-badge {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #C0392B;
+            color: white;
+            padding: 2px 8px;
+            font-size: 0.7em;
+            font-weight: bold;
+            border-radius: 5px;
+        }
+
+        /* --- Fee Alert --- */
+        .fee-warning {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 15px;
+            margin-bottom: 20px;
+            color: #856404;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="portal-header d-flex justify-content-between align-items-center">
+        <div>
+            <h2 class="m-0">BCSM STUDENT PORTAL</h2>
+            <p class="small m-0">Download Center & Academic Vault</p>
+        </div>
+        <button class="btn btn-light fw-bold" onclick="location.href='/student-dashboard.html'">Back to Dashboard</button>
+    </div>
+
+    <div id="payment-notice" class="fee-warning" style="display:none;">
+        ⚠️ ATTENTION: Your academic documents are currently locked due to outstanding fees. Please settle your dues to enable downloads.
+    </div>
+
+    <div class="card p-4 border-dark shadow-sm">
+        <h3 class="border-bottom pb-2 mb-4" style="color: #005A9C;">
+            <i class="fas fa-file-invoice"></i> OFFICIAL DOCUMENTS
+        </h3>
+
+        <div class="download-grid">
+            <div class="download-card" onclick="location.href='/master-id.html'">
+                <i class="fas fa-id-card"></i>
+                <h4>Digital ID Card</h4>
+                <button class="btn-download">VIEW & PRINT</button>
+            </div>
+
+            <div class="download-card" id="doc-registration">
+                <i class="fas fa-certificate"></i>
+                <h4>Registration</h4>
+                <button class="btn-download" onclick="requestDownload('registration')">DOWNLOAD PDF</button>
+            </div>
+
+            <div class="download-card" id="doc-admit">
+                <i class="fas fa-user-graduate"></i>
+                <h4>Admit Card</h4>
+                <button class="btn-download" onclick="requestDownload('admit')">DOWNLOAD PDF</button>
+            </div>
+
+            <div class="download-card" id="doc-marksheet">
+                <i class="fas fa-poll-h"></i>
+                <h4>Marksheet</h4>
+                <button class="btn-download" onclick="requestDownload('marksheet')">DOWNLOAD PDF</button>
+            </div>
+
+            <div class="download-card" id="doc-certificate">
+                <i class="fas fa-award"></i>
+                <h4>Certificate</h4>
+                <button class="btn-download" onclick="requestDownload('certificate')">DOWNLOAD PDF</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Configuration from LocalStorage
+    const AUTH_TOKEN = localStorage.getItem('erp-token');
+    const STUDENT_ID = localStorage.getItem('student_id');
+
+    async function initDownloadCenter() {
+        if (!AUTH_TOKEN) { window.location.href = '/login.html'; return; }
+
+        try {
+            // Fetch student status to check payment
+            const response = await fetch(`/api/students/${STUDENT_ID}`, {
+                headers: { 'Authorization': `Bearer ${AUTH_TOKEN}` }
+            });
+            const student = await response.json();
+
+            // 🛡️ Security Check: If not paid, lock the specific cards
+            // Using the 'is_paid' property from your database logic
+            if (!student.is_paid) {
+                document.getElementById('payment-notice').style.display = 'block';
+                lockDocuments(['doc-registration', 'doc-admit', 'doc-marksheet', 'doc-certificate']);
+            }
+        } catch (error) {
+            console.error("Initialization Failed", error);
+        }
+    }
+
+    function lockDocuments(ids) {
+        ids.forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.classList.add('locked');
+                const btn = el.querySelector('button');
+                btn.innerText = 'LOCKED';
+                btn.disabled = true;
+                el.innerHTML += '<span class="lock-badge"><i class="fas fa-lock"></i> FEE DUE</span>';
+                el.onclick = (e) => {
+                    e.stopPropagation();
+                    alert("This document is locked due to pending academic fees.");
+                };
+            }
+        });
+    }
+
+    function requestDownload(type) {
+        // Trigger backend PDF generation in a new tab
+        window.open(`/api/students/vault/generate?type=${type}&sid=${STUDENT_ID}&token=${AUTH_TOKEN}`, '_blank');
+    }
+
+    document.addEventListener('DOMContentLoaded', initDownloadCenter);
+</script>
+</body>
+</html>

@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Advanced Notice Board Management</title>
+    <style>
+        /* --- MODERNIZED DESIGN STYLES --- */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; /* Modern Font */
+            margin: 0; padding: 2em; 
+            background-color: #f4f7f9; /* Soft background */
+            color: #333; 
+        }
+        .container { 
+            max-width: 1200px; margin: auto; padding: 30px; 
+            background-color: #FFFFFF; 
+            border: 1px solid #e0e0e0; 
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05); /* Soft Shadow */
+            border-radius: 8px; /* Rounded corners */
+        }
+        h1 { 
+            color: #C0392B; /* Deep Red Accent */
+            font-weight: 700; text-transform: uppercase; text-align: center; 
+            border-bottom: 2px solid #ddd; /* Lighter separator */
+            padding-bottom: 15px; margin-bottom: 30px; 
+            font-size: 2em;
+        }
+        h2 { 
+            color: #005A9C; /* Primary Blue */
+            font-weight: 600; border-bottom: 1px solid #ddd; 
+            padding-bottom: 5px; margin-top: 20px; margin-bottom: 15px;
+            font-size: 1.4em;
+        }
+
+        /* Layout */
+        .grid-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; }
+        .grid-form { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+        .card { 
+            padding: 20px; 
+            border: 1px solid #f0f0f0; 
+            border-radius: 6px; 
+            margin-top: 20px; 
+            background-color: #ffffff; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.03); /* Subtle card shadow */
+        }
+        
+        /* Form & Input Styles */
+        label { display: block; margin-top: 10px; font-weight: 600; font-size: 0.9em; color: #555; }
+        input, select, textarea { 
+            width: 100%; padding: 10px; margin-top: 5px; box-sizing: border-box; 
+            border: 1px solid #ccc; border-radius: 4px; 
+            transition: border-color 0.3s;
+        }
+        input:focus, select:focus, textarea:focus { border-color: #005A9C; outline: none; }
+        
+        button { 
+            background-color: #005A9C; 
+            color: white; padding: 10px 15px; 
+            border: none; /* No border for modern look */
+            border-radius: 4px; 
+            cursor: pointer; margin-top: 15px; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1); /* Soft button shadow */
+            font-weight: 600; 
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        button:hover { background-color: #00457E; transform: translateY(-1px); }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+
+        /* Status & Message Boxes */
+        .message-box { padding: 15px; border-radius: 4px; margin-top: 10px; font-weight: 600; border: 1px solid transparent; }
+        .error { background-color: #ffe8e8; color: #721c24; border-color: #f5c6cb; }
+        .success { background-color: #e6ffed; color: #155724; border-color: #c3e6cb; }
+        .info { background-color: #eaf3ff; color: #383d41; border-color: #dae6f2; }
+        
+        /* Table Styles */
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { 
+            background-color: #eef3f7; 
+            color: #495057; 
+            font-weight: 600; 
+            padding: 12px 10px; 
+            text-transform: uppercase; 
+            font-size: 0.85em; 
+            border-bottom: 2px solid #ddd;
+        }
+        td { padding: 10px; border-bottom: 1px solid #eee; font-size: 0.9em; }
+
+        /* Action Buttons in Table */
+        td button {
+            padding: 6px 10px;
+            font-size: 0.8em;
+            margin: 2px 2px 2px 0;
+            background-color: #f0f0f0;
+            color: #333;
+            box-shadow: none;
+            border: 1px solid #ccc;
+            transition: background-color 0.2s;
+        }
+        td button:hover {
+            background-color: #ddd;
+            transform: none;
+        }
+        .delete-btn {
+            background-color: #C0392B !important;
+            color: white !important;
+            border: 1px solid #8e2b21 !important;
+        }
+        .delete-btn:hover {
+            background-color: #A62D21 !important;
+        }
+
+
+        /* MODAL STYLES */
+        .modal { 
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0; top: 0; 
+            width: 100%; height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.6); 
+            display: flex;
+            align-items: center; 
+            justify-content: center; 
+        }
+        .modal-content { 
+            background-color: #fefefe; 
+            margin: auto; 
+            padding: 30px; 
+            border: none; 
+            width: 90%; 
+            max-width: 600px; 
+            border-radius: 8px;
+            position: relative;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.2);
+        }
+        .close-btn { 
+            color: #aaa; float: right; 
+            font-size: 28px; font-weight: normal; 
+            cursor: pointer; 
+        }
+        .revision-log-entry {
+            border: 1px solid #dcdcdc; 
+            padding: 10px; 
+            margin-bottom: 10px; 
+            background-color: #fcfcfc; 
+            border-left: 4px solid #005A9C;
+            border-radius: 4px;
+        }
+        .revision-log-entry:first-child {
+            background-color: #e6ffed;
+            border-left: 4px solid #28a745;
+        }
+        /* Custom Switch for Active Toggle */
+        .switch { position: relative; display: inline-block; width: 34px; height: 20px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; }
+        .slider:before { position: absolute; content: ""; height: 14px; width: 14px; left: 3px; bottom: 3px; background-color: white; transition: .4s; }
+        input:checked + .slider { background-color: #2196F3; }
+        input:checked + .slider:before { transform: translateX(14px); }
+        .slider.round { border-radius: 34px; }
+        .slider.round:before { border-radius: 50%; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Notice Board Management</h1>
+        <p>Current Role: <strong id="user-role-display">Loading...</strong></p>
+
+        <div class="card" style="padding: 15px; margin-bottom: 20px; background-color: #eaf8ff; border: 1px solid #005A9C;">
+            <h2 style="border-bottom: none; margin-top: 0; margin-bottom: 10px;">Channel Health Check</h2>
+            <p id="channel-status-display">Last checked: N/A</p>
+            <button onclick="checkDeliveryChannelHealth()" style="margin-top: 5px;">Run Health Check</button>
+        </div>
+        <div class="grid-layout">
+            <div>
+                <div class="card">
+                    <h2>Create New Targeted Notice</h2>
+                    <form id="create-notice-form">
+                        
+                        <label for="notice-type">Notice Type (Template):</label>
+                        <select id="notice-type" name="notice_type" onchange="handleTemplateSelect(this.value)">
+                            <option value="">Select a Template (No Auto-Fill)</option>
+                            <option value="ExamNotification">Exam Notification</option>
+                            <option value="FeeDueReminder">Fee Due Reminder</option>
+                            <option value="HolidayAnnouncement">Holiday Announcement</option>
+                        </select>
+                        
+                        <label for="title">Title:</label>
+                        <input type="text" id="title" name="title" required placeholder="e.g., Exam Schedule Change">
+
+                        <div class="grid-form">
+                            <div>
+                                <label for="target-role">Target Audience:</label>
+                                <select id="target-role" name="target_role" required>
+                                    <option value="All">All Users (Default)</option>
+                                    <option value="Student">Students Only</option>
+                                    <option value="Teacher">Teachers Only</option>
+                                    <option value="Parent">Parents Only</option>
+                                    <option value="Admin">Admin/Staff Only</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label for="expiry-date">Expiry Date (Optional):</label>
+                                <input type="date" id="expiry-date" name="expiry_date">
+                            </div>
+                            <div>
+                                <label for="scheduled-at">Post Date/Time (Schedule):</label>
+                                <input type="datetime-local" id="scheduled-at" name="scheduled_at">
+                            </div>
+                        </div>
+
+                        <label for="delivery-channels">Delivery Channels:</label>
+                        <div id="delivery-channels" class="channel-group">
+                            <label><input type="checkbox" name="delivery_channels" value="In-App" checked> In-App Feed</label>
+                            <label><input type="checkbox" name="delivery_channels" value="Email"> Email Notification</label>
+                            <label><input type="checkbox" name="delivery_channels" value="SMS"> SMS Alert</label>
+                        </div>
+                        
+                        <label for="content">Content:</label>
+                        <textarea id="content" name="content" rows="6" required></textarea>
+
+                        <div class="card" style="margin-top:10px; padding:15px; border: 1px dashed #005A9C; background-color: #eaf3ff;">
+                            <h3 style="margin: 0; font-size: 1.1em; color: #005A9C;">AI Content Analysis (Beta)</h3>
+                            <p id="ai-summary" style="margin-top: 5px; font-size: 0.9em;">Type content above to analyze its tone and length.</p>
+                            <div id="ai-metrics" style="display: flex; gap: 15px; margin-top: 10px;">
+                                <span id="ai-tone" style="font-weight: bold;">Tone: N/A</span>
+                                <span id="ai-length">Words: 0</span>
+                            </div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; margin-bottom: 15px; background: #e8f0fe; padding: 10px; border-radius: 5px; border: 1px solid #b3d7ff;">
+                            <label style="display: flex; align-items: center; cursor: pointer; margin-top:0;">
+                                <input type="checkbox" id="publishToWeb" name="publishToWeb" style="width: auto; margin-right: 10px; transform: scale(1.2);">
+                                <span style="font-weight: bold; color: #0056b3;">🌐 Publish to Website (bcsm.org.in)</span>
+                            </label>
+                        </div>
+
+                        <label for="required-action">Required Action/RSVP (Optional):</label>
+                        <input type="text" id="required-action" name="required_action" placeholder="e.g., Acknowledge, Reply by 2026-01-15, Attending">
+
+                        <button type="submit">Post Notice / Schedule</button>
+                        <div id="notice-message" class="message-box" style="display:none;"></div>
+                    </form>
+                </div>
+                
+                <div class="card birthday-card" style="margin-top: 30px;">
+                    <h2>🎂 Today's Birthdays</h2>
+                    <ul id="birthday-list" style="list-style: none; padding: 0;">
+                        <li>Fetching birthdays...</li>
+                    </ul>
+                    <button id="send-birthday-wish-btn" style="background-color: #2ecc71;">Send Quick Wish to All</button>
+                    <div id="birthday-message" class="message-box" style="display:none;"></div>
+                </div>
+            </div>
+
+            <div>
+                <div class="card">
+                    <h2>Recent Notices & Distribution Log</h2>
+                    <table id="notice-log-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Target</th>
+                                <th>Posted/Scheduled</th> <th>Read Rate</th> <th>Active</th> 
+                                <th>Log Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="notices-tbody">
+                            <tr><td colspan="6">Loading recent notices...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="card" style="margin-top: 30px;">
+                    <h2>Delivery Audit</h2>
+                    <p>Select a notice above to view the detailed delivery log.</p>
+                    <table id="delivery-audit-table">
+                        <thead>
+                            <tr>
+                                <th>User ID</th>
+                                <th>Channel</th>
+                                <th>Status</th>
+                                <th>Time Sent/Read</th>
+                            </tr>
+                        </thead>
+                        <tbody id="audit-tbody">
+                            <tr><td colspan="4">No delivery audit loaded.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <span class="close-btn" onclick="document.getElementById('edit-modal').style.display='none'">&times;</span>
+            <h3 style="color:#005A9C;">Edit Notice: <span id="edit-modal-title-display"></span></h3>
+            <form id="edit-notice-form">
+                <input type="hidden" id="edit-notice-id">
+                
+                <label for="edit-title">Title:</label>
+                <input type="text" id="edit-title" name="title" required>
+
+                <div class="grid-form">
+                    <div>
+                        <label for="edit-target-role">Target Audience:</label>
+                        <select id="edit-target-role" name="target_role" required>
+                            <option value="All">All Users</option>
+                            <option value="Student">Students Only</option>
+                            <option value="Teacher">Teachers Only</option>
+                            <option value="Parent">Parents Only</option>
+                            <option value="Admin">Admin/Staff Only</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label for="edit-expiry-date">Expiry Date (Optional):</label>
+                        <input type="date" id="edit-expiry-date" name="expiry_date">
+                    </div>
+                    <div>
+                        <label for="edit-is-active">Active Status:</label>
+                        <select id="edit-is-active" name="is_active">
+                            <option value="true">Active</option>
+                            <option value="false">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+
+                <label for="edit-content">Content:</label>
+                <textarea id="edit-content" name="content" rows="6" required></textarea>
+
+                <button type="submit" style="margin-top: 20px;">Save Changes</button>
+                <div id="edit-message" class="message-box" style="display:none;"></div>
+            </form>
+        </div>
+    </div>
+
+    <div id="history-modal" class="modal" style="display:none;">
+        <div class="modal-content" style="max-width: 800px;">
+            <span class="close-btn" onclick="document.getElementById('history-modal').style.display='none'">&times;</span>
+            <h3 style="color:#C0392B;">Revision History for: <span id="history-modal-title-display"></span></h3>
+            <div id="history-content-area">
+                <p>Loading history...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/notices';
+        const TOKEN = localStorage.getItem('erp-token');
+        const USER_ROLE = localStorage.getItem('user-role');
+        const USER_ID = localStorage.getItem('profile-id') || localStorage.getItem('user-id');
+        
+        let currentEditNoticeId = null;
+
+        // DOM Elements
+        const userRoleDisplay = document.getElementById('user-role-display');
+        const createNoticeForm = document.getElementById('create-notice-form');
+        const noticeMessage = document.getElementById('notice-message');
+        const noticesTbody = document.getElementById('notices-tbody');
+        const auditTbody = document.getElementById('audit-tbody');
+        const birthdayList = document.getElementById('birthday-list');
+        const birthdayMessage = document.getElementById('birthday-message');
+        const sendBirthdayWishBtn = document.getElementById('send-birthday-wish-btn');
+        const editModal = document.getElementById('edit-modal');
+        const editNoticeForm = document.getElementById('edit-notice-form');
+        const editMessage = document.getElementById('edit-message');
+        const channelStatusDisplay = document.getElementById('channel-status-display');
+        const contentTextarea = document.getElementById('content');
+        const aiSummary = document.getElementById('ai-summary');
+        const aiTone = document.getElementById('ai-tone');
+        const aiLength = document.getElementById('ai-length');
+        const historyModal = document.getElementById('history-modal');
+        const historyTitleDisplay = document.getElementById('history-modal-title-display');
+        const historyContentArea = document.getElementById('history-content-area');
+
+        let todayBirthdays = []; 
+
+        // --- Helper Functions ---
+        async function handleApi(url, options = {}) {
+            const authHeaders = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${TOKEN}` };
+            const response = await fetch(url, { ...options, headers: authHeaders });
+            
+            if (response.status === 401 || response.status === 403) {
+                localStorage.clear();
+                throw new Error('Unauthorized or session expired.');
+            }
+            if (!response.ok) {
+                const errorBody = await response.json().catch(() => ({ message: response.statusText || 'Server error.' }));
+                throw new Error(errorBody.message || 'API call failed.');
+            }
+            return response.json();
+        }
+        
+        function showMessage(element, text, type) {
+            element.textContent = text;
+            element.className = `message-box ${type}`;
+            element.style.display = 'block';
+        }
+
+        // --- Content Templating Logic ---
+        window.handleTemplateSelect = function(type) {
+            const titleInput = document.getElementById('title');
+            const contentTextarea = document.getElementById('content');
+            const expiryInput = document.getElementById('expiry-date');
+            
+            const templates = {
+                'ExamNotification': {
+                    title: "Urgent: Final Exam Schedule Released",
+                    content: "The final examination schedule for all classes is now available on the portal. Review immediately. Starting Date: [YYYY-MM-DD].",
+                    expiryOffsetDays: 7
+                },
+                'FeeDueReminder': {
+                    title: "Fee Payment Reminder - Deadline Approaching",
+                    content: "Please ensure all outstanding fees are paid before the deadline to avoid late charges. Deadline: [YYYY-MM-DD]. Contact the accounts office with queries.",
+                    expiryOffsetDays: 3
+                },
+                'HolidayAnnouncement': {
+                    title: "School Holiday Notification (MM/DD)",
+                    content: "The school will remain closed on [Date] on account of [Reason]. Classes will resume on [Date].",
+                    expiryOffsetDays: 14
+                }
+            };
+
+            if (templates[type]) {
+                titleInput.value = templates[type].title;
+                contentTextarea.value = templates[type].content;
+                
+                const defaultExpiry = new Date();
+                defaultExpiry.setDate(defaultExpiry.getDate() + templates[type].expiryOffsetDays);
+                expiryInput.value = defaultExpiry.toISOString().split('T')[0];
+
+                analyzeContent(contentTextarea.value);
+            } else {
+                titleInput.value = '';
+                contentTextarea.value = '';
+                expiryInput.value = '';
+                analyzeContent('');
+            }
+        }
+        
+        // --- AI Content Analysis Logic ---
+        function analyzeContent(content) {
+            const wordCount = content.trim().split(/\s+/).filter(w => w.length > 0).length;
+            aiLength.textContent = `Words: ${wordCount}`;
+
+            let tone = 'Neutral';
+            if (content.toLowerCase().includes('urgent') || content.toLowerCase().includes('critical') || content.toLowerCase().includes('immediate')) {
+                tone = '🚨 Urgent';
+            } else if (content.toLowerCase().includes('celebration') || content.toLowerCase().includes('happy') || content.toLowerCase().includes('success')) {
+                tone = '🎉 Positive';
+            } else if (wordCount > 150) {
+                tone = '⚠️ Detailed/Long';
+            }
+            
+            aiTone.textContent = `Tone: ${tone}`;
+            aiSummary.textContent = (wordCount > 50) 
+                ? `Summary: Content is ${wordCount} words long. Consider shortening for SMS/Email channels.` 
+                : `Summary: ${wordCount} words. Looks concise for clear delivery.`;
+        }
+        
+        contentTextarea.addEventListener('input', (e) => {
+            analyzeContent(e.target.value);
+        });
+        
+        // --- Delivery Channel Health Check ---
+        window.checkDeliveryChannelHealth = async function() {
+            channelStatusDisplay.textContent = 'Checking server status...';
+            const HEALTH_API = '/api/utils/delivery-health'; 
+            
+            try {
+                const result = await handleApi(HEALTH_API); 
+                let statusText = `Last checked: ${new Date().toLocaleTimeString()}. `;
+                
+                if (result.sms === 'OK' && result.email === 'OK') {
+                     statusText += '✅ All Channels Operational.';
+                } else {
+                     statusText += `⚠️ SMS: ${result.sms || 'Unknown'}, Email: ${result.email || 'Unknown'}.`;
+                }
+                channelStatusDisplay.textContent = statusText;
+
+            } catch (error) {
+                channelStatusDisplay.textContent = `❌ Health Check Failed: API Endpoint not found or Server down.`;
+                console.error("Health Check Error:", error);
+            }
+        }
+
+        // --- Birthday Feature ---
+        async function loadTodayBirthdays() {
+            birthdayList.innerHTML = '<li>Fetching birthdays...</li>'; 
+            sendBirthdayWishBtn.disabled = true;
+
+            try {
+                const data = await handleApi(`${API_BASE}/birthdays/today`); 
+                todayBirthdays = data;
+
+                if (todayBirthdays.length > 0) {
+                    let listHtml = '';
+                    todayBirthdays.forEach(person => {
+                        const dob = new Date(person.dob_date).toLocaleDateString();
+                        listHtml += `<li>✅ ${person.full_name} (${person.role}) - DOB: ${dob}</li>`;
+                    });
+                    birthdayList.innerHTML = listHtml;
+                    sendBirthdayWishBtn.disabled = false;
+                } else {
+                    birthdayList.innerHTML = '<li>No birthdays today.</li>';
+                    sendBirthdayWishBtn.disabled = true;
+                }
+            } catch (error) {
+                console.error('Birthday Fetch Error:', error);
+                birthdayList.innerHTML = '<li>❌ Error loading birthdays. Check console.</li>';
+                sendBirthdayWishBtn.disabled = true;
+            }
+        }
+
+        sendBirthdayWishBtn.addEventListener('click', async () => {
+            if (todayBirthdays.length === 0) {
+                showMessage(birthdayMessage, 'No recipients found to send wishes.', 'info');
+                return;
+            }
+            sendBirthdayWishBtn.disabled = true;
+            showMessage(birthdayMessage, `Sending wishes to ${todayBirthdays.length} recipients...`, 'info');
+
+            try {
+                const result = await handleApi(`${API_BASE}/birthdays/send-wish`, {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                });
+
+                showMessage(birthdayMessage, `✅ ${result.message}`, 'success');
+                loadRecentNotices(); 
+            } catch (error) {
+                showMessage(birthdayMessage, `❌ Failed to send wishes: ${error.message}`, 'error');
+            } finally {
+                sendBirthdayWishBtn.disabled = false;
+                loadTodayBirthdays(); 
+            }
+        });
+
+        // --- 1. Notice Creation (UPDATED with Web Publish Logic) ---
+        createNoticeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            showMessage(noticeMessage, 'Posting notice...', 'info');
+
+            const scheduledAt = form.elements['scheduled-at'].value;
+            const isScheduled = !!scheduledAt;
+
+            const formData = {
+                title: form.elements.title.value,
+                content: form.elements.content.value,
+                target_role: form.elements.target_role.value,
+                expiry_date: form.elements.expiry_date.value || null,
+                required_action: form.elements['required-action'].value || null,
+                notice_type: form.elements['notice-type'].value || 'General',
+                scheduled_at: isScheduled ? new Date(scheduledAt).toISOString() : null,
+                delivery_channels: Array.from(form.querySelectorAll('input[name="delivery_channels"]:checked'))
+                                       .map(input => input.value),
+                // ✅ UPDATE: Send checkbox status to backend
+                publishToWeb: document.getElementById('publishToWeb').checked 
+            };
+
+            if (formData.delivery_channels.length === 0) {
+                 showMessage(noticeMessage, '❌ Please select at least one delivery channel.', 'error');
+                 submitBtn.disabled = false;
+                 return;
+            }
+
+            try {
+                const result = await handleApi(`${API_BASE}/create`, { 
+                    method: 'POST', 
+                    body: JSON.stringify(formData) 
+                });
+                
+                // ✅ UPDATE: Show success message for Website link
+                let msg = `✅ ${result.message}`;
+                if (result.wpLink) {
+                    msg += `\n🌐 Also published to Website!`;
+                }
+
+                showMessage(noticeMessage, msg, 'success');
+                form.reset();
+                document.getElementById('publishToWeb').checked = false; // Reset checkbox
+                analyzeContent('');
+                loadRecentNotices(); 
+                
+            } catch (error) {
+                showMessage(noticeMessage, `❌ Failed: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        // --- 2. Notice Log & Audit ---
+        async function loadRecentNotices() {
+            noticesTbody.innerHTML = '<tr><td colspan="6">Loading notices...</td></tr>'; 
+            auditTbody.innerHTML = '<tr><td colspan="4">No delivery audit loaded.</td></tr>';
+            try {
+                const notices = await handleApi(`${API_BASE}/all-management`); 
+                noticesTbody.innerHTML = '';
+                
+                if (notices.length === 0) {
+                     noticesTbody.innerHTML = '<tr><td colspan="6">No recent notices found.</td></tr>'; 
+                     return;
+                }
+
+                notices.forEach(n => {
+                    const isActive = n.is_active !== false; 
+                    const isScheduled = !!n.scheduled_at && new Date(n.scheduled_at) > new Date();
+                    const postInfo = isScheduled 
+                        ? `<strong style="color: #f39c12;">Scheduled:</strong> ${new Date(n.scheduled_at).toLocaleDateString()}`
+                        : `Posted: ${new Date(n.created_at).toLocaleDateString()}`;
+
+                    const readRatePercent = n.read_rate ? Math.round((n.read_rate / n.total_users) * 100) : 0;
+                    const readRateHtml = isScheduled 
+                        ? 'N/A' 
+                        : `<strong style="color: ${readRatePercent < 50 ? '#c0392b' : '#27ae60'};">${readRatePercent}%</strong> (${n.read_rate || 0}/${n.total_users || 0})`;
+
+                    const toggleHtml = `
+                        <label class="switch" style="cursor: pointer;">
+                            <input type="checkbox" ${isActive ? 'checked' : ''} onchange="toggleNoticeActive('${n.id}', this.checked)" ${isScheduled ? 'disabled' : ''}>
+                            <span class="slider round"></span>
+                        </label>
+                    `;
+
+                    noticesTbody.innerHTML += `
+                        <tr>
+                            <td><strong>${n.title}</strong><br><small>${n.content.substring(0, 50)}...</small></td>
+                            <td>${n.target_role}</td>
+                            <td>${postInfo}</td>
+                            <td>${readRateHtml}</td> <td>${toggleHtml}</td>
+                            <td>
+                                <button onclick="viewRevisionHistory('${n.id}', '${n.title}')" style="background-color:#3498db; margin-bottom: 5px;">History</button>
+                                <button onclick="viewDeliveryLog('${n.id}', '${n.title}')" style="margin-bottom: 5px;">Audit</button>
+                                <button onclick="openEditModal('${n.id}')" style="margin-bottom: 5px;">Edit</button> 
+                                <button class="delete-btn" onclick="deleteNotice('${n.id}', '${n.title}')">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+            } catch (error) {
+                console.error("Error loading notices:", error);
+                noticesTbody.innerHTML = `<tr><td colspan="6" class="error">Failed to load notices: ${error.message}</td></tr>`; 
+            }
+        }
+        
+        // --- Revision History ---
+        window.viewRevisionHistory = async function(noticeId, noticeTitle) {
+            historyTitleDisplay.textContent = noticeTitle;
+            historyContentArea.innerHTML = '<p class="info">Loading history...</p>';
+            historyModal.style.display = 'flex'; 
+
+            try {
+                const history = await handleApi(`${API_BASE}/${noticeId}/history`);
+                if (history.length === 0) {
+                    historyContentArea.innerHTML = '<p class="info">No revision history found.</p>';
+                    return;
+                }
+
+                historyContentArea.innerHTML = history.reverse().map((rev, index) => `
+                    <div class="revision-log-entry">
+                        <p style="margin: 0; font-weight: bold;">Version ${history.length - index} (${rev.action})</p>
+                        <p style="margin: 5px 0 5px 0; font-size: 0.9em;">
+                            By: ${rev.user} | On: ${new Date(rev.timestamp).toLocaleString()}
+                        </p>
+                        <p style="margin: 0; font-size: 0.9em; white-space: pre-wrap;">
+                            Title: <em>${rev.title || 'N/A'}</em>
+                        </p>
+                        <p style="margin: 5px 0 0 0; font-size: 0.9em; white-space: pre-wrap;">
+                            Content: ${(rev.content || 'N/A').substring(0, 100)}...
+                        </p>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                historyContentArea.innerHTML = `<p class="error">Failed to load history: ${error.message}</p>`;
+            }
+        }
+
+        // --- Toggle Status ---
+        window.toggleNoticeActive = async function(noticeId, isActive) {
+            const STATUS_API = `${API_BASE}/${noticeId}/status`; 
+            try {
+                await handleApi(STATUS_API, { method: 'PATCH', body: JSON.stringify({ is_active: isActive }) });
+                console.log(`Notice ${noticeId} status set to ${isActive}`);
+            } catch (error) {
+                alert(`Failed to change status: ${error.message}`);
+                loadRecentNotices(); 
+            }
+        }
+
+        // --- View Delivery Log (FILLED) ---
+        window.viewDeliveryLog = async function(noticeId, noticeTitle) {
+             auditTbody.innerHTML = '<tr><td colspan="4" class="info">Fetching audit log...</td></tr>';
+             try {
+                const logs = await handleApi(`${API_BASE}/${noticeId}/delivery-log`); // Ensure backend has this endpoint
+                if (logs.length === 0) {
+                    auditTbody.innerHTML = '<tr><td colspan="4">No delivery data found.</td></tr>';
+                    return;
+                }
+                auditTbody.innerHTML = logs.map(log => `
+                    <tr>
+                        <td>${log.user_name || log.user_id}</td>
+                        <td>${log.channel}</td>
+                        <td style="color:${log.status === 'Sent' || log.status === 'Read' ? 'green' : 'red'}">${log.status}</td>
+                        <td>${new Date(log.timestamp).toLocaleString()}</td>
+                    </tr>
+                `).join('');
+             } catch (error) {
+                auditTbody.innerHTML = `<tr><td colspan="4" class="error">Error: ${error.message}</td></tr>`;
+             }
+        }
+
+        // --- Open Edit Modal ---
+        window.openEditModal = async function(noticeId) {
+            currentEditNoticeId = noticeId;
+            showMessage(editMessage, 'Loading notice details...', 'info');
+            editModal.style.display = 'flex'; 
+
+            try {
+                const notice = await handleApi(`${API_BASE}/${noticeId}`);
+
+                document.getElementById('edit-modal-title-display').textContent = notice.title;
+                document.getElementById('edit-notice-id').value = notice.id;
+                document.getElementById('edit-title').value = notice.title;
+                document.getElementById('edit-content').value = notice.content;
+                document.getElementById('edit-target-role').value = notice.target_role;
+                
+                const expiryDate = notice.expiry_date ? new Date(notice.expiry_date).toISOString().split('T')[0] : '';
+                document.getElementById('edit-expiry-date').value = expiryDate;
+                
+                document.getElementById('edit-is-active').value = String(notice.is_active); 
+
+                editMessage.style.display = 'none';
+
+            } catch (error) {
+                showMessage(editMessage, `Failed to load notice: ${error.message}`, 'error');
+            }
+        }
+
+        editNoticeForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const submitBtn = form.querySelector('button[type="submit"]');
+            submitBtn.disabled = true;
+            showMessage(editMessage, 'Saving changes...', 'info');
+
+            const noticeId = form.elements['edit-notice-id'].value;
+            const formData = {
+                title: form.elements['edit-title'].value,
+                content: form.elements['edit-content'].value,
+                target_role: form.elements['edit-target-role'].value,
+                expiry_date: form.elements['edit-expiry-date'].value || null,
+                is_active: form.elements['edit-is-active'].value === 'true'
+            };
+
+            try {
+                const result = await handleApi(`${API_BASE}/${noticeId}`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(formData)
+                });
+
+                showMessage(editMessage, `✅ ${result.message}`, 'success');
+                loadRecentNotices(); 
+                setTimeout(() => { editModal.style.display = 'none'; }, 1500);
+
+            } catch (error) {
+                showMessage(editMessage, `❌ Update Failed: ${error.message}`, 'error');
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+
+        // --- Delete Notice (FILLED) ---
+        window.deleteNotice = async function(noticeId, noticeTitle) {
+             if(!confirm(`Are you sure you want to delete "${noticeTitle}"?`)) return;
+             try {
+                await handleApi(`${API_BASE}/${noticeId}`, { method: 'DELETE' });
+                alert(`✅ Notice deleted successfully.`);
+                loadRecentNotices();
+             } catch (error) {
+                alert(`❌ Failed to delete: ${error.message}`);
+             }
+        }
+
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            userRoleDisplay.textContent = USER_ROLE;
+            loadRecentNotices();
+            loadTodayBirthdays(); 
+            analyzeContent(contentTextarea.value); 
+            checkDeliveryChannelHealth();
+        });
+    </script>
+    <script src="js/global-config.js"></script>
+</body>
+</html>

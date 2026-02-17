@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Library Management | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        .nav-pills .nav-link {
+            color: var(--primary-dark);
+            font-weight: 600;
+            border-radius: 50px;
+            padding: 10px 25px;
+            margin-right: 10px;
+            transition: all 0.3s ease;
+        }
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .status-badge {
+            font-size: 0.75rem;
+            padding: 5px 10px;
+            border-radius: 20px;
+            font-weight: 600;
+        }
+        .status-available { background: #d4edda; color: #155724; }
+        .status-issued { background: #fff3cd; color: #856404; }
+        .status-overdue { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid" style="max-width: 1600px; padding: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-book-reader me-2"></i>Library Management</h2>
+            <p class="text-muted mb-0 small">Manage books, circulation, and library assets</p>
+        </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="glass-card mb-4 p-2">
+        <ul class="nav nav-pills" id="pills-tab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pills-catalog" onclick="fetchCatalog()">
+                    <i class="fas fa-list me-2"></i>Catalog
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-circulation">
+                    <i class="fas fa-exchange-alt me-2"></i>Circulation
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-history" onclick="fetchCirculationHistory(null, null, true)">
+                    <i class="fas fa-history me-2"></i>History
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-config" onclick="fetchConfig()">
+                    <i class="fas fa-cog me-2"></i>Configuration
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="tab-content" id="pills-tabContent">
+        
+        <div class="tab-pane fade show active" id="pills-catalog">
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="glass-card h-100">
+                        <h6 class="fw-bold text-primary mb-3"><i class="fas fa-plus-circle me-2"></i>Add New Book</h6>
+                        <form id="add-catalog-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">ISBN *</label>
+                                <input type="text" name="isbn" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Title *</label>
+                                <input type="text" name="title" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Author *</label>
+                                <input type="text" name="author" class="form-control" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Publisher</label>
+                                    <input type="text" name="publisher" class="form-control">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Subject</label>
+                                    <input type="text" name="subject_area" class="form-control">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill shadow-sm">Save Book</button>
+                            <div id="catalog-message" class="mt-2 small text-center"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="glass-card h-100 p-0 overflow-hidden">
+                        <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
+                            <h6 class="fw-bold mb-0">Master Catalog</h6>
+                            <div class="input-group w-50">
+                                <span class="input-group-text bg-white border-end-0"><i class="fas fa-search text-muted"></i></span>
+                                <input type="text" id="catalog-search" class="form-control border-start-0 ps-0" placeholder="Search title, author, ISBN..." onkeyup="filterCatalog()">
+                            </div>
+                        </div>
+                        <div class="table-responsive" style="max-height: 500px;">
+                            <table class="table table-glass table-hover mb-0 align-middle">
+                                <thead class="table-light sticky-top">
+                                    <tr>
+                                        <th>Book Details</th>
+                                        <th class="text-center">Availability</th>
+                                        <th class="text-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="catalog-tbody">
+                                    <tr><td colspan="3" class="text-center p-4 text-muted">Loading catalog...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="pills-circulation">
+            <div class="row g-4">
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-success">
+                        <h6 class="fw-bold text-success mb-3"><i class="fas fa-hand-holding-medical me-2"></i>Issue Book</h6>
+                        <form id="issue-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Student ID (UUID)</label>
+                                <input type="text" name="student_id" class="form-control" required placeholder="Paste UUID">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" required placeholder="Scan Barcode">
+                            </div>
+                            <button type="submit" class="btn btn-success w-100 rounded-pill">Issue Book</button>
+                            <div id="issue-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-danger">
+                        <h6 class="fw-bold text-danger mb-3"><i class="fas fa-undo me-2"></i>Return Book</h6>
+                        <form id="return-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" required placeholder="Scan Barcode">
+                            </div>
+                            <button type="submit" class="btn btn-danger w-100 rounded-pill">Process Return</button>
+                            <div id="return-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-primary">
+                        <h6 class="fw-bold text-primary mb-3"><i class="fas fa-boxes me-2"></i>Add Inventory</h6>
+                        <form id="add-copy-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Book ID (Catalog)</label>
+                                <input type="text" id="book_id_copy" name="book_id" class="form-control" required placeholder="Catalog ID">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">New Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" required placeholder="e.g. 2025-001">
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill">Add Copy</button>
+                            <div id="copy-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="glass-card h-100 border-start border-4 border-warning">
+                        <h6 class="fw-bold text-warning mb-3"><i class="fas fa-sync-alt me-2"></i>Renewal</h6>
+                        <form id="renewal-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Accession No.</label>
+                                <input type="text" name="accession_number" class="form-control" placeholder="Scan Barcode">
+                            </div>
+                            <button type="submit" class="btn btn-warning w-100 rounded-pill text-white">Renew Book</button>
+                            <div id="renewal-error-message" class="mt-2 small text-center fw-bold"></div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="pills-history">
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="p-3 border-bottom bg-light">
+                    <form id="history-search-form" class="row g-3 align-items-end">
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Student ID</label>
+                            <input type="text" id="history-student-id" class="form-control" placeholder="UUID...">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-bold small">Accession No.</label>
+                            <input type="text" id="history-accession-no" class="form-control" placeholder="Copy ID...">
+                        </div>
+                        <div class="col-md-4">
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill"><i class="fas fa-search me-2"></i>Search History</button>
+                        </div>
+                    </form>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-glass table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Book Info</th>
+                                <th>Student ID</th>
+                                <th>Issued</th>
+                                <th>Due Date</th>
+                                <th>Returned</th>
+                                <th>Fine</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody">
+                            <tr><td colspan="6" class="text-center p-4 text-muted">Enter search criteria...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="history-error-message" class="p-2 text-center text-danger small fw-bold"></div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="pills-config">
+            <div class="col-lg-6 mx-auto">
+                <div class="glass-card">
+                    <h6 class="fw-bold text-dark mb-4 border-bottom pb-2">Library Rules & Fines</h6>
+                    <form id="config-form">
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Max Books / Student</label>
+                                <input type="number" id="max_books_student" name="max_books_student" class="form-control" min="1" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label fw-bold small">Max Issue Days</label>
+                                <input type="number" id="max_issue_days" name="max_issue_days" class="form-control" min="1" required>
+                            </div>
+                        </div>
+                        <div class="mb-4">
+                            <label class="form-label fw-bold small">Daily Fine Rate (₹)</label>
+                            <div class="input-group">
+                                <span class="input-group-text">₹</span>
+                                <input type="number" step="0.01" id="daily_fine_rate" name="daily_fine_rate" class="form-control" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-dark w-100 rounded-pill">Save Configuration</button>
+                        <div id="config-error-message" class="mt-2 small text-center fw-bold"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+    const API_BASE = '/api/library';
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        const token = localStorage.getItem('erp-token');
+        if (!token) window.location.href = '/login.html';
+        
+        // Initial Load
+        fetchCatalog();
+    });
+
+    // --- 1. Catalog Logic ---
+    async function fetchCatalog() {
+        const tbody = document.getElementById('catalog-tbody');
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4">Loading...</td></tr>';
+        
+        try {
+            const res = await window.authFetch(`${API_BASE}/catalog`);
+            const data = await res.json();
+            window.masterCatalogData = data; 
+            filterCatalog(data);
+        } catch(e) { 
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger p-4">Error loading catalog</td></tr>'; 
+        }
+    }
+
+    function filterCatalog(data = window.masterCatalogData) {
+        const tbody = document.getElementById('catalog-tbody');
+        const term = document.getElementById('catalog-search').value.toLowerCase();
+        
+        if(!data) return;
+
+        const filtered = data.filter(b => 
+            (b.title && b.title.toLowerCase().includes(term)) ||
+            (b.author && b.author.toLowerCase().includes(term)) ||
+            (b.isbn && b.isbn.includes(term))
+        );
+
+        if(filtered.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center p-4 text-muted">No books found</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = filtered.map(b => `
+            <tr>
+                <td>
+                    <div class="fw-bold text-dark">${b.title}</div>
+                    <small class="text-muted d-block">${b.author}</small>
+                    <small class="text-secondary" style="font-size:0.7rem">ISBN: ${b.isbn}</small>
+                </td>
+                <td class="text-center">
+                    <span class="status-badge ${b.available_copies > 0 ? 'status-available' : 'status-issued'}">
+                        ${b.available_copies} / ${b.total_copies}
+                    </span>
+                </td>
+                <td class="text-center">
+                    <button class="btn btn-sm btn-outline-primary me-1" onclick="copyToClipboard('${b.id}')" title="Copy ID"><i class="fas fa-copy"></i></button>
+                    <button class="btn btn-sm btn-outline-dark" onclick="manageInventory('${b.id}')" title="Add Copy"><i class="fas fa-plus"></i></button>
+                </td>
+            </tr>
+        `).join('');
+    }
+
+    async function copyToClipboard(text) {
+        await navigator.clipboard.writeText(text);
+        alert("ID Copied: " + text);
+    }
+
+    function manageInventory(bookId) {
+        document.getElementById('book_id_copy').value = bookId;
+        // Switch tab
+        const tabTrigger = new bootstrap.Tab(document.querySelector('#pills-tab button[data-bs-target="#pills-circulation"]'));
+        tabTrigger.show();
+    }
+
+    // --- 2. Forms Logic (Using generic handler) ---
+    async function handleFormSubmit(e, url, resultDivId, successMsg) {
+        e.preventDefault();
+        const form = e.target;
+        const msgDiv = document.getElementById(resultDivId);
+        msgDiv.className = 'mt-2 small text-center fw-bold text-primary';
+        msgDiv.innerText = 'Processing...';
+        
+        try {
+            const fd = new FormData(form);
+            const data = Object.fromEntries(fd.entries());
+            
+            const res = await window.authFetch(url, {
+                method: 'POST', // Default to POST, override if needed
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+
+            if(res.ok) {
+                msgDiv.className = 'mt-2 small text-center fw-bold text-success';
+                msgDiv.innerText = `✅ ${successMsg}`;
+                form.reset();
+                if(url.includes('catalog') || url.includes('inventory')) fetchCatalog(); 
+            } else {
+                throw new Error(result.message);
+            }
+        } catch(err) {
+            msgDiv.className = 'mt-2 small text-center fw-bold text-danger';
+            msgDiv.innerText = `❌ ${err.message}`;
+        }
+    }
+
+    // Bind Forms
+    document.getElementById('add-catalog-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/catalog`, 'catalog-message', 'Book Added!'));
+    document.getElementById('add-copy-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/inventory`, 'copy-error-message', 'Copy Added!'));
+    document.getElementById('issue-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/issue`, 'issue-error-message', 'Issued Successfully!'));
+    document.getElementById('return-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/return`, 'return-error-message', 'Returned Successfully!'));
+    document.getElementById('renewal-form').addEventListener('submit', (e) => handleFormSubmit(e, `${API_BASE}/renew`, 'renewal-error-message', 'Renewed Successfully!'));
+
+    // --- 3. Configuration (PUT request) ---
+    document.getElementById('config-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const msgDiv = document.getElementById('config-error-message');
+        try {
+            const data = Object.fromEntries(new FormData(e.target).entries());
+            await window.authFetch(`${API_BASE}/config`, { method: 'PUT', body: JSON.stringify(data) });
+            msgDiv.className = 'mt-2 small text-center fw-bold text-success';
+            msgDiv.innerText = 'Configuration Saved!';
+        } catch(err) {
+            msgDiv.className = 'mt-2 small text-center fw-bold text-danger';
+            msgDiv.innerText = 'Save Failed';
+        }
+    });
+
+    async function fetchConfig() {
+        try {
+            const res = await window.authFetch(`${API_BASE}/config`);
+            const data = await res.json();
+            document.getElementById('max_books_student').value = data.max_books_student || 3;
+            document.getElementById('max_issue_days').value = data.max_issue_days || 14;
+            document.getElementById('daily_fine_rate').value = data.daily_fine_rate || 5;
+        } catch(e) {}
+    }
+
+    // --- 4. History ---
+    document.getElementById('history-search-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const sid = document.getElementById('history-student-id').value;
+        const acc = document.getElementById('history-accession-no').value;
+        fetchCirculationHistory(sid, acc);
+    });
+
+    async function fetchCirculationHistory(sid, acc, isDefault = false) {
+        const tbody = document.getElementById('history-tbody');
+        tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4">Searching...</td></tr>';
+        
+        let query = '';
+        if(sid) query += `studentId=${sid}&`;
+        if(acc) query += `accessionNo=${acc}`;
+        
+        try {
+            const res = await window.authFetch(`${API_BASE}/history?${query}`);
+            const data = await res.json();
+            
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center p-4 text-muted">No records found.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.map(r => `
+                <tr>
+                    <td><strong>${r.title}</strong><br><small class="text-muted">${r.accession_number}</small></td>
+                    <td class="small font-monospace">${r.student_id ? r.student_id.slice(0,8)+'...' : '-'}</td>
+                    <td>${new Date(r.issue_date).toLocaleDateString()}</td>
+                    <td>${new Date(r.due_date).toLocaleDateString()}</td>
+                    <td>${r.return_date ? new Date(r.return_date).toLocaleDateString() : '<span class="badge bg-warning text-dark">Active</span>'}</td>
+                    <td class="${r.fine_amount > 0 ? 'text-danger fw-bold' : 'text-muted'}">₹${r.fine_amount || 0}</td>
+                </tr>
+            `).join('');
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-center text-danger p-4">Error fetching history</td></tr>'; }
+    }
+
+</script>
+
+</body>
+</html>

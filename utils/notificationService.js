@@ -1,62 +1,230 @@
-// utils/notificationService.js
 const nodemailer = require('nodemailer');
-// dotenv লোড হয়েছে ধরে নিচ্ছি
 
-// ==========================================================
-// ✅ চূড়ান্ত ফিক্স: EMAIL_HOST এবং EMAIL_PORT ব্যবহার করা হচ্ছে
-// ==========================================================
+/**
+ * SMTP Transporter Configuration
+ */
 const transporter = nodemailer.createTransport({
-    // 🚨 FIX: SMTP_HOST এর পরিবর্তে EMAIL_HOST ব্যবহার করা হলো
-    host: process.env.EMAIL_HOST,
-    // 🚨 FIX: SMTP_PORT এর পরিবর্তে EMAIL_PORT ব্যবহার করা হলো
-    port: process.env.EMAIL_PORT, 
-    // NOTE: EMAIL_SECURE যদি 'true' হয় তবে এটি SSL/TLS চালু করবে
+    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
+    port: parseInt(process.env.EMAIL_PORT) || 587,
     secure: process.env.EMAIL_SECURE === 'true', 
     auth: {
         user: process.env.EMAIL_USER, 
         pass: process.env.EMAIL_PASS 
     },
+    debug: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === 'development'
 });
 
 /**
- * পাসওয়ার্ড রিসেট লিঙ্ক সহ ইমেল পাঠায়
- * @param {string} toEmail - প্রাপকের ইমেল ঠিকানা
- * @param {string} resetLink - সম্পূর্ণ রিসেট URL
+ * FEATURE 1: Password Reset Email
  */
 async function sendPasswordResetEmail(toEmail, resetLink) {
-    if (!toEmail) {
-        console.warn('Skipping password reset email: Recipient email address is missing.');
-        return; 
-    }
+    if (!toEmail) return;
     
+    const mailOptions = {
+        from: `"BCSM Portal Admin" <${process.env.EMAIL_USER}>`, 
+        to: toEmail,
+        subject: 'Security Notification: Password Reset Request',
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden;">
+                <div style="background-color: #003366; color: white; padding: 20px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 22px;">BCSM SCHOOL ERP</h1>
+                </div>
+                <div style="padding: 30px; color: #333;">
+                    <h2>Reset Your Password</h2>
+                    <p>Click the button below to set a new password. This link expires in 60 minutes.</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${resetLink}" style="background-color: #005A9C; color: white; padding: 14px 25px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Reset My Password</a>
+                    </div>
+                    <p style="font-size: 12px; color: #666;">If you didn't request this, please ignore this email.</p>
+                </div>
+            </div>
+        `,
+    };
+
     try {
-        const mailOptions = {
-            from: `"School ERP Admin" <${process.env.EMAIL_USER}>`, 
-            to: toEmail,
-            subject: 'Action Required: Password Reset for School ERP Account',
-            html: `
-                <p>Hello,</p>
-                <p>We received a request to reset the password for your School ERP account. If you made this request, please click the secure link below:</p>
-                
-                <a href="${resetLink}" style="background-color: #005A9C; color: white; padding: 10px 15px; text-decoration: none; border-radius: 5px; display: inline-block; margin: 15px 0; font-weight: bold;">
-                    Reset Your Password
-                </a>
-                
-                <p style="font-size: 12px; color: #555;">This secure link is valid for **60 minutes**.</p>
-                <p>If you did not request a password reset, you can safely ignore this email.</p>
-                <br>
-                <p>Regards,<br>School ERP System Administrator</p>
-            `,
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`Password reset email sent successfully to ${toEmail}. Message ID: ${info.messageId}`);
-
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Reset email sent to: ${toEmail}`);
     } catch (error) {
-        // এই ত্রুটিটি এখন প্রকৃত SMTP সমস্যা দেখাবে, লোকালহোস্ট সংযোগের ত্রুটি নয়।
-        console.error(`🚨 CRITICAL ERROR: Failed to send password reset email to ${toEmail}. Check SMTP Configuration.`, error.message);
-        throw new Error("Failed to send notification email. Please check server logs for SMTP errors."); 
+        console.error(`🚨 Reset Email Error:`, error.message);
     }
 }
 
-module.exports = { sendPasswordResetEmail };
+/**
+ * FEATURE 2: Registration Welcome Email
+ */
+async function sendRegistrationEmail(toEmail, studentName, username, loginUrl) {
+    const mailOptions = {
+        from: `"BCSM Admissions" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: 'Welcome to BCSM School ERP - Registration Successful',
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; border-radius: 12px; overflow: hidden;">
+                <div style="background-color: #003366; color: white; padding: 20px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 20px;">Welcome to BCSM!</h1>
+                </div>
+                <div style="padding: 30px; color: #333;">
+                    <h2>Hello ${studentName},</h2>
+                    <p>Your registration is successful. Use the credentials below to access your portal.</p>
+                    <div style="background-color: #f4f4f4; padding: 15px; border-radius: 8px;">
+                        <p><strong>Username:</strong> ${username}</p>
+                        <p><strong>Login Portal:</strong> <a href="${loginUrl}">${loginUrl}</a></p>
+                    </div>
+                    <p>Happy Learning!</p>
+                </div>
+            </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Welcome email sent to: ${toEmail}`);
+    } catch (error) {
+        console.error(`🚨 Registration Email Error:`, error.message);
+    }
+}
+
+/**
+ * FEATURE 3: Payment Confirmation Email
+ */
+async function sendPaymentEmail(toEmail, studentName, amount, txnId) {
+    const mailOptions = {
+        from: `"BCSM Accounts" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: 'Fee Payment Received - Confirmation',
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e0e0e0; border-radius: 12px;">
+                <div style="background-color: #22c55e; color: white; padding: 20px; text-align: center;">
+                    <h2 style="margin:0;">Payment Successful</h2>
+                </div>
+                <div style="padding: 30px;">
+                    <p>Dear <strong>${studentName}</strong>,</p>
+                    <p>We have received your payment of <strong>₹${amount}</strong>.</p>
+                    <p><strong>Transaction ID:</strong> ${txnId}</p>
+                    <p>You can download the official receipt from your dashboard.</p>
+                </div>
+            </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Payment confirmation sent to: ${toEmail}`);
+    } catch (error) {
+        console.error(`🚨 Payment Email Error:`, error.message);
+    }
+}
+
+/**
+ * FEATURE 4: Reports with Attachments (PDF/Excel)
+ */
+async function sendEmailWithAttachment({ to, subject, html, attachments }) {
+    const mailOptions = {
+        from: `"BCSM Reports" <${process.env.EMAIL_USER}>`,
+        to,
+        subject,
+        html,
+        attachments // Expects array: [{ filename: 'Report.pdf', path: '/path/to/file' }]
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Report email with attachment sent to: ${to}`);
+    } catch (error) {
+        console.error(`🚨 Attachment Email Error:`, error.message);
+    }
+}
+
+/**
+ * FEATURE 5: Attendance Absence Alert
+ */
+async function sendAbsentEmail(toEmail, studentName, attendanceDate) {
+    if (!toEmail) return;
+
+    const mailOptions = {
+        from: `"BCSM Attendance" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: `Absence Alert: ${studentName}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #fee2e2; border-radius: 12px; overflow: hidden;">
+                <div style="background-color: #dc2626; color: white; padding: 20px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 20px;">Attendance Notification</h1>
+                </div>
+                <div style="padding: 30px; color: #333; line-height: 1.6;">
+                    <h2>Dear Parent,</h2>
+                    <p>This is an automated alert to inform you that your child, <strong>${studentName}</strong>, has been marked <span style="color: #dc2626; font-weight: bold;">ABSENT</span> today.</p>
+                    
+                    <div style="background-color: #f9fafb; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin: 20px 0;">
+                        <p style="margin: 0;"><strong>Date:</strong> ${attendanceDate}</p>
+                        <p style="margin: 0;"><strong>Status:</strong> Not Present in Roster</p>
+                    </div>
+
+                    <p>If you believe this is a mistake or if the absence was unplanned, please contact the school office as soon as possible.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+                    <p style="font-size: 12px; color: #666; text-align: center;">This is a system-generated email from BCSM School ERP Portal.</p>
+                </div>
+            </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Absence alert sent to: ${toEmail} for student: ${studentName}`);
+    } catch (error) {
+        console.error(`🚨 Absence Email Error:`, error.message);
+    }
+}
+
+/**
+ * FEATURE 6: Leave Status Notification
+ */
+async function sendLeaveStatusEmail(toEmail, employeeName, leaveType, startDate, status, reason = "") {
+    if (!toEmail) return;
+
+    const isApproved = status === 'Approved';
+    const statusColor = isApproved ? '#166534' : '#991b1b';
+    const statusBg = isApproved ? '#dcfce7' : '#fee2e2';
+
+    const mailOptions = {
+        from: `"BCSM HR Department" <${process.env.EMAIL_USER}>`,
+        to: toEmail,
+        subject: `Leave Application ${status}: ${employeeName}`,
+        html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+                <div style="background-color: #1e293b; color: white; padding: 20px; text-align: center;">
+                    <h1 style="margin: 0; font-size: 20px;">Leave Management System</h1>
+                </div>
+                <div style="padding: 30px; color: #333; line-height: 1.6;">
+                    <h2>Hello ${employeeName},</h2>
+                    <p>Your leave application for <strong>${leaveType}</strong> starting from <strong>${startDate}</strong> has been processed.</p>
+                    
+                    <div style="background-color: ${statusBg}; color: ${statusColor}; padding: 15px; border-radius: 8px; text-align: center; font-weight: bold; margin: 20px 0; border: 1px solid ${statusColor};">
+                        STATUS: ${status.toUpperCase()}
+                    </div>
+
+                    ${!isApproved && reason ? `<p><strong>Reason for Rejection:</strong> ${reason}</p>` : ''}
+
+                    <p>You can check your updated leave balance in the employee portal.</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+                    <p style="font-size: 12px; color: #666; text-align: center;">BCSM School ERP - Digital HR Cell</p>
+                </div>
+            </div>
+        `
+    };
+
+    try {
+        await transporter.sendMail(mailOptions);
+        console.log(`✅ Leave status email sent to: ${toEmail} [${status}]`);
+    } catch (error) {
+        console.error(`🚨 Leave Email Error:`, error.message);
+    }
+}
+
+module.exports = { 
+    sendPasswordResetEmail, 
+    sendRegistrationEmail, 
+    sendPaymentEmail, 
+    sendEmailWithAttachment,
+    sendAbsentEmail,
+    sendLeaveStatusEmail
+};

@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assign Student | Transport ERP</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .assign-grid { display: grid; grid-template-columns: 400px 1fr; gap: 20px; padding: 20px; }
+        .search-results { 
+            border: 1px solid #e2e8f0; border-radius: 8px; 
+            max-height: 300px; overflow-y: auto; margin-top: 5px; 
+            display: none; background: white; position: absolute; width: 100%; z-index: 100;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+        .student-item { 
+            padding: 12px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s;
+        }
+        .student-item:hover { background: #f0f9ff; color: #0284c7; }
+        .selected-student-box {
+            background: #f0fdf4; border: 1px dashed #22c55e; padding: 15px;
+            border-radius: 8px; margin-bottom: 15px; display: none;
+        }
+        .roster-card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); overflow: hidden; }
+        .badge-active { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+        .no-data { text-align: center; padding: 40px; color: #94a3b8; font-style: italic; }
+        
+        .location-btn {
+            color: #0ea5e9; border: none; background: #f0f9ff; 
+            padding: 5px 10px; border-radius: 6px; cursor: pointer; 
+            font-size: 11px; transition: 0.2s; display: flex; align-items: center; gap: 5px;
+        }
+        .location-btn:hover { background: #e0f2fe; color: #0284c7; }
+        .coords-text { font-family: monospace; font-size: 10px; color: #64748b; display: block; margin-top: 2px; }
+        .action-cell { display: flex; gap: 10px; justify-content: center; align-items: center; }
+        
+        /* Loading overlay */
+        .loading-spinner { display: none; margin-left: 10px; color: var(--info); }
+    </style>
+</head>
+<body>
+
+    <nav class="glass-nav">
+        <div class="brand"><h2>TRANSPORT <span style="color:var(--info)">MAPPING</span></h2></div>
+        <div class="nav-actions">
+            <a href="manage-transport.html" class="btn btn-sm" style="background:#64748b; color:white;">
+                <i class="fas fa-arrow-left"></i> Back to Fleet
+            </a>
+        </div>
+    </nav>
+
+    <div class="assign-grid">
+        <div class="glass-card">
+            <h3>Assign/Update Student Bus</h3>
+            <p style="font-size: 12px; color: #64748b;">Note: Assigning a student to a new bus will automatically remove them from their previous one.</p>
+            <hr>
+            
+            <div class="form-group" style="position:relative;">
+                <label>Search Student</label>
+                <div style="position:relative; display: flex; align-items: center;">
+                    <input type="text" id="studentSearch" class="form-control" placeholder="Type Name or Roll..." onkeyup="handleSearch(this.value)" autocomplete="off">
+                    <i class="fas fa-circle-notch fa-spin loading-spinner" id="searchLoader"></i>
+                    <div id="results" class="search-results"></div>
+                </div>
+                <small id="searchStatus" style="color: #94a3b8; font-size: 11px;"></small>
+            </div>
+
+            <div id="selectedBox" class="selected-student-box">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div>
+                        <strong id="dispName" style="color: #166534;"></strong><br>
+                        <small id="dispRoll" style="color: #15803d;"></small>
+                    </div>
+                    <button onclick="clearSelection()" style="background:none; border:none; color:#dc2626; cursor:pointer; font-size: 18px;">&times;</button>
+                </div>
+            </div>
+
+            <form id="assignForm">
+                <input type="hidden" id="student_id_val">
+                
+                <div class="form-group">
+                    <label>Select Target Vehicle</label>
+                    <select id="vehicle_id" class="form-control" required onchange="loadRoster(this.value)">
+                        <option value="">-- Select Bus --</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Pickup Time</label>
+                    <input type="time" id="pickup_time" class="form-control" required>
+                </div>
+
+                <button type="submit" id="submitBtn" class="btn btn-primary w-100" style="margin-top:10px; font-weight: 600;">
+                    <i class="fas fa-link"></i> Confirm Assignment
+                </button>
+            </form>
+        </div>
+
+        <div class="roster-card">
+            <div style="padding: 20px; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center; background: #fafafa;">
+                <h3 id="rosterTitle" style="margin:0;">Vehicle Roster</h3>
+                <span class="badge-active" id="countBadge">0 Students</span>
+            </div>
+            <div style="max-height: 600px; overflow-y: auto;">
+                <table style="width:100%; border-collapse: collapse;">
+                    <thead style="background: #f8fafc; position: sticky; top: 0;">
+                        <tr>
+                            <th style="padding:12px; text-align:left; font-size:12px; border-bottom: 2px solid #e2e8f0;">Student Name & Location</th>
+                            <th style="padding:12px; text-align:left; font-size:12px; border-bottom: 2px solid #e2e8f0;">Roll No</th>
+                            <th style="padding:12px; text-align:left; font-size:12px; border-bottom: 2px solid #e2e8f0;">Pickup</th>
+                            <th style="padding:12px; text-align:center; font-size:12px; border-bottom: 2px solid #e2e8f0;">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rosterBody">
+                        <tr><td colspan="4" class="no-data">Select a vehicle to view its current roster</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const rawToken = localStorage.getItem('erp-token');
+        const AUTH_HEADER = { 
+            'Authorization': `Bearer ${rawToken ? rawToken.replace(/"/g, '') : ''}`,
+            'Content-Type': 'application/json'
+        };
+
+        // Initialize vehicles dropdown
+        async function init() {
+            try {
+                const res = await fetch('/api/transport/vehicles', { headers: AUTH_HEADER });
+                const vehicles = await res.json();
+                const select = document.getElementById('vehicle_id');
+                select.innerHTML = '<option value="">-- Select Bus --</option>'; // Reset
+                vehicles.forEach(v => {
+                    select.innerHTML += `<option value="${v.id}">${v.vehicle_no} (${v.model})</option>`;
+                });
+            } catch (err) { console.error("Init Error:", err); }
+        }
+
+        let searchTimeout;
+        async function handleSearch(term) {
+            clearTimeout(searchTimeout);
+            const resultsDiv = document.getElementById('results');
+            const statusLabel = document.getElementById('searchStatus');
+            const loader = document.getElementById('searchLoader');
+
+            if (term.length < 2) { 
+                resultsDiv.style.display = 'none'; 
+                statusLabel.innerText = '';
+                return; 
+            }
+            
+            searchTimeout = setTimeout(async () => {
+                try {
+                    loader.style.display = 'block';
+                    const res = await fetch(`/api/transport/search-students?term=${encodeURIComponent(term)}`, { headers: AUTH_HEADER });
+                    const students = await res.json();
+
+                    if (students.length === 0) {
+                        resultsDiv.innerHTML = '<div class="student-item" style="color:#94a3b8">No matching students found</div>';
+                    } else {
+                        resultsDiv.innerHTML = students.map(s => `
+                            <div class="student-item" onclick="selectStudent('${s.student_id}', '${s.full_name}', '${s.roll_number || s.admission_no}')">
+                                <i class="fas fa-user-graduate" style="margin-right:8px; color:#64748b;"></i>
+                                <strong>${s.full_name}</strong> 
+                                <span style="float:right; font-size:11px; color:#64748b;">ID: ${s.admission_no || 'N/A'}</span>
+                            </div>
+                        `).join('');
+                    }
+                    resultsDiv.style.display = 'block';
+                    statusLabel.innerText = `${students.length} results found`;
+                } catch (err) { 
+                    statusLabel.innerText = 'Search failed'; 
+                } finally {
+                    loader.style.display = 'none';
+                }
+            }, 300);
+        }
+
+        function selectStudent(id, name, roll) {
+            document.getElementById('student_id_val').value = id;
+            document.getElementById('dispName').innerText = name;
+            document.getElementById('dispRoll').innerText = "ID/Roll: " + roll;
+            document.getElementById('selectedBox').style.display = 'block';
+            document.getElementById('results').style.display = 'none';
+            document.getElementById('studentSearch').value = '';
+            document.getElementById('searchStatus').innerText = '';
+        }
+
+        function clearSelection() {
+            document.getElementById('student_id_val').value = '';
+            document.getElementById('selectedBox').style.display = 'none';
+        }
+
+        async function loadRoster(vId) {
+            if (!vId) {
+                document.getElementById('rosterBody').innerHTML = '<tr><td colspan="4" class="no-data">Select a vehicle to view its current roster</td></tr>';
+                document.getElementById('countBadge').innerText = '0 Students';
+                return;
+            }
+            try {
+                const res = await fetch(`/api/transport/assignments/${vId}`, { headers: AUTH_HEADER });
+                const roster = await res.json();
+                document.getElementById('countBadge').innerText = `${roster.length} Students`;
+                
+                const body = document.getElementById('rosterBody');
+                if (roster.length === 0) {
+                    body.innerHTML = '<tr><td colspan="4" class="no-data">This bus has no assigned students.</td></tr>';
+                } else {
+                    body.innerHTML = roster.map(item => `
+                        <tr>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">
+                                <strong>${item.full_name}</strong>
+                                <span class="coords-text">
+                                    <i class="fas fa-location-dot"></i> ${item.location_coords || 'Location Not Set'}
+                                </span>
+                            </td>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">${item.roll_number || 'N/A'}</td>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">${item.pickup_time || '--:--'}</td>
+                            <td style="padding:12px; border-bottom:1px solid #f1f5f9;">
+                                <div class="action-cell">
+                                    <button class="location-btn" onclick="setStudentLocation('${item.student_id}')" title="Set Current GPS">
+                                        <i class="fas fa-crosshairs"></i> GPS
+                                    </button>
+                                    <button onclick="removeAssignment('${item.id}', '${vId}')" style="color:#ef4444; border:none; background:none; cursor:pointer;" title="Remove Assignment">
+                                        <i class="fas fa-user-minus"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function setStudentLocation(studentId) {
+            if (!navigator.geolocation) return alert("Geolocation not supported.");
+            if (!confirm("Are you standing at this student's exact pickup point?")) return;
+
+            navigator.geolocation.getCurrentPosition(async (pos) => {
+                const coords = `${pos.coords.latitude.toFixed(6)}, ${pos.coords.longitude.toFixed(6)}`;
+                try {
+                    const res = await fetch(`/api/transport/student-location/${studentId}`, {
+                        method: 'PUT',
+                        headers: AUTH_HEADER,
+                        body: JSON.stringify({ coords })
+                    });
+                    if (res.ok) {
+                        alert("Pickup coordinates updated successfully!");
+                        loadRoster(document.getElementById('vehicle_id').value);
+                    }
+                } catch (err) { alert("Server error saving location."); }
+            }, (err) => alert("GPS Error: " + err.message));
+        }
+
+        document.getElementById('assignForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            const vId = document.getElementById('vehicle_id').value;
+            const studentId = document.getElementById('student_id_val').value;
+
+            if (!studentId) return alert("Please search and select a student first.");
+            if (!vId) return alert("Please select a vehicle.");
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+
+            try {
+                const res = await fetch('/api/transport/assign', {
+                    method: 'POST',
+                    headers: AUTH_HEADER,
+                    body: JSON.stringify({
+                        student_id: studentId,
+                        vehicle_id: vId,
+                        pickup_time: document.getElementById('pickup_time').value
+                    })
+                });
+
+                if (res.ok) {
+                    alert("Student successfully assigned/moved to this vehicle.");
+                    clearSelection();
+                    loadRoster(vId);
+                } else {
+                    const data = await res.json();
+                    alert("Error: " + (data.error || "Failed to assign."));
+                }
+            } catch (err) {
+                alert("Network error occurred.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-link"></i> Confirm Assignment';
+            }
+        };
+
+        async function removeAssignment(id, vId) {
+            if (!confirm("Are you sure you want to remove this student from the transport service?")) return;
+            try {
+                const res = await fetch(`/api/transport/assignments/${id}`, { method: 'DELETE', headers: AUTH_HEADER });
+                if (res.ok) loadRoster(vId);
+                else alert("Failed to remove student.");
+            } catch (err) { console.error(err); }
+        }
+
+        window.onload = init;
+    </script>
+</body>
+</html>

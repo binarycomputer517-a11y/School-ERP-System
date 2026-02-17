@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Ledger | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        /* Print Specific Styles */
+        @media print {
+            body { background: white !important; }
+            .no-print, .controls-section { display: none !important; }
+            .glass-card { box-shadow: none !important; border: 1px solid #ddd !important; }
+            .ledger-table thead th { background-color: #f0f0f0 !important; color: black !important; border: 1px solid #000 !important; }
+            .ledger-table td { border: 1px solid #ccc !important; }
+        }
+
+        .summary-box {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(0,0,0,0.1);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        .text-debit { color: #dc3545; font-weight: 700; }
+        .text-credit { color: #198754; font-weight: 700; }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width: 1000px; padding-top: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-file-invoice me-2"></i>Student Ledger</h2>
+            <p class="text-muted mb-0 small">Financial Statement & History</p>
+        </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="glass-card mb-4 no-print controls-section">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-8">
+                <label class="form-label fw-bold small">Select Student</label>
+                <select id="studentSelect" class="form-select" onchange="fetchLedger()">
+                    <option value="">-- Loading Students... --</option>
+                </select>
+            </div>
+            <div class="col-md-4 text-end">
+                <button onclick="window.print()" class="btn btn-primary rounded-pill shadow-sm px-4" id="printBtn" disabled>
+                    <i class="fas fa-print me-2"></i> Print Report
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <div class="glass-card" id="ledgerReport" style="display: none;">
+        
+        <div class="text-center mb-4 pb-3 border-bottom">
+            <h3 class="fw-bold text-dark mb-1 global-school-name">SCHOOL NAME</h3>
+            <p class="text-muted small mb-0 global-school-address">Address Line</p>
+            <h5 class="mt-3 text-uppercase fw-bold text-primary">Student Financial Ledger</h5>
+        </div>
+
+        <div class="row mb-4 bg-light p-3 rounded mx-0">
+            <div class="col-md-8">
+                <table class="w-100">
+                    <tr><td class="text-muted small w-25">Student Name:</td><td class="fw-bold" id="stName">...</td></tr>
+                    <tr><td class="text-muted small">Roll / ID:</td><td class="fw-bold" id="stRoll">...</td></tr>
+                    <tr><td class="text-muted small">Course:</td><td class="fw-bold" id="stBatch">...</td></tr>
+                </table>
+            </div>
+            <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <p class="mb-0 small"><strong>Date:</strong> <span id="genDate">...</span></p>
+                <p class="mb-0 small"><strong>Ref:</strong> <span id="refId">...</span></p>
+            </div>
+        </div>
+
+        <div class="row g-3 mb-4">
+            <div class="col-4">
+                <div class="summary-box">
+                    <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Total Billed</small>
+                    <h5 class="text-debit mb-0" id="cardDebit">₹0.00</h5>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="summary-box">
+                    <small class="text-muted text-uppercase fw-bold" style="font-size: 0.7rem;">Total Paid</small>
+                    <h5 class="text-credit mb-0" id="cardCredit">₹0.00</h5>
+                </div>
+            </div>
+            <div class="col-4">
+                <div class="summary-box bg-primary bg-opacity-10 border-primary">
+                    <small class="text-primary text-uppercase fw-bold" style="font-size: 0.7rem;">Net Balance</small>
+                    <h5 class="text-primary mb-0" id="cardBalance">₹0.00</h5>
+                </div>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-bordered ledger-table mb-0" style="font-size: 0.85rem;">
+                <thead class="table-light">
+                    <tr>
+                        <th>Date</th>
+                        <th>Ref No</th>
+                        <th>Description</th>
+                        <th class="text-end">Debit (₹)</th>
+                        <th class="text-end">Credit (₹)</th>
+                    </tr>
+                </thead>
+                <tbody id="ledgerBody"></tbody>
+                <tfoot class="table-light border-top-2">
+                    <tr>
+                        <td colspan="3" class="text-end fw-bold">TOTALS:</td>
+                        <td class="text-end fw-bold text-debit" id="footerDebit">0.00</td>
+                        <td class="text-end fw-bold text-credit" id="footerCredit">0.00</td>
+                    </tr>
+                    <tr class="bg-light">
+                        <td colspan="4" class="text-end fw-bold py-3">CLOSING BALANCE (DUE):</td>
+                        <td class="text-end fw-bold text-primary fs-6 py-3" id="footerBalance">0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <div class="row mt-5 pt-4">
+            <div class="col-4 text-center">
+                <div class="border-top border-secondary w-75 mx-auto"></div>
+                <small class="text-muted">Guardian</small>
+            </div>
+            <div class="col-4 text-center">
+                <div class="border-top border-secondary w-75 mx-auto"></div>
+                <small class="text-muted">Accountant</small>
+            </div>
+            <div class="col-4 text-center">
+                <div class="border-top border-secondary w-75 mx-auto"></div>
+                <small class="text-muted">Principal</small>
+            </div>
+        </div>
+        
+        <div class="text-center mt-4 pt-2 border-top">
+            <small class="text-muted" style="font-size: 10px;">Computer generated report. Valid without signature.</small>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const token = localStorage.getItem('erp-token');
+        if(!token) window.location.href = '/login.html';
+        loadStudents();
+    });
+
+    // 1. Load Students
+    async function loadStudents() {
+        try {
+            const res = await window.authFetch('/api/students');
+            const students = await res.json();
+            
+            const select = document.getElementById('studentSelect');
+            select.innerHTML = '<option value="">-- Select Student --</option>';
+            
+            students.sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''));
+
+            students.forEach(s => {
+                const opt = document.createElement('option');
+                opt.value = s.student_id;
+                opt.text = `${s.first_name} ${s.last_name} (${s.roll_number || 'N/A'})`;
+                select.appendChild(opt);
+            });
+        } catch (error) {
+            console.error("Error loading students", error);
+        }
+    }
+
+    // 2. Fetch Ledger
+    async function fetchLedger() {
+        const studentId = document.getElementById('studentSelect').value;
+        const reportDiv = document.getElementById('ledgerReport');
+        const printBtn = document.getElementById('printBtn');
+
+        if (!studentId) {
+            reportDiv.style.display = 'none';
+            printBtn.disabled = true;
+            return;
+        }
+
+        try {
+            // Updated Endpoint: /api/finance/ledger/:id
+            const res = await window.authFetch(`/api/finance/ledger/${studentId}`);
+            if(!res.ok) throw new Error("Data fetch failed");
+            
+            const data = await res.json();
+            renderReport(data);
+            
+            reportDiv.style.display = 'block';
+            printBtn.disabled = false;
+
+        } catch (error) {
+            console.error(error);
+            alert("Error loading ledger: " + error.message);
+            reportDiv.style.display = 'none';
+        }
+    }
+
+    // 3. Render Report
+    function renderReport(data) {
+        const { student, ledger } = data;
+        const config = window.erpSettings || {};
+
+        // Header Info
+        document.querySelector('.global-school-name').innerText = config.school_name || 'BCSM SCHOOL';
+        document.querySelector('.global-school-address').innerText = config.school_address || 'Address Line';
+
+        document.getElementById('stName').innerText = `${student.username || student.first_name}`;
+        document.getElementById('stRoll').innerText = student.roll_number || 'N/A';
+        document.getElementById('stBatch').innerText = `${student.course_name || '-'} ${student.batch_name ? '(' + student.batch_name + ')' : ''}`;
+        document.getElementById('genDate').innerText = new Date().toLocaleDateString();
+        document.getElementById('refId').innerText = 'LED-' + Math.floor(100000 + Math.random() * 900000);
+
+        // Table
+        const tbody = document.getElementById('ledgerBody');
+        tbody.innerHTML = '';
+
+        let sumDebit = 0;
+        let sumCredit = 0;
+
+        if (!ledger || ledger.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No records found.</td></tr>';
+        } else {
+            ledger.forEach(row => {
+                const debit = parseFloat(row.debit || 0);
+                const credit = parseFloat(row.credit || 0);
+                
+                sumDebit += debit;
+                sumCredit += credit;
+
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${new Date(row.date).toLocaleDateString()}</td>
+                        <td class="text-muted small">${row.ref_no || '-'}</td>
+                        <td><span class="fw-bold">${row.type}</span>: ${row.description}</td>
+                        <td class="text-end">${debit > 0 ? window.formatCurrency(debit) : '-'}</td>
+                        <td class="text-end">${credit > 0 ? window.formatCurrency(credit) : '-'}</td>
+                    </tr>
+                `;
+            });
+        }
+
+        const finalBalance = sumDebit - sumCredit;
+
+        // Summaries
+        document.getElementById('cardDebit').innerText = window.formatCurrency(sumDebit);
+        document.getElementById('cardCredit').innerText = window.formatCurrency(sumCredit);
+        document.getElementById('cardBalance').innerText = window.formatCurrency(finalBalance);
+
+        document.getElementById('footerDebit').innerText = window.formatCurrency(sumDebit);
+        document.getElementById('footerCredit').innerText = window.formatCurrency(sumCredit);
+        document.getElementById('footerBalance').innerText = window.formatCurrency(finalBalance);
+    }
+</script>
+
+</body>
+</html>

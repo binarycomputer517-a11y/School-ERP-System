@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Driver Identity Card | Transport Dept</title>
+    <style>
+        :root { --safety-orange: #f97316; --navy: #0f172a; }
+        body { font-family: sans-serif; background: #f1f5f9; display: flex; flex-direction: column; align-items: center; padding: 50px; }
+        .id-card { width: 350px; background: white; border-radius: 15px; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.2); border: 1px solid #e2e8f0; }
+        .header { background: var(--navy); color: white; padding: 20px; text-align: center; border-bottom: 5px solid var(--safety-orange); }
+        .photo { width: 120px; height: 120px; background: #cbd5e1; margin: 20px auto; border-radius: 10px; border: 3px solid #f1f5f9; object-fit: cover; }
+        .content { padding: 20px; text-align: center; }
+        .name { font-size: 1.5em; font-weight: bold; color: var(--navy); margin-bottom: 5px; text-transform: uppercase; }
+        .badge { background: var(--safety-orange); color: white; padding: 4px 12px; border-radius: 5px; font-size: 0.8em; font-weight: bold; }
+        .details { margin-top: 20px; text-align: left; font-size: 0.9em; }
+        .detail-row { display: flex; justify-content: space-between; border-bottom: 1px solid #f1f5f9; padding: 8px 0; }
+        .label { color: #64748b; }
+        .val { font-weight: 600; color: var(--navy); }
+        .footer { background: #f8fafc; padding: 15px; text-align: center; font-size: 0.7em; color: #94a3b8; }
+        @media print { .no-print { display: none; } body { background: white; padding: 0; } }
+    </style>
+</head>
+<body>
+
+    <div class="id-card">
+        <div class="header">
+            <div style="font-weight: bold; letter-spacing: 1px;">SCHOOL TRANSPORT</div>
+            <div style="font-size: 0.7em; opacity: 0.8;">AUTHORISED DRIVER</div>
+        </div>
+        
+        <img src="/images/default-avatar.png" id="driver-img" class="photo">
+        
+        <div class="content">
+            <div class="name" id="name">Loading...</div>
+            <span class="badge">HEAVY VEHICLE LICENSE</span>
+            
+            <div class="details">
+                <div class="detail-row"><span class="label">License No:</span> <span class="val" id="license">---</span></div>
+                <div class="detail-row"><span class="label">Phone:</span> <span class="val" id="phone">---</span></div>
+                <div class="detail-row"><span class="label">Blood Group:</span> <span class="val">O+</span></div>
+            </div>
+        </div>
+        
+        <div class="footer">
+            <div style="font-weight: bold; color: #334155; margin-bottom: 5px;">|| ||| || |||| || |||</div>
+            STAFF ID: <span id="staff-id">---</span>
+        </div>
+    </div>
+
+    <div style="margin-top: 20px;" class="no-print">
+        <button onclick="window.print()" style="padding: 10px 25px; cursor: pointer;">Print ID Card</button>
+        <a href="/driver-dashboard.html" style="margin-left: 10px; color: #64748b;">Back</a>
+    </div>
+
+    <script>
+        async function fetchCard() {
+            const token = localStorage.getItem('erp-token');
+            const res = await fetch('/api/transport/driver/status', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                document.getElementById('name').innerText = data.full_name;
+                document.getElementById('license').innerText = data.license_number || 'VALID';
+                document.getElementById('phone').innerText = data.phone_number || 'N/A';
+                document.getElementById('staff-id').innerText = data.full_name.substring(0,3).toUpperCase() + Math.floor(100 + Math.random() * 900);
+            }
+        }
+        window.onload = fetchCard;
+    </script>
+</body>
+</html>

@@ -7,7 +7,7 @@
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&family=Orbitron:wght@700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
    <style>
@@ -22,10 +22,17 @@
         .top-right-nav a, .top-right-nav button { background-color: #f0f0f0; border: 1px solid #555; color: #333; padding: 6px 15px; border-radius: 0; box-shadow: 1px 1px 0 #000; text-decoration: none; font-family: 'Poppins', sans-serif; font-size: 0.9em; }
         .top-right-nav a:hover, .top-right-nav button:hover { background-color: #ddd; transform: translate(-1px, -1px); }
 
+        /* User Profile Section Styling */
+        .user-profile-box { display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid #555; padding: 5px 12px; box-shadow: 1px 1px 0 #000; }
+        .user-profile-box img { width: 35px; height: 35px; border-radius: 50%; object-fit: cover; border: 1px solid #333; background: #eee; }
+        .user-details { display: flex; flex-direction: column; line-height: 1.2; }
+        .user-details .u-name { font-family: 'Poppins', sans-serif; font-weight: 600; font-size: 0.85em; color: #333; }
+        .user-details .u-role { font-family: 'Poppins', sans-serif; font-size: 0.7em; color: #C0392B; font-weight: bold; text-transform: uppercase; }
+
         /* Branch Switcher Style */
-        .branch-switcher-container { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #555; padding: 5px 10px; box-shadow: 1px 1px 0 #000; }
-        .branch-switcher-container label { font-weight: bold; font-size: 0.85em; color: #005A9C; }
-        #branch-select { border: none; outline: none; font-weight: 600; cursor: pointer; color: #333; background: transparent; }
+        .branch-switcher-container { display: flex; align-items: center; gap: 8px; background: #fff; border: 1px solid #C0392B; padding: 5px 10px; box-shadow: 2px 2px 0 #000; }
+        .branch-switcher-container label { font-weight: bold; font-size: 0.85em; color: #C0392B; }
+        #branch-select { border: none; outline: none; font-weight: 700; cursor: pointer; color: #333; background: transparent; font-family: 'Poppins', sans-serif; }
 
         /* Live Statistics Bar */
         .live-stats-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px; margin-bottom: 30px; }
@@ -49,10 +56,16 @@
             color: #333; 
             transition: all 0.2s; 
             font-family: 'Poppins', sans-serif;
+            position: relative;
         }
         .dashboard-card:hover { box-shadow: 2px 2px 0 #555; transform: translate(-2px, -2px); background: #f0f7ff; }
         .dashboard-card .icon { font-size: 2em; color: #005A9C; margin-bottom: 5px; }
         .dashboard-card span { font-weight: 500; font-size: 0.9em; text-align: center; }
+        
+        .category-header { font-family: 'Times New Roman', serif; text-transform: uppercase; letter-spacing: 1px; }
+
+        /* Badge for Super Admin items */
+        .admin-only-badge { position: absolute; top: -5px; right: -5px; background: #C0392B; color: #fff; font-size: 0.6em; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -60,7 +73,9 @@
     const token = localStorage.getItem('erp-token');
     const userRole = localStorage.getItem('user-role');
     const username = localStorage.getItem('username');
-    const userBranchId = localStorage.getItem('user-branch-id'); // Added for branch isolation
+    const userFullName = localStorage.getItem('full-name'); 
+    const userPhoto = localStorage.getItem('user-photo');   
+    const userBranchId = localStorage.getItem('user-branch-id');
 
     if (!token || (userRole !== 'Admin' && userRole !== 'Super Admin' && userRole !== 'Prime Admin')) {
         window.location.href = '/login.html';
@@ -73,13 +88,21 @@
 </script>
 
     <div class="top-right-nav">
+        <div class="user-profile-box">
+            <img src="/uploads/default-avatar.png" id="nav-user-photo" alt="User">
+            <div class="user-details">
+                <span class="u-name" id="nav-user-name">Admin</span>
+                <span class="u-role" id="nav-user-role">Role</span>
+            </div>
+        </div>
+
         <div class="branch-switcher-container" id="branch-nav" style="display: none;">
-            <label><i class="fas fa-university"></i> BRANCH:</label>
+            <label><i class="fas fa-project-diagram"></i> FILTER:</label>
             <select id="branch-select" onchange="switchBranch(this.value)">
-                <option value="">Loading...</option>
+                <option value="">All Branches</option>
             </select>
         </div>
-        <a href="/register.html" id="register-link">👤 User Registration</a>
+        <a href="/register.html" id="register-link">👤 Registration</a>
         <a href="/messaging.html" id="messaging-link">✉️ Messaging</a>
         <button onclick="logout()">🚪 Logout</button>
     </div>
@@ -114,7 +137,7 @@
             <a href="/students-list.html" class="dashboard-card"><span class="icon">🧑‍🎓</span><span>Students</span></a>
             <a href="/school-calendar.html" class="dashboard-card"><span class="icon">📅</span><span>Calendar</span></a>
             <a href="/online-exam.html" class="dashboard-card"><span class="icon">💻</span><span>online Exam</span></a>
-            <a href="/Academics-with-Fee-Management.html"class="dashboard-card"><span class="icon">🎓</span><span>Academics with Fess</span></a>
+            <a href="/Academics-with-Fee-Management.html"class="dashboard-card"><span class="icon">🎓</span><span>Academics with Fees</span></a>
             <a href="/homework-assignments.html" class="dashboard-card"><span class="icon">📝</span><span>Homework</span></a>
             <a href="/exam-management.html" class="dashboard-card"><span class="icon">💯</span><span>Exams</span></a>
             <a href="/manage-timetable.html" class="dashboard-card"><span class="icon">🕓</span><span>Timetable</span></a>
@@ -155,10 +178,11 @@
 
         <h2 class="category-header" id="global-gov-header" style="display: none;">Governance & Support (Global Features)</h2>
         <div class="card-grid" id="global-gov-grid" style="display: none;">
-            <a href="/manage-branches.html" class="dashboard-card" title="Global System/Branch Configuration (Super Admin)"><span class="icon">🏢</span><span>Branch Mgmt</span></a>
-            <a href="/system-logs.html" class="dashboard-card" title="Review Server, Security, and Access Logs"><span class="icon">⚙️</span><span>System Logs</span></a>
-            <a href="/backup-restore.html" class="dashboard-card" title="Backup and Disaster Recovery Operations"><span class="icon">💾</span><span>Backup/DR</span></a>
-            <a href="/compliance-management.html" class="dashboard-card" title="Manage Data Privacy and Regulatory Compliance"><span class="icon">📜</span><span>Compliance</span></a>
+            <a href="/manage-branches.html" class="dashboard-card"><span class="admin-only-badge">SUPER</span><span class="icon">🏢</span><span>Branch Mgmt</span></a>
+            <a href="/manager-id-card.html" id="manager-id-link" target="_blank" class="dashboard-card"><span class="icon">🪪</span><span>Manager ID Card</span></a>
+            <a href="/system-logs.html" class="dashboard-card"><span class="icon">⚙️</span><span>System Logs</span></a>
+            <a href="/backup-restore.html" class="dashboard-card"><span class="icon">💾</span><span>Backup/DR</span></a>
+            <a href="/compliance-management.html" class="dashboard-card"><span class="icon">📜</span><span>Compliance</span></a>
             <a href="/reports-analytics.html" class="dashboard-card"><span class="icon">📈</span><span>Reports & Analytics</span></a>
             <a href="/it-helpdesk.html" class="dashboard-card"><span class="icon">🖥️</span><span>IT Helpdesk</span></a>
             <a href="/visitor-log.html" class="dashboard-card"><span class="icon">🛡️</span><span>Visitor Log</span></a>
@@ -174,20 +198,33 @@
         document.addEventListener('DOMContentLoaded', () => {
             const welcomeMessageEl = document.getElementById('welcome-message');
             const datetimeEl = document.getElementById('datetime');
-            const greetingName = username || 'Admin';
+            const greetingName = userFullName || username || 'Admin';
 
-            // Security Logic: Role-based UI Adjustments
+            const navPhoto = document.getElementById('nav-user-photo');
+            const navName = document.getElementById('nav-user-name');
+            const navRole = document.getElementById('nav-user-role');
+
+            navName.textContent = greetingName;
+            navRole.textContent = userRole;
+
+            const resolveImg = (p) => {
+                if (!p || p === 'null') return '/uploads/default-avatar.png';
+                if (p.length > 500) return p; 
+                return p.startsWith('http') ? p : `${window.location.origin}/${p.replace(/^\/+/, '')}`;
+            };
+            navPhoto.src = resolveImg(userPhoto);
+
             const branchNav = document.getElementById('branch-nav');
             const govHeader = document.getElementById('global-gov-header');
             const govGrid = document.getElementById('global-gov-grid');
+            const managerIdLink = document.getElementById('manager-id-link');
 
-            if (userRole === 'Super Admin') {
+            if (userRole === 'Super Admin' || userRole === 'Prime Admin') {
                 branchNav.style.display = 'flex';
                 govHeader.style.display = 'block';
                 govGrid.style.display = 'grid';
                 loadBranches();
             } else {
-                // Branch Admin logic
                 localStorage.setItem('active_branch_id', userBranchId);
                 branchNav.style.display = 'none';
                 govHeader.style.display = 'none';
@@ -205,12 +242,9 @@
             
             updateHeader(); 
             setInterval(updateHeader, 1000);
-
-            // Fetch stats based on permissions
             fetchLiveStats();
         });
 
-        // Load Branches for Switcher (Super Admin only)
         async function loadBranches() {
             try {
                 const res = await fetch('/api/branches', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -218,26 +252,19 @@
                 const select = document.getElementById('branch-select');
                 const activeBranchId = localStorage.getItem('active_branch_id');
                 
-                select.innerHTML = branches.map(b => 
+                let options = `<option value="">Global Overview</option>`;
+                options += branches.map(b => 
                     `<option value="${b.id}" ${b.id === activeBranchId ? 'selected' : ''}>${b.branch_name}</option>`
                 ).join('');
-
-                if (!activeBranchId && branches.length > 0) {
-                    localStorage.setItem('active_branch_id', branches[0].id);
-                }
+                select.innerHTML = options;
             } catch (err) { console.error('Failed to load branches'); }
         }
 
-        // Fetch Live Stats with UUID Null check
         async function fetchLiveStats() {
-            let activeBranchId = localStorage.getItem('active_branch_id');
-            const myBranchId = localStorage.getItem('user-branch-id');
-            let targetId = (userRole === 'Super Admin') ? activeBranchId : myBranchId;
+            const activeBranchId = localStorage.getItem('active_branch_id');
+            const targetId = activeBranchId || userBranchId;
 
-            if (!targetId || targetId === 'null' || targetId === 'undefined') {
-                console.warn("Branch ID missing. Retrying...");
-                return;
-            }
+            if (!targetId || targetId === 'null') return;
 
             try {
                 const res = await fetch(`/api/reports/stats?branch_id=${targetId}`, { 
@@ -251,19 +278,19 @@
                     document.getElementById('stat-revenue').textContent = '₹' + (data.fees || 0).toLocaleString();
                     document.getElementById('stat-attendance').textContent = (data.attendance || 0) + '%';
                 }
-            } catch (err) {
-                console.warn('Live stats API not reachable.');
-            }
+            } catch (err) { console.warn('Stats sync delayed.'); }
         }
 
-        // Branch Switcher Function
         function switchBranch(branchId) {
-            if (userRole === 'Super Admin') {
-                localStorage.setItem('active_branch_id', branchId);
-                location.reload();
+            localStorage.setItem('active_branch_id', branchId);
+            // Dynamic ID Link Update: If Super Admin selects a branch, the ID link will query that branch's manager
+            const managerIdLink = document.getElementById('manager-id-link');
+            if(branchId) {
+                // Here we assume a logic where we might want to see the specific manager of the selected branch
+                // managerIdLink.href = `/manager-id-card.html?branch_id=${branchId}`; 
             }
+            location.reload();
         }
     </script>
-    <script src="js/global-config.js"></script>
 </body>
 </html>

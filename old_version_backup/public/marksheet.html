@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Official Academic Transcript</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    
+    <style>
+        :root {
+            --primary-color: #002d72; /* Will be updated by global-config.js */
+            --accent-color: #f8f9fa;
+            --text-dark: #1f2937;
+            --border-color: #e5e7eb;
+        }
+
+        body {
+            background: #f3f4f6;
+            font-family: 'Inter', sans-serif;
+            color: var(--text-dark);
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact; 
+        }
+
+        /* A4 Page Container */
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            position: relative;
+            overflow: hidden;
+            border-top: 10px solid var(--primary-color);
+        }
+
+        /* WATERMARK */
+        .watermark-container {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+        .watermark-logo {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            width: 350px;
+            opacity: 0.04;
+            filter: grayscale(100%);
+        }
+        .watermark-pattern {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-content: center;
+            gap: 40px;
+            opacity: 0.03;
+            transform: rotate(-20deg) scale(1.5);
+        }
+        .watermark-text {
+            font-size: 14px;
+            font-weight: 700;
+            color: #000;
+            text-transform: uppercase;
+        }
+
+        .content { position: relative; z-index: 2; }
+
+        /* HEADER DESIGN */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+        }
+        .school-logo { 
+            width: 90px; 
+            height: 90px; 
+            object-fit: contain; 
+        }
+        .school-info { 
+            text-align: center; 
+            flex-grow: 1; 
+            padding: 0 20px; 
+        }
+        .school-name {
+            font-size: 24px;
+            font-weight: 800;
+            color: var(--primary-color);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0;
+        }
+        .school-address {
+            font-size: 13px;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+        .report-title {
+            background: var(--primary-color);
+            color: white;
+            padding: 6px 20px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 20px;
+            display: inline-block;
+            margin-top: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        /* STUDENT PROFILE GRID */
+        .student-box {
+            background: #f9fafb;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+            display: flex;
+            gap: 20px;
+        }
+        .info-grid {
+            flex-grow: 1;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px 20px;
+        }
+        .info-item { display: flex; flex-direction: column; }
+        .info-label { font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: 600; letter-spacing: 0.5px; }
+        .info-val { font-size: 14px; font-weight: 600; color: #111827; }
+        
+        .student-photo-frame {
+            width: 100px; height: 120px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            border: 1px solid #d1d5db;
+        }
+        .student-photo { width: 100%; height: 100%; object-fit: cover; }
+
+        /* MODERN TABLE */
+        .table-custom {
+            width: 100%;
+            border-collapse: separate;
+            border-spacing: 0;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .table-custom th {
+            background: var(--primary-color);
+            color: white;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .table-custom th:first-child { border-top-left-radius: 6px; }
+        .table-custom th:last-child { border-top-right-radius: 6px; }
+        
+        .table-custom td {
+            padding: 12px 15px;
+            border-bottom: 1px solid var(--border-color);
+            color: #374151;
+        }
+        .table-custom tr:last-child td { border-bottom: 1px solid var(--primary-color); }
+        .grade-badge {
+            background: #eef2ff;
+            color: var(--primary-color);
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: 700;
+            font-size: 12px;
+        }
+
+        /* SUMMARY & RESULT */
+        .summary-box {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 40px;
+        }
+        .summary-card {
+            background: white;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 15px;
+            text-align: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+        }
+        .summary-label { font-size: 11px; color: #6b7280; text-transform: uppercase; font-weight: 700; margin-bottom: 5px; }
+        .summary-val { font-size: 18px; font-weight: 700; color: var(--primary-color); }
+        
+        .status-pass { color: #059669; }
+        .status-fail { color: #dc2626; }
+
+        /* FOOTER & QR */
+        .footer-bottom {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            margin-top: 50px;
+            border-top: 1px dashed var(--border-color);
+            padding-top: 30px;
+        }
+        .qr-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .qr-text { font-size: 11px; color: #6b7280; line-height: 1.4; }
+        
+        .signatures {
+            display: flex;
+            gap: 60px;
+        }
+        .sign-box {
+            text-align: center;
+        }
+        .sign-line {
+            width: 140px;
+            border-bottom: 2px solid #9ca3af;
+            margin-bottom: 8px;
+        }
+        .sign-label { font-size: 12px; font-weight: 700; color: #374151; text-transform: uppercase; }
+
+        /* BUTTONS */
+        .action-bar {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .btn-print {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: transform 0.2s;
+        }
+        .btn-print:hover { transform: translateY(-2px); opacity: 0.9; }
+
+        @media print {
+            body { background: white; margin: 0; }
+            .page { 
+                margin: 0; 
+                box-shadow: none; 
+                border: none; 
+                width: 100%; 
+                height: 100vh;
+                padding: 10mm;
+            }
+            .action-bar { display: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="action-bar no-print">
+        <button onclick="window.print()" class="btn-print">
+            <i class="fas fa-print"></i> Download / Print PDF
+        </button>
+        <a href="javascript:history.back()" class="btn btn-outline-secondary ms-2" style="padding: 9px 20px; border-radius:6px; font-weight:600;">Back</a>
+    </div>
+
+    <div class="page">
+        <div class="watermark-container">
+            <img src="" class="watermark-logo global-school-logo" id="wm-logo" alt="Watermark">
+            <div class="watermark-pattern" id="bg-text-pattern"></div>
+        </div>
+
+        <div class="content">
+            <div class="header">
+                <img src="" alt="Logo" class="school-logo global-school-logo">
+                <div class="school-info">
+                    <h1 class="school-name global-school-name">Loading School Name...</h1>
+                    <p class="school-address global-school-address">Loading Address...</p>
+                    <span class="report-title">Academic Transcript 2024-25</span>
+                </div>
+                <div style="width: 90px;"></div> 
+            </div>
+
+            <div class="student-box">
+                <div class="student-photo-frame">
+                    <img src="" class="student-photo" id="s-photo" alt="Student">
+                </div>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Student Name</span>
+                        <span class="info-val" id="s-name">Loading...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Enrollment / Roll No</span>
+                        <span class="info-val" id="s-roll">...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Course / Program</span>
+                        <span class="info-val" id="s-course">...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Batch / Section</span>
+                        <span class="info-val" id="s-batch">...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Exam ID</span>
+                        <span class="info-val" id="s-exam-id">...</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Date of Issue</span>
+                        <span class="info-val" id="current-date"></span>
+                    </div>
+                </div>
+            </div>
+
+            <table class="table-custom">
+                <thead>
+                    <tr>
+                        <th style="width: 15%;">Sub Code</th>
+                        <th style="width: 40%;">Subject Name</th>
+                        <th style="width: 15%;">Max Marks</th>
+                        <th style="width: 15%;">Obtained</th>
+                        <th style="width: 15%;">Grade</th>
+                    </tr>
+                </thead>
+                <tbody id="marks-body">
+                    </tbody>
+            </table>
+
+            <div class="summary-box">
+                <div class="summary-card">
+                    <div class="summary-label">Grand Total</div>
+                    <div class="summary-val" id="val-total">0 / 0</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Percentage</div>
+                    <div class="summary-val" id="val-percent">0%</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Result</div>
+                    <div class="summary-val" id="val-status">-</div>
+                </div>
+                <div class="summary-card">
+                    <div class="summary-label">Division</div>
+                    <div class="summary-val" id="val-division">-</div>
+                </div>
+            </div>
+
+            <div class="footer-bottom">
+                <div class="qr-section">
+                    <div id="qrcode"></div>
+                    <div class="qr-text">
+                        Scan this QR code to verify<br>the authenticity of this<br>digital transcript.
+                    </div>
+                </div>
+                
+                <div class="signatures">
+                    <div class="sign-box">
+                        <div class="sign-line"></div>
+                        <div class="sign-label">Controller of Exams</div>
+                    </div>
+                    <div class="sign-box">
+                        <div class="sign-line"></div>
+                        <div class="sign-label">Principal / Director</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="text-align: center; font-size: 10px; color: #9ca3af; margin-top: 20px;">
+                Generated by School ERP System | This document is electronically generated and valid without a signature.
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/global-config.js"></script>
+
+    <script>
+        const QUIZ_ID = new URLSearchParams(window.location.search).get('quizId');
+        const TOKEN = localStorage.getItem('erp-token');
+
+        function getGrade(p) { 
+            if (p >= 90) return 'O (Outstanding)';
+            if (p >= 80) return 'A+ (Excellent)';
+            if (p >= 70) return 'A (Very Good)';
+            if (p >= 60) return 'B+ (Good)';
+            if (p >= 50) return 'B (Above Average)';
+            if (p >= 40) return 'C (Average)';
+            return 'F (Fail)';
+        }
+
+        function getDivision(p, s) { 
+            if (s === 'Failed') return 'N/A';
+            if (p >= 75) return 'Distinction';
+            if (p >= 60) return 'First Division';
+            if (p >= 45) return 'Second Division';
+            return 'Third Division';
+        }
+
+        async function init() {
+            if (!TOKEN || !QUIZ_ID) return alert("Access Denied");
+
+            try {
+                const response = await fetch(`/api/online-exam/results/${QUIZ_ID}`, {
+                    headers: { 'Authorization': `Bearer ${TOKEN}` }
+                });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.message);
+
+                const s = data.summary;
+
+                // Profile
+                document.getElementById('s-name').innerText = s.student_name;
+                document.getElementById('s-roll').innerText = s.roll_number;
+                document.getElementById('s-exam-id').innerText = QUIZ_ID.substring(0, 8).toUpperCase();
+                document.getElementById('s-course').innerText = s.course_name || 'N/A';
+                document.getElementById('s-batch').innerText = s.batch_name || 'N/A';
+                document.getElementById('s-photo').src = s.profile_pic || `https://ui-avatars.com/api/?name=${encodeURIComponent(s.student_name)}&background=random`;
+
+                // Calculation
+                const percent = ((s.total_score / s.max_marks) * 100).toFixed(2);
+                const isPassed = percent >= 40;
+                
+                // Table Row
+                const row = `
+                    <tr>
+                        <td style="font-weight:700;">SUB-${s.subject_name.substring(0,3).toUpperCase()}</td>
+                        <td>${s.subject_name} <br><span style="font-size:11px; color:#666;">Exam Title: ${s.title}</span></td>
+                        <td>${s.max_marks}</td>
+                        <td style="font-weight:700;">${s.total_score}</td>
+                        <td><span class="grade-badge">${getGrade(percent).split(' ')[0]}</span></td>
+                    </tr>`;
+                document.getElementById('marks-body').innerHTML = row;
+
+                // Summary
+                document.getElementById('val-total').innerText = `${s.total_score} / ${s.max_marks}`;
+                document.getElementById('val-percent').innerText = `${percent}%`;
+                
+                const statusEl = document.getElementById('val-status');
+                statusEl.innerText = isPassed ? "PASSED" : "FAILED";
+                statusEl.className = `summary-val ${isPassed ? 'status-pass' : 'status-fail'}`;
+                
+                document.getElementById('val-division').innerText = getDivision(percent, isPassed ? 'Passed' : 'Failed');
+
+                // QR Code
+                const qrText = `VERIFY:${QUIZ_ID}|ROLL:${s.roll_number}|SCORE:${s.total_score}`;
+                document.getElementById("qrcode").innerHTML = "";
+                new QRCode(document.getElementById("qrcode"), {
+                    text: qrText, width: 70, height: 70,
+                    colorDark : "#000000", colorLight : "#ffffff",
+                    correctLevel : QRCode.CorrectLevel.H
+                });
+
+            } catch (err) {
+                console.error(err);
+                // alert("Data load error");
+            }
+        }
+
+        document.getElementById('current-date').innerText = new Date().toLocaleDateString('en-GB');
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

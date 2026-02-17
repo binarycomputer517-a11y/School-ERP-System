@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exam Management | BCSM</title>
+    
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"> 
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="css/style.css">
+
+    <style>
+        .nav-pills .nav-link {
+            color: var(--primary-dark);
+            font-weight: 600;
+            border-radius: 50px;
+            padding: 10px 25px;
+            margin-right: 10px;
+        }
+        .nav-pills .nav-link.active {
+            background-color: var(--primary-color);
+            color: white;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        
+        /* Marks Entry Input */
+        .marks-input {
+            width: 80px;
+            text-align: center;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 5px;
+        }
+        .marks-input:focus { border-color: var(--primary-color); outline: none; }
+    </style>
+</head>
+<body>
+
+<div class="container" style="max-width: 1400px; padding-top: 30px;">
+    
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h2 class="fw-bold text-dark mb-0 global-school-name"><i class="fas fa-edit me-2"></i>Exam Management</h2>
+            <p class="text-muted mb-0 small">Create exams, schedule dates, and enter marks</p>
+        </div>
+        <a href="/admin-dashboard.html" class="btn btn-outline-dark rounded-pill">
+            <i class="fas fa-arrow-left me-2"></i> Dashboard
+        </a>
+    </div>
+
+    <div class="glass-card mb-4 p-2">
+        <ul class="nav nav-pills" id="pills-tab" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active" data-bs-toggle="pill" data-bs-target="#pills-create">
+                    <i class="fas fa-plus-circle me-2"></i>Create Exam
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-schedule">
+                    <i class="fas fa-calendar-alt me-2"></i>Schedule
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-marks">
+                    <i class="fas fa-pen-alt me-2"></i>Marks Entry
+                </button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link" data-bs-toggle="pill" data-bs-target="#pills-status" onclick="loadMarksheetStatus()">
+                    <i class="fas fa-certificate me-2"></i>Marksheets
+                </button>
+            </li>
+        </ul>
+    </div>
+
+    <div class="tab-content">
+        
+        <div class="tab-pane fade show active" id="pills-create">
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="glass-card h-100">
+                        <h5 class="fw-bold text-primary mb-3">Create New Exam</h5>
+                        <form id="exam-form">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Exam Name</label>
+                                <input type="text" name="exam_name" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Type (e.g. Final)</label>
+                                <input type="text" name="exam_type" class="form-control" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Start Date</label>
+                                <input type="date" name="exam_date" class="form-control" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Course</label>
+                                    <select id="course_code" name="course_code" class="form-select" required>
+                                        <option value="">Select</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Batch</label>
+                                    <select id="batch_code" name="batch_code" class="form-select" required disabled>
+                                        <option value="">Select Course</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Theory Max</label>
+                                    <input type="number" name="max_theory_marks" class="form-control" value="100">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Practical Max</label>
+                                    <input type="number" name="max_practical_marks" class="form-control" value="0">
+                                </div>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input type="checkbox" class="form-check-input" id="is_midterm" name="is_midterm_assessment">
+                                <label class="form-check-label small" for="is_midterm">Is Midterm?</label>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100 rounded-pill shadow-sm">Create Exam</button>
+                            <div id="exam-error-msg" class="text-danger small mt-2"></div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="glass-card h-100 p-0 overflow-hidden">
+                        <div class="p-3 border-bottom bg-light"><h6 class="fw-bold mb-0">Existing Exams</h6></div>
+                        <div class="table-responsive">
+                            <table class="table table-glass table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Course</th>
+                                        <th>Batch</th>
+                                        <th>Marks</th>
+                                        <th>Date</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="exams-table-body">
+                                    <tr><td colspan="6" class="text-center p-4">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="pills-schedule">
+            <div class="glass-card mb-4">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Select Exam to Schedule</label>
+                        <select id="schedule_exam_select" class="form-select">
+                            <option value="">-- Select Exam --</option>
+                        </select>
+                    </div>
+                    <div class="col-md-8 text-end">
+                        <span class="text-muted small">Selected:</span> 
+                        <span id="selected-exam-name" class="fw-bold text-primary">None</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row g-4">
+                <div class="col-lg-4">
+                    <div class="glass-card">
+                        <h6 class="fw-bold border-bottom pb-2 mb-3">Add Schedule Entry</h6>
+                        <form id="schedule-form">
+                            <input type="hidden" id="schedule_id">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Subject</label>
+                                <select id="subject_code" name="subject_code" class="form-select" disabled required>
+                                    <option value="">Select Exam First</option>
+                                </select>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Date</label>
+                                <input type="date" name="exam_date_schedule" class="form-control" required>
+                            </div>
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">Start Time</label>
+                                    <input type="time" name="start_time" class="form-control" required>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label fw-bold small">End Time</label>
+                                    <input type="time" name="end_time" class="form-control" required>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label fw-bold small">Room No</label>
+                                <input type="text" name="room_number" class="form-control" required>
+                            </div>
+                            <button type="submit" id="add-schedule-btn" class="btn btn-success w-100 rounded-pill">Add to Schedule</button>
+                            <button type="button" id="cancel-edit-schedule-btn" class="btn btn-secondary w-100 rounded-pill mt-2" style="display:none;">Cancel</button>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="col-lg-8">
+                    <div class="glass-card p-0 overflow-hidden">
+                        <div class="table-responsive">
+                            <table class="table table-glass table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Subject</th>
+                                        <th>Date</th>
+                                        <th>Time</th>
+                                        <th>Room</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="schedule-table-body">
+                                    <tr><td colspan="5" class="text-center p-4 text-muted">Select an exam to view schedule.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="pills-marks">
+            <div class="glass-card mb-4">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Exam</label>
+                        <select id="marks_exam_select" class="form-select">
+                            <option value="">Select Exam</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label fw-bold small">Subject</label>
+                        <select id="marks_subject_select" class="form-select" disabled>
+                            <option value="">Select Subject</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button id="load-students-btn" class="btn btn-primary w-100 rounded-pill">Load Students</button>
+                    </div>
+                    <div class="col-md-2 text-end">
+                        <span class="text-muted small d-block">Max Marks</span>
+                        <span id="max-marks-display" class="fw-bold fs-5 text-dark">0</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="glass-card p-0 overflow-hidden">
+                <form id="marks-entry-form">
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-glass table-hover mb-0 align-middle">
+                            <thead class="table-light sticky-top" style="z-index: 1;">
+                                <tr>
+                                    <th>Student Name / Roll</th>
+                                    <th class="text-center" style="width: 150px;">Theory</th>
+                                    <th class="text-center" style="width: 150px;">Practical</th>
+                                </tr>
+                            </thead>
+                            <tbody id="student-marks-body">
+                                <tr><td colspan="3" class="text-center p-5 text-muted">Select exam & subject to begin.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="p-3 border-top bg-light text-end">
+                        <button type="submit" class="btn btn-success rounded-pill px-5 shadow-sm">Save Marks</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="tab-pane fade" id="pills-status">
+            <div class="glass-card p-0 overflow-hidden">
+                <div class="table-responsive">
+                    <table class="table table-glass table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Roll No</th>
+                                <th>Student Name</th>
+                                <th>Course</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="marksheet-status-body">
+                            <tr><td colspan="5" class="text-center p-4">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<div class="modal fade" id="marksheetModal" tabindex="-1">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content glass-card border-0">
+            <div class="modal-header border-0">
+                <h5 class="modal-title fw-bold">Marksheet View</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-light border">
+                    <div class="row">
+                        <div class="col-6"><strong>Name:</strong> <span id="modal-student-name">...</span></div>
+                        <div class="col-6"><strong>Roll:</strong> <span id="modal-roll-number">...</span></div>
+                        <div class="col-12"><strong>Course:</strong> <span id="modal-course-batch">...</span></div>
+                    </div>
+                </div>
+                <table class="table table-bordered table-sm mt-3">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Subject</th>
+                            <th>Exam</th>
+                            <th>Max</th>
+                            <th>Obtained</th>
+                            <th>Grade</th>
+                        </tr>
+                    </thead>
+                    <tbody id="modal-marks-table-body"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/global-config.js?v=2.3.1"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+    const token = localStorage.getItem('erp-token');
+    const sessionId = localStorage.getItem('active_session_id') || '00000000-0000-0000-0000-000000000000';
+    
+    if (!token) window.location.href = '/login.html';
+    
+    // Globals
+    let examCache = {};
+    const API = {
+        EXAMS: '/api/exams',
+        MARKS: '/api/marks',
+        ACADEMICS: '/api/academicswithfees',
+        STUDENTS: '/api/students'
+    };
+
+    // --- INIT ---
+    loadFormDependencies();
+    loadExams();
+
+    // --- 1. CREATE EXAM LOGIC ---
+    async function loadFormDependencies() {
+        try {
+            const res = await window.authFetch(`${API.ACADEMICS}/courses`);
+            const courses = await res.json();
+            const select = document.getElementById('course_code');
+            select.innerHTML = '<option value="">Select Course</option>';
+            courses.forEach(c => select.innerHTML += `<option value="${c.course_id}">${c.course_name}</option>`);
+        } catch (e) { console.error(e); }
+    }
+
+    document.getElementById('course_code').addEventListener('change', async function() {
+        const id = this.value;
+        const bSelect = document.getElementById('batch_code');
+        bSelect.innerHTML = '<option value="">Loading...</option>';
+        bSelect.disabled = true;
+        if(!id) return;
+
+        try {
+            const res = await window.authFetch(`${API.ACADEMICS}/courses/${id}/batches`);
+            const batches = await res.json();
+            bSelect.innerHTML = '<option value="">Select Batch</option>';
+            batches.forEach(b => bSelect.innerHTML += `<option value="${b.batch_id}">${b.batch_name}</option>`);
+            bSelect.disabled = false;
+        } catch(e) {}
+    });
+
+    document.getElementById('exam-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const data = Object.fromEntries(fd.entries());
+        data.is_midterm_assessment = document.getElementById('is_midterm').checked;
+        data.academic_session_id = sessionId;
+
+        try {
+            const res = await window.authFetch(API.EXAMS, { method: 'POST', body: JSON.stringify(data) });
+            if(res.ok) {
+                alert("Exam Created!");
+                e.target.reset();
+                loadExams();
+            } else { alert("Failed"); }
+        } catch(e) { alert("Error"); }
+    });
+
+    async function loadExams() {
+        const tbody = document.getElementById('exams-table-body');
+        try {
+            const res = await window.authFetch(`${API.EXAMS}/list`);
+            const exams = await res.json();
+            examCache = {};
+            tbody.innerHTML = '';
+
+            const sSelect = document.getElementById('schedule_exam_select');
+            const mSelect = document.getElementById('marks_exam_select');
+            sSelect.innerHTML = mSelect.innerHTML = '<option value="">-- Select Exam --</option>';
+
+            exams.forEach(ex => {
+                const id = ex.exam_id || ex.id;
+                examCache[id] = ex;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${ex.exam_name}</td>
+                        <td>${ex.course_name || '-'}</td>
+                        <td>${ex.batch_name || '-'}</td>
+                        <td>${ex.total_marks || 0}</td>
+                        <td>${new Date(ex.exam_date).toLocaleDateString()}</td>
+                        <td><button class="btn btn-sm btn-outline-danger" onclick="deleteExam('${id}')"><i class="fas fa-trash"></i></button></td>
+                    </tr>
+                `;
+
+                const opt = `<option value="${id}">${ex.exam_name}</option>`;
+                sSelect.innerHTML += opt;
+                mSelect.innerHTML += opt;
+            });
+        } catch(e) { tbody.innerHTML = '<tr><td colspan="6" class="text-danger text-center">Error loading</td></tr>'; }
+    }
+
+    // --- 2. SCHEDULE LOGIC ---
+    document.getElementById('schedule_exam_select').addEventListener('change', async function() {
+        const id = this.value;
+        const exam = examCache[id];
+        const subSelect = document.getElementById('subject_code');
+        const tbody = document.getElementById('schedule-table-body');
+
+        if(!exam) return;
+        document.getElementById('selected-exam-name').innerText = exam.exam_name;
+
+        subSelect.innerHTML = '<option>Loading...</option>';
+        try {
+            const res = await window.authFetch(`${API.ACADEMICS}/courses/${exam.course_id}/subjects`);
+            const subs = await res.json();
+            subSelect.innerHTML = '<option value="">Select Subject</option>';
+            subs.forEach(s => subSelect.innerHTML += `<option value="${s.subject_id}">${s.subject_name}</option>`);
+            subSelect.disabled = false;
+        } catch(e) {}
+
+        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Loading...</td></tr>';
+        try {
+            const res = await window.authFetch(`${API.EXAMS}/schedule/${id}`);
+            const sch = await res.json();
+            tbody.innerHTML = sch.length ? '' : '<tr><td colspan="5" class="text-center text-muted">No schedule yet.</td></tr>';
+            sch.forEach(s => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${s.subject_name}</td>
+                        <td>${new Date(s.exam_date).toLocaleDateString()}</td>
+                        <td>${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}</td>
+                        <td>${s.room_number}</td>
+                        <td><button class="btn btn-sm text-danger" onclick="deleteSchedule('${s.schedule_id}')"><i class="fas fa-trash"></i></button></td>
+                    </tr>
+                `;
+            });
+        } catch(e) {}
+    });
+
+    document.getElementById('schedule-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const examId = document.getElementById('schedule_exam_select').value;
+        const exam = examCache[examId];
+        if(!exam) return alert("Select exam first");
+
+        const fd = new FormData(e.target);
+        const data = Object.fromEntries(fd.entries());
+        data.exam_id = examId;
+        data.course_id = exam.course_id;
+        data.batch_id = exam.batch_id;
+        data.subject_id = document.getElementById('subject_code').value;
+        data.max_marks = exam.total_marks;
+
+        try {
+            const res = await window.authFetch(`${API.EXAMS}/schedule`, { method: 'POST', body: JSON.stringify(data) });
+            if(res.ok) {
+                alert("Scheduled!");
+                document.getElementById('schedule_exam_select').dispatchEvent(new Event('change'));
+            }
+        } catch(e) { alert("Error"); }
+    });
+
+    // --- 3. MARKS LOGIC (FIXED) ---
+    document.getElementById('marks_exam_select').addEventListener('change', async function() {
+        const id = this.value;
+        const exam = examCache[id];
+        const subSelect = document.getElementById('marks_subject_select');
+        
+        if(!exam) return;
+        document.getElementById('max-marks-display').innerText = exam.total_marks;
+
+        try {
+            const res = await window.authFetch(`${API.ACADEMICS}/courses/${exam.course_id}/subjects`);
+            const subs = await res.json();
+            subSelect.innerHTML = '<option value="">Select Subject</option>';
+            subs.forEach(s => subSelect.innerHTML += `<option value="${s.subject_id}">${s.subject_name}</option>`);
+            subSelect.disabled = false;
+        } catch(e) {}
+    });
+
+    document.getElementById('load-students-btn').addEventListener('click', async () => {
+        const examId = document.getElementById('marks_exam_select').value;
+        const subId = document.getElementById('marks_subject_select').value;
+        const exam = examCache[examId];
+        const tbody = document.getElementById('student-marks-body');
+
+        if(!exam || !subId) return alert("Select Exam & Subject");
+
+        tbody.innerHTML = '<tr><td colspan="3" class="text-center">Loading...</td></tr>';
+
+        try {
+            const [studentsRes, marksRes] = await Promise.all([
+                window.authFetch(`${API.STUDENTS}/course/${exam.course_id}/batch/${exam.batch_id}`),
+                window.authFetch(`${API.MARKS}/${examId}/${subId}`)
+            ]);
+            
+            const students = await studentsRes.json();
+            const marks = await marksRes.json();
+            
+            const markMap = {};
+            marks.forEach(m => markMap[m.student_id] = { t: m.marks_obtained_theory, p: m.marks_obtained_practical });
+
+            if(!students.length) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center">No students found.</td></tr>';
+                return;
+            }
+
+            // ✅ FIX: Robust ID Selection
+            tbody.innerHTML = students.map(s => {
+                const sid = s.student_id || s.id;
+                return `
+                <tr data-sid="${sid}">
+                    <td>
+                        <div class="fw-bold">${s.first_name} ${s.last_name}</div>
+                        <small class="text-muted">${s.enrollment_no || 'N/A'}</small>
+                    </td>
+                    <td class="text-center"><input type="number" class="marks-input t-mark" value="${markMap[sid]?.t ?? ''}"></td>
+                    <td class="text-center"><input type="number" class="marks-input p-mark" value="${markMap[sid]?.p ?? ''}"></td>
+                </tr>
+            `}).join('');
+
+        } catch(e) { console.error(e); alert("Error loading data"); }
+    });
+
+    document.getElementById('marks-entry-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const examId = document.getElementById('marks_exam_select').value;
+        const subId = document.getElementById('marks_subject_select').value;
+        const rows = document.querySelectorAll('#student-marks-body tr[data-sid]');
+        
+        const marks = [];
+        rows.forEach(r => {
+            const t = r.querySelector('.t-mark').value;
+            const p = r.querySelector('.p-mark').value;
+            if(t !== '' || p !== '') {
+                marks.push({
+                    student_id: r.dataset.sid,
+                    marks_obtained_theory: t ? parseFloat(t) : null,
+                    marks_obtained_practical: p ? parseFloat(p) : null
+                });
+            }
+        });
+
+        if(!marks.length) return alert("No marks entered");
+
+        const payload = {
+            exam_id: examId,
+            subject_id: subId,
+            marks: marks,
+            academic_session_id: sessionId
+        };
+
+        try {
+            const res = await window.authFetch(API.MARKS, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+            if(res.ok) alert("Marks Saved Successfully!");
+            else alert("Failed to save.");
+        } catch(e) { alert("Error saving marks"); }
+    });
+
+    // --- 4. MARKSHEET STATUS ---
+    window.loadMarksheetStatus = async function() {
+        const tbody = document.getElementById('marksheet-status-body');
+        try {
+            const res = await window.authFetch(`${API.MARKS}/status`);
+            const data = await res.json();
+            tbody.innerHTML = data.map(d => `
+                <tr>
+                    <td>${d.enrollment_no}</td>
+                    <td>${d.student_name}</td>
+                    <td>${d.course_name}</td>
+                    <td><span class="badge ${d.marksheet_status === 'Generated' ? 'bg-success' : 'bg-warning text-dark'}">${d.marksheet_status || 'Pending'}</span></td>
+                    <td><button class="btn btn-sm btn-primary" onclick="viewMarksheet('${d.enrollment_no}')">View</button></td>
+                </tr>
+            `).join('');
+        } catch(e) {}
+    };
+
+    window.viewMarksheet = async function(roll) {
+        try {
+            const res = await window.authFetch(`${API.MARKS}/marksheet/roll/${roll}`);
+            const data = await res.json();
+            
+            document.getElementById('modal-student-name').innerText = data.student_name;
+            document.getElementById('modal-roll-number').innerText = data.roll_number;
+            document.getElementById('modal-course-batch').innerText = data.course_name;
+            
+            const tbody = document.getElementById('modal-marks-table-body');
+            tbody.innerHTML = data.marks.map(m => `
+                <tr>
+                    <td>${m.subject_name}</td>
+                    <td>${m.exam_name}</td>
+                    <td>${m.total_marks}</td>
+                    <td>${m.marks_obtained}</td>
+                    <td>${m.grade || '-'}</td>
+                </tr>
+            `).join('');
+            
+            new bootstrap.Modal(document.getElementById('marksheetModal')).show();
+        } catch(e) { alert("Data not found"); }
+    };
+
+    window.deleteExam = async (id) => {
+        if(confirm("Delete?")) {
+            await window.authFetch(`${API.EXAMS}/${id}`, { method: 'DELETE' });
+            loadExams();
+        }
+    };
+
+    window.deleteSchedule = async (id) => {
+        if(confirm("Delete schedule?")) {
+            await window.authFetch(`${API.EXAMS}/schedule/${id}`, { method: 'DELETE' });
+            document.getElementById('schedule_exam_select').dispatchEvent(new Event('change'));
+        }
+    };
+});
+</script>
+
+</body>
+</html>

@@ -36,6 +36,7 @@
             box-shadow: 0 10px 30px rgba(0,0,0,0.04); 
             transition: all 0.3s ease;
             background: #ffffff;
+            position: relative;
         }
 
         .quiz-card:hover {
@@ -47,6 +48,16 @@
         .badge-published {
             background: rgba(16, 185, 129, 0.1);
             color: #059669;
+            font-size: 0.7rem;
+            letter-spacing: 1px;
+            font-weight: 800;
+            padding: 6px 12px;
+            border-radius: 8px;
+        }
+
+        .badge-completed {
+            background: rgba(99, 102, 241, 0.1);
+            color: #4f46e5;
             font-size: 0.7rem;
             letter-spacing: 1px;
             font-weight: 800;
@@ -67,6 +78,23 @@
 
         .btn-start:hover { 
             background: #4f46e5; 
+            color: white;
+        }
+
+        .btn-report {
+            background: #1e293b;
+            color: white;
+            border-radius: 12px;
+            font-weight: 700;
+            padding: 12px;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            transition: 0.3s;
+        }
+        
+        .btn-report:hover {
+            background: #0f172a;
             color: white;
         }
 
@@ -91,10 +119,10 @@
     <div class="container py-4 py-md-5">
         <header class="d-flex justify-content-between align-items-center page-header">
             <div>
-                <h2 class="fw-800 mb-1">Online Assessments</h2>
-                <p class="text-muted mb-0">Manage and attempt your active quizzes</p>
+                <h2 class="fw-800 mb-1" id="header-title">Online Assessments</h2>
+                <p class="text-muted mb-0" id="header-subtitle">Manage and attempt your active quizzes</p>
             </div>
-            <a href="/student-dashboard.html" class="btn btn-outline-dark btn-dashboard px-4">
+            <a href="/student-dashboard.html" id="dashboard-btn" class="btn btn-outline-dark btn-dashboard px-4">
                 <i class="fas fa-th-large me-2"></i> Dashboard
             </a>
         </header>
@@ -107,27 +135,60 @@
         </div>
     </div>
 
+    <script src="/js/global-config.js"></script>
     <script>
         const TOKEN = localStorage.getItem('erp-token');
-        const STUDENT_ID = localStorage.getItem('profile-id'); 
+
+        /**
+         * Resolves identity for Student or Parent
+         */
+        function getAuthContext() {
+            if (!TOKEN) return null;
+            try {
+                const payload = JSON.parse(atob(TOKEN.split('.')[1]));
+                const role = payload.role.toLowerCase();
+                return {
+                    role: role,
+                    // If parent, use selected child ID; if student, use self ID
+                    studentId: role === 'parent' 
+                               ? localStorage.getItem('selected-student-id') 
+                               : (payload.student_id || payload.id || localStorage.getItem('profile-id'))
+                };
+            } catch (e) { return null; }
+        }
+
+        const context = getAuthContext();
 
         async function fetchQuizzes() {
             const container = document.getElementById('quiz-list-container');
             
-            if (!STUDENT_ID) {
+            if (!TOKEN) {
+                window.location.href = '/login.html';
+                return;
+            }
+
+            // UI Adjustment for Parent Role
+            if (context.role === 'parent') {
+                document.getElementById('header-title').innerText = "Child's Assessments";
+                document.getElementById('header-subtitle').innerText = "Monitor quiz attempts and reports";
+                document.getElementById('dashboard-btn').href = "/parent-dashboard.html";
+            }
+
+            if (!context.studentId) {
                 container.innerHTML = `
                     <div class="col-12">
                         <div class="alert alert-warning border-0 shadow-sm rounded-4 p-4 text-center">
-                            <i class="fas fa-exclamation-circle fa-2x mb-3"></i>
-                            <h5 class="fw-bold">Profile Session Expired</h5>
-                            <p class="mb-0">Please log in again to access your quizzes.</p>
+                            <i class="fas fa-user-slash fa-2x mb-3"></i>
+                            <h5 class="fw-bold">Student Identity Missing</h5>
+                            <p class="mb-0">Please select a student from the dashboard to continue.</p>
                         </div>
                     </div>`;
                 return;
             }
 
             try {
-                const res = await fetch(`/api/online-exam/student/${STUDENT_ID}/quizzes`, {
+                // 
+                const res = await fetch(`/api/online-exam/student/${context.studentId}/quizzes`, {
                     headers: { 'Authorization': `Bearer ${TOKEN}` }
                 });
 
@@ -139,41 +200,56 @@
                         <div class="col-12 text-center py-5">
                             <img src="https://cdn-icons-png.flaticon.com/512/6108/6108830.png" width="80" class="mb-3 opacity-50">
                             <h4 class="text-muted">No active quizzes found.</h4>
-                            <p class="small text-secondary">Contact your instructor if you think this is a mistake.</p>
+                            <p class="small text-secondary">Contact your institution if you think this is a mistake.</p>
                         </div>`;
                     return;
                 }
 
                 data.forEach(quiz => {
+                    const isAttempted = quiz.attempt_status === 'Submitted';
+                    const isParent = context.role === 'parent';
+
                     container.innerHTML += `
                         <div class="col-12 col-md-6 col-lg-4">
                             <div class="card quiz-card p-4 h-100">
                                 <div class="d-flex justify-content-between align-items-start mb-3">
-                                    <span class="badge-published">PUBLISHED</span>
+                                    <span class="${isAttempted ? 'badge-completed' : 'badge-published'}">
+                                        ${isAttempted ? 'COMPLETED' : 'PUBLISHED'}
+                                    </span>
                                     <i class="fas fa-file-signature text-primary opacity-25 fa-2x"></i>
                                 </div>
                                 
                                 <h4 class="fw-bold mb-1">${quiz.title}</h4>
-                                <p class="text-muted small mb-4">Subject: ${quiz.subject_name || 'N/A'}</p>
+                                <p class="text-muted small mb-4">Subject: ${quiz.subject_name || 'General'}</p>
                                 
                                 <div class="row g-0 border-top pt-3 mb-4">
                                     <div class="col-6 border-end">
                                         <div class="ps-2">
                                             <small class="d-block text-muted">Time Limit</small>
-                                            <span class="fw-bold"><i class="far fa-clock me-1"></i> ${quiz.time_limit_minutes} Min</span>
+                                            <span class="fw-bold"><i class="far fa-clock me-1"></i> ${quiz.time_limit} Min</span>
                                         </div>
                                     </div>
                                     <div class="col-6">
                                         <div class="ps-3">
                                             <small class="d-block text-muted">Total Marks</small>
-                                            <span class="fw-bold"><i class="fas fa-star me-1 text-warning"></i> 100</span>
+                                            <span class="fw-bold"><i class="fas fa-star me-1 text-warning"></i> ${quiz.max_marks || 100}</span>
                                         </div>
                                     </div>
                                 </div>
                                 
-                                <button onclick="startQuiz('${quiz.id}')" class="btn btn-start w-100 shadow-sm">
-                                    START ASSESSMENT <i class="fas fa-chevron-right ms-2 small"></i>
-                                </button>
+                                ${isAttempted ? 
+                                    `<a href="/assessment-report.html?quizId=${quiz.id}" class="btn-report w-100 shadow-sm">
+                                        VIEW REPORT CARD <i class="fas fa-file-contract ms-2 small"></i>
+                                    </a>` : 
+                                    (isParent ? 
+                                        `<button class="btn btn-secondary w-100" disabled style="border-radius: 12px; font-weight:700;">
+                                            PENDING ATTEMPT
+                                        </button>` :
+                                        `<button onclick="startQuiz('${quiz.id}')" class="btn btn-start w-100 shadow-sm">
+                                            START ASSESSMENT <i class="fas fa-chevron-right ms-2 small"></i>
+                                        </button>`
+                                    )
+                                }
                             </div>
                         </div>
                     `;
@@ -182,15 +258,14 @@
                 container.innerHTML = `
                     <div class="col-12">
                         <div class="alert alert-danger rounded-4">
-                            <strong>Connection Error:</strong> ${err.message}
+                            <strong>Sync Error:</strong> ${err.message}. Please verify academic server status.
                         </div>
                     </div>`;
             }
         }
 
         function startQuiz(quizId) {
-            // কনফার্মেশন প্রম্পট যোগ করা হয়েছে যাতে ভুল করে ক্লিক না হয়
-            if(confirm("Are you ready to start this assessment? Once started, the timer cannot be paused.")) {
+            if(confirm("Are you ready to start this assessment? Once started, the system will track your progress and violations.")) {
                 window.location.href = `/student-quiz-attempt.html?quizId=${quizId}`;
             }
         }

@@ -179,7 +179,6 @@
 
 <script src="js/global-config.js"></script>
 <script>
-    // Configuration & Auth
     const API_BASE = (window.erpSettings && window.erpSettings.API_BASE) ? window.erpSettings.API_BASE : '';
     const token = localStorage.getItem('erp-token');
     let userSession = null;
@@ -194,7 +193,6 @@
 
     function toggleLoader(show) { document.getElementById('loading-modal').classList.toggle('active', show); }
 
-    // Enhanced Fetch Wrapper
     async function apiRequest(path) {
         if (!token) return null;
         toggleLoader(true);
@@ -219,7 +217,6 @@
         }
     }
 
-    // UI Updater
     function updateUI(total, present) {
         document.getElementById('totalCount').textContent = total;
         document.getElementById('presentCount').textContent = present;
@@ -229,7 +226,6 @@
         pctEl.style.color = parseFloat(pct) < 75 ? 'var(--danger)' : 'var(--success)';
     }
 
-    // Main Load Function
     async function loadAttendance() {
         const start = document.getElementById('startDate').value;
         const end = document.getElementById('endDate').value;
@@ -238,7 +234,17 @@
 
         if (!userSession) return;
 
-        let url = `/api/attendance/report/user/${userSession.id}?start_date=${start}&end_date=${end}`;
+        // অভিভাবকের জন্য 'selected-student-id' ব্যবহার করা হচ্ছে, নতুবা নিজের আইডি
+        const targetId = (userSession.role.toLowerCase() === 'parent') 
+                        ? localStorage.getItem('selected-student-id') 
+                        : userSession.id;
+
+        if (!targetId) {
+            alert("Please select a student from the dashboard first.");
+            return;
+        }
+
+        let url = `/api/attendance/report/user/${targetId}?start_date=${start}&end_date=${end}`;
         if (subId && subId !== 'all') url += `&subject_id=${subId}`;
 
         const data = await apiRequest(url);
@@ -256,7 +262,7 @@
         let pCount = 0;
         data.forEach(item => {
             const rawStatus = item.status ? item.status.toString().toUpperCase() : 'A';
-            const statusKey = rawStatus.charAt(0); // Takes 'P' from 'Present' or 'Present'
+            const statusKey = rawStatus.charAt(0);
             
             if (statusKey === 'P' || rawStatus === 'PRESENT') pCount++;
             
@@ -281,11 +287,9 @@
         updateUI(data.length, pCount);
     }
 
-    // Initialize Page
     async function setupPortal() {
         userSession = decodeToken(token);
         if (!userSession) {
-            console.warn("Session missing, redirecting...");
             window.location.href = '/login.html'; 
             return;
         }
@@ -294,12 +298,11 @@
         const titleEl = document.getElementById('pageTitle');
         const backLink = document.getElementById('backLink');
 
-        // UI Adjustments by Role
-        if (role === 'student') {
-            titleEl.innerHTML = '<i class="fas fa-user-graduate"></i> My Attendance Portal';
-            backLink.href = '/student-dashboard.html';
+        // Parent Role Support Added
+        if (role === 'student' || role === 'parent') {
+            titleEl.innerHTML = (role === 'parent') ? '<i class="fas fa-user-shield"></i> Child Attendance Tracking' : '<i class="fas fa-user-graduate"></i> My Attendance Portal';
+            backLink.href = (role === 'parent') ? '/parent-dashboard.html' : '/student-dashboard.html';
             
-            // Fetch subjects list for filter
             const subjects = await apiRequest('/api/attendance/subjects');
             const subSelect = document.getElementById('subjectSelect');
             if(subjects && Array.isArray(subjects)) {
@@ -317,7 +320,6 @@
             document.getElementById('typeColumn').textContent = 'Duty Category';
         }
 
-        // Set Default Date Range (Last 30 Days)
         const today = new Date();
         const past = new Date();
         past.setDate(today.getDate() - 30);
@@ -325,11 +327,9 @@
         document.getElementById('endDate').value = today.toISOString().split('T')[0];
         document.getElementById('startDate').value = past.toISOString().split('T')[0];
 
-        // First Load
         loadAttendance();
     }
 
-    // Start
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', setupPortal);
     } else {

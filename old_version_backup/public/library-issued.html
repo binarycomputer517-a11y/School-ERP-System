@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Issued Books | Student Portal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        :root {
+            --primary-navy: #003366;
+            --danger-red: #dc3545;
+            --success-green: #15803d;
+        }
+
+        body { background-color: #f0f2f5; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        
+        .container { 
+            max-width: 950px; 
+            margin-top: 30px; 
+            margin-bottom: 30px;
+            background: white; 
+            padding: 25px; 
+            border-radius: 15px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+        }
+
+        h1 { 
+            color: var(--primary-navy); 
+            font-weight: 700;
+            border-bottom: 3px solid var(--primary-navy); 
+            padding-bottom: 15px; 
+            margin-bottom: 25px;
+            font-size: 1.8rem;
+        }
+
+        /* Responsive Table */
+        @media (max-width: 768px) {
+            .table-responsive table thead { display: none; } /* মোবাইলে হেডার হাইড */
+            .table-responsive table td { 
+                display: block; 
+                text-align: right; 
+                padding-left: 50%; 
+                position: relative; 
+                border: none;
+            }
+            .table-responsive table td::before {
+                content: attr(data-label);
+                position: absolute;
+                left: 15px;
+                width: 45%;
+                font-weight: bold;
+                text-align: left;
+                color: var(--primary-navy);
+            }
+            .table-responsive table tr {
+                display: block;
+                border: 1px solid #eee;
+                margin-bottom: 15px;
+                border-radius: 10px;
+                padding: 10px;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+            }
+            .action-cell { text-align: center !important; padding-left: 0 !important; }
+            .action-cell::before { display: none; }
+            .action-cell button { width: 100%; margin-top: 10px; }
+        }
+
+        .table thead th { background-color: var(--primary-navy); color: white; border: none; }
+        
+        /* Status Badges */
+        .badge-custom {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .status-overdue { background-color: var(--danger-red); color: white; }
+        .status-ok { background-color: #dcfce7; color: var(--success-green); }
+        
+        .btn-renew {
+            font-weight: 600;
+            border-radius: 8px;
+            transition: 0.3s;
+        }
+        
+        .summary-alert {
+            border-left: 5px solid var(--danger-red);
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <a href="/student-dashboard.html" class="btn btn-sm btn-outline-secondary px-3">
+                <i class="fas fa-arrow-left me-1"></i> Dashboard
+            </a>
+        </div>
+        
+        <h1><i class="fas fa-book-reader me-2"></i>Books Issued to Me</h1>
+        
+        <div id="loading-status" class="text-center py-5">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p class="mt-2 text-muted">Synchronizing with library records...</p>
+        </div>
+        
+        <div class="table-responsive">
+            <table class="table table-hover align-middle">
+                <thead>
+                    <tr>
+                        <th>Title & Author</th>
+                        <th>Accession No.</th>
+                        <th>Issued On</th>
+                        <th>Due Date</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="issued-books-body">
+                </tbody>
+            </table>
+        </div>
+
+        <div id="summary-info" class="alert alert-danger summary-alert mt-4 d-none">
+            <div class="d-flex align-items-center">
+                <i class="fas fa-exclamation-circle fa-2x me-3"></i>
+                <div>
+                    <h6 class="mb-0 fw-bold">Action Required!</h6>
+                    <p class="mb-0 small">You have <span id="overdue-count" class="fw-bold">0</span> book(s) overdue. Please return or renew them to avoid fines.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    
+
+    <script>
+        const token = localStorage.getItem('erp-token');
+        const body = document.getElementById('issued-books-body');
+        const loadingStatus = document.getElementById('loading-status');
+        const summaryInfo = document.getElementById('summary-info');
+        
+        if (!token) window.location.href = '/login.html';
+
+        async function fetchIssuedBooks() {
+            try {
+                const response = await fetch(`/api/library/student/issued`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) throw new Error('Could not fetch data');
+
+                const records = await response.json();
+                loadingStatus.classList.add('d-none');
+                let overdueCount = 0;
+
+                if (records.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" class="text-center py-5 text-muted">No books currently issued.</td></tr>';
+                    return;
+                }
+
+                records.forEach(record => {
+                    if (record.is_overdue) overdueCount++;
+                    
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td data-label="Book Details">
+                            <div class="fw-bold">${record.title}</div>
+                            <div class="small text-muted">${record.author}</div>
+                        </td>
+                        <td data-label="Accession No.">${record.accession_number}</td>
+                        <td data-label="Issued On">${new Date(record.issue_date).toLocaleDateString('en-GB')}</td>
+                        <td data-label="Due Date">${new Date(record.due_date).toLocaleDateString('en-GB')}</td>
+                        <td data-label="Status">
+                            <span class="badge-custom ${record.is_overdue ? 'status-overdue' : 'status-ok'}">
+                                ${record.is_overdue ? 'Overdue' : 'Healthy'}
+                            </span>
+                        </td>
+                        <td class="action-cell">
+                            <button class="btn btn-sm btn-primary btn-renew w-100 w-md-auto" onclick="requestRenewal('${record.circulation_id}')">
+                                <i class="fas fa-sync-alt me-1"></i> Renew
+                            </button>
+                        </td>
+                    `;
+                    body.appendChild(row);
+                });
+                
+                if (overdueCount > 0) {
+                    document.getElementById('overdue-count').textContent = overdueCount;
+                    summaryInfo.classList.remove('d-none');
+                }
+
+            } catch (error) {
+                loadingStatus.innerHTML = `<p class="text-danger"><i class="fas fa-wifi-slash"></i> Error: ${error.message}</p>`;
+            }
+        }
+
+        function requestRenewal(id) {
+            if (confirm("Request a 7-day extension for this book?")) {
+                alert(`Renewal requested for: ${id}`);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', fetchIssuedBooks);
+    </script>
+</body>
+</html>
