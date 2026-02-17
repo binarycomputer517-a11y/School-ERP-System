@@ -14,23 +14,14 @@ const transporter = nodemailer.createTransport({
     port: process.env.EMAIL_PORT || 587,
     secure: false, // true for 465, false for other ports
     auth: {
-<<<<<<< HEAD
         user: process.env.EMAIL_USER, // e.g., schoolerp995@gmail.com
         pass: process.env.EMAIL_PASS  // Secure App Password
-=======
-        user: process.env.EMAIL_USER, // schoolerp995@gmail.com
-        pass: process.env.EMAIL_PASS  // sqpztuyqoivgasek (App Password)
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
     }
 });
 
 /**
  * FEATURE 1: Sends a professional fee payment confirmation email
-<<<<<<< HEAD
  * Triggered after successful online/manual payment synchronization.
-=======
- * Triggered after successful online/manual payment
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
  */
 const sendPaymentEmail = async (to, studentName, amount, txnId) => {
     const mailOptions = {
@@ -41,47 +32,28 @@ const sendPaymentEmail = async (to, studentName, amount, txnId) => {
             <div style="font-family: Arial, sans-serif; padding: 20px; border: 1px solid #eee; border-radius: 10px; max-width: 600px;">
                 <h2 style="color: #22c55e;">Payment Successful!</h2>
                 <p>Dear <b>${studentName}</b>,</p>
-<<<<<<< HEAD
                 <p>We have successfully synchronized your fee payment of <b>₹${amount}</b> into our registry.</p>
                 <p><b>Transaction ID:</b> <span style="color: #4f46e5;">${txnId}</span></p>
                 <p>Your student ledger has been updated. You can download your official digital receipt from the student portal.</p>
                 <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
                 <p style="font-size: 12px; color: #666;">Regards,<br><b>Accounts Department</b><br>Institutional ERP System</p>
-=======
-                <p>We have successfully received your fee payment of <b>₹${amount}</b>.</p>
-                <p><b>Transaction ID:</b> <span style="color: #4f46e5;">${txnId}</span></p>
-                <p>Your student account has been updated. You can view or download your official receipt from your student portal.</p>
-                <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
-                <p style="font-size: 12px; color: #666;">Regards,<br><b>Accounts Department</b><br>School ERP System</p>
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
             </div>
         `
     };
 
     try {
         await transporter.sendMail(mailOptions);
-<<<<<<< HEAD
         console.log(`✅ Payment confirmation broadcasted to: ${to}`);
         return { success: true };
     } catch (error) {
         console.error("❌ Payment Email Dispatch Failure:", error);
-=======
-        console.log(`✅ Payment Email sent to: ${to}`);
-        return { success: true };
-    } catch (error) {
-        console.error("❌ Payment Email Sending Error:", error);
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
         return { success: false, error };
     }
 };
 
 /**
  * FEATURE 2: Sends an email with an attachment (Excel/PDF)
-<<<<<<< HEAD
  * Used by Daily Report Automation & PDF Receipt Generation System.
-=======
- * Used by Daily Report Automation & PDF Receipt System
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
  */
 const sendEmailWithAttachment = async ({ to, subject, html, attachments }) => {
     const mailOptions = {
@@ -89,16 +61,11 @@ const sendEmailWithAttachment = async ({ to, subject, html, attachments }) => {
         to: to,
         subject: subject,
         html: html,
-<<<<<<< HEAD
         attachments: attachments // Format: [{ filename: 'report.pdf', content: buffer }]
-=======
-        attachments: attachments // Format: [{ filename: 'name.xlsx', content: buffer }]
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
     };
 
     try {
         await transporter.sendMail(mailOptions);
-<<<<<<< HEAD
         console.log(`✅ Attachment-based report dispatched to: ${to}`);
         return { success: true };
     } catch (error) {
@@ -214,23 +181,13 @@ const sendAbsentEmail = async (to, studentName, date) => {
         return { success: true };
     } catch (error) {
         console.error("❌ Absence Alert Dispatch Failure:", error);
-=======
-        console.log(`✅ Report Email with attachment sent to: ${to}`);
-        return { success: true };
-    } catch (error) {
-        console.error("❌ Attachment Email Error:", error);
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
         return { success: false, error };
     }
 };
 
 module.exports = { 
     sendPaymentEmail, 
-<<<<<<< HEAD
     sendEmailWithAttachment,
     sendManagerProvisionEmail,
     sendAbsentEmail
-=======
-    sendEmailWithAttachment 
->>>>>>> e74cb45f9cf0b7dfeaf3f71192b94ebcd52a8bee
 };
