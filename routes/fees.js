@@ -179,16 +179,18 @@ router.post('/generate-structure-invoice', authenticateToken, authorize(['admin'
 });
 /**
  * 2.2 FEE COLLECTION (With Multi-Branch Security & Auto-Activation)
- * @desc   বিকাশ বা ক্যাশ কালেকশন করার সময় ব্রাঞ্চ ভ্যালিডেশন চেক করে
+ * @desc Collects payments and distributes them across pending invoices using FIFO.
  */
 router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff', 'super admin']), async (req, res) => {
     const { student_id, amount_paid, payment_mode, notes } = req.body;
     const collectedBy = req.user.id;
-    const userBranchId = req.user.branch_id; // লগইন করা ইউজারের ব্রাঞ্চ আইডি
-    const userRole = req.user.role; // ইউজারের রোল
+    const userBranchId = req.user.branch_id;
+    const userRole = req.user.role;
+    
+    // Ensure payAmount is a valid number in JS
     const payAmount = parseFloat(amount_paid);
 
-    if (!student_id || !payAmount || payAmount <= 0) {
+    if (!student_id || isNaN(payAmount) || payAmount <= 0) {
         return res.status(400).json({ message: 'Invalid payment details.' });
     }
 
@@ -196,7 +198,7 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
     try {
         await client.query('BEGIN');
 
-        // 🛡️ SECURITY STEP: স্টুডেন্টের ব্রাঞ্চ ভ্যালিডেশন
+        // 🛡️ SECURITY STEP: Validate Student Branch
         const studentInfo = await client.query(`
             SELECT branch_id FROM ${DB.STUDENTS} WHERE student_id = $1::uuid
         `, [student_id]);
@@ -207,26 +209,27 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
 
         const studentBranchId = studentInfo.rows[0].branch_id;
 
-        // যদি ইউজার 'super admin' না হয় এবং ব্রাঞ্চ আইডি না মিলে, তবে অ্যাক্সেস ডিনাইড
+        // Branch Access Control
         if (userRole !== 'super admin' && studentBranchId !== userBranchId) {
             return res.status(403).json({ 
                 message: 'Access Denied: You cannot collect fees for a student from another branch.' 
             });
         }
 
-        // 1. Fetch pending invoices
+        // 1. Fetch pending invoices (FIXED: Removed parseFloat from SQL)
         const openInvoices = await client.query(`
-            SELECT id, total_amount, paid_amount, (total_amount - parseFloat(paid_amount)) AS balance_due
+            SELECT id, total_amount, paid_amount, (total_amount - paid_amount) AS balance_due
             FROM ${DB.INVOICES} 
-            WHERE student_id = $1::uuid AND status != 'Paid' AND status != 'Waived'
+            WHERE student_id = $1::uuid AND status NOT IN ('Paid', 'Waived')
             ORDER BY due_date ASC;
         `, [student_id]);
 
+        // Calculate total due in JavaScript
         let totalDue = openInvoices.rows.reduce((acc, i) => acc + parseFloat(i.balance_due), 0);
         
         if (totalDue <= 0) throw new Error("No pending dues found for this student.");
         
-        // ওভারপেমেন্ট চেক (Safety Margin: 0.01)
+        // Overpayment Protection (0.01 margin for float precision)
         if (payAmount > (totalDue + 0.01)) {
             throw new Error(`Overpayment detected. Total Due: ₹${totalDue.toFixed(2)}`);
         }
@@ -238,10 +241,12 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
         // 2. Distribute payment across invoices (FIFO Method)
         for (const inv of openInvoices.rows) {
             if (remaining <= 0) break;
+            
             const due = parseFloat(inv.balance_due);
             const paying = Math.min(remaining, due);
 
             if (paying > 0) {
+                // Record the payment
                 const pRes = await client.query(`
                     INSERT INTO ${DB.PAYMENTS} (invoice_id, amount, payment_mode, transaction_id, collected_by, remarks) 
                     VALUES ($1::uuid, $2, $3, $4, $5::uuid, $6) RETURNING id;
@@ -249,8 +254,10 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
                 
                 if (!firstPaymentId) firstPaymentId = pRes.rows[0].id; 
 
+                // Update Invoice Status
                 const newPaid = parseFloat(inv.paid_amount) + paying;
-                const newStatus = (newPaid >= (parseFloat(inv.total_amount) - 0.01)) ? 'Paid' : 'Partial';
+                const isFullyPaid = (newPaid >= (parseFloat(inv.total_amount) - 0.01));
+                const newStatus = isFullyPaid ? 'Paid' : 'Partial';
                 
                 await client.query(`
                     UPDATE ${DB.INVOICES} 
@@ -272,7 +279,7 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
 
         const totalCollected = parseFloat(totalPaidRes.rows[0].total_collected);
 
-        // টাকা ১০০০ বা তার বেশি হলে অ্যাকাউন্ট অটোমেটিক অ্যাক্টিভ হবে
+        // Auto-activate if lifetime collection >= 1000
         if (totalCollected >= 1000) {
             await client.query(`
                 UPDATE ${DB.USERS} 
@@ -282,10 +289,11 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
         }
 
         await client.query('COMMIT');
+
         res.status(201).json({ 
             success: true,
-            message: `Payment successfully recorded: ₹${payAmount}`, 
-            receipt_number: batchRef, // Batch reference can be used as Receipt No
+            message: `Payment successfully recorded: ₹${payAmount.toFixed(2)}`, 
+            receipt_number: batchRef,
             activation: totalCollected >= 1000 ? 'Student Account Activated' : 'Pending Activation'
         });
 
@@ -297,6 +305,7 @@ router.post('/collect', authenticateToken, authorize(['admin', 'teacher', 'staff
         client.release();
     }
 });
+
  //* 2.3 REFUND MANAGEMENT
  //*//
 router.get('/student-refund-info/:studentId', authenticateToken, authorize(['admin', 'finance']), async (req, res) => {

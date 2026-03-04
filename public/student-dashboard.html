@@ -587,363 +587,389 @@
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
-        const token = localStorage.getItem('erp-token');
+    // --- AUTH & CORE CONFIG ---
+    const sid = localStorage.getItem('student_id') || localStorage.getItem('profile-id');
+    const token = localStorage.getItem('erp-token');
 
-        if (!token || !sid) {
-            window.location.href = '/login.html';
-        }
+    if (!token || !sid) {
+        window.location.href = '/login.html';
+    }
 
-        const btnExplore = document.getElementById('btnExplore'), 
-              drawer = document.getElementById('menuDrawer'), 
-              overlay = document.getElementById('overlay');
+    const btnExplore = document.getElementById('btnExplore'), 
+          drawer = document.getElementById('menuDrawer'), 
+          overlay = document.getElementById('overlay');
 
-        const toggleDrawer = (isOpen) => {
-            drawer.classList.toggle('open', isOpen);
-            overlay.classList.toggle('show', isOpen);
-            document.body.style.overflow = isOpen ? 'hidden' : 'auto';
+    const toggleDrawer = (isOpen) => {
+        drawer.classList.toggle('open', isOpen);
+        overlay.classList.toggle('show', isOpen);
+        document.body.style.overflow = isOpen ? 'hidden' : 'auto';
+    };
+
+    btnExplore.addEventListener('click', () => toggleDrawer(true));
+    overlay.addEventListener('click', () => toggleDrawer(false));
+
+    function updateClock() {
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+        const clockEl = document.getElementById('digital-clock');
+        if (clockEl) clockEl.innerText = timeStr;
+    }
+
+    function checkConnectivity() {
+        const isOnline = navigator.onLine;
+        const dot = document.getElementById('status-dot');
+        if (dot) dot.className = isOnline ? 'status-dot online' : 'status-dot offline';
+    }
+
+    async function updateMessagingBadge() {
+        const badge = document.getElementById('unread-count');
+        if (!badge) return;
+        try {
+            const res = await fetch('/api/messaging/unread-count', {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const count = parseInt(data.count) || 0;
+                badge.innerText = count > 9 ? '9+' : count;
+                badge.style.display = count > 0 ? 'block' : 'none';
+            }
+        } catch (err) { console.warn("Messaging check skipped."); }
+    }
+
+    async function checkAnnouncements() {
+        const dot = document.getElementById('notif-unread-dot');
+        try {
+            const res = await fetch('/api/announcements/role/student', {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            if (res.ok) {
+                const notices = await res.json();
+                dot.style.display = (notices && notices.length > 0) ? 'block' : 'none';
+                return notices;
+            }
+        } catch (err) { console.warn("Could not sync notifications:", err); }
+        return [];
+    }
+
+    function initChart(labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May'], data = [30, 50, 40, 60, 55]) {
+        const canvas = document.getElementById('performanceChart');
+        if(!canvas) return;
+        let chartStatus = Chart.getChart("performanceChart"); 
+        if (chartStatus !== undefined) chartStatus.destroy();
+        const ctx = canvas.getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{ 
+                    label: 'Progress', 
+                    data: data, 
+                    borderColor: '#6366f1', 
+                    tension: 0.4, 
+                    fill: true, 
+                    backgroundColor: 'rgba(99, 102, 241, 0.1)', 
+                    pointRadius: 3 
+                }]
+            },
+            options: { 
+                responsive: true, maintainAspectRatio: false, 
+                plugins: { legend: { display: false } }, 
+                scales: { y: { display: false }, x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } } } 
+            }
+        });
+    }
+
+    async function syncPortalData(isInitialLoad = false) {
+        try {
+            const [fRes, tRes, nRes] = await Promise.all([
+                fetch(`/api/students/${sid}/fees`, { headers: { "Authorization": `Bearer ${token}` } }),
+                fetch(`/api/students/${sid}/teachers`, { headers: { "Authorization": `Bearer ${token}` } }),
+                checkAnnouncements() 
+            ]);
+            if (fRes?.ok) {
+                const f = await fRes.json();
+                document.getElementById('finance-content').innerHTML = `
+                    <div class="col-4 border-end"><small class="text-muted d-block">Pending</small>
+                        <span class="fw-bold text-danger">₹${f.total_billed || 0}</span></div>
+                    <div class="col-4 border-end"><small class="text-muted d-block">Paid</small>
+                        <span class="fw-bold text-success">₹${f.total_paid || 0}</span></div>
+                    <div class="col-4"><small class="text-muted d-block">Balance</small>
+                        <span class="fw-bold text-dark">₹${f.balance_due || 0}</span></div>
+                `;
+            }
+            if (tRes?.ok) {
+                const teachers = await tRes.json();
+                const container = document.getElementById('my-teachers-list');
+                if (teachers && teachers.length > 0) {
+                    container.innerHTML = teachers.map(t => `
+                        <div class="teacher-card text-center shadow-sm">
+                            <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(t.full_name)}&background=f1f5f9&color=6366f1&bold=true" class="rounded-circle mb-2 shadow-sm" style="width:55px; height:55px; border: 2px solid white;">
+                            <div class="small fw-extrabold text-truncate" style="color: #334155;">${t.full_name}</div>
+                            <div class="text-muted" style="font-size: 10px;">${t.subject_name || 'Teacher'}</div>
+                        </div>
+                    `).join('');
+                } else {
+                    container.innerHTML = '<div class="p-3 text-muted small">No teachers assigned yet.</div>';
+                }
+            }
+            if (nRes && nRes.length > 0) {
+                const scroller = document.getElementById('notice-scroller');
+                const noticeHtml = nRes.map(n => {
+                    let iconClass = "text-primary";
+                    if(n.notice_type === 'Urgent') iconClass = "text-danger";
+                    if(n.notice_type === 'Event') iconClass = "text-success";
+                    return `<div class="notice-card"><i class="fas fa-bullhorn ${iconClass} mb-2"></i><div class="fw-bold small text-truncate" style="color: #1e293b;">${n.title}</div><div class="text-muted" style="font-size: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${n.content || 'New update available.'}</div></div>`;
+                }).join('');
+                scroller.innerHTML = noticeHtml + noticeHtml; 
+            }
+            updateMessagingBadge();
+        } catch (err) { console.error("Background sync failed", err); }
+    }
+
+    async function initPortal() {
+        const hr = new Date().getHours();
+        const greet = document.getElementById('greeting-txt');
+        if (greet) greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
+        try {
+            const pRes = await fetch(`/api/students/${sid}`, { headers: { "Authorization": `Bearer ${token}` } });
+            if (pRes && pRes.ok) {
+                const d = await pRes.json();
+                if (document.getElementById('student-fullname')) document.getElementById('student-fullname').innerText = d.first_name || 'Student';
+                if (document.getElementById('drawer-name')) document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
+                if (document.getElementById('badge-admission')) document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
+                if (document.getElementById('badge-roll')) document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
+                if (document.getElementById('drawer-id')) document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
+                if (document.getElementById('drawer-email')) document.getElementById('drawer-email').innerText = d.email || 'N/A';
+                const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(d.first_name)}&background=6366f1&color=fff&bold=true`;
+                if (document.getElementById('header-pic')) document.getElementById('header-pic').src = d.profile_image_path || avatar;
+                if (document.getElementById('drawer-pic')) document.getElementById('drawer-pic').src = d.profile_image_path || avatar;
+            }
+            await syncPortalData(true);
+            initChart();
+        } catch (err) { console.error("Portal Init Error:", err); initChart(); }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        initPortal();
+        updateClock();
+        checkConnectivity();
+        setInterval(updateClock, 1000);
+        setInterval(() => { syncPortalData(); }, 60000);
+        setInterval(updateMessagingBadge, 30000);
+
+        const chatToggle = document.getElementById('ai-chat-toggle'),
+              chatWindow = document.getElementById('ai-chat-window'),
+              closeChat = document.getElementById('close-chat'),
+              chatMessages = document.getElementById('chat-messages'),
+              chatInput = document.getElementById('chat-input'),
+              sendBtn = document.getElementById('send-btn'),
+              micBtn = document.getElementById('mic-btn'),
+              typingIndicator = document.getElementById('ai-typing'),
+              // FIXED: Reference your specific Tactical Robot IDs/Classes
+              avatarFace = document.querySelector('.advanced-robot-body'),
+              avatarMouth = document.querySelector('.robot-mouth-tactical'),
+              langSelect = document.getElementById('ai-lang-select'),
+              scannerLaser = document.getElementById('face-scanner-laser');
+
+        const TacticalAudio = {
+            ctx: new (window.AudioContext || window.webkitAudioContext)(),
+            playScan() {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 2);
+                gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 2);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 2);
+            },
+            playConfirm() {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.frequency.setValueAtTime(1800, this.ctx.currentTime);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.1);
+                setTimeout(() => {
+                    const osc2 = this.ctx.createOscillator();
+                    osc2.frequency.setValueAtTime(2100, this.ctx.currentTime);
+                    osc2.connect(gain); osc2.start(); osc2.stop(this.ctx.currentTime + 0.1);
+                }, 100);
+            },
+            playSuccess() {
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(1000, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(2000, this.ctx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.2);
+            }
         };
 
-        btnExplore.addEventListener('click', () => toggleDrawer(true));
-        overlay.addEventListener('click', () => toggleDrawer(false));
+        const synth = window.speechSynthesis;
+        let tacticalVoices = [];
 
-        function updateClock() {
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
-            const clockEl = document.getElementById('digital-clock');
-            if (clockEl) clockEl.innerText = timeStr;
+        const loadVoices = () => { tacticalVoices = synth.getVoices(); };
+        loadVoices();
+        if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
+
+        const speak = (text) => {
+            if (!synth) return;
+            synth.cancel(); 
+            const utter = new SpeechSynthesisUtterance(text);
+            const selectedLang = langSelect.value;
+            utter.lang = selectedLang;
+            const voice = tacticalVoices.find(v => v.lang === selectedLang) || tacticalVoices[0];
+            if (voice) utter.voice = voice;
+            utter.rate = 1.0; utter.pitch = 1.1; 
+            utter.onstart = () => { 
+                if(avatarMouth) avatarMouth.classList.add('talking'); 
+                if(avatarFace) avatarFace.classList.remove('thinking'); 
+            };
+            utter.onend = () => { 
+                if(avatarMouth) avatarMouth.classList.remove('talking'); 
+            };
+            synth.speak(utter);
+        };
+
+        const triggerWelcome = () => {
+            const name = document.getElementById('student-fullname')?.innerText || "Officer";
+            const selectedLang = langSelect.value;
+            let welcomeText = (selectedLang === 'bn-IN') ? `স্বাগতম অফিসার ${name}। আমি ইনফিনিটি টেকটিক্যাল এআই। আমি আপনার নির্দেশনার জন্য প্রস্তুত।` : 
+                              (selectedLang === 'hi-IN') ? `नमस्ते অফিসার ${name}। मैं इन्फिनिटी टैक्टिकल एआई हूँ। आपके निर्देशों के लिए तैयार हूँ।` :
+                              `Status online. Good to see you, ${name}. I am Infinity Tactical AI. Ready for deployment.`;
+            addMsg(welcomeText);
+        };
+
+        langSelect.onchange = () => { chatMessages.innerHTML = ''; setTimeout(triggerWelcome, 100); };
+
+        const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition;
+        if (Recognition) {
+            recognition = new Recognition();
+            recognition.onstart = () => micBtn.classList.add('recording');
+            recognition.onend = () => micBtn.classList.remove('recording');
+            recognition.onresult = (event) => { chatInput.value = event.results[0][0].transcript; handleSend(); };
+        }
+        micBtn.onclick = () => { if (recognition) recognition.start(); };
+
+        function addMsg(text, isUser = false) {
+            const div = document.createElement('div');
+            div.style.cssText = `padding: 10px 15px; border-radius: 15px; font-size: 12px; max-width: 85%; align-self: ${isUser ? 'flex-end' : 'flex-start'}; background: ${isUser ? 'var(--primary)' : 'white'}; color: ${isUser ? 'white' : '#334155'}; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 5px;`;
+            div.innerText = text;
+            chatMessages.appendChild(div);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            if (!isUser) speak(text);
         }
 
-        function checkConnectivity() {
-            const isOnline = navigator.onLine;
-            const dot = document.getElementById('status-dot');
-            if (dot) dot.className = isOnline ? 'status-dot online' : 'status-dot offline';
-        }
+        async function askAI(question) {
+            if(typingIndicator) typingIndicator.style.display = 'block';
+            if(avatarFace) avatarFace.classList.add('thinking');
+            
+            const lowerQ = question.toLowerCase();
+            
+            // --- AUTOMATION INTERCEPTOR ---
+            if (lowerQ.includes("গান চালাও") || lowerQ.includes("play song") || lowerQ.includes("youtube")) {
+                const query = question.replace(/(গান চালাও|play song|youtube|on youtube)/gi, "").trim();
+                TacticalAudio.playSuccess();
+                addMsg(`Initiating YouTube sequence for: ${query || 'Music'}`);
+                window.open(`https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`, '_blank');
+                if(typingIndicator) typingIndicator.style.display = 'none'; 
+                if(avatarFace) avatarFace.classList.remove('thinking');
+                return;
+            }
 
-        async function updateMessagingBadge() {
-            const badge = document.getElementById('unread-count');
-            if (!badge) return;
+            if (lowerQ.includes("call") || lowerQ.includes("ফোন") || lowerQ.includes("message")) {
+                TacticalAudio.playSuccess();
+                addMsg("Accessing communication protocols. Please specify the recipient's name or number.");
+                if(typingIndicator) typingIndicator.style.display = 'none'; 
+                if(avatarFace) avatarFace.classList.remove('thinking');
+                return;
+            }
+
+            if (lowerQ.includes("alarm") || lowerQ.includes("অ্যালার্ম") || lowerQ.includes("remind")) {
+                TacticalAudio.playSuccess();
+                addMsg("Clock synchronization active. Alarm/Reminder module initialized.");
+                if(typingIndicator) typingIndicator.style.display = 'none'; 
+                if(avatarFace) avatarFace.classList.remove('thinking');
+                return;
+            }
+
             try {
-                const res = await fetch('/api/messaging/unread-count', {
-                    headers: { "Authorization": `Bearer ${token}` }
+                const response = await fetch("/api/chat", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                    body: JSON.stringify({ 
+                        question, 
+                        studentName: document.getElementById('student-fullname')?.innerText, 
+                        language: langSelect.options[langSelect.selectedIndex].text 
+                    })
                 });
-                if (res.ok) {
-                    const data = await res.json();
-                    const count = parseInt(data.count) || 0;
-                    badge.innerText = count > 9 ? '9+' : count;
-                    badge.style.display = count > 0 ? 'block' : 'none';
-                }
-            } catch (err) { console.warn("Messaging check skipped."); }
+                const data = await response.json();
+                if(data.reply) TacticalAudio.playSuccess();
+                addMsg(data.reply || "Directive processed.");
+            } catch (error) { 
+                addMsg("Link Severed. Connection unstable."); 
+            } finally { 
+                if(typingIndicator) typingIndicator.style.display = 'none'; 
+                if(avatarFace) avatarFace.classList.remove('thinking'); 
+            }
         }
 
-        async function checkAnnouncements() {
-            const dot = document.getElementById('notif-unread-dot');
-            try {
-                const res = await fetch('/api/announcements/role/student', {
-                    headers: { "Authorization": `Bearer ${token}` }
-                });
-                if (res.ok) {
-                    const notices = await res.json();
-                    dot.style.display = (notices && notices.length > 0) ? 'block' : 'none';
-                    return notices;
-                }
-            } catch (err) { console.warn("Could not sync notifications:", err); }
-            return [];
+        async function handleSend() {
+            const val = chatInput.value.trim();
+            if(!val) return;
+            addMsg(val, true);
+            chatInput.value = '';
+            await askAI(val);
         }
 
-        function initChart(labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May'], data = [30, 50, 40, 60, 55]) {
-            const canvas = document.getElementById('performanceChart');
-            if(!canvas) return;
-            let chartStatus = Chart.getChart("performanceChart"); 
-            if (chartStatus !== undefined) chartStatus.destroy();
-            const ctx = canvas.getContext('2d');
-            new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{ 
-                        label: 'Progress', 
-                        data: data, 
-                        borderColor: '#6366f1', 
-                        tension: 0.4, 
-                        fill: true, 
-                        backgroundColor: 'rgba(99, 102, 241, 0.1)', 
-                        pointRadius: 3 
-                    }]
-                },
-                options: { 
-                    responsive: true, maintainAspectRatio: false, 
-                    plugins: { legend: { display: false } }, 
-                    scales: { y: { display: false }, x: { grid: { display: false }, ticks: { font: { size: 10, weight: 'bold' } } } } 
-                }
+        chatToggle.onclick = () => {
+            const isOpening = chatWindow.style.display === 'none';
+            chatWindow.style.display = isOpening ? 'flex' : 'none';
+            if(isOpening) {
+                TacticalAudio.playScan();
+                if(scannerLaser) scannerLaser.style.display = 'block';
+                setTimeout(() => {
+                    if(scannerLaser) scannerLaser.style.display = 'none';
+                    TacticalAudio.playConfirm();
+                    if(chatMessages.innerHTML === '') triggerWelcome();
+                }, 2500);
+            }
+        };
+
+        if(closeChat) closeChat.onclick = () => { 
+            chatWindow.style.display = 'none'; 
+            if(synth) synth.cancel(); 
+        };
+        
+        if(sendBtn) sendBtn.onclick = handleSend;
+        if(chatInput) chatInput.onkeypress = (e) => { if(e.key === 'Enter') handleSend(); };
+
+        document.addEventListener('mousemove', (e) => {
+            const eyes = document.querySelectorAll('.robot-eye-blue-glow');
+            eyes.forEach(eye => {
+                const rect = eye.getBoundingClientRect();
+                const x = (e.clientX - rect.left) / 30;
+                const y = (e.clientY - rect.top) / 30;
+                eye.style.transform = `translate(${Math.min(x, 5)}px, ${Math.min(y, 5)}px)`;
             });
-        }
+        });
 
-        async function syncPortalData(isInitialLoad = false) {
-            try {
-                const [fRes, tRes, nRes] = await Promise.all([
-                    fetch(`/api/students/${sid}/fees`, { headers: { "Authorization": `Bearer ${token}` } }),
-                    fetch(`/api/students/${sid}/teachers`, { headers: { "Authorization": `Bearer ${token}` } }),
-                    checkAnnouncements() 
-                ]);
-                if (fRes?.ok) {
-                    const f = await fRes.json();
-                    document.getElementById('finance-content').innerHTML = `
-                        <div class="col-4 border-end"><small class="text-muted d-block">Pending</small>
-                            <span class="fw-bold text-danger">₹${f.total_billed || 0}</span></div>
-                        <div class="col-4 border-end"><small class="text-muted d-block">Paid</small>
-                            <span class="fw-bold text-success">₹${f.total_paid || 0}</span></div>
-                        <div class="col-4"><small class="text-muted d-block">Balance</small>
-                            <span class="fw-bold text-dark">₹${f.balance_due || 0}</span></div>
-                    `;
-                }
-                if (tRes?.ok) {
-                    const teachers = await tRes.json();
-                    const container = document.getElementById('my-teachers-list');
-                    if (teachers && teachers.length > 0) {
-                        container.innerHTML = teachers.map(t => `
-                            <div class="teacher-card text-center shadow-sm">
-                                <img src="https://ui-avatars.com/api/?name=${encodeURIComponent(t.full_name)}&background=f1f5f9&color=6366f1&bold=true" class="rounded-circle mb-2 shadow-sm" style="width:55px; height:55px; border: 2px solid white;">
-                                <div class="small fw-extrabold text-truncate" style="color: #334155;">${t.full_name}</div>
-                                <div class="text-muted" style="font-size: 10px;">${t.subject_name || 'Teacher'}</div>
-                            </div>
-                        `).join('');
-                    } else {
-                        container.innerHTML = '<div class="p-3 text-muted small">No teachers assigned yet.</div>';
-                    }
-                }
-                if (nRes && nRes.length > 0) {
-                    const scroller = document.getElementById('notice-scroller');
-                    const noticeHtml = nRes.map(n => {
-                        let iconClass = "text-primary";
-                        if(n.notice_type === 'Urgent') iconClass = "text-danger";
-                        if(n.notice_type === 'Event') iconClass = "text-success";
-                        return `<div class="notice-card"><i class="fas fa-bullhorn ${iconClass} mb-2"></i><div class="fw-bold small text-truncate" style="color: #1e293b;">${n.title}</div><div class="text-muted" style="font-size: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${n.content || 'New update available.'}</div></div>`;
-                    }).join('');
-                    scroller.innerHTML = noticeHtml + noticeHtml; 
-                }
-                updateMessagingBadge();
-            } catch (err) { console.error("Background sync failed", err); }
-        }
-
-        async function initPortal() {
-            const hr = new Date().getHours();
-            const greet = document.getElementById('greeting-txt');
-            if (greet) greet.innerText = hr < 12 ? "Good Morning," : hr < 18 ? "Good Afternoon," : "Good Evening,";
-            try {
-                const pRes = await fetch(`/api/students/${sid}`, { headers: { "Authorization": `Bearer ${token}` } });
-                if (pRes && pRes.ok) {
-                    const d = await pRes.json();
-                    if (document.getElementById('student-fullname')) document.getElementById('student-fullname').innerText = d.first_name || 'Student';
-                    if (document.getElementById('drawer-name')) document.getElementById('drawer-name').innerText = `${d.first_name || ''} ${d.last_name || ''}`;
-                    if (document.getElementById('badge-admission')) document.getElementById('badge-admission').innerText = "ID: " + (d.admission_id || sid);
-                    if (document.getElementById('badge-roll')) document.getElementById('badge-roll').innerText = "Roll: " + (d.roll_number || 'N/A');
-                    if (document.getElementById('drawer-id')) document.getElementById('drawer-id').innerText = "GR No: " + (d.admission_id || sid);
-                    if (document.getElementById('drawer-email')) document.getElementById('drawer-email').innerText = d.email || 'N/A';
-                    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(d.first_name)}&background=6366f1&color=fff&bold=true`;
-                    if (document.getElementById('header-pic')) document.getElementById('header-pic').src = d.profile_image_path || avatar;
-                    if (document.getElementById('drawer-pic')) document.getElementById('drawer-pic').src = d.profile_image_path || avatar;
-                }
-                await syncPortalData(true);
-                initChart();
-            } catch (err) { console.error("Portal Init Error:", err); initChart(); }
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initPortal();
-            updateClock();
-            checkConnectivity();
-            setInterval(updateClock, 1000);
-            setInterval(() => { syncPortalData(); }, 60000);
-            setInterval(updateMessagingBadge, 30000);
-
-            // --- ADVANCED TACTICAL AI SYSTEM ---
-            const chatToggle = document.getElementById('ai-chat-toggle'),
-                  chatWindow = document.getElementById('ai-chat-window'),
-                  closeChat = document.getElementById('close-chat'),
-                  chatMessages = document.getElementById('chat-messages'),
-                  chatInput = document.getElementById('chat-input'),
-                  sendBtn = document.getElementById('send-btn'),
-                  micBtn = document.getElementById('mic-btn'),
-                  typingIndicator = document.getElementById('ai-typing'),
-                  avatarFace = document.getElementById('ai-avatar-face'),
-                  avatarMouth = document.getElementById('ai-avatar-mouth'),
-                  langSelect = document.getElementById('ai-lang-select'),
-                  scannerLaser = document.getElementById('face-scanner-laser');
-
-            // --- AUDIO ENGINE ---
-            const TacticalAudio = {
-                ctx: new (window.AudioContext || window.webkitAudioContext)(),
-                playScan() {
-                    const osc = this.ctx.createOscillator();
-                    const gain = this.ctx.createGain();
-                    osc.type = 'sine';
-                    osc.frequency.setValueAtTime(800, this.ctx.currentTime);
-                    osc.frequency.exponentialRampToValueAtTime(1200, this.ctx.currentTime + 2);
-                    gain.gain.setValueAtTime(0.05, this.ctx.currentTime);
-                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 2);
-                    osc.connect(gain); gain.connect(this.ctx.destination);
-                    osc.start(); osc.stop(this.ctx.currentTime + 2);
-                },
-                playConfirm() {
-                    const osc = this.ctx.createOscillator();
-                    const gain = this.ctx.createGain();
-                    osc.frequency.setValueAtTime(1800, this.ctx.currentTime);
-                    gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-                    osc.connect(gain); gain.connect(this.ctx.destination);
-                    osc.start(); osc.stop(this.ctx.currentTime + 0.1);
-                    setTimeout(() => {
-                        const osc2 = this.ctx.createOscillator();
-                        osc2.frequency.setValueAtTime(2100, this.ctx.currentTime);
-                        osc2.connect(gain); osc2.start(); osc2.stop(this.ctx.currentTime + 0.1);
-                    }, 100);
-                }
-            };
-
-            const synth = window.speechSynthesis;
-            let tacticalVoices = [];
-
-            const loadVoices = () => {
-                tacticalVoices = synth.getVoices();
-            };
-            loadVoices();
-            if (synth.onvoiceschanged !== undefined) synth.onvoiceschanged = loadVoices;
-
-            const speak = (text) => {
-                if (!synth) return;
-                synth.cancel(); 
-
-                const utter = new SpeechSynthesisUtterance(text);
-                const selectedLang = langSelect.value;
-                utter.lang = selectedLang;
-                
-                const voice = tacticalVoices.find(v => v.lang === selectedLang) || tacticalVoices[0];
-                if (voice) utter.voice = voice;
-
-                utter.rate = 1.0;
-                utter.pitch = 1.1; 
-                
-                utter.onstart = () => { avatarMouth.classList.add('talking'); avatarFace.classList.remove('thinking'); };
-                utter.onend = () => { avatarMouth.classList.remove('talking'); };
-                
-                synth.speak(utter);
-            };
-
-            const triggerWelcome = () => {
-                const name = document.getElementById('student-fullname')?.innerText || "Officer";
-                const selectedLang = langSelect.value;
-                let welcomeText = "";
-
-                if(selectedLang === 'bn-IN') welcomeText = `স্বাগতম অফিসার ${name}। আমি ইনফিনিটি টেকটিক্যাল এআই। আমি আপনার নির্দেশনার জন্য প্রস্তুত।`;
-                else if(selectedLang === 'hi-IN') welcomeText = `नमस्ते অফিসার ${name}। আমি ইনফিনিটি टैक्टिकल एআই हूँ। কমান্ডের জন্য প্রস্তুত हूँ।`;
-                else welcomeText = `Welcome Officer ${name}. I am Infinity Tactical AI. Ready for your directives.`;
-
-                addMsg(welcomeText);
-            };
-
-            langSelect.onchange = () => {
-                chatMessages.innerHTML = ''; 
-                setTimeout(triggerWelcome, 100);
-            };
-
-            const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            let recognition;
-            if (Recognition) {
-                recognition = new Recognition();
-                recognition.onstart = () => micBtn.classList.add('recording');
-                recognition.onend = () => micBtn.classList.remove('recording');
-                recognition.onresult = (event) => { chatInput.value = event.results[0][0].transcript; handleSend(); };
-            }
-            micBtn.onclick = () => {
-                if (recognition) recognition.start();
-            };
-
-            function addMsg(text, isUser = false) {
-                const div = document.createElement('div');
-                div.style.cssText = `padding: 10px 15px; border-radius: 15px; font-size: 12px; max-width: 85%; align-self: ${isUser ? 'flex-end' : 'flex-start'}; background: ${isUser ? 'var(--primary)' : 'white'}; color: ${isUser ? 'white' : '#334155'}; box-shadow: 0 2px 5px rgba(0,0,0,0.05); margin-bottom: 5px;`;
-                div.innerText = text;
-                chatMessages.appendChild(div);
-                chatMessages.scrollTop = chatMessages.scrollHeight;
-                if (!isUser) speak(text);
-            }
-
-            async function askAI(question) {
-                typingIndicator.style.display = 'block';
-                avatarFace.classList.add('thinking'); 
-                try {
-                    const studentName = document.getElementById('student-fullname')?.innerText || 'Personnel';
-                    const financeInfo = document.getElementById('finance-content')?.innerText || "";
-                    const selectedLangText = langSelect.options[langSelect.selectedIndex].text;
-
-                    const response = await fetch("/api/chat", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
-                        body: JSON.stringify({ 
-                            question, 
-                            studentName, 
-                            financeData: financeInfo,
-                            language: selectedLangText
-                        })
-                    });
-                    const data = await response.json();
-                    addMsg(data.reply || "Directive processed.");
-                } catch (error) { 
-                    addMsg("Link Severed. Retry Directive."); 
-                } finally { 
-                    typingIndicator.style.display = 'none'; 
-                    avatarFace.classList.remove('thinking'); 
-                }
-            }
-
-            async function handleSend() {
-                const val = chatInput.value.trim();
-                if(!val) return;
-                addMsg(val, true);
-                chatInput.value = '';
-                await askAI(val);
-            }
-
-            chatToggle.onclick = () => {
-                const isOpening = chatWindow.style.display === 'none';
-                chatWindow.style.display = isOpening ? 'flex' : 'none';
-                if(isOpening) {
-                    TacticalAudio.playScan();
-                    scannerLaser.style.display = 'block';
-                    setTimeout(() => {
-                        scannerLaser.style.display = 'none';
-                        TacticalAudio.playConfirm();
-                        if(chatMessages.innerHTML === '') triggerWelcome();
-                    }, 2500);
-                }
-            };
-            closeChat.onclick = () => { 
-                chatWindow.style.display = 'none'; 
-                if(synth) synth.cancel(); 
-            };
-            sendBtn.onclick = handleSend;
-            chatInput.onkeypress = (e) => { if(e.key === 'Enter') handleSend(); };
-
-            // Eye Tracking
-            document.addEventListener('mousemove', (e) => {
-                const eyes = document.querySelectorAll('.robot-eye-blue-glow');
-                eyes.forEach(eye => {
-                    const rect = eye.getBoundingClientRect();
-                    const x = (e.clientX - rect.left) / 30;
-                    const y = (e.clientY - rect.top) / 30;
-                    eye.style.transform = `translate(${Math.min(x, 5)}px, ${Math.min(y, 5)}px)`;
-                });
-            });
-
-            // --- TACTICAL AUTO-ACTIVATION ENGINE ---
-            let hasAutoGreeted = false;
-            const autoGreetPersonnel = () => {
-                if (hasAutoGreeted) return;
-                chatToggle.click();
-                hasAutoGreeted = true;
-            };
-            document.body.addEventListener('click', autoGreetPersonnel, { once: true });
-        }); 
-    </script>
+        let hasAutoGreeted = false;
+        const autoGreetPersonnel = () => {
+            if (hasAutoGreeted) return;
+            chatToggle.click();
+            hasAutoGreeted = true;
+        };
+        document.body.addEventListener('click', autoGreetPersonnel, { once: true });
+    }); 
+</script>
     <script src="/js/confetti.min.js"></script>
 </body>
 </html>

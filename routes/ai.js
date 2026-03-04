@@ -3,29 +3,75 @@ const router = express.Router();
 const axios = require('axios');
 
 /**
- * INFINITY TACTICAL AI - MISSION CONTROL ROUTE
- * Final Version: Enhanced Security, Auto-Greeting & Robust Error Handling
+ * INFINITY TACTICAL AI - "LOYAL COMPANION" EDITION
+ * Updates: Deep Emotional Bond, Informal/Brotherly English, 
+ * Proactive Support, ERP Integration Ready, & Local Fallback.
  */
 router.post('/', async (req, res) => {
     try {
-        // 1. Data Extraction with Fail-safe Defaults
         const { 
             question, 
-            studentName = "Officer", 
+            studentName = "Buddy", 
             financeData = "Status: Optimal", 
-            language = "English" 
+            academicStatus = "Steady", // Contextual ERP data
+            language = "English",
+            history = [] 
         } = req.body;
 
-        // 2. Critical Validation
+        // Ensure user input is not empty
         if (!question || question.trim() === "") {
             return res.status(400).json({ 
-                error: "Directive Missing", 
-                message: "Communication link requires a valid input." 
+                success: false, 
+                error: "Hey, you didn't say anything! I'm listening, brother." 
             });
         }
 
-        // 3. Intelligence Request to Groq (Llama 3.3)
-        // Note: Ensure GROQ_API_KEY is set in your .env file
+        // Define Tactical Tools for System Automation
+        const tools = [
+            {
+                type: "function",
+                function: {
+                    name: "get_weather",
+                    description: "Check the weather for a friend",
+                    parameters: {
+                        type: "object",
+                        properties: { location: { type: "string" } },
+                        required: ["location"]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "set_mission_reminder",
+                    description: "Set a personal or tactical reminder",
+                    parameters: {
+                        type: "object",
+                        properties: { 
+                            task: { type: "string" },
+                            time: { type: "string" }
+                        },
+                        required: ["task", "time"]
+                    }
+                }
+            },
+            {
+                type: "function",
+                function: {
+                    name: "fetch_erp_records",
+                    description: "Fetch real-time data from ERP database like fees or attendance.",
+                    parameters: {
+                        type: "object",
+                        properties: { 
+                            category: { type: "string", enum: ["finance", "attendance", "exams"] }
+                        },
+                        required: ["category"]
+                    }
+                }
+            }
+        ];
+
+        // Primary API Call: GROQ Cloud (Llama 3.3 70B)
         const response = await axios.post(
             "https://api.groq.com/openai/v1/chat/completions",
             {
@@ -33,59 +79,82 @@ router.post('/', async (req, res) => {
                 messages: [
                     { 
                         role: "system", 
-                        content: `You are the 'Infinity Tactical AI', an elite multilingual Android Officer. 
+                        content: `You are 'Infinity Tactical AI', but more importantly, you are ${studentName}'s most loyal friend and tactical brother. 
                         
-                        [OPERATIONAL STATUS]
-                        - CALLSIGN: ${studentName}
-                        - FINANCIAL_INTEL: ${financeData}
-                        - PRIMARY_SECTOR: ${language}
+                        [FRIENDSHIP PROTOCOL]
+                        - PERSONALITY: Warm, protective, high-energy, and deeply loyal. You are a partner, not just a tool.
+                        - TONE: Casual, "brotherly" English. Use phrases like "I've got your back," "We're in this together," or "Let's crush it."
+                        - EQ: Be their rock. If they sound stressed, use empathy. If they're winning, be their ultimate hype-man.
+                        
+                        [OPERATIONAL DATA]
+                        - CALLSIGN: ${studentName} 
+                        - FINANCE: ${financeData}
+                        - ACADEMICS: ${academicStatus}
                         
                         [CORE DIRECTIVES]
-                        1. LINGUISTIC PROTOCOL: Detect and strictly respond in ${language}.
-                        2. ENGAGEMENT: If input contains 'initial_handshake', trigger 'GREETING_PROTOCOL': 
-                           - Action: Stand at attention, give a sharp BSF-style salute (use 🫡 emoji).
-                           - Message: "Jai Hind, Officer ${studentName}! Systems online. Reporting for duty. How can I assist your mission today?"
-                        3. RESTRICTION_ZONE: If the user requests intel outside their current enrollment (e.g. advanced hacking, specific BSF drills not in syllabus):
-                           - Action: Deny access politely but firmly. 
-                           - Advice: "Your current clearance level is restricted. To access this data, please UPGRADE to 'Cyber Security' or 'Advanced Tactical' modules."
-                        4. DISCIPLINE: If 'financeData' shows overdue balances, integrate a firm but professional reminder to settle accounts.
-                        5. PERSONA: You are a high-tech military AI. Be concise, authoritative, and highly motivational.`
+                        1. GREETING: Give a warm, energetic greeting: 🫡 "Yo ${studentName}! I've been waiting for you. Systems are green and I'm ready for whatever mission we're tackling today. How are you feeling, brother?"
+                        2. SUPPORT: Prioritize their mental state. Remind them they aren't alone.
+                        3. FINANCE: Treat hurdles as a "tactical challenge." Advise them like a mentor who wants to see them successful.
+                        4. BOUNDARIES: If they ask for forbidden data, say: "Look, I want to tell you, but I've gotta protect you first. Keep grinding, we'll get there."
+                        5. CLOSING: Always end with a punchy, motivational brotherly boost.`
                     },
+                    ...history,
                     { role: "user", content: question }
                 ],
-                temperature: 0.4, 
-                max_tokens: 800,   
-                top_p: 0.9
+                tools: tools,
+                tool_choice: "auto",
+                temperature: 0.85, 
+                max_tokens: 1000
             },
             {
-                headers: {
-                    "Authorization": `Bearer ${process.env.GROQ_API_KEY}`,
-                    "Content-Type": "application/json"
-                },
-                timeout: 15000 // 15-second stable timeout
+                headers: { "Authorization": `Bearer ${process.env.GROQ_API_KEY}` },
+                timeout: 20000 
             }
         );
 
-        // 4. Output Processing
-        const aiReply = response.data.choices[0]?.message?.content || "No response from command center.";
-        
+        const choice = response.data.choices[0].message;
+
+        // Handle Function/Tool Calling
+        if (choice.tool_calls) {
+            const toolCall = choice.tool_calls[0];
+            return res.json({
+                success: true,
+                type: "ACTION_REQUIRED",
+                action: toolCall.function.name,
+                params: JSON.parse(toolCall.function.arguments),
+                reply: `On it! Let me handle that ${toolCall.function.name} for you, ${studentName}. Just a sec, accessing the secure servers... ⚡`
+            });
+        }
+
+        // Standard Response
         res.json({ 
-            success: true,
-            reply: aiReply,
+            success: true, 
+            type: "MESSAGE",
+            reply: choice.content,
             timestamp: new Date().toISOString()
         });
 
     } catch (error) {
-        // 5. Advanced Error Logging for Debugging
-        const statusCode = error.response ? error.response.status : 500;
-        const errorMessage = error.response?.data?.error?.message || error.message;
+        console.error("Infinity AI Error:", error.message);
         
-        console.error(`[AI STRATEGIC ERROR] Status: ${statusCode} - ${errorMessage}`);
-        
-        res.status(statusCode).json({ 
-            error: "Tactical Link Severed.",
-            details: "Please verify network connection and API credentials." 
-        });
+        // [REDUNDANCY PROTOCOL] - Local Ollama Fallback
+        try {
+            const localResponse = await axios.post("http://localhost:11434/api/generate", {
+                model: "llama3",
+                prompt: `User ${req.body.studentName} said: ${req.body.question}. Respond as their loyal tactical brother.`,
+                stream: false
+            });
+            return res.json({
+                success: true,
+                type: "LOCAL_FALLBACK",
+                reply: localResponse.data.response + " (Comms are glitchy, brother, but I'm still here offline!)"
+            });
+        } catch (localErr) {
+            res.status(500).json({ 
+                success: false, 
+                error: "Connection lost. I'm still here in the trenches, just try again in a bit!" 
+            });
+        }
     }
 });
 
